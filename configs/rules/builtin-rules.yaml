@@ -1,0 +1,320 @@
+# MxSec 内置检测规则集 v1
+# CEL 表达式规则，由 Consumer CEL 引擎加载执行
+# 可通过 Manager API 导入到 detection_rules 表
+
+rules:
+  # ==================== 进程类 (DataType 3000) ====================
+
+  - name: "挖矿进程 - xmrig/minerd"
+    expression: 'exe.contains("xmrig") || exe.contains("minerd") || exe.contains("cpuminer") || cmdline.contains("stratum+tcp") || cmdline.contains("stratum+ssl")'
+    severity: critical
+    category: cryptomining
+    mitre_id: "T1496"
+    data_types: ["3000"]
+    description: "检测常见挖矿程序执行（xmrig、minerd、cpuminer）或挖矿协议特征"
+
+  - name: "反弹 Shell - bash /dev/tcp"
+    expression: 'cmdline.contains("/dev/tcp") || cmdline.contains("/dev/udp") || (exe.contains("bash") && cmdline.contains("-i"))'
+    severity: critical
+    category: reverse_shell
+    mitre_id: "T1059.004"
+    data_types: ["3000"]
+    description: "检测通过 bash /dev/tcp 或 bash -i 方式建立的反弹 Shell"
+
+  - name: "反弹 Shell - nc/ncat"
+    expression: '(exe.contains("nc") || exe.contains("ncat") || exe.contains("netcat")) && (cmdline.contains("-e") || cmdline.contains("-c"))'
+    severity: critical
+    category: reverse_shell
+    mitre_id: "T1059.004"
+    data_types: ["3000"]
+    description: "检测通过 nc/ncat 的 -e 或 -c 参数执行命令的反弹 Shell"
+
+  - name: "反弹 Shell - Python/Perl/PHP"
+    expression: '(exe.contains("python") || exe.contains("perl") || exe.contains("php")) && (cmdline.contains("socket") && cmdline.contains("connect"))'
+    severity: high
+    category: reverse_shell
+    mitre_id: "T1059"
+    data_types: ["3000"]
+    description: "检测通过脚本语言建立的反弹 Shell（socket.connect 模式）"
+
+  - name: "权限提升 - sudo 异常使用"
+    expression: 'exe.contains("sudo") && (cmdline.contains("sh") || cmdline.contains("bash")) && uid != "0"'
+    severity: medium
+    category: privilege_escalation
+    mitre_id: "T1548.003"
+    data_types: ["3000"]
+    description: "非 root 用户通过 sudo 执行 shell，可能为权限提升尝试"
+
+  - name: "权限提升 - SUID 利用"
+    expression: 'cmdline.contains("chmod") && cmdline.contains("+s")'
+    severity: high
+    category: privilege_escalation
+    mitre_id: "T1548.001"
+    data_types: ["3000"]
+    description: "检测设置 SUID 位操作，可能用于权限维持或提升"
+
+  - name: "信息收集 - 密码文件读取"
+    expression: '(exe.contains("cat") || exe.contains("head") || exe.contains("less")) && (cmdline.contains("/etc/shadow") || cmdline.contains("/etc/passwd"))'
+    severity: medium
+    category: credential_access
+    mitre_id: "T1003.008"
+    data_types: ["3000"]
+    description: "检测读取系统密码文件操作"
+
+  - name: "远程工具 - 可疑下载执行"
+    expression: '(exe.contains("wget") || exe.contains("curl")) && (cmdline.contains("/tmp/") || cmdline.contains("| bash") || cmdline.contains("| sh"))'
+    severity: high
+    category: execution
+    mitre_id: "T1105"
+    data_types: ["3000"]
+    description: "检测通过 wget/curl 下载到 /tmp 或直接管道执行的行为"
+
+  - name: "持久化 - crontab 修改"
+    expression: 'exe.contains("crontab") && cmdline.contains("-e")'
+    severity: medium
+    category: persistence
+    mitre_id: "T1053.003"
+    data_types: ["3000"]
+    description: "检测 crontab 编辑操作，可能为持久化后门"
+
+  - name: "防御规避 - 日志清除"
+    expression: '(cmdline.contains(">/dev/null") || cmdline.contains("history -c") || cmdline.contains("rm -rf /var/log")) && exe.contains("bash")'
+    severity: high
+    category: defense_evasion
+    mitre_id: "T1070"
+    data_types: ["3000"]
+    description: "检测清除系统日志或命令历史的行为"
+
+  - name: "反弹 Shell - socat"
+    expression: '(exe.contains("socat") || cmdline.contains("socat")) && (cmdline.contains("EXEC") || cmdline.contains("exec")) && (cmdline.contains("tcp") || cmdline.contains("TCP"))'
+    severity: critical
+    category: reverse_shell
+    mitre_id: "T1059"
+    data_types: ["3000"]
+    description: "检测通过 socat 建立的反弹 Shell（EXEC + TCP 模式）"
+
+  - name: "反弹 Shell - openssl 加密隧道"
+    expression: 'exe.contains("openssl") && cmdline.contains("s_client") && cmdline.contains("connect")'
+    severity: critical
+    category: reverse_shell
+    mitre_id: "T1573.002"
+    data_types: ["3000"]
+    description: "检测通过 openssl s_client 建立的加密反弹 Shell"
+
+  - name: "持久化 - 内核模块加载"
+    expression: 'exe.contains("insmod") || exe.contains("modprobe") || (cmdline.contains("insmod") && exe.contains("bash"))'
+    severity: high
+    category: persistence
+    mitre_id: "T1547.006"
+    data_types: ["3000"]
+    description: "检测内核模块加载操作，可能为 rootkit 植入"
+
+  - name: "劫持 - LD_PRELOAD 注入"
+    expression: 'cmdline.contains("LD_PRELOAD") || cmdline.contains("ld.so.preload")'
+    severity: high
+    category: defense_evasion
+    mitre_id: "T1574.006"
+    data_types: ["3000"]
+    description: "检测通过 LD_PRELOAD 环境变量进行的动态链接库劫持"
+
+  - name: "横向移动 - SSH 隧道"
+    expression: 'exe.contains("ssh") && (cmdline.contains(" -L ") || cmdline.contains(" -R ") || cmdline.contains(" -D ") || cmdline.contains(" -J "))'
+    severity: medium
+    category: lateral_movement
+    mitre_id: "T1572"
+    data_types: ["3000"]
+    description: "检测 SSH 端口转发或动态隧道，可能为横向移动通道"
+
+  - name: "容器逃逸 - 特权操作"
+    expression: '(exe.contains("nsenter") && cmdline.contains("-t 1")) || (cmdline.contains("docker") && cmdline.contains("--privileged")) || (exe.contains("crictl") && cmdline.contains("exec"))'
+    severity: critical
+    category: privilege_escalation
+    mitre_id: "T1611"
+    data_types: ["3000"]
+    description: "检测容器逃逸相关命令（nsenter 进入宿主 namespace、特权容器、crictl exec）"
+
+  - name: "防御规避 - 安全工具停止"
+    expression: '(cmdline.contains("systemctl") || cmdline.contains("service")) && (cmdline.contains("stop") || cmdline.contains("disable")) && (cmdline.contains("firewalld") || cmdline.contains("iptables") || cmdline.contains("apparmor") || cmdline.contains("selinux") || cmdline.contains("auditd"))'
+    severity: high
+    category: defense_evasion
+    mitre_id: "T1562.001"
+    data_types: ["3000"]
+    description: "检测停止或禁用安全防护工具（防火墙、SELinux、审计）"
+
+  # ==================== 文件类 (DataType 3001, 6001) ====================
+
+  - name: "Webshell 路径检测"
+    expression: '(file_path.contains("/var/www/") || file_path.contains("/usr/share/nginx/")) && (file_path.endsWith(".php") || file_path.endsWith(".jsp") || file_path.endsWith(".asp"))'
+    severity: critical
+    category: webshell
+    mitre_id: "T1505.003"
+    data_types: ["3001", "6001"]
+    description: "检测 Web 目录下新增可疑脚本文件（PHP/JSP/ASP）"
+
+  - name: "/etc/passwd 异常修改"
+    expression: 'file_path == "/etc/passwd" || file_path == "/etc/shadow"'
+    severity: critical
+    category: credential_access
+    mitre_id: "T1003"
+    data_types: ["3001", "6001"]
+    description: "检测系统账号文件 /etc/passwd 或 /etc/shadow 被修改"
+
+  - name: "SSH 配置异常修改"
+    expression: 'file_path == "/etc/ssh/sshd_config" || file_path.contains(".ssh/authorized_keys")'
+    severity: high
+    category: persistence
+    mitre_id: "T1098.004"
+    data_types: ["3001", "6001"]
+    description: "检测 SSH 配置或授权密钥文件修改，可能为后门植入"
+
+  - name: "系统启动项修改"
+    expression: 'file_path.contains("/etc/init.d/") || file_path.contains("/etc/systemd/system/") || file_path.contains("/etc/rc.local")'
+    severity: high
+    category: persistence
+    mitre_id: "T1037"
+    data_types: ["3001", "6001"]
+    description: "检测系统启动项或服务配置被修改"
+
+  - name: "sudoers 文件修改"
+    expression: 'file_path.contains("/etc/sudoers") || file_path.contains("/etc/sudoers.d/")'
+    severity: critical
+    category: privilege_escalation
+    mitre_id: "T1548.003"
+    data_types: ["3001", "6001"]
+    description: "检测 sudoers 配置文件修改，可能为无密码提权"
+
+  - name: "动态链接劫持 - ld.so.preload"
+    expression: 'file_path == "/etc/ld.so.preload" || file_path.contains("/etc/ld.so.conf")'
+    severity: critical
+    category: defense_evasion
+    mitre_id: "T1574.006"
+    data_types: ["3001", "6001"]
+    description: "检测动态链接器配置修改，可能为 LD_PRELOAD 劫持"
+
+  - name: "PAM 配置修改"
+    expression: 'file_path.contains("/etc/pam.d/")'
+    severity: high
+    category: credential_access
+    mitre_id: "T1556.003"
+    data_types: ["3001", "6001"]
+    description: "检测 PAM 认证模块配置修改，可能为认证后门或密码窃取"
+
+  # ==================== 网络类 (DataType 3002) ====================
+
+  - name: "高危端口外连"
+    expression: 'remote_port == "4444" || remote_port == "5555" || remote_port == "6666" || remote_port == "8888" || remote_port == "1337"'
+    severity: high
+    category: c2_communication
+    mitre_id: "T1571"
+    data_types: ["3002"]
+    description: "检测连接常见 C2/后门端口（4444/5555/6666/8888/1337）"
+
+  - name: "DNS 隧道端口外连"
+    expression: 'remote_port == "53" && exe != "/usr/bin/dig" && exe != "/usr/bin/nslookup" && exe != "/usr/bin/host"'
+    severity: medium
+    category: exfiltration
+    mitre_id: "T1048.001"
+    data_types: ["3002"]
+    description: "检测非 DNS 工具连接 53 端口，可能为 DNS 隧道"
+
+  - name: "IRC 协议外连"
+    expression: 'remote_port == "6667" || remote_port == "6668" || remote_port == "6669"'
+    severity: high
+    category: c2_communication
+    mitre_id: "T1071.001"
+    data_types: ["3002"]
+    description: "检测 IRC 协议端口外连，可能为僵尸网络 C2 通信"
+
+  # ==================== 网络探测/扫描检测 (DataType 3002) ====================
+
+  - name: "SSH 暴力尝试 - 入站连接"
+    expression: 'event_type == "tcp_accept" && local_port == "22"'
+    severity: medium
+    category: network_scan
+    mitre_id: "T1110"
+    data_types: ["3002"]
+    description: "检测到 SSH 端口（22）入站连接，高频触发时可能为暴力破解尝试"
+
+  - name: "数据库端口入站访问"
+    expression: 'event_type == "tcp_accept" && (local_port == "3306" || local_port == "5432" || local_port == "6379" || local_port == "27017" || local_port == "9200")'
+    severity: high
+    category: network_scan
+    mitre_id: "T1046"
+    data_types: ["3002"]
+    description: "检测到数据库端口（MySQL/PostgreSQL/Redis/MongoDB/Elasticsearch）入站连接，可能为未授权访问探测"
+
+  - name: "远程管理端口入站访问"
+    expression: 'event_type == "tcp_accept" && (local_port == "23" || local_port == "3389" || local_port == "5900" || local_port == "5901")'
+    severity: high
+    category: network_scan
+    mitre_id: "T1021"
+    data_types: ["3002"]
+    description: "检测到远程管理端口（Telnet/RDP/VNC）入站连接，可能为暴力破解或未授权访问"
+
+  - name: "高危服务端口入站访问"
+    expression: 'event_type == "tcp_accept" && (local_port == "2375" || local_port == "2376" || local_port == "10250" || local_port == "8443" || local_port == "6443")'
+    severity: critical
+    category: network_scan
+    mitre_id: "T1046"
+    data_types: ["3002"]
+    description: "检测到容器/K8s 管理端口（Docker API/Kubelet/API Server）入站连接，高危未授权访问风险"
+
+  - name: "ICMP 探测 - Ping 扫描"
+    expression: 'event_type == "icmp_recv" && protocol == "icmp"'
+    severity: low
+    category: network_scan
+    mitre_id: "T1018"
+    data_types: ["3002"]
+    description: "检测到 ICMP Ping 请求，可能为网络主机存活探测（注: LTO 内核下需 tracepoint 支持）"
+
+  - name: "Tor/匿名代理外连"
+    expression: 'remote_port == "9050" || remote_port == "9150" || remote_port == "9001" || remote_port == "9030"'
+    severity: high
+    category: c2_communication
+    mitre_id: "T1090.003"
+    data_types: ["3002"]
+    description: "检测连接 Tor 常用端口（9050/9150 SOCKS、9001/9030 ORPort），可能为匿名通信"
+
+  - name: "挖矿矿池端口外连"
+    expression: 'remote_port == "3333" || remote_port == "14444" || remote_port == "14433" || remote_port == "7777" || remote_port == "9999"'
+    severity: critical
+    category: cryptomining
+    mitre_id: "T1496"
+    data_types: ["3002"]
+    description: "检测连接常见挖矿矿池端口（Stratum 协议），可能为加密货币挖矿"
+
+  - name: "SOCKS 代理外连"
+    expression: 'remote_port == "1080" || remote_port == "1081"'
+    severity: medium
+    category: c2_communication
+    mitre_id: "T1090.001"
+    data_types: ["3002"]
+    description: "检测连接 SOCKS 代理端口，可能为流量代理或横向移动"
+
+  # ==================== Scanner 威胁 (DataType 7001) ====================
+
+  - name: "高危病毒检出"
+    expression: 'severity == "critical" && threat_name != ""'
+    severity: critical
+    category: malware
+    mitre_id: "T1204"
+    data_types: ["7001"]
+    description: "Scanner 检测到 critical 级别恶意文件"
+
+  - name: "勒索软件检出"
+    expression: 'threat_name.contains("Ransom") || threat_name.contains("ransom")'
+    severity: critical
+    category: ransomware
+    mitre_id: "T1486"
+    data_types: ["7001"]
+    description: "Scanner 检测到勒索软件"
+
+  # ==================== 关联类 (多 DataType) ====================
+
+  - name: "未知进程高 CPU 使用"
+    expression: 'data_type == 3000 && exe.contains("/tmp/") && cpu_usage != "" && cpu_usage != "0"'
+    severity: high
+    category: resource_hijacking
+    mitre_id: "T1496"
+    data_types: ["3000"]
+    description: "来自 /tmp 目录的进程消耗 CPU，可能为挖矿或恶意程序"

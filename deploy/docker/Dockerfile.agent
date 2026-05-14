@@ -1,0 +1,63 @@
+# Agent Dockerfile
+# 用于在 Docker 容器中运行 Agent（使用 Rocky Linux 9，更接近生产环境）
+# 注意：Agent 需要 root 权限执行主机级操作（基线检查、文件监控等）
+
+FROM --platform=$BUILDPLATFORM golang:1.25 AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+# 安装构建依赖
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录
+WORKDIR /build
+
+# 复制 go mod 文件
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 复制源代码
+COPY . .
+
+# 构建参数（通过 build args 传入）
+ARG SERVER_HOST=localhost:6751
+ARG VERSION=dev
+ARG BUILD_TIME
+
+# 构建 Agent
+ARG BUILD_TIME_DEFAULT=""
+RUN BUILD_TIME_FINAL=${BUILD_TIME:-${BUILD_TIME_DEFAULT}} && \
+    if [ -z "$BUILD_TIME_FINAL" ]; then BUILD_TIME_FINAL=$(date -u +"%Y-%m-%dT%H:%M:%SZ"); fi && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags "-X main.serverHost=$SERVER_HOST -X main.buildVersion=$VERSION -X main.buildTime=$BUILD_TIME_FINAL -s -w" \
+    -o /build/mxcsec-agent \
+    ./cmd/agent
+
+# 运行时镜像：使用 Rocky Linux 9
+FROM rockylinux:9
+
+# 安装必要的工具
+RUN dnf install -y \
+    ca-certificates \
+    tzdata \
+    && dnf clean all
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+
+# 创建必要的目录
+RUN mkdir -p /var/lib/mxcsec-agent/{certs,cache} /var/log/mxcsec-agent
+
+# 复制二进制文件
+COPY --from=builder /build/mxcsec-agent /usr/local/bin/mxcsec-agent
+RUN chmod +x /usr/local/bin/mxcsec-agent
+
+# 设置工作目录
+WORKDIR /var/lib/mxcsec-agent
+
+# 运行 Agent（以 root 运行，需要主机级操作权限）
+ENTRYPOINT ["/usr/local/bin/mxcsec-agent"]

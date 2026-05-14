@@ -1,0 +1,64 @@
+# Tetragon TracingPolicy: 进程执行监控
+# 捕获所有进程创建和退出事件，用于 CEL 规则引擎检测
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: mxsec-process-monitor
+spec:
+  # 进程执行监控 (execve)
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"    # filename
+        - index: 1
+          type: "string"    # argv (展平)
+      selectors:
+        - matchActions:
+            - action: Post
+      return: false
+      returnArg:
+        index: 0
+        type: "int"
+
+    # execveat (容器场景常用)
+    - call: "sys_execveat"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"       # dirfd
+        - index: 1
+          type: "string"    # pathname
+        - index: 2
+          type: "string"    # argv
+      selectors:
+        - matchActions:
+            - action: Post
+
+    # 进程 setuid (提权检测)
+    - call: "sys_setuid"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"       # uid
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "0"       # 切换到 root
+          matchActions:
+            - action: Post
+
+    # ptrace (调试/注入检测)
+    - call: "sys_ptrace"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"       # request (PTRACE_ATTACH=16, PTRACE_SEIZE=16902)
+        - index: 1
+          type: "int"       # pid
+      selectors:
+        - matchActions:
+            - action: Post

@@ -1,0 +1,97 @@
+name: mxsec-storage
+
+services:
+  mysql:
+    image: {{ .MySQLImage }}
+    container_name: mxsec-mysql
+    restart: always
+    network_mode: host
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ .Config.Infrastructure.MySQL.RootPassword }}"
+      MYSQL_DATABASE: "{{ .Config.Infrastructure.MySQL.Database }}"
+      MYSQL_USER: "{{ .Config.Infrastructure.MySQL.User }}"
+      MYSQL_PASSWORD: "{{ .Config.Infrastructure.MySQL.Password }}"
+      MYSQL_TCP_PORT: "{{ .MySQLPort }}"
+      TZ: "{{ .Timezone }}"
+    volumes:
+      - {{ .DataRoot }}/mysql:/var/lib/mysql
+      - {{ .InstallDir }}/current/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - {{ .InstallDir }}/current/config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - {{ .DataRoot }}/logs/mysql:/var/log/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "{{ .MySQLPort }}", "-u", "root", "-p{{ .Config.Infrastructure.MySQL.RootPassword }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: {{ .RedisImage }}
+    container_name: mxsec-redis
+    restart: always
+    network_mode: host
+    command: >
+      sh -c '
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --port {{ .RedisPort }}
+        else
+          redis-server --appendonly yes --port {{ .RedisPort }}
+        fi
+      '
+    environment:
+      REDIS_PASSWORD: "{{ .Config.Infrastructure.Redis.Password }}"
+    volumes:
+      - {{ .DataRoot }}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -p {{ .RedisPort }} -a \"$$REDIS_PASSWORD\" ping | grep -q PONG; else redis-cli -p {{ .RedisPort }} ping | grep -q PONG; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  clickhouse:
+    image: {{ .ClickHouseImage }}
+    container_name: mxsec-clickhouse
+    restart: always
+    network_mode: host
+    cap_add:
+      - SYS_NICE
+    environment:
+      CLICKHOUSE_DB: "{{ .Config.Infrastructure.ClickHouse.Database }}"
+      CLICKHOUSE_USER: "{{ .Config.Infrastructure.ClickHouse.User }}"
+      CLICKHOUSE_PASSWORD: "{{ .Config.Infrastructure.ClickHouse.Password }}"
+      CLICKHOUSE_HTTP_PORT: "{{ .ClickHouseHTTP }}"
+      CLICKHOUSE_TCP_PORT: "{{ .ClickHouseTCP }}"
+      TZ: "{{ .Timezone }}"
+    volumes:
+      - {{ .DataRoot }}/clickhouse:/var/lib/clickhouse
+      - {{ .InstallDir }}/current/deploy/init-clickhouse.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - {{ .InstallDir }}/current/config/clickhouse.xml:/etc/clickhouse-server/config.d/custom.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:{{ .ClickHouseHTTP }}/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  prometheus:
+    image: {{ .PrometheusImage }}
+    container_name: mxsec-prometheus
+    restart: always
+    user: root
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - {{ .DataRoot }}/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.enable-lifecycle"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

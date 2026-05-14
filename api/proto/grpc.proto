@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "github.com/imkerbos/mxsec-platform/api/proto/grpc";
+
+// PackagedData 是 Agent 发送给 Server 的数据包
+message PackagedData {
+  repeated EncodedRecord records = 1;  // 编码后的记录列表
+  string agent_id = 2;                  // Agent ID
+  repeated string intranet_ipv4 = 3;    // 内网 IPv4 地址列表
+  repeated string extranet_ipv4 = 4;    // 外网 IPv4 地址列表
+  repeated string intranet_ipv6 = 5;    // 内网 IPv6 地址列表
+  repeated string extranet_ipv6 = 6;   // 外网 IPv6 地址列表
+  string hostname = 7;                  // 主机名
+  string version = 8;                   // Agent 版本
+  string product = 9;                  // 产品名称
+}
+
+// EncodedRecord 是编码后的记录（Agent 不解析插件数据，直接透传）
+message EncodedRecord {
+  int32 data_type = 1;    // 数据类型
+  int64 timestamp = 2;    // 时间戳（Unix 纳秒）
+  bytes data = 3;         // 编码后的数据（protobuf bytes）
+}
+
+// Record 是解析后的记录（用于内部处理）
+message Record {
+  int32 data_type = 1;
+  int64 timestamp = 2;
+  Payload data = 3;
+}
+
+// Payload 是数据负载
+message Payload {
+  map<string, string> fields = 1;
+}
+
+// Command 是 Server 发送给 Agent 的命令
+message Command {
+  repeated Task tasks = 2;                // 任务列表
+  repeated Config configs = 3;            // 配置列表（插件配置等）
+  AgentConfig agent_config = 4;          // Agent 配置（Server 下发）
+  CertificateBundle certificate_bundle = 5;  // 证书包（首次连接时下发）
+  AgentUpdate agent_update = 6;          // Agent 更新命令（新版本推送）
+  bool agent_restart = 7;               // Agent 重启命令
+  DependencyInstall dependency_install = 8;  // 依赖安装命令
+}
+
+// AgentUpdate 是 Agent 更新命令
+message AgentUpdate {
+  string version = 1;                     // 新版本号
+  string download_url = 2;                // 下载地址
+  string sha256 = 3;                      // SHA256 校验和
+  string pkg_type = 4;                    // 包类型 (rpm/deb/binary)
+  string arch = 5;                        // 架构 (amd64/arm64)
+  bool force = 6;                         // 是否强制更新（即使版本相同也更新）
+}
+
+// AgentConfig 是 Agent 配置（由 Server 下发）
+message AgentConfig {
+  int32 heartbeat_interval = 1;      // 心跳间隔（秒）
+  string work_dir = 2;               // 工作目录
+  string product = 3;                // 产品名称
+  string version = 4;                // 版本
+  map<string, string> extra = 5;     // 额外配置（扩展用）
+}
+
+// CertificateBundle 是证书包（由 Server 下发）
+message CertificateBundle {
+  bytes ca_cert = 1;        // CA 证书
+  bytes client_cert = 2;   // 客户端证书
+  bytes client_key = 3;    // 客户端密钥
+}
+
+// Task 是任务定义
+message Task {
+  int32 data_type = 1;      // 数据类型
+  string object_name = 2;    // 对象名称（如插件名称）
+  string data = 3;          // 任务数据（JSON 字符串）
+  string token = 4;         // 任务令牌
+}
+
+// Config 是插件配置
+message Config {
+  string name = 1;              // 插件名称
+  string type = 2;              // 插件类型（如 "baseline", "collector"）
+  string version = 3;           // 插件版本
+  string sha256 = 4;            // 插件 SHA256 校验和
+  string signature = 5;         // 插件签名
+  repeated string download_urls = 6;  // 下载地址列表
+  string detail = 7;            // 配置详情（JSON 字符串）
+}
+
+// Transfer 服务：Agent 与 Server 之间的双向流通信
+service Transfer {
+  // Transfer 是双向流 RPC，用于 Agent 与 Server 之间的数据传输
+  rpc Transfer(stream PackagedData) returns (stream Command) {}
+}
+
+// FileUploadRequest 是文件上传请求
+message FileUploadRequest {
+  string token = 1;  // 上传令牌
+  bytes data = 2;    // 文件数据
+}
+
+// FileUploadResponse 是文件上传响应
+message FileUploadResponse {
+  enum StatusCode {
+    SUCCESS = 0;  // 成功
+    FAILED = 1;   // 失败
+  }
+  StatusCode status = 1;
+}
+
+// FileExt 服务：文件上传扩展服务
+service FileExt {
+  rpc Upload(stream FileUploadRequest) returns (FileUploadResponse);
+}
+
+// DependencyInstall 是依赖安装命令（Server → Agent）
+message DependencyInstall {
+  string name = 1;         // 依赖名称（如 "tetragon"）
+  string version = 2;      // 指定版本（空则使用默认版本）
+  string action = 3;       // 操作：install / uninstall / status
+  string request_id = 4;   // 请求 ID（用于结果关联）
+  string download_url = 5; // 后台下载基础地址（优先从此下载依赖包）
+}
+
+// DependencyInstallResult 是依赖安装结果（Agent → Server，通过 DataType 上报）
+// DataType = 9100
+message DependencyInstallResult {
+  string request_id = 1;  // 关联请求 ID
+  string name = 2;        // 依赖名称
+  bool success = 3;       // 是否成功
+  string message = 4;     // 结果消息
+  string version = 5;     // 安装后的版本
+}

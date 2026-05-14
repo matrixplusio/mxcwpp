@@ -1,0 +1,163 @@
+{
+  "id": "LINUX_MAC_SECURITY",
+  "name": "强制访问控制安全基线",
+  "version": "1.0.0",
+  "description": "SELinux/MAC 强制访问控制安全配置检查（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_MAC_001",
+      "category": "mac",
+      "title": "SELinux 已安装",
+      "description": "确保 SELinux 包已安装，SELinux 是 Linux 内核的强制访问控制安全机制",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": ["libselinux"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装 SELinux 相关包",
+        "command": "if command -v dnf &>/dev/null; then dnf install libselinux libselinux-utils policycoreutils -y; else yum install libselinux libselinux-utils policycoreutils -y; fi"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_002",
+      "category": "mac",
+      "title": "SELinux 未在 bootloader 中禁用",
+      "description": "GRUB 配置中不应包含 selinux=0 或 enforcing=0 参数，这会禁用 SELinux",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/default/grub", "selinux=0", "not_match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/default/grub", "enforcing=0", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/default/grub，移除 GRUB_CMDLINE_LINUX 中的 selinux=0 或 enforcing=0，然后运行 grub2-mkconfig",
+        "command": "sed -i 's/selinux=0//g; s/enforcing=0//g' /etc/default/grub && grub2-mkconfig -o /boot/grub2/grub.cfg"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_003",
+      "category": "mac",
+      "title": "SELinux 策略已配置",
+      "description": "SELinux 应配置使用 targeted 或 mls 策略",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/selinux/config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/selinux/config", "SELINUXTYPE", "^(targeted|mls)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/selinux/config，设置 SELINUXTYPE=targeted",
+        "command": "sed -i 's/^SELINUXTYPE=.*/SELINUXTYPE=targeted/' /etc/selinux/config"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_004",
+      "category": "mac",
+      "title": "SELinux 模式为 enforcing",
+      "description": "SELinux 应设置为 enforcing 模式，这是最严格的安全模式",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/selinux/config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/selinux/config", "SELINUX", "^enforcing$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/selinux/config，设置 SELINUX=enforcing，然后重启系统",
+        "command": "sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config && setenforce 1"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_005",
+      "category": "mac",
+      "title": "检查 SELinux 运行状态",
+      "description": "SELinux 当前运行状态应为 Enforcing",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["getenforce", "Enforcing"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "临时启用 SELinux enforcing 模式",
+        "command": "setenforce 1"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_006",
+      "category": "mac",
+      "title": "无 unconfined 服务运行",
+      "description": "不应有服务以 unconfined 域运行，这会绕过 SELinux 保护",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["ps -eZ 2>/dev/null | grep -c unconfined_service_t || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "检查以 unconfined_service_t 域运行的服务，并为其配置正确的 SELinux 策略",
+        "command": "ps -eZ | grep unconfined_service_t"
+      }
+    },
+    {
+      "rule_id": "LINUX_MAC_007",
+      "category": "mac",
+      "title": "SELinux 警告日志检查",
+      "description": "检查是否存在大量 SELinux 拒绝日志，可能表示配置问题",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["ausearch -m avc --start today 2>/dev/null | wc -l || echo 0", "^[0-9]{1,2}$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "检查 SELinux 拒绝日志并解决相关问题",
+        "command": "ausearch -m avc --start today | audit2why"
+      }
+    }
+  ]
+}

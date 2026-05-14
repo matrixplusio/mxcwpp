@@ -1,0 +1,177 @@
+# ======================
+# Build artifacts
+# ======================
+bin/
+dist/
+build/
+target/
+out/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+
+# Top-level binaries
+/agent
+/agentcenter
+/manager
+/consumer
+/baseline
+/baseline-plugin
+/collector-plugin
+/stress
+/migrate-metrics
+/remediation
+
+# ======================
+# Go
+# ======================
+vendor/
+go.work
+go.work.sum
+*.test
+*.out
+coverage/
+*.coverprofile
+*.coverage
+coverage.html
+coverage.xml
+
+# Generated protobuf
+*.pb.go
+*_grpc.pb.go
+
+# Profiling
+*.prof
+*.pprof
+
+# ======================
+# Node / Frontend
+# ======================
+node_modules/
+ui/dist/
+ui/dist-ssr/
+ui/build/
+ui/.vite/
+ui/.output/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ======================
+# IDE / Editor
+# ======================
+.idea/
+.vscode/
+.cursor/
+.claude/
+*.iml
+*.iws
+*.ipr
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*.swn
+*.swm
+*~
+\#*\#
+.\#*
+
+# ======================
+# OS files
+# ======================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+.Trash-*
+
+# ======================
+# Logs
+# ======================
+*.log
+*.log.*
+logs/
+
+# ======================
+# Secrets / Configs
+# ======================
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret.*
+
+# Actual config files (keep examples)
+configs/server.yaml
+configs/agent.yaml
+deploy/config/server.yaml
+deploy/.env
+
+# ======================
+# Data volumes
+# ======================
+deploy/data/
+deploy/data-perf/
+uploads/
+
+# ======================
+# Packages
+# ======================
+*.deb
+*.rpm
+*.tar.gz
+*.tgz
+*.tar
+*.zip
+*.rar
+*.7z
+
+# ======================
+# Misc
+# ======================
+Elkeid/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.pid
+*.lock
+*.sock
+
+# ======================
+# AI
+# ======================
+CLAUDE.md
+CODEX.md
+.claude/
+memory/
+
+# ======================
+# Local data
+# ======================
+data/
+
+# ======================
+# Legacy tools (root level only, not cmd/tools/)
+# ======================
+/tools/

@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+# Consumer 生产镜像
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+ARG VERSION=dev
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+RUN apk add --no-cache git protobuf protobuf-dev && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+# 生成 Protobuf Go 代码
+RUN mkdir -p api/proto/bridge api/proto/grpc && \
+    protoc \
+    --go_out=api/proto/bridge --go_opt=paths=source_relative \
+    -I=api/proto api/proto/bridge.proto && \
+    protoc \
+    --go_out=api/proto/grpc --go_opt=paths=source_relative \
+    --go-grpc_out=api/proto/grpc --go-grpc_opt=paths=source_relative \
+    -I=api/proto api/proto/grpc.proto
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-s -w -X main.buildVersion=${VERSION}" \
+    -o consumer ./cmd/server/consumer
+
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -g 10001 -S mxsec && adduser -u 10001 -S mxsec -G mxsec
+
+COPY --from=builder /app/consumer /usr/bin/consumer
+
+RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform && \
+    chown -R mxsec:mxsec /var/log/mxsec-platform /opt/mxsec-platform
+
+WORKDIR /opt/mxsec-platform
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD kill -0 1 || exit 1
+
+USER mxsec
+
+ENTRYPOINT ["/usr/bin/consumer"]
+CMD ["-config", "/etc/mxsec-platform/server.yaml"]

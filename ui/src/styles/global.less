@@ -1,0 +1,302 @@
+/* =====================================================
+   Matrix Cloud Security Platform - Global Styles
+   对齐 Elkeid / Arco Design 配色方案
+   ===================================================== */
+
+/* CSS Variables — Arco Design 色系 */
+:root {
+  /* Primary */
+  --mxsec-primary: #165DFF;
+  --mxsec-primary-hover: #4080FF;
+  --mxsec-primary-active: #0E42D2;
+  --mxsec-primary-bg: #E8F3FF;
+
+  /* Semantic */
+  --mxsec-success: #00B42A;
+  --mxsec-success-bg: #E8FFEA;
+  --mxsec-warning: #FF7D00;
+  --mxsec-warning-bg: #FFF7E8;
+  --mxsec-danger: #F53F3F;
+  --mxsec-danger-bg: #FFECE8;
+  --mxsec-critical: #CB2634;
+  --mxsec-info: #165DFF;
+
+  /* Alert Severity */
+  --mxsec-severity-critical: #F53F3F;
+  --mxsec-severity-high: #FF7D00;
+  --mxsec-severity-medium: #FADC19;
+  --mxsec-severity-low: #165DFF;
+
+  /* Layout */
+  --mxsec-navbar-height: 60px;
+  --mxsec-sider-width: 200px;
+  --mxsec-sider-collapsed-width: 48px;
+  --mxsec-body-bg: #F2F3F5;
+  --mxsec-card-bg: #FFFFFF;
+  --mxsec-navbar-bg: #FFFFFF;
+  --mxsec-sider-bg: #FFFFFF;
+
+  /* Text */
+  --mxsec-text-1: #1D2129;
+  --mxsec-text-2: #4E5969;
+  --mxsec-text-3: #86909C;
+  --mxsec-text-4: #C9CDD4;
+
+  /* Border */
+  --mxsec-border: #E5E8EF;
+  --mxsec-border-light: #F2F3F5;
+
+  /* Fill */
+  --mxsec-fill-1: #F7F8FA;
+  --mxsec-fill-2: #F2F3F5;
+  --mxsec-fill-3: #E5E6EB;
+
+  /* Spacing */
+  --mxsec-spacing-xs: 4px;
+  --mxsec-spacing-sm: 8px;
+  --mxsec-spacing-md: 16px;
+  --mxsec-spacing-lg: 24px;
+  --mxsec-spacing-xl: 32px;
+
+  /* Radius */
+  --mxsec-radius-sm: 2px;
+  --mxsec-radius-md: 4px;
+  --mxsec-radius-lg: 8px;
+}
+
+/* =====================================================
+   Page Title — 蓝色竖条装饰
+   ===================================================== */
+.page-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--mxsec-text-1);
+    margin: 0;
+    position: relative;
+    padding-left: 12px;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 18px;
+      background: var(--mxsec-primary);
+      border-radius: 2px;
+    }
+  }
+
+  .page-header-hint {
+    margin-left: 12px;
+    font-size: 13px;
+    color: var(--mxsec-text-3);
+  }
+}
+
+/* =====================================================
+   Card 样式 — Elkeid 风格: border, 不用 shadow
+   ===================================================== */
+.ant-card {
+  border-radius: var(--mxsec-radius-lg);
+  border: 1px solid var(--mxsec-border);
+  box-shadow: none;
+
+  .ant-card-head {
+    border-bottom: 1px solid var(--mxsec-border);
+    padding: 0 20px;
+    min-height: 48px;
+
+    .ant-card-head-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--mxsec-text-1);
+      padding: 12px 0;
+    }
+  }
+
+  .ant-card-body {
+    padding: 20px;
+  }
+}
+
+/* =====================================================
+   Table 样式 — 干净无斑马纹
+   ===================================================== */
+.ant-table-wrapper {
+  .ant-table {
+    .ant-table-thead > tr > th {
+      background: var(--mxsec-fill-1);
+      font-weight: 600;
+      color: var(--mxsec-text-1);
+      font-size: 13px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--mxsec-fill-3);
+    }
+
+    .ant-table-tbody > tr {
+      > td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--mxsec-border-light);
+        color: var(--mxsec-text-2);
+      }
+
+      &:hover > td {
+        background: var(--mxsec-fill-1);
+      }
+    }
+  }
+}
+
+/* =====================================================
+   Filter Bar — 筛选条件栏
+   ===================================================== */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--mxsec-fill-1);
+  border-radius: var(--mxsec-radius-md);
+  border: 1px solid var(--mxsec-border);
+}
+
+/* =====================================================
+   Stat Card — 统计卡片
+   ===================================================== */
+.stat-card {
+  background: var(--mxsec-card-bg);
+  border-radius: var(--mxsec-radius-lg);
+  border: 1px solid var(--mxsec-border);
+  padding: 20px;
+  text-align: center;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: var(--mxsec-primary);
+  }
+}
+
+/* =====================================================
+   Tag / Status 样式
+   ===================================================== */
+.ant-tag {
+  border-radius: var(--mxsec-radius-sm);
+}
+
+/* Severity Tags */
+.severity-critical {
+  color: #F53F3F;
+  background: #FFECE8;
+  border-color: #FDCDC5;
+}
+
+.severity-high {
+  color: #FF7D00;
+  background: #FFF7E8;
+  border-color: #FFE4BA;
+}
+
+.severity-medium {
+  color: #F7BA1E;
+  background: #FFFCE8;
+  border-color: #FDEEBA;
+}
+
+.severity-low {
+  color: #165DFF;
+  background: #E8F3FF;
+  border-color: #BEDAFF;
+}
+
+/* Status Tags */
+.status-online {
+  color: #00B42A;
+  background: #E8FFEA;
+  border-color: #AFF0B5;
+}
+
+.status-offline {
+  color: #F53F3F;
+  background: #FFECE8;
+  border-color: #FDCDC5;
+}
+
+/* =====================================================
+   Scrollbar — 精简风格
+   ===================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C9CDD4;
+  border-radius: 3px;
+
+  &:hover {
+    background: #86909C;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #C9CDD4 transparent;
+}
+
+/* =====================================================
+   Ant Design 微调
+   ===================================================== */
+.ant-modal {
+  .ant-modal-content {
+    border-radius: var(--mxsec-radius-lg);
+  }
+  .ant-modal-header {
+    border-bottom: 1px solid var(--mxsec-border);
+  }
+}
+
+.ant-statistic {
+  .ant-statistic-title {
+    color: var(--mxsec-text-3);
+    font-size: 13px;
+  }
+  .ant-statistic-content-value {
+    font-weight: 600;
+    color: var(--mxsec-text-1);
+  }
+}
+
+.ant-dropdown {
+  .ant-dropdown-menu {
+    border-radius: var(--mxsec-radius-md);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.ant-tabs-card {
+  .ant-tabs-tab {
+    border-radius: var(--mxsec-radius-md) var(--mxsec-radius-md) 0 0;
+  }
+}
+
+/* =====================================================
+   Utility — 辅助类
+   ===================================================== */
+.text-primary { color: var(--mxsec-text-1); }
+.text-secondary { color: var(--mxsec-text-2); }
+.text-tertiary { color: var(--mxsec-text-3); }
+.text-success { color: var(--mxsec-success); }
+.text-warning { color: var(--mxsec-warning); }
+.text-danger { color: var(--mxsec-danger); }

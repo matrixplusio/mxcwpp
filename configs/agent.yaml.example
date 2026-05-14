@@ -1,0 +1,18 @@
+# Agent 配置说明
+#
+# 注意：Agent 完全依赖构建时嵌入的配置，不需要此配置文件！
+#
+# 配置方式：
+# - Server 地址：必须通过构建时嵌入（-ldflags）
+# - 日志配置：默认 /var/log/mxsec-agent/agent.log，按天轮转，保留30天
+# - 证书：由 Server 下发，存储在 /var/lib/mxsec-agent/certs/
+#
+# 构建示例：
+# go build -ldflags "-X main.serverHost=10.0.0.1:6751 -X main.buildVersion=1.0.0" ./cmd/agent
+#
+# 默认配置：
+# - 日志路径：/var/log/mxsec-agent/agent.log
+# - 日志轮转：每天一个文件（agent.log.YYYY-MM-DD）
+# - 日志保留：30天
+# - Agent ID：/var/lib/mxsec-agent/agent_id
+# - 证书目录：/var/lib/mxsec-agent/certs/

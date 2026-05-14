@@ -1,0 +1,103 @@
+api_version: mxsec.io/v1alpha1
+kind: ClusterConfig
+
+metadata:
+  name: prod-cluster
+  environment: prod
+
+release:
+  version: v1.0.0
+  install_dir: /opt/mxsec-platform
+  data_root: /data/mxsec
+  timezone: Asia/Shanghai
+
+registry:
+  domain: harbor.example.com
+  namespace: mxsec
+  username: deployer
+  password: change-me
+
+os:
+  family: ubuntu
+  version: "22.04"
+
+network:
+  ui:
+    scheme: https
+    host: sec.example.com
+    port: 443
+  grpc:
+    host: ac.sec.example.com
+    port: 6751
+  additional_sans:
+    ips:
+      - 10.0.0.10
+      - 10.0.0.11
+      - 10.0.0.12
+    dns:
+      - sec.example.com
+      - ac.sec.example.com
+
+app:
+  jwt_secret: change-this-32-char-secret
+  log_level: info
+  log_format: json
+  heartbeat_interval: 60
+  plugins_base_url: https://sec.example.com/api/v1/plugins/download
+  prometheus_enabled: true
+  prometheus_query_url: http://localhost:9090
+  prometheus_timeout: 10s
+  manager_http_port: 8080
+  grpc_port: 6751
+  http_port: 80
+  https_port: 443
+  expose_https: false
+
+infrastructure:
+  mysql:
+    root_password: change-root-password
+    database: mxsec
+    user: mxsec_user
+    password: change-mysql-password
+    port: 13306
+  redis:
+    password: change-redis-password
+    port: 16379
+    db: 0
+  clickhouse:
+    database: mxsec
+    user: default
+    password: change-clickhouse-password
+    http_port: 8123
+    tcp_port: 9000
+  kafka:
+    enabled: true
+    broker_ports: [9092, 9094, 9095]
+    topic_prefix: prod
+
+control_plane:
+  manager_replicas: 1
+  agentcenter_replicas: 1
+  consumer_replicas: 1
+
+nodes:
+  - name: node1-control
+    host: 10.0.0.10
+    ssh_user: root
+    ssh_port: 22
+    ssh_key_path: ~/.ssh/id_rsa
+    roles: [control]
+
+  - name: node2-storage
+    host: 10.0.0.11
+    ssh_user: root
+    ssh_port: 22
+    ssh_key_path: ~/.ssh/id_rsa
+    roles: [storage]
+
+  - name: node3-kafka
+    host: 10.0.0.12
+    ssh_user: root
+    ssh_port: 22
+    ssh_key_path: ~/.ssh/id_rsa
+    roles: [kafka]

@@ -1,0 +1,387 @@
+name: mxsec-platform-dev
+
+# 开发环境 compose 文件（独立，Air 热重载）
+# 启动：docker compose -f docker-compose.dev.yml up
+
+services:
+  # ==================== 基础设施 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: mxsec-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mxsec}
+      MYSQL_USER: ${MYSQL_USER:-mxsec_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MYSQL_HOST_PORT:-13306}:3306"
+    volumes:
+      - ${DATA_DIR:-./data}/mysql:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ${DATA_DIR:-./data}/logs/mysql:/var/log/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - mxsec-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: mxsec-redis
+    restart: always
+    command: >
+      sh -c '
+        if [ -n "$REDIS_PASSWORD" ]; then
+          redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"
+        else
+          redis-server --appendonly yes
+        fi
+      '
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "16379:6379"
+    volumes:
+      - ${DATA_DIR:-./data}/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mxsec-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: mxsec-kafka
+    restart: always
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 4
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 72
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${DATA_DIR:-./data}/kafka-dev:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mxsec-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    container_name: mxsec-clickhouse
+    restart: always
+    cap_add:
+      - SYS_NICE
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxsec}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${DATA_DIR:-./data}/clickhouse:/var/lib/clickhouse
+      - ./init-clickhouse.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./config/clickhouse.xml:/etc/clickhouse-server/config.d/custom.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mxsec-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ==================== 应用服务（Air 热重载）====================
+  agentcenter:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.agentcenter.dev
+    image: mxsec-agentcenter:dev
+    container_name: mxsec-agentcenter-dev
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "6751:6751"
+      - "6752:8080"
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./certs:/etc/mxsec-platform/certs:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "
+        cd /workspace &&
+        mkdir -p tmp &&
+        go mod tidy &&
+        if command -v air > /dev/null 2>&1 && [ -f configs/air/agentcenter.toml ]; then
+          echo '使用 Air 热重载模式（AgentCenter）...';
+          air -c configs/air/agentcenter.toml
+        else
+          echo '使用 go run 模式...';
+          go run ./cmd/server/agentcenter -config /etc/mxsec-platform/server.yaml
+        fi
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/health 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    networks:
+      - mxsec-net
+
+  manager:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.manager.dev
+    image: mxsec-manager:dev
+    container_name: mxsec-manager-dev
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./certs:/etc/mxsec-platform/certs:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "
+        cd /workspace &&
+        mkdir -p tmp &&
+        go mod tidy &&
+        if command -v air > /dev/null 2>&1 && [ -f configs/air/manager.toml ]; then
+          echo '使用 Air 热重载模式（Manager）...';
+          air -c configs/air/manager.toml
+        else
+          echo '使用 go run 模式...';
+          go run ./cmd/server/manager -config /etc/mxsec-platform/server.yaml
+        fi
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/health 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    networks:
+      - mxsec-net
+
+  consumer:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.consumer.dev
+    image: mxsec-consumer:dev
+    container_name: mxsec-consumer-dev
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./certs:/etc/mxsec-platform/certs:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "
+        cd /workspace &&
+        mkdir -p tmp &&
+        go mod tidy &&
+        if command -v air > /dev/null 2>&1 && [ -f configs/air/consumer.toml ]; then
+          echo '使用 Air 热重载模式（Consumer）...';
+          air -c configs/air/consumer.toml
+        else
+          echo '使用 go run 模式...';
+          go run ./cmd/server/consumer -config /etc/mxsec-platform/server.yaml
+        fi
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "ps | grep -E 'air|/tmp/consumer|go run ./cmd/server/consumer' | grep -v grep > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    networks:
+      - mxsec-net
+
+  ui:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.ui.dev
+    image: mxsec-ui:dev
+    container_name: mxsec-ui-dev
+    restart: unless-stopped
+    depends_on:
+      manager:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../ui:/app:rw
+      - /app/node_modules
+      - ../configs/air/ui.toml:/etc/air/ui.toml:ro
+    working_dir: /app
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_ENV: development
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://0.0.0.0:3000/ 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mxsec-net
+
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.agent.dev
+    image: mxsec-agent:dev
+    container_name: mxsec-agent-dev
+    restart: unless-stopped
+    depends_on:
+      agentcenter:
+        condition: service_healthy
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - agent_data:/var/lib/mxsec-agent
+      - agent_logs:/var/log/mxsec-agent
+      - ./certs:/var/lib/mxsec-agent/certs:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+      SERVER_HOST: agentcenter:6751
+    command: >
+      sh -c "
+        cd /workspace &&
+        mkdir -p tmp &&
+        go mod tidy &&
+        if command -v air > /dev/null 2>&1 && [ -f configs/air/agent.toml ]; then
+          echo '使用 Air 热重载模式（Agent）...';
+          air -c configs/air/agent.toml
+        else
+          echo '使用 go run 模式...';
+          go run -ldflags \"-X main.serverHost=$${SERVER_HOST:-agentcenter:6751} -X main.buildVersion=$${VERSION:-dev} -X main.buildTime=$$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" ./cmd/agent
+        fi
+      "
+    networks:
+      - mxsec-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: mxsec-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.enable-lifecycle"
+    networks:
+      - mxsec-net
+
+networks:
+  mxsec-net:
+    driver: bridge
+
+volumes:
+  go_mod_cache:
+    driver: local
+  go_build_cache:
+    driver: local
+  agent_data:
+    driver: local
+  agent_logs:
+    driver: local
+  prometheus_data:
+    driver: local

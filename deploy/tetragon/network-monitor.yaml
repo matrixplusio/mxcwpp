@@ -1,0 +1,80 @@
+# Tetragon TracingPolicy: 网络连接监控
+# 通过 syscall kprobe 兼容 LTO 编译的内核（Rocky 9 / RHEL 9 等）
+# 覆盖 TCP/UDP 外连、入站、DNS、ICMP → 用于反弹 shell、C2 通信、端口扫描、网络探测检测
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: mxsec-network-monitor
+spec:
+  kprobes:
+    # TCP/UDP 主动连接（出站）
+    # 注意: Tetragon sockaddr matchArgs 只支持 saddr/sport/family
+    # 对 sys_connect 而言，"saddr" 即这个 sockaddr 本身的 IP（即目标 IP）
+    - call: "sys_connect"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"        # sockfd
+        - index: 1
+          type: "sockaddr"   # 目标地址（user-space 读取）
+        - index: 2
+          type: "int"        # addrlen
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "NotSAddr"
+              values:
+                - "127.0.0.0/8"
+                - "::1"
+          matchActions:
+            - action: Post
+
+    # 入站连接（被动 accept）
+    - call: "sys_accept4"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"        # sockfd
+        - index: 1
+          type: "sockaddr"   # 对端地址
+        - index: 3
+          type: "int"        # flags
+      selectors:
+        - matchActions:
+            - action: Post
+
+    # UDP sendto（DNS 隧道 / 高危端口检测）
+    # 注意: sockaddr 的 "sport" = 目标 sockaddr 的端口
+    - call: "sys_sendto"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"        # sockfd
+        - index: 4
+          type: "sockaddr"   # 目标地址
+      selectors:
+        - matchArgs:
+            - index: 4
+              operator: "SPort"
+              values:
+                - "53"       # DNS
+                - "853"      # DNS-over-TLS
+                - "4444"     # Metasploit
+                - "5555"
+                - "6666"
+                - "8888"
+                - "9999"
+                - "31337"
+          matchActions:
+            - action: Post
+
+    # ICMP 探测检测（Ping 扫描等）
+    # icmp_rcv 是全局符号，LTO 内核下也可用
+    - call: "icmp_rcv"
+      syscall: false
+      args:
+        - index: 0
+          type: "skb"
+      selectors:
+        - matchActions:
+            - action: Post

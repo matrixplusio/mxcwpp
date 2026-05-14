@@ -1,0 +1,635 @@
+{
+  "id": "LINUX_AUDIT_LOGGING",
+  "name": "审计日志配置基线",
+  "version": "1.0.0",
+  "description": "系统审计日志配置检查（参考 CIS Benchmark 和等保 2.0）",
+  "os_family": ["rocky", "centos", "oracle", "debian", "ubuntu", "almalinux"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_AUDIT_001",
+      "category": "audit",
+      "title": "auditd 服务运行",
+      "description": "auditd 审计服务应处于运行状态",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": ["auditd", "active"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "启动 auditd 服务：systemctl start auditd && systemctl enable auditd",
+        "command": "systemctl start auditd && systemctl enable auditd"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_002",
+      "category": "audit",
+      "title": "rsyslog 服务运行",
+      "description": "rsyslog 日志服务应处于运行状态",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": ["rsyslog", "active"]
+          },
+          {
+            "type": "service_status",
+            "param": ["syslog-ng", "active"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "启动 rsyslog 服务：systemctl start rsyslog && systemctl enable rsyslog",
+        "command": "systemctl start rsyslog && systemctl enable rsyslog"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_003",
+      "category": "audit",
+      "title": "审计日志文件权限",
+      "description": "/var/log/audit 目录权限应为 700",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/var/log/audit"]
+          },
+          {
+            "type": "file_permission",
+            "param": ["/var/log/audit", "700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 700 /var/log/audit",
+        "command": "chmod 700 /var/log/audit"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_004",
+      "category": "audit",
+      "title": "审计日志最大文件大小",
+      "description": "审计日志文件大小应有限制（max_log_file）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/auditd.conf", "^\\s*max_log_file\\s*=\\s*[1-9][0-9]*", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/audit/auditd.conf 中设置 max_log_file = 8",
+        "command": "sed -i 's/^max_log_file.*/max_log_file = 8/' /etc/audit/auditd.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_005",
+      "category": "audit",
+      "title": "审计日志满时动作",
+      "description": "审计日志满时应保留日志（max_log_file_action）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/auditd.conf", "(?i)^\\s*max_log_file_action\\s*=\\s*keep_logs", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/audit/auditd.conf 中设置 max_log_file_action = keep_logs",
+        "command": "sed -i 's/^max_log_file_action.*/max_log_file_action = keep_logs/' /etc/audit/auditd.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_006",
+      "category": "audit",
+      "title": "磁盘空间满时动作",
+      "description": "磁盘空间不足时应停止系统（space_left_action）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/auditd.conf", "(?i)^\\s*space_left_action\\s*=\\s*(email|exec|syslog|halt)", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/audit/auditd.conf 中设置 space_left_action = email",
+        "command": "sed -i 's/^space_left_action.*/space_left_action = email/' /etc/audit/auditd.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_007",
+      "category": "audit",
+      "title": "管理员空间满动作",
+      "description": "管理员空间满时应暂停审计（admin_space_left_action）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/auditd.conf", "(?i)^\\s*admin_space_left_action\\s*=\\s*(single|halt|suspend)", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/audit/auditd.conf 中设置 admin_space_left_action = halt",
+        "command": "sed -i 's/^admin_space_left_action.*/admin_space_left_action = halt/' /etc/audit/auditd.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_008",
+      "category": "audit",
+      "title": "审计用户登录登出",
+      "description": "应审计用户登录和登出事件（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-w /var/log/lastlog' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c lastlog", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加审计规则：-w /var/log/lastlog -p wa -k logins，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/var\\/log\\/lastlog.*-k logins/d' /etc/audit/rules.d/audit.rules && echo '-w /var/log/lastlog -p wa -k logins' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_009",
+      "category": "audit",
+      "title": "审计时间修改",
+      "description": "应审计系统时间修改事件（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- 'adjtimex' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c adjtimex", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加审计规则监控时间修改，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/adjtimex.*time-change/d; /settimeofday.*time-change/d; /clock_settime.*time-change/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k time-change' >> /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b32 -S adjtimex,settimeofday,clock_settime -k time-change' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_010",
+      "category": "audit",
+      "title": "审计用户/组修改",
+      "description": "应审计用户和组的修改（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-w /etc/passwd' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c '/etc/passwd'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加审计规则：-w /etc/passwd -p wa -k identity，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/etc\\/passwd.*-k identity/d' /etc/audit/rules.d/audit.rules && echo '-w /etc/passwd -p wa -k identity' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_011",
+      "category": "audit",
+      "title": "审计网络配置修改",
+      "description": "应审计网络配置的修改（配置持久化且已加载到内核）",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-w /etc/hosts' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c '/etc/hosts'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加审计规则：-w /etc/hosts -p wa -k system-locale，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/etc\\/hosts.*-k system-locale/d' /etc/audit/rules.d/audit.rules && echo '-w /etc/hosts -p wa -k system-locale' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_012",
+      "category": "audit",
+      "title": "审计 sudoers 修改",
+      "description": "应审计 sudoers 文件的修改（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-w /etc/sudoers' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c '/etc/sudoers'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加审计规则：-w /etc/sudoers -p wa -k scope，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/etc\\/sudoers.*-k scope/d' /etc/audit/rules.d/audit.rules && echo '-w /etc/sudoers -p wa -k scope' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_013",
+      "category": "audit",
+      "title": "日志轮转配置",
+      "description": "应配置日志轮转（logrotate）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/logrotate.conf"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 /etc/logrotate.conf 进行日志轮转"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_014",
+      "category": "audit",
+      "title": "系统日志保留",
+      "description": "系统日志应保留至少 90 天",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/logrotate.conf", "rotate\\s+([4-9]|[1-9][0-9]+)", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/logrotate.d/syslog", "rotate\\s+([4-9]|[1-9][0-9]+)", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 logrotate 配置中设置 rotate 4 或更大（按周轮转时）"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_015",
+      "category": "audit",
+      "title": "安全日志权限",
+      "description": "/var/log/secure 或 /var/log/auth.log 权限应不超过 600",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/var/log/secure", "600"]
+          },
+          {
+            "type": "file_permission",
+            "param": ["/var/log/auth.log", "600"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 /var/log/secure",
+        "command": "chmod 600 /var/log/secure 2>/dev/null || chmod 600 /var/log/auth.log"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_016",
+      "category": "audit",
+      "title": "审计文件权限修改 (chmod)",
+      "description": "应审计文件权限修改系统调用（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-S chmod' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c 'chmod'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加 chmod 审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-S chmod,fchmod,fchmodat.*perm_mod/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_017",
+      "category": "audit",
+      "title": "审计文件属主修改 (chown)",
+      "description": "应审计文件属主修改系统调用（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-S chown' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c 'chown'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加 chown 审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-S chown,fchown,fchownat,lchown.*perm_mod/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b64 -S chown,fchown,fchownat,lchown -F auid>=1000 -F auid!=4294967295 -k perm_mod' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_018",
+      "category": "audit",
+      "title": "审计文件属性修改 (setxattr)",
+      "description": "应审计扩展文件属性修改系统调用（配置持久化且已加载到内核）",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-S setxattr' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c 'setxattr'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加 setxattr 审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-S setxattr,lsetxattr,fsetxattr.*perm_mod/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_019",
+      "category": "audit",
+      "title": "审计失败的文件访问",
+      "description": "应审计失败的文件访问尝试 (EACCES/EPERM)（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-F exit=-EACCES' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -E 'EACCES|EPERM' | grep -c .", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加失败文件访问审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-F exit=-EACCES.*-k access/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_020",
+      "category": "audit",
+      "title": "审计特权命令执行",
+      "description": "应审计 SUID/SGID 特权命令的执行（配置持久化且已加载到内核）",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '-k privileged' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -c 'privileged'", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "为常用特权命令添加审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-F path=\\/usr\\/bin\\/sudo.*-k privileged/d; /-F path=\\/usr\\/bin\\/su .*-k privileged/d; /-F path=\\/usr\\/bin\\/passwd.*-k privileged/d; /-F path=\\/usr\\/bin\\/chsh.*-k privileged/d' /etc/audit/rules.d/audit.rules && echo '-a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged' >> /etc/audit/rules.d/audit.rules && echo '-a always,exit -F path=/usr/bin/su -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged' >> /etc/audit/rules.d/audit.rules && echo '-a always,exit -F path=/usr/bin/passwd -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged' >> /etc/audit/rules.d/audit.rules && echo '-a always,exit -F path=/usr/bin/chsh -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_021",
+      "category": "audit",
+      "title": "审计内核模块操作",
+      "description": "应审计内核模块加载和卸载操作 (insmod/rmmod)（配置持久化且已加载到内核）",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rhE -- '-w /sbin/(insmod|modprobe)|-S init_module' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -E 'init_module|delete_module|insmod|modprobe' | grep -c .", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加内核模块审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/sbin\\/insmod.*-k modules/d; /-w \\/sbin\\/rmmod.*-k modules/d; /-w \\/sbin\\/modprobe.*-k modules/d' /etc/audit/rules.d/audit.rules && echo '-w /sbin/insmod -p x -k modules' >> /etc/audit/rules.d/audit.rules && echo '-w /sbin/rmmod -p x -k modules' >> /etc/audit/rules.d/audit.rules && echo '-w /sbin/modprobe -p x -k modules' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_022",
+      "category": "audit",
+      "title": "审计 MAC 策略修改",
+      "description": "应审计 SELinux/AppArmor 策略的修改（配置持久化且已加载到内核）",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '/etc/selinux' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -E 'selinux|apparmor' | grep -c .", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加 MAC 策略审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/etc\\/selinux.*-k MAC-policy/d' /etc/audit/rules.d/audit.rules && echo '-w /etc/selinux/ -p wa -k MAC-policy' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_023",
+      "category": "audit",
+      "title": "审计规则不可变",
+      "description": "审计规则应设置为不可变 (-e 2)，且必须放在 99-finalize.rules 中确保最后加载",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/rules.d/99-finalize.rules", "^-e 2$", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/audit/rules.d/audit.rules", "^-e 2$", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 -e 2 从 audit.rules 移除，并添加到 99-finalize.rules（确保最后加载）",
+        "command": "mkdir -p /etc/audit/rules.d && sed -i '/^-e 2$/d' /etc/audit/rules.d/audit.rules 2>/dev/null; sed -i '/^-e 2$/d' /etc/audit/rules.d/99-finalize.rules 2>/dev/null; echo '-e 2' > /etc/audit/rules.d/99-finalize.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_024",
+      "category": "audit",
+      "title": "审计会话初始化",
+      "description": "应审计会话初始化文件 (utmp/wtmp/btmp)（配置持久化且已加载到内核）",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["grep -rh -- '/var/run/utmp' /etc/audit/rules.d/ /etc/audit/audit.rules 2>/dev/null | grep -v '^#' | grep -c .", "^[1-9]"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["auditctl -l | grep -E 'utmp|wtmp|btmp' | grep -c .", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "添加会话审计规则，并加载到内核",
+        "command": "touch /etc/audit/rules.d/audit.rules && sed -i '/-w \\/var\\/run\\/utmp.*-k session/d; /-w \\/var\\/log\\/wtmp.*-k session/d; /-w \\/var\\/log\\/btmp.*-k session/d' /etc/audit/rules.d/audit.rules && echo '-w /var/run/utmp -p wa -k session' >> /etc/audit/rules.d/audit.rules && echo '-w /var/log/wtmp -p wa -k session' >> /etc/audit/rules.d/audit.rules && echo '-w /var/log/btmp -p wa -k session' >> /etc/audit/rules.d/audit.rules",
+        "restart_services": ["auditd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_025",
+      "category": "audit",
+      "title": "journald 持久化存储",
+      "description": "journald 应配置为持久化存储日志",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/systemd/journald.conf", "^\\s*Storage\\s*=\\s*persistent", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 journald 持久化存储",
+        "command": "sed -i 's/^#*Storage=.*/Storage=persistent/' /etc/systemd/journald.conf && systemctl restart systemd-journald"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_026",
+      "category": "audit",
+      "title": "journald 日志压缩",
+      "description": "journald 应配置压缩日志以节省空间",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/systemd/journald.conf", "^\\s*Compress\\s*=\\s*yes", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 journald 压缩日志",
+        "command": "sed -i 's/^#*Compress=.*/Compress=yes/' /etc/systemd/journald.conf && systemctl restart systemd-journald"
+      }
+    },
+    {
+      "rule_id": "LINUX_AUDIT_027",
+      "category": "audit",
+      "title": "rsyslog 默认文件权限",
+      "description": "rsyslog 创建的日志文件权限应为 0640 或更严格",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/rsyslog.conf", "\\$FileCreateMode\\s+0[0-6][04]0", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 rsyslog 文件权限",
+        "command": "sed -i '/\\$FileCreateMode/d' /etc/rsyslog.conf && echo '$FileCreateMode 0640' >> /etc/rsyslog.conf && systemctl restart rsyslog"
+      }
+    }
+  ]
+}

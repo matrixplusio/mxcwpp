@@ -1,0 +1,63 @@
+<clickhouse>
+    <!-- MxSec Platform - ClickHouse 生产加固配置 -->
+
+    <!-- 关闭系统内部日志（压测环境减少内存占用） -->
+    <trace_log remove="1"/>
+    <text_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <processors_profile_log remove="1"/>
+
+    <!-- 慢查询日志（超过 2 秒的查询写入 system.query_log） -->
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_log>
+
+    <!-- 控制后台合并线程，既满足 MergeTree 约束，也避免在 16G Docker 配额下过度并发 -->
+    <background_pool_size>16</background_pool_size>
+    <background_merges_mutations_concurrency_ratio>2</background_merges_mutations_concurrency_ratio>
+
+    <!-- MergeTree 数据压缩（zstd 替代默认 lz4，压缩率更高） -->
+    <compression>
+        <case>
+            <min_part_size>10000000000</min_part_size>
+            <min_part_size_ratio>0.01</min_part_size_ratio>
+            <method>zstd</method>
+            <level>1</level>
+        </case>
+    </compression>
+
+    <!-- 用户默认内存限制 -->
+    <profiles>
+        <default>
+            <max_concurrent_queries>64</max_concurrent_queries>
+            <max_memory_usage>2147483648</max_memory_usage>
+            <max_execution_time>30</max_execution_time>
+            <log_queries>1</log_queries>
+            <log_queries_min_type>QUERY_FINISH</log_queries_min_type>
+            <log_queries_min_query_duration_ms>2000</log_queries_min_query_duration_ms>
+            <readonly>0</readonly>
+        </default>
+        <!-- 只读用户（供监控 / 报表查询使用） -->
+        <readonly>
+            <readonly>1</readonly>
+            <max_concurrent_queries>16</max_concurrent_queries>
+            <max_memory_usage>1073741824</max_memory_usage>
+            <max_execution_time>60</max_execution_time>
+        </readonly>
+    </profiles>
+
+    <!-- 指标导出（Prometheus 格式，供 Grafana 抓取） -->
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <status_info>true</status_info>
+    </prometheus>
+</clickhouse>

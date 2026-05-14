@@ -1,0 +1,10 @@
+.git
+.DS_Store
+dist/
+tmp/
+data/
+memory/
+.claude/
+deploy/data/
+ui/node_modules/
+ui/dist/

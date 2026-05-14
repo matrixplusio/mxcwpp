@@ -1,0 +1,22 @@
+# 开发环境 Dockerfile for Consumer
+# 支持代码热重载和调试
+
+FROM golang:1.25-alpine
+
+RUN apk add --no-cache \
+    git \
+    make \
+    curl \
+    wget \
+    ca-certificates \
+    tzdata
+
+RUN go install github.com/air-verse/air@latest
+
+ENV PATH="${PATH}:/root/go/bin"
+
+WORKDIR /workspace
+
+ENV TZ=Asia/Shanghai
+
+CMD ["sh", "-c", "go run ./cmd/server/consumer -config /etc/mxsec-platform/server.yaml"]

@@ -1,0 +1,191 @@
+{
+  "id": "LINUX_NETWORK_PROTOCOLS",
+  "name": "网络协议安全基线",
+  "version": "1.0.0",
+  "description": "禁用不安全的网络协议和模块（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_NET_001",
+      "category": "network",
+      "title": "禁用 DCCP 协议模块",
+      "description": "DCCP (Datagram Congestion Control Protocol) 很少使用，应禁用以减少攻击面",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/dccp.conf", "install dccp /bin/(true|false)", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/dccp.conf", "blacklist dccp", "match"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["lsmod | grep -c '^dccp' || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 DCCP 协议模块",
+        "command": "echo 'install dccp /bin/true' > /etc/modprobe.d/dccp.conf && echo 'blacklist dccp' >> /etc/modprobe.d/dccp.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_002",
+      "category": "network",
+      "title": "禁用 SCTP 协议模块",
+      "description": "SCTP (Stream Control Transmission Protocol) 很少使用，应禁用以减少攻击面",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/sctp.conf", "install sctp /bin/(true|false)", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/sctp.conf", "blacklist sctp", "match"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["lsmod | grep -c '^sctp' || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 SCTP 协议模块",
+        "command": "echo 'install sctp /bin/true' > /etc/modprobe.d/sctp.conf && echo 'blacklist sctp' >> /etc/modprobe.d/sctp.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_003",
+      "category": "network",
+      "title": "禁用 RDS 协议模块",
+      "description": "RDS (Reliable Datagram Sockets) 很少使用，应禁用以减少攻击面",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/rds.conf", "install rds /bin/(true|false)", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/rds.conf", "blacklist rds", "match"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["lsmod | grep -c '^rds' || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 RDS 协议模块",
+        "command": "echo 'install rds /bin/true' > /etc/modprobe.d/rds.conf && echo 'blacklist rds' >> /etc/modprobe.d/rds.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_004",
+      "category": "network",
+      "title": "禁用 TIPC 协议模块",
+      "description": "TIPC (Transparent Inter-Process Communication) 很少使用，应禁用以减少攻击面",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/tipc.conf", "install tipc /bin/(true|false)", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/tipc.conf", "blacklist tipc", "match"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["lsmod | grep -c '^tipc' || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 TIPC 协议模块",
+        "command": "echo 'install tipc /bin/true' > /etc/modprobe.d/tipc.conf && echo 'blacklist tipc' >> /etc/modprobe.d/tipc.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_005",
+      "category": "network",
+      "title": "禁用无线接口",
+      "description": "服务器环境应禁用无线网络接口，减少攻击面",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["ip link show 2>/dev/null | grep -cE 'wlan|wl[a-z]' || echo 0", "^0$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用无线网络接口或卸载无线网卡驱动",
+        "command": "nmcli radio wifi off 2>/dev/null || echo 'No wireless interface'"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_006",
+      "category": "network",
+      "title": "禁用 IPv6 (可选)",
+      "description": "如果不使用 IPv6，应禁用以减少攻击面（可选检查）",
+      "severity": "low",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.all.disable_ipv6", "1"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["ip -6 addr show 2>/dev/null | grep -c 'inet6' || echo 0", "^[0-2]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "如需禁用 IPv6，添加内核参数",
+        "command": "sysctl -w net.ipv6.conf.all.disable_ipv6=1"
+      }
+    },
+    {
+      "rule_id": "LINUX_NET_007",
+      "category": "network",
+      "title": "禁用蓝牙",
+      "description": "服务器环境应禁用蓝牙服务，减少攻击面",
+      "severity": "low",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": ["bluetooth", "inactive"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["systemctl is-enabled bluetooth 2>/dev/null || echo disabled", "^(disabled|masked|not-found)"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用蓝牙服务",
+        "command": "systemctl stop bluetooth && systemctl disable bluetooth && systemctl mask bluetooth"
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package bridge;
+
+option go_package = "github.com/imkerbos/mxsec-platform/api/proto/bridge";
+
+// Record 是插件发送给 Agent 的数据记录
+message Record {
+  int32 data_type = 1;      // 数据类型（如 8000=基线检查结果，5050=进程数据等）
+  int64 timestamp = 2;      // 时间戳（Unix 纳秒）
+  Payload data = 3;         // 数据负载
+}
+
+// Payload 是数据负载，使用 key-value 形式
+message Payload {
+  map<string, string> fields = 1;
+}
+
+// Task 是 Agent 发送给插件的任务
+message Task {
+  int32 data_type = 1;      // 数据类型
+  string object_name = 2;    // 对象名称（如插件名称）
+  string data = 3;          // 任务数据（JSON 字符串）
+  string token = 4;         // 任务令牌
+}

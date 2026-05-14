@@ -1,0 +1,32 @@
+# 开发环境 Dockerfile for AgentCenter
+# 支持代码热重载和调试
+
+FROM golang:1.25-alpine
+
+# 安装开发工具
+RUN apk add --no-cache \
+    git \
+    make \
+    curl \
+    wget \
+    ca-certificates \
+    tzdata \
+    netcat-openbsd
+
+# 安装 Air（Go 热重载工具）
+# Air 项目已迁移到新仓库 github.com/air-verse/air
+RUN go install github.com/air-verse/air@latest
+
+# 确保 Air 在 PATH 中
+ENV PATH="${PATH}:/root/go/bin"
+
+WORKDIR /workspace
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+
+# 暴露端口
+EXPOSE 6751
+
+# 默认命令（会被 docker-compose 覆盖）
+CMD ["sh", "-c", "go run ./cmd/server/agentcenter -config /etc/mxsec-platform/server.yaml"]

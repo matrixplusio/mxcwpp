@@ -1,0 +1,45 @@
+# 开发环境 Dockerfile for Agent
+# 支持代码热重载和调试
+# 使用 Rocky Linux 9 作为基础镜像，更接近生产环境
+# 注意：Agent 需要构建时嵌入 Server 地址，在 docker-compose 中通过环境变量传递
+
+FROM rockylinux:9
+
+# 安装 Go 1.25 和开发工具
+# 注意：Rocky Linux 9 默认包含 curl-minimal，需要替换为 curl
+RUN dnf install -y --allowerasing \
+    git \
+    make \
+    curl \
+    wget \
+    ca-certificates \
+    tzdata \
+    && dnf clean all
+
+# 安装 Go（从官方二进制包）
+# 使用 Go 1.25.5（最新稳定版，2025年12月）
+ENV GO_VERSION=1.25.5
+RUN cd /tmp && \
+    curl -L https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz -o go.tar.gz && \
+    tar -C /usr/local -xzf go.tar.gz && \
+    rm go.tar.gz
+
+# 设置 Go 环境变量
+ENV PATH="${PATH}:/usr/local/go/bin"
+ENV GOPATH=/go
+ENV PATH="${PATH}:${GOPATH}/bin"
+
+# 安装 Air（Go 热重载工具）
+# Air 项目已迁移到新仓库 github.com/air-verse/air
+RUN /usr/local/go/bin/go install github.com/air-verse/air@latest
+
+WORKDIR /workspace
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+
+# 创建必要的目录
+RUN mkdir -p /var/lib/mxsec-agent/{certs,cache} /var/log/mxsec-agent
+
+# 默认命令（会被 docker-compose 覆盖）
+CMD ["sh", "-c", "go run ./cmd/agent"]

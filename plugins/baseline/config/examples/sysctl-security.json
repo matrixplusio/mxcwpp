@@ -1,0 +1,611 @@
+{
+  "id": "LINUX_SYSCTL_SECURITY",
+  "name": "内核安全参数基线",
+  "version": "2.0.0",
+  "description": "内核安全参数检查（参考 CIS Benchmark 和等保 2.0）",
+  "os_family": ["rocky", "centos", "oracle", "debian", "ubuntu", "almalinux"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_SYSCTL_001",
+      "category": "sysctl",
+      "title": "禁止 IP 转发",
+      "description": "非路由服务器应禁用 IP 转发（net.ipv4.ip_forward=0）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.ip_forward", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.ip_forward=0，并添加到 /etc/sysctl.conf",
+        "command": "sysctl -w net.ipv4.ip_forward=0 && echo 'net.ipv4.ip_forward=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_002",
+      "category": "sysctl",
+      "title": "启用 SYN Cookie 防护",
+      "description": "应启用 SYN Cookie 防护 SYN Flood 攻击",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.tcp_syncookies", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.tcp_syncookies=1",
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1 && echo 'net.ipv4.tcp_syncookies=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_003",
+      "category": "sysctl",
+      "title": "禁止 ICMP 重定向接收",
+      "description": "应禁止接收 ICMP 重定向包，防止路由欺骗",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.accept_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.accept_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && echo 'net.ipv4.conf.all.accept_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_004",
+      "category": "sysctl",
+      "title": "禁止默认 ICMP 重定向",
+      "description": "默认网卡应禁止 ICMP 重定向",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.default.accept_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.default.accept_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.default.accept_redirects=0 && echo 'net.ipv4.conf.default.accept_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_005",
+      "category": "sysctl",
+      "title": "禁止安全 ICMP 重定向",
+      "description": "应禁止接收安全 ICMP 重定向",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.secure_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.secure_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.secure_redirects=0 && echo 'net.ipv4.conf.all.secure_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_006",
+      "category": "sysctl",
+      "title": "禁止发送 ICMP 重定向",
+      "description": "非路由服务器应禁止发送 ICMP 重定向",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.send_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.send_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.send_redirects=0 && echo 'net.ipv4.conf.all.send_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_007",
+      "category": "sysctl",
+      "title": "禁止默认发送 ICMP 重定向",
+      "description": "默认网卡应禁止发送 ICMP 重定向",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.default.send_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.default.send_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.default.send_redirects=0 && echo 'net.ipv4.conf.default.send_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_008",
+      "category": "sysctl",
+      "title": "启用源地址验证",
+      "description": "启用反向路径过滤，防止 IP 欺骗",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.rp_filter", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.rp_filter=1",
+        "command": "sysctl -w net.ipv4.conf.all.rp_filter=1 && echo 'net.ipv4.conf.all.rp_filter=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_009",
+      "category": "sysctl",
+      "title": "默认源地址验证",
+      "description": "默认网卡应启用反向路径过滤",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.default.rp_filter", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.default.rp_filter=1",
+        "command": "sysctl -w net.ipv4.conf.default.rp_filter=1 && echo 'net.ipv4.conf.default.rp_filter=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_010",
+      "category": "sysctl",
+      "title": "忽略 ICMP 广播请求",
+      "description": "忽略 ICMP 广播请求，防止 Smurf 攻击",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.icmp_echo_ignore_broadcasts", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.icmp_echo_ignore_broadcasts=1",
+        "command": "sysctl -w net.ipv4.icmp_echo_ignore_broadcasts=1 && echo 'net.ipv4.icmp_echo_ignore_broadcasts=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_011",
+      "category": "sysctl",
+      "title": "忽略伪造的 ICMP 错误",
+      "description": "忽略伪造的 ICMP 错误消息",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.icmp_ignore_bogus_error_responses", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.icmp_ignore_bogus_error_responses=1",
+        "command": "sysctl -w net.ipv4.icmp_ignore_bogus_error_responses=1 && echo 'net.ipv4.icmp_ignore_bogus_error_responses=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_012",
+      "category": "sysctl",
+      "title": "启用 ASLR",
+      "description": "启用地址空间布局随机化，增强安全性",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.randomize_va_space", "2"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.randomize_va_space=2",
+        "command": "sysctl -w kernel.randomize_va_space=2 && echo 'kernel.randomize_va_space=2' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_013",
+      "category": "sysctl",
+      "title": "禁止源路由包",
+      "description": "禁止接收源路由包，防止路由欺骗",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.accept_source_route", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.accept_source_route=0",
+        "command": "sysctl -w net.ipv4.conf.all.accept_source_route=0 && echo 'net.ipv4.conf.all.accept_source_route=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_014",
+      "category": "sysctl",
+      "title": "默认禁止源路由包",
+      "description": "默认网卡应禁止接收源路由包",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.default.accept_source_route", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.default.accept_source_route=0",
+        "command": "sysctl -w net.ipv4.conf.default.accept_source_route=0 && echo 'net.ipv4.conf.default.accept_source_route=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_015",
+      "category": "sysctl",
+      "title": "记录可疑数据包",
+      "description": "应记录可疑的网络数据包",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.all.log_martians", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.log_martians=1",
+        "command": "sysctl -w net.ipv4.conf.all.log_martians=1 && echo 'net.ipv4.conf.all.log_martians=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_016",
+      "category": "sysctl",
+      "title": "默认记录可疑数据包",
+      "description": "默认网卡应记录可疑数据包",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv4.conf.default.log_martians", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.default.log_martians=1",
+        "command": "sysctl -w net.ipv4.conf.default.log_martians=1 && echo 'net.ipv4.conf.default.log_martians=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_017",
+      "category": "sysctl",
+      "title": "禁用 IPv6 路由广告",
+      "description": "如果不使用 IPv6，应禁用路由广告接收",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.all.accept_ra", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv6.conf.all.accept_ra=0",
+        "command": "sysctl -w net.ipv6.conf.all.accept_ra=0 && echo 'net.ipv6.conf.all.accept_ra=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_018",
+      "category": "sysctl",
+      "title": "禁用 IPv6 重定向",
+      "description": "应禁用 IPv6 ICMP 重定向接收",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.all.accept_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv6.conf.all.accept_redirects=0",
+        "command": "sysctl -w net.ipv6.conf.all.accept_redirects=0 && echo 'net.ipv6.conf.all.accept_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_019",
+      "category": "sysctl",
+      "title": "限制 core dump",
+      "description": "限制 SUID 程序的 core dump，防止敏感信息泄露",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["fs.suid_dumpable", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 fs.suid_dumpable=0",
+        "command": "sysctl -w fs.suid_dumpable=0 && echo 'fs.suid_dumpable=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_020",
+      "category": "sysctl",
+      "title": "限制内核指针泄露",
+      "description": "限制非特权用户查看内核指针",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.kptr_restrict", "^[12]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.kptr_restrict=1 或 2",
+        "command": "sysctl -w kernel.kptr_restrict=1 && echo 'kernel.kptr_restrict=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_021",
+      "category": "sysctl",
+      "title": "限制 dmesg 访问",
+      "description": "限制非特权用户访问 dmesg",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.dmesg_restrict", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.dmesg_restrict=1",
+        "command": "sysctl -w kernel.dmesg_restrict=1 && echo 'kernel.dmesg_restrict=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_022",
+      "category": "sysctl",
+      "title": "限制 ptrace 范围",
+      "description": "限制 ptrace 的使用范围，增强安全性",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.yama.ptrace_scope", "^[123]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.yama.ptrace_scope=1 或更高",
+        "command": "sysctl -w kernel.yama.ptrace_scope=1 && echo 'kernel.yama.ptrace_scope=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_023",
+      "category": "sysctl",
+      "title": "禁用 Magic SysRq",
+      "description": "应禁用或限制 Magic SysRq 键功能",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.sysrq", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.sysrq=0",
+        "command": "sysctl -w kernel.sysrq=0 && echo 'kernel.sysrq=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_024",
+      "category": "sysctl",
+      "title": "禁止非特权用户执行 BPF",
+      "description": "限制非特权用户使用 BPF 系统调用",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.unprivileged_bpf_disabled", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.unprivileged_bpf_disabled=1",
+        "command": "sysctl -w kernel.unprivileged_bpf_disabled=1 && echo 'kernel.unprivileged_bpf_disabled=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_025",
+      "category": "sysctl",
+      "title": "启用 ExecShield",
+      "description": "启用内核执行保护（如果可用）",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.exec-shield", "1"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.exec-shield=1（部分内核版本支持）",
+        "command": "sysctl -w kernel.exec-shield=1 2>/dev/null && echo 'kernel.exec-shield=1' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_026",
+      "category": "sysctl",
+      "title": "限制用户命名空间",
+      "description": "限制非特权用户创建用户命名空间，减少容器逃逸风险",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["user.max_user_namespaces", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 user.max_user_namespaces=0（注意：可能影响容器功能）",
+        "command": "sysctl -w user.max_user_namespaces=0 && echo 'user.max_user_namespaces=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_027",
+      "category": "sysctl",
+      "title": "限制性能监控",
+      "description": "限制非特权用户使用性能监控功能，防止侧信道攻击",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["kernel.perf_event_paranoid", "^[23]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 kernel.perf_event_paranoid=2 或更高",
+        "command": "sysctl -w kernel.perf_event_paranoid=2 && echo 'kernel.perf_event_paranoid=2' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_028",
+      "category": "sysctl",
+      "title": "IPv6 默认禁止源路由",
+      "description": "默认网卡应禁止接收 IPv6 源路由包",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.default.accept_source_route", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv6.conf.default.accept_source_route=0",
+        "command": "sysctl -w net.ipv6.conf.default.accept_source_route=0 && echo 'net.ipv6.conf.default.accept_source_route=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_029",
+      "category": "sysctl",
+      "title": "IPv6 默认禁止路由广告",
+      "description": "默认网卡应禁止接收 IPv6 路由广告",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.default.accept_ra", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv6.conf.default.accept_ra=0",
+        "command": "sysctl -w net.ipv6.conf.default.accept_ra=0 && echo 'net.ipv6.conf.default.accept_ra=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_SYSCTL_030",
+      "category": "sysctl",
+      "title": "IPv6 默认禁止重定向",
+      "description": "默认网卡应禁止接收 IPv6 ICMP 重定向",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": ["net.ipv6.conf.default.accept_redirects", "0"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv6.conf.default.accept_redirects=0",
+        "command": "sysctl -w net.ipv6.conf.default.accept_redirects=0 && echo 'net.ipv6.conf.default.accept_redirects=0' >> /etc/sysctl.d/99-security.conf"
+      }
+    }
+  ]
+}

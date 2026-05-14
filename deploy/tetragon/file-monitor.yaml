@@ -1,0 +1,88 @@
+# Tetragon TracingPolicy: 文件访问监控
+# 通过 syscall kprobe 兼容 LTO 编译的内核（Rocky 9 / RHEL 9 等）
+# 覆盖敏感路径访问 → 用于 FIM、webshell、持久化后门检测
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: mxsec-file-monitor
+spec:
+  kprobes:
+    # openat 系统调用：覆盖所有文件打开（open/openat 最终都走这里）
+    - call: "sys_openat"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"       # dfd
+        - index: 1
+          type: "string"    # filename (user-space)
+        - index: 2
+          type: "int"       # flags
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Prefix"
+              values:
+                # 敏感账户 / 认证 / 审计
+                - "/etc/passwd"
+                - "/etc/shadow"
+                - "/etc/sudoers"
+                - "/etc/crontab"
+                - "/etc/cron.d"
+                - "/etc/ssh/sshd_config"
+                - "/etc/ld.so.preload"
+                - "/etc/pam.d"
+                - "/root/.ssh"
+                - "/root/.bash_history"
+                - "/var/spool/cron"
+                # Web 目录（webshell 检测）
+                - "/var/www"
+                - "/usr/share/nginx/html"
+                - "/opt/lampp/htdocs"
+                # 启动项 / 服务配置
+                - "/etc/init.d"
+                - "/etc/systemd/system"
+                - "/usr/lib/systemd/system"
+                # 内核模块 / 动态链接劫持
+                - "/lib/modules"
+                - "/etc/modprobe.d"
+                - "/etc/ld.so.conf"
+                - "/etc/ld.so.conf.d"
+          matchActions:
+            - action: Post
+
+    # openat2 系统调用（新内核 5.6+ 引入，glibc 2.35+ 会走这个）
+    - call: "sys_openat2"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"       # dfd
+        - index: 1
+          type: "string"    # filename
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Prefix"
+              values:
+                - "/etc/passwd"
+                - "/etc/shadow"
+                - "/etc/sudoers"
+                - "/etc/crontab"
+                - "/etc/cron.d"
+                - "/etc/ssh/sshd_config"
+                - "/etc/ld.so.preload"
+                - "/etc/pam.d"
+                - "/root/.ssh"
+                - "/root/.bash_history"
+                - "/var/spool/cron"
+                - "/var/www"
+                - "/usr/share/nginx/html"
+                - "/opt/lampp/htdocs"
+                - "/etc/init.d"
+                - "/etc/systemd/system"
+                - "/usr/lib/systemd/system"
+                - "/lib/modules"
+                - "/etc/modprobe.d"
+                - "/etc/ld.so.conf"
+                - "/etc/ld.so.conf.d"
+          matchActions:
+            - action: Post

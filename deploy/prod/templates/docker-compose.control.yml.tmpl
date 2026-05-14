@@ -1,0 +1,80 @@
+name: mxsec-control
+
+services:
+  manager:
+    image: {{ .ManagerImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/manager:/var/log/mxsec-platform
+      - {{ .DataRoot }}/plugins:/opt/mxsec-platform/plugins
+      - {{ .DataRoot }}/uploads:/opt/mxsec-platform/uploads
+      - {{ .DataRoot }}/data:/opt/mxsec-platform/data
+      - {{ .DataRoot }}/clamav:/var/lib/clamav
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  agentcenter:
+    image: {{ .AgentCenterImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server-ac.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/agentcenter:/var/log/mxsec-platform
+      - {{ .DataRoot }}/plugins:/opt/mxsec-platform/plugins
+      - {{ .DataRoot }}/data:/opt/mxsec-platform/data:ro
+      - {{ .DataRoot }}/uploads:/opt/mxsec-platform/uploads:ro
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 6751"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+{{- if gt .Assignment.ConsumerReplicas 0 }}
+  consumer:
+    image: {{ .ConsumerImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/consumer:/var/log/mxsec-platform
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+{{- end }}
+
+  ui:
+    image: {{ .UIImage }}
+    restart: always
+    network_mode: host
+    depends_on:
+      manager:
+        condition: service_healthy
+    volumes:
+      - {{ .InstallDir }}/current/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - {{ .DataRoot }}/logs/nginx:/var/log/nginx
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

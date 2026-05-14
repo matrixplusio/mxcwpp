@@ -1,0 +1,115 @@
+# Server 配置文件示例
+# 复制此文件为 server.yaml 并根据实际情况修改配置
+
+# 服务器配置
+server:
+  # gRPC 服务监听地址（AgentCenter）
+  grpc:
+    host: "0.0.0.0"
+    port: 6751
+  
+  # HTTP 服务监听地址（Manager，可选）
+  http:
+    host: "0.0.0.0"
+    port: 8080
+
+  # 外网访问地址（用于拼接 K8s Audit Webhook URL）
+  # 格式：https://your-domain.com（不带尾部斜杠）
+  # 如果为空，则使用 http://host:port 作为 fallback（仅适用于内网环境）
+  external_url: ""
+
+# 数据库配置
+database:
+  # 数据库类型：mysql 或 postgres
+  type: "mysql"
+  
+  # MySQL 配置
+  mysql:
+    host: "localhost"
+    port: 3306
+    user: "mxsec_user"
+    password: "mxsec_password"
+    database: "mxsec"
+    charset: "utf8mb4"
+    parse_time: true
+    loc: "Local"
+    max_idle_conns: 10
+    max_open_conns: 100
+    conn_max_lifetime: "1h"
+  
+  # PostgreSQL 配置
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "mxsec_user"
+    password: "mxsec_password"
+    database: "mxsec"
+    sslmode: "disable"
+    timezone: "Asia/Shanghai"
+    max_idle_conns: 10
+    max_open_conns: 100
+    conn_max_lifetime: "1h"
+
+# mTLS 配置
+mtls:
+  # CA 证书路径
+  ca_cert: "certs/ca.crt"
+  
+  # Server 证书路径
+  server_cert: "certs/server.crt"
+  
+  # Server 私钥路径
+  server_key: "certs/server.key"
+
+# 日志配置
+log:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json 或 console
+  file: "/var/log/mxsec-server/server.log"
+  max_age: 30  # 保留天数
+
+# Agent 配置（下发到 Agent）
+agent:
+  heartbeat_interval: 60  # 心跳间隔（秒）
+  work_dir: "/var/lib/mxsec-agent"
+
+# 插件配置
+plugins:
+  # 插件存放目录（本地路径）
+  dir: "dist/plugins"
+  # 插件下载基础 URL（Agent 用于下载插件的 URL 前缀）
+  # 例如：http://192.168.8.140:8080/api/v1/plugins/download
+  # 重要：必须是 Agent 可以访问的地址（不能使用 localhost）
+  # 格式：http(s)://IP或域名:端口/api/v1/plugins/download
+  # 如果为空，将使用相对路径（仅适用于 Agent 和 Server 在同一网络的场景）
+  base_url: ""
+
+# 监控指标配置
+metrics:
+  # MySQL 存储配置（默认启用）
+  mysql:
+    enabled: true          # 默认启用 MySQL 存储（如果启用 Prometheus 则自动禁用）
+    retention_days: 30     # 数据保留天数（默认 30 天）
+    batch_size: 100        # 批量插入大小（默认 100）
+    flush_interval: 5s     # 刷新间隔（默认 5 秒）
+  
+  # Prometheus 配置（可选，启用后 MySQL 存储将自动禁用）
+  # 注意：必须配置外部 Prometheus 服务，本项目不自动拉起 Prometheus
+  prometheus:
+    enabled: false         # 是否启用 Prometheus 远程写入（启用后 MySQL 存储将禁用）
+    # 方式 1：使用 Prometheus Remote Write API（推荐）
+    # 需要配置外部 Prometheus 服务，并启用 remote_write 功能
+    remote_write_url: ""   # 例如: "http://prometheus:9090/api/v1/write"
+    # Prometheus Query API URL（用于查询监控数据）
+    # 如果为空，将自动从 remote_write_url 提取基础 URL
+    query_url: ""          # 例如: "http://prometheus:9090"（可选）
+    # 方式 2：使用 Pushgateway（可选，与 remote_write_url 二选一）
+    # 需要部署 Pushgateway 服务
+    pushgateway_url: ""    # 例如: "http://pushgateway:9091"
+    job_name: "mxsec-platform"  # Job 名称（默认 "mxsec-platform"）
+    timeout: 10s           # 请求超时（默认 10 秒）
+
+# GKE 审计日志接入说明
+# GCP Pub/Sub 配置已迁移到集群级别（UI → 容器安全 → 集群管理 → 集群详情 → GCP Pub/Sub 配置）
+# 每个 GKE 集群可独立配置 project_id、subscription 和 SA 凭据
+# 详见: docs/deployment/gke-audit-log-setup.md

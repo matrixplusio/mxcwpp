@@ -1,0 +1,27 @@
+[Unit]
+Description=Matrix Cloud Security Platform Agent
+Documentation=https://github.com/imkerbos/mxsec-platform
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/mxsec-agent
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxsec-agent
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=1G
+CPUQuota=100%
+
+# 环境变量
+Environment="TZ=Asia/Shanghai"
+
+[Install]
+WantedBy=multi-user.target

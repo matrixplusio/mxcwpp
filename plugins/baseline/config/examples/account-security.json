@@ -1,0 +1,596 @@
+{
+  "id": "LINUX_ACCOUNT_SECURITY",
+  "name": "账户安全基线",
+  "version": "1.0.0",
+  "description": "系统账户安全检查（参考 CIS Benchmark 和等保 2.0）",
+  "os_family": [
+    "rocky",
+    "centos",
+    "oracle",
+    "debian",
+    "ubuntu",
+    "almalinux"
+  ],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_ACCOUNT_001",
+      "category": "account",
+      "title": "root 账户 UID 为 0",
+      "description": "root 账户的 UID 必须为 0",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/passwd",
+              "^root:x:0:0:",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "确保 /etc/passwd 中 root 账户的 UID 为 0"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_002",
+      "category": "account",
+      "title": "无其他 UID 为 0 的账户",
+      "description": "除 root 外不应存在 UID 为 0 的账户",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($3 == 0 && $1 != \"root\") { print $1 }' /etc/passwd | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除或修改除 root 外 UID 为 0 的账户"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_003",
+      "category": "account",
+      "title": "root 账户登录超时",
+      "description": "root 账户应配置登录超时（TMOUT）",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/profile",
+              "^\\s*TMOUT=",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/bashrc",
+              "^\\s*TMOUT=",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/profile.d/timeout.sh",
+              "^\\s*TMOUT=",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/profile 中添加 TMOUT=300 并 export TMOUT",
+        "command": "echo 'TMOUT=300' >> /etc/profile && echo 'export TMOUT' >> /etc/profile"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_004",
+      "category": "account",
+      "title": "禁用系统账户登录",
+      "description": "系统账户（UID < 1000）的 shell 应为 /sbin/nologin 或 /bin/false",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($3 < 1000 && $1 != \"root\" && $7 !~ /nologin|false|sync|shutdown|halt/) { print $1 }' /etc/passwd | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将系统账户的 shell 设置为 /sbin/nologin",
+        "command": "for user in $(awk -F: '($3 < 1000 && $1 != \"root\" && $7 !~ /nologin|false/) { print $1 }' /etc/passwd); do usermod -s /sbin/nologin $user; done"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_005",
+      "category": "account",
+      "title": "无空密码可交互登录账户",
+      "description": "可交互登录的账户不应设置空密码（使用SSH Key登录或锁定的账户除外）",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($2 == \"\") { print $1 }' /etc/shadow 2>/dev/null | while read user; do shell=$(getent passwd $user | cut -d: -f7); if [[ \"$shell\" != */nologin && \"$shell\" != */false && \"$shell\" != \"\" ]]; then echo $user; fi; done | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "为空密码账户设置密码、锁定账户或设置为不可登录shell"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_006",
+      "category": "account",
+      "title": "默认 umask 设置",
+      "description": "默认 umask 应设置为 027 或更严格",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/profile",
+              "^\\s*umask\\s+0?[0-2]7$",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/bashrc",
+              "^\\s*umask\\s+0?[0-2]7$",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/login.defs",
+              "^\\s*UMASK\\s+0?[0-2]7$",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/profile 或 /etc/login.defs 中设置 umask 027",
+        "command": "sed -i 's/^umask.*/umask 027/' /etc/profile /etc/bashrc"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_007",
+      "category": "account",
+      "title": "禁止 root 从控制台以外登录",
+      "description": "/etc/securetty 应限制 root 登录终端",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/securetty"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "创建或配置 /etc/securetty 文件，限制 root 登录终端"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_008",
+      "category": "account",
+      "title": "禁用 guest 账户",
+      "description": "系统不应存在 guest 账户",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/passwd",
+              "^guest:",
+              "not_match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除 guest 账户：userdel guest",
+        "command": "userdel guest 2>/dev/null || true"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_009",
+      "category": "account",
+      "title": "可登录用户主目录存在",
+      "description": "可交互登录用户的主目录应存在",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($3 >= 1000 && $6 != \"\" && $6 != \"/dev/null\" && $7 !~ /nologin|false/) { system(\"test -d \" $6 \" || echo \" $1) }' /etc/passwd | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "为可登录用户创建缺失的主目录：mkhomedir_helper <username>"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_010",
+      "category": "account",
+      "title": "用户主目录权限",
+      "description": "用户主目录权限不应超过 750",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "find /home -maxdepth 1 -type d -perm /027 2>/dev/null | wc -l",
+              "^[01]$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改用户主目录权限为 750 或更严格",
+        "command": "chmod 750 /home/*"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_011",
+      "category": "account",
+      "title": "无重复 UID",
+      "description": "系统中不应存在重复的 UID",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '{print $3}' /etc/passwd | sort | uniq -d | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改重复的 UID"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_012",
+      "category": "account",
+      "title": "无重复 GID",
+      "description": "系统中不应存在重复的 GID",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '{print $3}' /etc/group | sort | uniq -d | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改重复的 GID"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_013",
+      "category": "account",
+      "title": "无重复用户名",
+      "description": "系统中不应存在重复的用户名",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '{print $1}' /etc/passwd | sort | uniq -d | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改重复的用户名"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_014",
+      "category": "account",
+      "title": "无重复组名",
+      "description": "系统中不应存在重复的组名",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '{print $1}' /etc/group | sort | uniq -d | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改重复的组名"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_015",
+      "category": "account",
+      "title": "wheel 组 sudo 权限",
+      "description": "sudo 权限应通过 wheel 组管理",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^%wheel\\s+ALL=\\(ALL\\)",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers.d/wheel",
+              "^%wheel\\s+ALL=\\(ALL\\)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 wheel 组的 sudo 权限"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_016",
+      "category": "account",
+      "title": "不存在用户 .rhosts 文件",
+      "description": ".rhosts 文件允许远程主机无密码访问，存在严重安全风险",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "find /home /root -name '.rhosts' 2>/dev/null | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除所有用户的 .rhosts 文件",
+        "command": "find /home /root -name '.rhosts' -delete 2>/dev/null"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_017",
+      "category": "account",
+      "title": "不存在用户 .netrc 文件",
+      "description": ".netrc 文件存储 FTP 密码，存在安全风险",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "find /home /root -name '.netrc' 2>/dev/null | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除所有用户的 .netrc 文件",
+        "command": "find /home /root -name '.netrc' -delete 2>/dev/null"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_018",
+      "category": "account",
+      "title": "不存在用户 .forward 文件",
+      "description": ".forward 文件可被用于邮件转发攻击",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "find /home /root -name '.forward' 2>/dev/null | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除所有用户的 .forward 文件",
+        "command": "find /home /root -name '.forward' -delete 2>/dev/null"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_019",
+      "category": "account",
+      "title": "root PATH 不含当前目录",
+      "description": "root 用户的 PATH 环境变量不应包含当前目录(.)，防止特洛伊木马攻击",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "echo $PATH | grep -E '(^|:)\\.(:|\\/|$)' && echo FOUND || echo OK",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "从 root 用户的 PATH 中移除当前目录(.)",
+        "command": "sed -i 's/:.:/:/' /root/.bashrc /root/.bash_profile /etc/profile 2>/dev/null"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_020",
+      "category": "account",
+      "title": "root PATH 不含组可写目录",
+      "description": "root 用户的 PATH 中的目录不应为组或其他用户可写",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "for dir in $(echo $PATH | tr ':' ' '); do [ -d \"$dir\" ] && stat -c '%a' \"$dir\" 2>/dev/null | grep -qE '^[0-7][2367][0-7]$' && echo $dir; done | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 PATH 中组可写目录的权限",
+        "command": "for dir in $(echo $PATH | tr ':' ' '); do chmod g-w,o-w \"$dir\" 2>/dev/null; done"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_021",
+      "category": "account",
+      "title": "su 命令限制为 wheel 组",
+      "description": "su 命令应限制为 wheel 组成员使用，通过 pam_wheel.so 实现",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/pam.d/su",
+              "pam_wheel.so",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 /etc/pam.d/su，启用 pam_wheel.so",
+        "command": "sed -i 's/^#auth.*pam_wheel.so/auth required pam_wheel.so/' /etc/pam.d/su"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_022",
+      "category": "account",
+      "title": "sudo 使用 pty",
+      "description": "sudo 应配置 use_pty，防止 sudo 被用于在后台运行恶意程序",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/sudoers"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^Defaults\\s+use_pty",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/sudoers 中添加: Defaults use_pty",
+        "command": "echo 'Defaults use_pty' >> /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "LINUX_ACCOUNT_023",
+      "category": "account",
+      "title": "sudo 操作日志",
+      "description": "sudo 应配置独立日志文件，记录所有提权操作",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/sudoers"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^Defaults\\s+logfile=",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/sudoers 中添加: Defaults logfile=/var/log/sudo.log",
+        "command": "echo 'Defaults logfile=/var/log/sudo.log' >> /etc/sudoers"
+      }
+    }
+  ]
+}

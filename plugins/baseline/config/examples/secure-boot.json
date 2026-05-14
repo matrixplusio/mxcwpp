@@ -1,0 +1,175 @@
+{
+  "id": "LINUX_SECURE_BOOT",
+  "name": "安全启动配置基线",
+  "version": "1.0.0",
+  "description": "GRUB 引导安全和系统启动安全配置检查（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_BOOT_001",
+      "category": "boot",
+      "title": "GRUB 引导密码已设置",
+      "description": "GRUB 应设置引导密码，防止未授权用户修改启动参数或进入单用户模式",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/boot/grub2/grub.cfg", "password_pbkdf2", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/boot/grub2/user.cfg", "GRUB2_PASSWORD", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/grub.d/40_custom", "password", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 GRUB 引导密码：运行 grub2-setpassword 或手动修改 /boot/grub2/user.cfg（默认密码 MxSec@Grub2024，请及时修改）",
+        "command": "HASH=$(echo -e 'MxSec@Grub2024\\nMxSec@Grub2024' | grub2-mkpasswd-pbkdf2 2>/dev/null | awk '/grub.pbkdf2/{print $NF}') && test -n \"$HASH\" && echo \"GRUB2_PASSWORD=$HASH\" > /boot/grub2/user.cfg"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_002",
+      "category": "boot",
+      "title": "单用户模式需要认证",
+      "description": "单用户模式（rescue/emergency）应需要 root 密码认证，防止未授权访问",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/usr/lib/systemd/system/rescue.service", "ExecStart=.*sulogin", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "确保 rescue.service 和 emergency.service 配置了 sulogin",
+        "command": "systemctl daemon-reload"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_003",
+      "category": "boot",
+      "title": "禁止 Ctrl-Alt-Del 重启",
+      "description": "应禁用 Ctrl-Alt-Del 组合键重启系统，防止意外或恶意重启",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["systemctl is-enabled ctrl-alt-del.target 2>/dev/null || echo masked", "(?m)^(masked|disabled)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 Ctrl-Alt-Del 重启功能",
+        "command": "systemctl mask ctrl-alt-del.target && systemctl daemon-reload"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_004",
+      "category": "boot",
+      "title": "GRUB 配置文件权限正确",
+      "description": "GRUB 配置文件权限应为 600 或更严格，仅 root 可读写",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["! test -f /boot/grub2/grub.cfg && echo skip", "skip"]
+          },
+          {
+            "type": "file_permission",
+            "param": ["/boot/grub2/grub.cfg", "0600"]
+          },
+          {
+            "type": "file_permission",
+            "param": ["/boot/grub2/grub.cfg", "0400"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 GRUB 配置文件权限为 600",
+        "command": "test -f /boot/grub2/grub.cfg && chmod 600 /boot/grub2/grub.cfg || true"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_005",
+      "category": "boot",
+      "title": "GRUB 配置文件属主正确",
+      "description": "GRUB 配置文件应属于 root:root",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": ["! test -f /boot/grub2/grub.cfg && echo skip", "skip"]
+          },
+          {
+            "type": "file_owner",
+            "param": ["/boot/grub2/grub.cfg", "root:root"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 GRUB 配置文件属主为 root:root",
+        "command": "test -f /boot/grub2/grub.cfg && chown root:root /boot/grub2/grub.cfg || true"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_006",
+      "category": "boot",
+      "title": "内核启动参数安全",
+      "description": "检查内核启动参数是否包含调试或不安全选项",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/proc/cmdline", "init=/bin/(ba)?sh", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "检查 /etc/default/grub 中的 GRUB_CMDLINE_LINUX 参数，移除不安全选项",
+        "command": "cat /proc/cmdline"
+      }
+    },
+    {
+      "rule_id": "LINUX_BOOT_007",
+      "category": "boot",
+      "title": "禁用 USB 存储设备自动挂载",
+      "description": "应禁用 USB 存储设备的内核模块，防止数据泄露",
+      "severity": "low",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/usb-storage.conf", "install usb-storage /bin/true", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/modprobe.d/usb-storage.conf", "blacklist usb-storage", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "禁用 USB 存储设备模块",
+        "command": "echo 'install usb-storage /bin/true' > /etc/modprobe.d/usb-storage.conf && echo 'blacklist usb-storage' >> /etc/modprobe.d/usb-storage.conf"
+      }
+    }
+  ]
+}
