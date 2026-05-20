@@ -74,6 +74,7 @@ func NewRouter(
 		prefix + kafka.TopicCommandAck,
 		prefix + kafka.TopicScanner,
 		prefix + kafka.TopicEBPF,
+		prefix + kafka.TopicRemediation,
 	}
 
 	return &Router{
@@ -211,6 +212,10 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 		if msg.DataType == 3002 {
 			r.checkPortScan(&msg)
 		}
+
+	// 漏洞修复结果
+	case msg.DataType == 9200:
+		writeErr = r.mysql.WriteRemediationResult(&msg)
 
 	// 命令执行回包
 	case msg.DataType == 9999:

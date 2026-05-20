@@ -834,6 +834,12 @@ func parseFloat(s string) *float64 {
 // 若 Kafka 生产者已注入，则将记录发布到对应 Topic（异步解耦，μs 级返回）；
 // 否则回退到直接写 MySQL（向后兼容）。
 func (s *Service) handleEncodedRecord(ctx context.Context, record *grpcProto.EncodedRecord, conn *Connection) error {
+	// ---- AC 直处理：部分 DataType 不走 Kafka，在 AC 侧直接处理 ----
+	// 6004: FIM 基线快照 — 涉及 GORM 事务和基线表 upsert，不适合走 Kafka → Consumer
+	if record.DataType == 6004 {
+		return s.handleFIMBaselineSnapshot(ctx, record, conn)
+	}
+
 	// ---- Kafka 路径 ----
 	if s.kafkaProducer != nil {
 		msg := &kafka.MQMessage{

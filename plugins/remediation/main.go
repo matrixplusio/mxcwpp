@@ -27,6 +27,9 @@ var (
 // commandTimeout 单条修复命令的最大执行时间
 const commandTimeout = 10 * time.Minute
 
+// precheckTimeout 预检命令的超时时间（短超时，避免网络慢阻塞主流程）
+const precheckTimeout = 60 * time.Second
+
 // dataTypeRemediationResult 漏洞修复结果的 DataType
 // 注意：不能使用 9001，因为 9001 是心跳 Pong（被 Agent receiveData 拦截），会导致结果丢失
 const dataTypeRemediationResult int32 = 9200
@@ -135,6 +138,24 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 	if payload.DryRun {
 		logger.Info("dry run mode, skipping execution")
 		return sendResult(client, payload.TaskID, 0, "[DRY RUN] 命令未实际执行: "+payload.Command, "", logger)
+	}
+
+	// 预检：检查包管理器和目标包是否可用
+	if checkCmd := buildPrecheck(payload.Command); checkCmd != "" {
+		logger.Info("running precheck", zap.String("check_cmd", checkCmd))
+		precheckCtx, precheckCancel := context.WithTimeout(ctx, precheckTimeout)
+		precheckOut, precheckErr := exec.CommandContext(precheckCtx, "/bin/sh", "-c", checkCmd).CombinedOutput()
+		precheckCancel()
+		if precheckErr != nil {
+			msg := fmt.Sprintf("预检失败：目标包可能不可用。\n预检命令: %s\n预检输出: %s", checkCmd, strings.TrimSpace(string(precheckOut)))
+			logger.Warn("precheck failed",
+				zap.Uint("task_id", payload.TaskID),
+				zap.String("check_cmd", checkCmd),
+				zap.String("output", string(precheckOut)),
+				zap.Error(precheckErr))
+			return sendResult(client, payload.TaskID, 2, "", msg, logger)
+		}
+		logger.Info("precheck passed", zap.Uint("task_id", payload.TaskID))
 	}
 
 	// 执行修复命令
@@ -350,4 +371,74 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// buildPrecheck 根据修复命令构造对应的预检命令
+// 返回空字符串表示无法构造预检（跳过预检直接执行）
+func buildPrecheck(command string) string {
+	cmd := strings.TrimSpace(command)
+	cmdLower := strings.ToLower(cmd)
+
+	// 提取包名（命令的最后一个非 flag 参数）
+	// 例如 "yum update openssl-1.1.1k -y" → "openssl-1.1.1k"
+	// 例如 "apt-get install --only-upgrade nginx=1.25.1 -y" → "nginx=1.25.1"
+
+	switch {
+	case strings.HasPrefix(cmdLower, "yum "):
+		pkg := extractPackageArg(cmd)
+		if pkg == "" {
+			return ""
+		}
+		// yum info 检查包是否在源中存在
+		return fmt.Sprintf("yum info %s -q 2>&1 | head -5", pkg)
+
+	case strings.HasPrefix(cmdLower, "dnf "):
+		pkg := extractPackageArg(cmd)
+		if pkg == "" {
+			return ""
+		}
+		return fmt.Sprintf("dnf info %s -q 2>&1 | head -5", pkg)
+
+	case strings.HasPrefix(cmdLower, "apt-get install"):
+		pkg := extractPackageArg(cmd)
+		if pkg == "" {
+			return ""
+		}
+		// apt-cache policy 检查包是否可用
+		// 去掉版本约束（=version）以便查询
+		pkgName := pkg
+		if idx := strings.Index(pkgName, "="); idx != -1 {
+			pkgName = pkgName[:idx]
+		}
+		return fmt.Sprintf("apt-cache policy %s 2>&1 | head -5", pkgName)
+
+	default:
+		return ""
+	}
+}
+
+// extractPackageArg 从包管理器命令中提取包名参数
+// 跳过子命令（update/install/upgrade）和 flag（-y, --only-upgrade 等）
+func extractPackageArg(command string) string {
+	parts := strings.Fields(command)
+	if len(parts) < 3 {
+		return ""
+	}
+
+	// 从第 2 个参数开始（跳过 yum/dnf/apt-get 和子命令 update/install/upgrade）
+	startIdx := 2
+	for i := startIdx; i < len(parts); i++ {
+		arg := parts[i]
+		// 跳过 flag
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		// 跳过 apt-get 的子命令
+		argLower := strings.ToLower(arg)
+		if argLower == "install" || argLower == "update" || argLower == "upgrade" || argLower == "dist-upgrade" {
+			continue
+		}
+		return arg
+	}
+	return ""
 }

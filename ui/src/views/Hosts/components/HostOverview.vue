@@ -837,7 +837,7 @@
                     <template v-else-if="column.key === 'action'">
                       <a-popconfirm
                         v-if="needsTetragonInstall(record)"
-                        title="确定安装 Tetragon 依赖？安装后 Sensor 插件将自动恢复运行。"
+                        title="确定安装 Tetragon 依赖？安装后 EDR 插件将自动恢复运行。"
                         @confirm="handleInstallTetragon"
                       >
                         <a-button type="link" size="small" :loading="depInstalling" :disabled="host?.status !== 'online'">
@@ -1075,11 +1075,11 @@ const loadComponents = async () => {
   }
 }
 
-// sensor 插件依赖（Tetragon）相关
+// EDR 插件依赖（Tetragon）相关
 const depInstalling = ref(false)
 
 const needsTetragonInstall = (record: ComponentInfo) => {
-  return record.name === 'sensor' && ['error', 'dormant', 'not_installed'].includes(record.status)
+  return record.name === 'edr' && ['error', 'dormant', 'not_installed'].includes(record.status)
 }
 
 const handleInstallTetragon = async () => {

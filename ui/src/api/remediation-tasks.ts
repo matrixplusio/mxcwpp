@@ -59,7 +59,7 @@ export const remediationTasksApi = {
   },
 
   batchCreate: (vulnIds: number[]) => {
-    return apiClient.post<{ created: number }>('/remediation-tasks/batch', { vulnIds })
+    return apiClient.post<{ created: number; vulnCount: number; hostCount: number; skipped: number }>('/remediation-tasks/batch', { vulnIds })
   },
 
   batchConfirm: (taskIds: number[]) => {

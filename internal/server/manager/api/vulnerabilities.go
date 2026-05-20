@@ -3,6 +3,7 @@ package api
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -24,11 +25,15 @@ func NewVulnerabilitiesHandler(db *gorm.DB, logger *zap.Logger) *Vulnerabilities
 }
 
 type vulnerabilityListFilter struct {
-	HostID    string
-	Search    string
-	Severity  string
-	Status    string
-	Component string
+	HostID        string
+	Search        string
+	Severity      string
+	Status        string
+	Component     string
+	ExploitStatus string // has_exploit / in_kev / none
+	Ecosystem     string // OS / Go / npm / PyPI / Maven / Cargo
+	Priority      string // high / medium-high / medium / low
+	Sort          string // priority_score / cvss_score
 }
 
 func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityListFilter) *gorm.DB {
@@ -49,8 +54,10 @@ func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityLis
 			"vulnerabilities.component LIKE ?",
 			"vulnerabilities.current_version LIKE ?",
 			"vulnerabilities.fixed_version LIKE ?",
+			"vulnerabilities.cnvd_id LIKE ?",
+			"vulnerabilities.cnnvd_id LIKE ?",
 		}
-		args := []interface{}{pattern, pattern, pattern, pattern, pattern, pattern}
+		args := []interface{}{pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern}
 		if filter.HostID != "" {
 			clauses = append(clauses, "hv.hostname LIKE ?", "hv.ip LIKE ?", "hv.current_version LIKE ?")
 			args = append(args, pattern, pattern, pattern)
@@ -69,6 +76,36 @@ func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityLis
 		} else {
 			query = query.Where("vulnerabilities.status = ?", filter.Status)
 		}
+	}
+
+	// 利用状态筛选
+	switch filter.ExploitStatus {
+	case "in_kev":
+		query = query.Where("vulnerabilities.in_kev = ?", true)
+	case "has_exploit":
+		query = query.Where("vulnerabilities.has_exploit = ? AND vulnerabilities.in_kev = ?", true, false)
+	case "none":
+		query = query.Where("vulnerabilities.has_exploit = ?", false)
+	}
+
+	// 生态系统筛选
+	if filter.Ecosystem != "" {
+		query = query.Joins("JOIN host_vulnerabilities ehv ON ehv.vuln_id = vulnerabilities.id").
+			Joins("JOIN software sw ON sw.host_id = ehv.host_id AND sw.name = vulnerabilities.component").
+			Where("sw.ecosystem = ?", filter.Ecosystem).
+			Group("vulnerabilities.id")
+	}
+
+	// 优先级筛选
+	switch filter.Priority {
+	case "high":
+		query = query.Where("vulnerabilities.priority_score >= ?", 0.75)
+	case "medium-high":
+		query = query.Where("vulnerabilities.priority_score >= ? AND vulnerabilities.priority_score < ?", 0.50, 0.75)
+	case "medium":
+		query = query.Where("vulnerabilities.priority_score >= ? AND vulnerabilities.priority_score < ?", 0.25, 0.50)
+	case "low":
+		query = query.Where("vulnerabilities.priority_score < ?", 0.25)
 	}
 
 	return query
@@ -117,11 +154,15 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	filter := vulnerabilityListFilter{
-		HostID:    strings.TrimSpace(c.Query("host_id")),
-		Search:    strings.TrimSpace(c.Query("search")),
-		Severity:  strings.TrimSpace(c.Query("severity")),
-		Status:    strings.TrimSpace(c.Query("status")),
-		Component: strings.TrimSpace(c.Query("component")),
+		HostID:        strings.TrimSpace(c.Query("host_id")),
+		Search:        strings.TrimSpace(c.Query("search")),
+		Severity:      strings.TrimSpace(c.Query("severity")),
+		Status:        strings.TrimSpace(c.Query("status")),
+		Component:     strings.TrimSpace(c.Query("component")),
+		ExploitStatus: strings.TrimSpace(c.Query("exploit_status")),
+		Priority:      strings.TrimSpace(c.Query("priority")),
+		Ecosystem:     strings.TrimSpace(c.Query("ecosystem")),
+		Sort:          strings.TrimSpace(c.Query("sort")),
 	}
 	if page <= 0 {
 		page = 1
@@ -150,9 +191,18 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 		}
 		return db.Order("updated_at DESC")
 	}
+	// 排序
+	orderClause := "vulnerabilities.discovered_at DESC"
+	switch filter.Sort {
+	case "priority_score":
+		orderClause = "vulnerabilities.priority_score DESC"
+	case "cvss_score":
+		orderClause = "vulnerabilities.cvss_score DESC"
+	}
+
 	if err := query.Preload("Hosts", preloadHosts).
 		Offset(offset).Limit(pageSize).
-		Order("vulnerabilities.discovered_at DESC").
+		Order(orderClause).
 		Find(&vulns).Error; err != nil {
 		h.logger.Error("查询漏洞列表失败", zap.Error(err))
 		InternalError(c, "查询漏洞列表失败")
@@ -360,11 +410,24 @@ func (h *VulnerabilitiesHandler) TriggerSync(c *gin.Context) {
 
 // TriggerScan 触发漏洞扫描（包含漏洞库同步 + 主机扫描）
 // POST /api/v1/vulnerabilities/scan
+// 支持 scan_type 参数：full_scan（全量，默认）/ incremental_scan（增量）
 func (h *VulnerabilitiesHandler) TriggerScan(c *gin.Context) {
+	var req struct {
+		ScanType string `json:"scan_type"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.ScanType == "" {
+		req.ScanType = "full_scan"
+	}
+	if req.ScanType != "full_scan" && req.ScanType != "incremental_scan" {
+		BadRequest(c, "无效的扫描类型，支持 full_scan / incremental_scan")
+		return
+	}
+
 	// 并发保护：检查是否有正在运行的同步/扫描任务
 	var running int64
 	h.db.Model(&model.SecurityDBSyncRecord{}).
-		Where("db_type IN ? AND status = ?", []string{"osv", "vuln-sync"}, "running").
+		Where("db_type IN ? AND status = ?", []string{"osv", "osv-incremental", "vuln-sync"}, "running").
 		Count(&running)
 	if running > 0 {
 		BadRequest(c, "已有同步或扫描任务正在运行，请等待完成后再试")
@@ -373,13 +436,21 @@ func (h *VulnerabilitiesHandler) TriggerScan(c *gin.Context) {
 
 	scanner := biz.NewVulnScanner(h.db, h.logger)
 
-	go func() {
-		if err := scanner.ScanAll(); err != nil {
-			h.logger.Error("漏洞扫描失败", zap.Error(err))
-		}
-	}()
-
-	SuccessMessage(c, "漏洞扫描任务已启动")
+	if req.ScanType == "incremental_scan" {
+		go func() {
+			if err := scanner.ScanIncremental(); err != nil {
+				h.logger.Error("增量扫描失败", zap.Error(err))
+			}
+		}()
+		SuccessMessage(c, "增量扫描任务已启动")
+	} else {
+		go func() {
+			if err := scanner.ScanAll(); err != nil {
+				h.logger.Error("漏洞扫描失败", zap.Error(err))
+			}
+		}()
+		SuccessMessage(c, "全量扫描任务已启动")
+	}
 }
 
 // GetScanStatus 获取漏洞扫描最新同步状态
@@ -397,6 +468,39 @@ func (h *VulnerabilitiesHandler) GetScanStatus(c *gin.Context) {
 		return
 	}
 	Success(c, record)
+}
+
+// GetPriorityStats 漏洞优先级分布统计
+// GET /api/v1/vulnerabilities/stats/priority
+func (h *VulnerabilitiesHandler) GetPriorityStats(c *gin.Context) {
+	type PriorityBucket struct {
+		Level string `json:"level"`
+		Count int64  `json:"count"`
+	}
+
+	var results []PriorityBucket
+
+	// 高优先级 >= 0.75
+	var high int64
+	h.db.Model(&model.Vulnerability{}).Where("status = ? AND priority_score >= ?", "unpatched", 0.75).Count(&high)
+	results = append(results, PriorityBucket{Level: "high", Count: high})
+
+	// 中高 0.50-0.75
+	var mediumHigh int64
+	h.db.Model(&model.Vulnerability{}).Where("status = ? AND priority_score >= ? AND priority_score < ?", "unpatched", 0.50, 0.75).Count(&mediumHigh)
+	results = append(results, PriorityBucket{Level: "medium-high", Count: mediumHigh})
+
+	// 中 0.25-0.50
+	var medium int64
+	h.db.Model(&model.Vulnerability{}).Where("status = ? AND priority_score >= ? AND priority_score < ?", "unpatched", 0.25, 0.50).Count(&medium)
+	results = append(results, PriorityBucket{Level: "medium", Count: medium})
+
+	// 低 < 0.25
+	var low int64
+	h.db.Model(&model.Vulnerability{}).Where("status = ? AND priority_score < ?", "unpatched", 0.25).Count(&low)
+	results = append(results, PriorityBucket{Level: "low", Count: low})
+
+	Success(c, results)
 }
 
 // GetScanHistory 获取漏洞扫描历史记录
@@ -422,5 +526,74 @@ func (h *VulnerabilitiesHandler) GetScanHistory(c *gin.Context) {
 	Success(c, gin.H{
 		"total": total,
 		"items": records,
+	})
+}
+
+// GetScanHistoryDetail 获取单条扫描记录详情（含本次新增的漏洞列表）
+// GET /api/v1/vulnerabilities/scan-history/:id
+func (h *VulnerabilitiesHandler) GetScanHistoryDetail(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		BadRequest(c, "无效的记录 ID")
+		return
+	}
+
+	var record model.SecurityDBSyncRecord
+	if err := h.db.First(&record, id).Error; err != nil {
+		NotFound(c, "扫描记录不存在")
+		return
+	}
+
+	vulnPage, _ := strconv.Atoi(c.DefaultQuery("vulnPage", "1"))
+	vulnPageSize, _ := strconv.Atoi(c.DefaultQuery("vulnPageSize", "20"))
+	if vulnPage < 1 {
+		vulnPage = 1
+	}
+	if vulnPageSize < 1 || vulnPageSize > 100 {
+		vulnPageSize = 20
+	}
+
+	// 时间窗口：扫描开始 → 扫描开始 + 耗时
+	windowEnd := record.StartedAt.Add(time.Duration(record.Duration+60) * time.Second) // +60s 容差
+	if record.Status == "running" {
+		windowEnd = time.Now()
+	}
+
+	var vulnTotal int64
+	h.db.Model(&model.Vulnerability{}).
+		Where("created_at >= ? AND created_at <= ?", record.StartedAt, windowEnd).
+		Count(&vulnTotal)
+
+	var vulns []model.Vulnerability
+	h.db.Where("created_at >= ? AND created_at <= ?", record.StartedAt, windowEnd).
+		Order("cvss_score DESC").
+		Offset((vulnPage - 1) * vulnPageSize).
+		Limit(vulnPageSize).
+		Find(&vulns)
+
+	// 受影响主机
+	type affectedHost struct {
+		HostID    string `json:"hostId"`
+		Hostname  string `json:"hostname"`
+		IP        string `json:"ip"`
+		VulnCount int64  `json:"vulnCount"`
+	}
+	var hosts []affectedHost
+	h.db.Model(&model.HostVulnerability{}).
+		Select("host_id, hostname, ip, COUNT(*) as vuln_count").
+		Where("created_at >= ? AND created_at <= ?", record.StartedAt, windowEnd).
+		Group("host_id, hostname, ip").
+		Order("vuln_count DESC").
+		Limit(100).
+		Find(&hosts)
+
+	Success(c, gin.H{
+		"record": record,
+		"vulns": gin.H{
+			"items": vulns,
+			"total": vulnTotal,
+			"page":  vulnPage,
+		},
+		"affectedHosts": hosts,
 	})
 }

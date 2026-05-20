@@ -52,11 +52,7 @@ export const systemConfigApi = {
   uploadLogo: async (file: File): Promise<{ logo_url: string }> => {
     const formData = new FormData()
     formData.append('logo', file)
-    return apiClient.post<{ logo_url: string }>('/system-config/upload-logo', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    return apiClient.post<{ logo_url: string }>('/system-config/upload-logo', formData)
   },
 
   // 获取告警配置

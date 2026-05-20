@@ -174,11 +174,7 @@ export const componentsApi = {
    * 上传包文件
    */
   uploadPackage: async (componentId: number, versionId: number, formData: FormData): Promise<ComponentPackage> => {
-    return await apiClient.post(`/components/${componentId}/versions/${versionId}/packages`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    return await apiClient.post(`/components/${componentId}/versions/${versionId}/packages`, formData)
   },
 
   /**

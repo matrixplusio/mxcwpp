@@ -19,6 +19,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
 	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/migration"
+	"github.com/imkerbos/mxsec-platform/internal/server/model"
 	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
 )
 
@@ -76,6 +77,14 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	if err := migration.InitDefaultData(db, logger, "", &cfg.Plugins); err != nil {
 		logger.Warn("初始化默认数据失败", zap.Error(err))
 		// 不中断启动，允许后续手动初始化
+	}
+
+	// 5.1.1 清理上次崩溃残留的同步/扫描锁
+	// Manager 重启后，所有 running 状态的同步记录均为孤儿进程，直接标记为失败
+	if result := db.Model(&model.SecurityDBSyncRecord{}).
+		Where("status = ?", "running").
+		Updates(map[string]any{"status": "failed", "error_msg": "进程重启，自动标记为失败"}); result.RowsAffected > 0 {
+		logger.Info("清理残留的同步任务", zap.Int64("count", result.RowsAffected))
 	}
 
 	// 5.2 初始化 Redis

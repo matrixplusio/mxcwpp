@@ -117,6 +117,7 @@ func (v *VulnScanner) SyncRedHatWithSoftware(softwareByName map[string][]install
 			DiscoveredAt:   model.LocalTime(time.Now()),
 			CurrentVersion: firstMatch.Version,
 			ReferenceUrl:   referenceURL,
+			Source:         "redhat",
 		}
 
 		if err := v.db.Clauses(clause.OnConflict{
@@ -151,21 +152,19 @@ func (v *VulnScanner) SyncRedHatWithSoftware(softwareByName map[string][]install
 		}
 		v.upsertHostVulnsBatch(vulnRecord.ID, entries)
 
-		// 发送漏洞告警通知
-		if len(matches) > 0 {
-			go func(vuln *model.Vulnerability, sw installedSoftware) {
-				var affected int64
-				v.db.Model(&model.HostVulnerability{}).Where("vuln_id = ? AND status = ?", vuln.ID, "unpatched").Count(&affected)
+		// 创建漏洞通报 + 发送通知（与 OSV 扫描路径统一）
+		go func(vuln *model.Vulnerability) {
+			bs := NewVulnBulletinService(v.db, v.logger)
+			bulletin := bs.TryCreateBulletin(vuln)
+			if bulletin != nil {
 				ns := NewNotificationService(v.db, v.logger)
-				_ = ns.SendVulnerabilityAlertNotification(&VulnerabilityAlertData{
-					HostID: sw.HostID, Hostname: sw.Hostname, IP: sw.IP,
-					CveID: vuln.CveID, Severity: vuln.Severity, CvssScore: vuln.CvssScore,
-					Component: vuln.Component, CurrentVersion: vuln.CurrentVersion,
-					FixedVersion: vuln.FixedVersion, Description: vuln.Description,
-					AffectedHosts: int(affected),
-				})
-			}(vulnRecord, matches[0])
-		}
+				if err := ns.SendVulnBulletinNotification(bulletin); err != nil {
+					v.logger.Error("发送漏洞通报通知失败",
+						zap.String("bulletin_no", bulletin.BulletinNo),
+						zap.Error(err))
+				}
+			}
+		}(vulnRecord)
 
 		existingCVEs[item.CVE] = struct{}{}
 		newCount++

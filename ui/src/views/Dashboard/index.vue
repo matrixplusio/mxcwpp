@@ -251,7 +251,7 @@ const riskRadarOption = computed(() => {
     roundPercent(stats.value.baselineHostPercent),
     roundPercent(stats.value.hostAlertPercent),
     roundPercent(stats.value.vulnHostPercent),
-    roundPercent(stats.value.runtimeAlertPercent),
+    roundPercent(stats.value.edrAlertPercent),
     roundPercent(stats.value.virusHostPercent),
   ]
   return {

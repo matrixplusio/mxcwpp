@@ -57,9 +57,28 @@
           <span v-if="scanStatus.duration" class="scan-status-info">
             耗时 {{ scanStatus.duration }}s
           </span>
-          <a-tooltip v-if="scanStatus.status === 'failed' && scanStatus.errorMsg" :title="scanStatus.errorMsg">
-            <span class="scan-status-error">{{ scanStatus.errorMsg }}</span>
-          </a-tooltip>
+          <template v-if="scanStatus.errorMsg">
+            <template v-if="parsedSourceResults.length > 0">
+              <a-tag
+                v-for="src in parsedSourceResults"
+                :key="src.name"
+                :color="src.status === 'success' ? 'green' : src.status === 'skipped' ? 'default' : 'red'"
+                :bordered="false"
+                size="small"
+                style="margin-left: 4px"
+              >
+                <a-tooltip v-if="src.error" :title="src.error">
+                  {{ src.name }}: {{ src.status === 'success' ? '成功' : src.status === 'skipped' ? '跳过' : '失败' }}
+                </a-tooltip>
+                <template v-else>
+                  {{ src.name }}: {{ src.status === 'success' ? '成功' : src.status === 'skipped' ? '跳过' : '失败' }}
+                </template>
+              </a-tag>
+            </template>
+            <a-tooltip v-else :title="scanStatus.errorMsg">
+              <span class="scan-status-error">{{ scanStatus.errorMsg }}</span>
+            </a-tooltip>
+          </template>
         </template>
         <span v-else class="scan-status-info">尚未执行过扫描</span>
       </div>
@@ -74,7 +93,7 @@
         <div class="filter-bar">
           <a-input-search
             v-model:value="searchText"
-            placeholder="搜索 CVE / Advisory / 组件 / 版本 / 主机"
+            placeholder="搜索 CVE / CNVD / CNNVD / 组件 / 主机"
             style="width: 320px"
             allow-clear
             @search="handleFilterChange"
@@ -113,10 +132,54 @@
             <a-select-option value="ignored">已忽略</a-select-option>
           </a-select>
 
+          <a-select
+            v-model:value="filterExploitStatus"
+            style="width: 140px"
+            placeholder="利用状态"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="in_kev">在野利用</a-select-option>
+            <a-select-option value="has_exploit">有 Exploit</a-select-option>
+            <a-select-option value="none">无 Exploit</a-select-option>
+          </a-select>
+
+          <a-select
+            v-model:value="filterPriority"
+            style="width: 140px"
+            placeholder="优先级"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="high">高</a-select-option>
+            <a-select-option value="medium-high">中高</a-select-option>
+            <a-select-option value="medium">中</a-select-option>
+            <a-select-option value="low">低</a-select-option>
+          </a-select>
+
+          <a-select
+            v-model:value="filterSort"
+            style="width: 160px"
+            placeholder="排序方式"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="priority_score">按优先级</a-select-option>
+            <a-select-option value="cvss_score">按 CVSS</a-select-option>
+          </a-select>
+
           <div class="filter-actions">
             <a-button @click="handleReset">重置</a-button>
             <a-button @click="handleExport">导出当前结果</a-button>
-            <a-button type="primary" @click="handleScan">立即扫描</a-button>
+            <a-dropdown>
+              <a-button type="primary">立即扫描 <DownOutlined /></a-button>
+              <template #overlay>
+                <a-menu @click="handleScanMenu">
+                  <a-menu-item key="full_scan">全量扫描</a-menu-item>
+                  <a-menu-item key="incremental_scan">增量扫描</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
         </div>
 
@@ -154,6 +217,20 @@
               <span :class="cvssClass(record.cvssScore)">{{ record.cvssScore }}</span>
             </template>
 
+            <template v-else-if="column.key === 'exploit'">
+              <a-tag v-if="record.inKev" color="red" :bordered="false">在野利用</a-tag>
+              <a-tag v-else-if="record.hasExploit" color="orange" :bordered="false">有 Exploit</a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'priority'">
+              <a-tag :color="priorityColor(record.priorityScore)" :bordered="false">
+                {{ priorityText(record.priorityScore) }}
+              </a-tag>
+              <span style="margin-left: 4px; font-size: 12px; color: #86909C">
+                {{ (record.priorityScore ?? 0).toFixed(2) }}
+              </span>
+            </template>
+
             <template v-else-if="column.key === 'status'">
               <a-tag :color="statusColor(record.status)" :bordered="false">
                 {{ statusTextMap[record.status] || record.status }}
@@ -176,6 +253,14 @@
                   @click="handleIgnore(record)"
                 >
                   忽略
+                </a-button>
+                <a-button
+                  v-if="record.status === 'ignored'"
+                  type="link"
+                  size="small"
+                  @click="handleUnignore(record)"
+                >
+                  取消忽略
                 </a-button>
               </a-space>
             </template>
@@ -207,10 +292,32 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'errorMsg'">
-            <a-tooltip v-if="record.errorMsg" :title="record.errorMsg">
+            <template v-if="record.errorMsg && record.errorMsg.startsWith('[')">
+              <a-tag
+                v-for="src in JSON.parse(record.errorMsg)"
+                :key="src.name"
+                :color="src.status === 'success' ? 'green' : src.status === 'skipped' ? 'default' : 'red'"
+                :bordered="false"
+                size="small"
+                style="margin-right: 4px"
+              >
+                <a-tooltip v-if="src.error" :title="src.error">{{ src.name }}</a-tooltip>
+                <template v-else>{{ src.name }}</template>
+              </a-tag>
+            </template>
+            <a-tooltip v-else-if="record.errorMsg" :title="record.errorMsg">
               <span style="color: #F53F3F; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
             </a-tooltip>
             <span v-else>-</span>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button
+              type="link"
+              size="small"
+              @click="goScanHistoryDetail(record.id)"
+            >
+              详情
+            </a-button>
           </template>
         </template>
       </a-table>
@@ -222,6 +329,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { DownOutlined } from '@ant-design/icons-vue'
 import { vulnerabilitiesApi } from '@/api/vulnerabilities'
 import { remediationTasksApi } from '@/api/remediation-tasks'
 import type { SecurityDBSyncRecord } from '@/api/antivirus'
@@ -235,6 +343,9 @@ const searchText = ref('')
 const filterSeverity = ref<string>()
 const filterStatus = ref<string>()
 const filterComponent = ref('')
+const filterExploitStatus = ref<string>()
+const filterPriority = ref<string>()
+const filterSort = ref<string>()
 const filterHostId = ref<string>()
 
 const loading = ref(false)
@@ -279,19 +390,32 @@ const activeContextText = computed(() => {
 })
 
 const columns = [
-  { title: '漏洞编号', key: 'cve', width: 200 },
-  { title: '严重级别', key: 'severity', width: 100 },
-  { title: 'CVSS', key: 'cvss', width: 90 },
-  { title: '影响组件', dataIndex: 'component', key: 'component', width: 180 },
-  { title: '当前版本', dataIndex: 'currentVersion', key: 'currentVersion', width: 140 },
-  { title: '受影响主机', key: 'hosts', width: 180 },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '发现时间', dataIndex: 'discoveredAt', key: 'discoveredAt', width: 180 },
+  { title: '漏洞编号', key: 'cve', width: 180 },
+  { title: '严重级别', key: 'severity', width: 90 },
+  { title: 'CVSS', key: 'cvss', width: 70 },
+  { title: '优先级', key: 'priority', width: 130 },
+  { title: '利用状态', key: 'exploit', width: 100 },
+  { title: '影响组件', dataIndex: 'component', key: 'component', width: 160 },
+  { title: '受影响主机', key: 'hosts', width: 140 },
+  { title: '状态', key: 'status', width: 90 },
+  { title: '发现时间', dataIndex: 'discoveredAt', key: 'discoveredAt', width: 160 },
   { title: '操作', key: 'action', width: 120, fixed: 'right' },
 ]
 
 // === 扫描状态 ===
 const scanStatus = ref<SecurityDBSyncRecord | null>(null)
+
+// 解析 errorMsg 中的数据源同步结果 JSON
+const parsedSourceResults = computed(() => {
+  const msg = scanStatus.value?.errorMsg
+  if (!msg || !msg.startsWith('[')) return []
+  try {
+    return JSON.parse(msg) as { name: string; status: string; error?: string }[]
+  } catch {
+    return []
+  }
+})
+
 const scanHistoryVisible = ref(false)
 const scanHistoryLoading = ref(false)
 const scanHistoryData = ref<SecurityDBSyncRecord[]>([])
@@ -306,13 +430,17 @@ const scanHistoryPagination = ref({
 const scanHistoryColumns = [
   {
     title: '类型', dataIndex: 'dbType', width: 120,
-    customRender: ({ text }: { text: string }) => text === 'vuln-sync' ? '漏洞库同步' : '全量扫描',
+    customRender: ({ text }: { text: string }) => {
+      const m: Record<string, string> = { osv: '全量扫描', 'osv-incremental': '增量扫描', 'vuln-sync': '漏洞库同步' }
+      return m[text] || text
+    },
   },
-  { title: '版本', dataIndex: 'version', width: 160 },
+  { title: '版本', dataIndex: 'version', width: 140 },
   { title: '状态', key: 'status', width: 80 },
   { title: '耗时(秒)', dataIndex: 'duration', width: 80 },
   { title: '开始时间', dataIndex: 'startedAt', width: 170, customRender: ({ text }: { text: string }) => formatDateTime(text) },
-  { title: '错误信息', key: 'errorMsg', ellipsis: true },
+  { title: '扫描摘要', key: 'errorMsg', ellipsis: true },
+  { title: '操作', key: 'action', width: 80, fixed: 'right' as const },
 ]
 
 const scanStatusColor = (status: string) => {
@@ -361,6 +489,11 @@ const loadScanHistory = async () => {
   }
 }
 
+const goScanHistoryDetail = (id: number) => {
+  scanHistoryVisible.value = false
+  router.push({ name: 'ScanHistoryDetail', params: { id } })
+}
+
 const handleScanHistoryTableChange = (pag: any) => {
   scanHistoryPagination.value.current = pag.current
   loadScanHistory()
@@ -398,6 +531,9 @@ const loadVulns = async () => {
       severity: filterSeverity.value || undefined,
       status: filterStatus.value || undefined,
       component: filterComponent.value || undefined,
+      exploit_status: filterExploitStatus.value || undefined,
+      priority: filterPriority.value || undefined,
+      sort: filterSort.value || undefined,
     })
     vulns.value = res.items ?? []
     pagination.value.total = res.total ?? 0
@@ -431,6 +567,16 @@ const handleIgnore = async (record: Vulnerability) => {
   }
 }
 
+const handleUnignore = async (record: Vulnerability) => {
+  try {
+    await vulnerabilitiesApi.unignore(record.id)
+    message.success('已取消忽略')
+    loadVulns()
+  } catch {
+    message.error('操作失败')
+  }
+}
+
 const handleBatchRemediate = async () => {
   if (selectedRowKeys.value.length === 0) {
     message.warning('请先选择要修复的漏洞')
@@ -439,7 +585,12 @@ const handleBatchRemediate = async () => {
   batchLoading.value = true
   try {
     const res = await remediationTasksApi.batchCreate(selectedRowKeys.value)
-    message.success(`已创建 ${res.created} 个修复任务，请前往修复任务页面确认执行`)
+    let msg = `已为 ${res.vulnCount} 个漏洞、${res.hostCount} 台主机创建 ${res.created} 个修复任务`
+    if (res.skipped > 0) {
+      msg += `，跳过 ${res.skipped} 个（已有进行中任务）`
+    }
+    msg += '，请前往修复任务页面确认执行'
+    message.success(msg)
     selectedRowKeys.value = []
   } catch {
     message.error('批量创建修复任务失败')
@@ -462,13 +613,15 @@ const handleSync = async () => {
   }
 }
 
-const handleScan = async () => {
+const handleScanMenu = async ({ key }: { key: string }) => {
+  const scanType = key as 'full_scan' | 'incremental_scan'
+  const label = scanType === 'incremental_scan' ? '增量扫描' : '全量扫描'
   try {
-    await vulnerabilitiesApi.triggerScan()
-    message.success('全量扫描任务已启动（OSV + NVD + Red Hat）')
+    await vulnerabilitiesApi.triggerScan(scanType)
+    message.success(`${label}任务已启动`)
     setTimeout(() => loadScanStatus(), 2000)
   } catch {
-    message.error('创建扫描任务失败')
+    message.error(`${label}任务启动失败`)
   }
 }
 
@@ -479,15 +632,16 @@ const handleExport = () => {
   }
 
   const rows = [
-    ['CVE', 'OSV_ID', 'Severity', 'CVSS', 'Component', 'CurrentVersion', 'FixedVersion', 'AffectedHosts', 'Status', 'DiscoveredAt'],
+    ['CVE', 'CNVD', 'CNNVD', 'Severity', 'CVSS', 'PriorityScore', 'ExploitStatus', 'Component', 'AffectedHosts', 'Status', 'DiscoveredAt'],
     ...vulns.value.map((item) => [
       item.cveId,
-      item.osvId || '',
+      item.cnvdId || '',
+      item.cnnvdId || '',
       item.severity,
       String(item.cvssScore ?? ''),
+      String(item.priorityScore ?? ''),
+      item.inKev ? '在野利用' : item.hasExploit ? '有Exploit' : '',
       item.component || '',
-      item.currentVersion || '',
-      item.fixedVersion || '',
       String(item.affectedHosts ?? 0),
       item.status || '',
       item.discoveredAt || '',
@@ -514,6 +668,9 @@ const handleReset = () => {
   filterSeverity.value = undefined
   filterStatus.value = undefined
   filterComponent.value = ''
+  filterExploitStatus.value = undefined
+  filterPriority.value = undefined
+  filterSort.value = undefined
   filterHostId.value = undefined
   pagination.value.current = 1
   syncRouteQuery()
@@ -521,6 +678,12 @@ const handleReset = () => {
 }
 
 const hostSummary = (record: Vulnerability) => {
+  // 全局视图：统一显示受影响主机数量
+  if (!filterHostId.value) {
+    const count = record.affectedHosts || record.hosts?.length || 0
+    return `${count} 台主机`
+  }
+  // 按主机筛选时：显示主机名详情
   if (!record.hosts?.length) return `${record.affectedHosts || 0} 台主机`
   if (record.hosts.length === 1) {
     return `${record.hosts[0].hostname || record.hosts[0].hostId} (${record.hosts[0].ip || '-'})`
@@ -538,6 +701,22 @@ const cvssClass = (score: number) => {
   if (score >= 9) return 'score-critical'
   if (score >= 7) return 'score-high'
   return 'score-normal'
+}
+
+const priorityColor = (score?: number) => {
+  if (!score) return 'default'
+  if (score >= 0.75) return 'red'
+  if (score >= 0.50) return 'orange'
+  if (score >= 0.25) return 'gold'
+  return 'blue'
+}
+
+const priorityText = (score?: number) => {
+  if (!score) return '未评分'
+  if (score >= 0.75) return '高'
+  if (score >= 0.50) return '中高'
+  if (score >= 0.25) return '中'
+  return '低'
 }
 
 watch(

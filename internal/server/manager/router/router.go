@@ -151,6 +151,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupKubeAPI(router, db, logger, alarmService, cfg, consumerManager)
 	setupMonitorAPI(router, db, logger, cfg, acRegistry, chConn, redisClient, promClient)
 	setupVulnerabilitiesAPI(router, db, logger)
+	setupVulnBulletinsAPI(router, db, logger)
 	setupAntivirusAPI(router, db, logger, virusDBUpdater)
 	setupQuarantineAPI(router, db, logger)
 	setupDetectionRulesAPI(router, db, logger)
@@ -203,6 +204,9 @@ func setupHostsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, sco
 	router.PUT("/hosts/:host_id/tags", handler.UpdateHostTags)
 	router.PUT("/hosts/:host_id/business-line", handler.UpdateHostBusinessLine)
 	router.DELETE("/hosts/:host_id", handler.DeleteHost)
+	router.POST("/hosts/batch-delete", handler.BatchDeleteHost)
+	router.POST("/hosts/batch-update-tags", handler.BatchUpdateTags)
+	router.POST("/hosts/batch-update-business-line", handler.BatchUpdateBusinessLine)
 	router.GET("/hosts/status-distribution", handler.GetHostStatusDistribution)
 	router.GET("/hosts/risk-distribution", handler.GetHostRiskDistribution)
 }
@@ -344,13 +348,13 @@ func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	router.GET("/reports/antivirus", handler.GetAntivirusReport)
 	router.GET("/reports/vulnerability", handler.GetVulnerabilityReport)
 	router.GET("/reports/kube", handler.GetKubeReport)
-	router.GET("/reports/runtime", handler.GetRuntimeReport)
+	router.GET("/reports/edr", handler.GetEDRReport)
 	// Executive 报告（可导出 PDF）
 	router.GET("/reports/antivirus/:task_id/executive", handler.GetAntivirusExecutiveReport)
 	router.GET("/reports/vulnerability/executive", handler.GetVulnerabilityExecutiveReport)
 	router.GET("/reports/remediation/executive", handler.GetRemediationExecutiveReport)
 	router.GET("/reports/kube/executive", handler.GetKubeExecutiveReport)
-	router.GET("/reports/runtime/executive", handler.GetRuntimeExecutiveReport)
+	router.GET("/reports/edr/executive", handler.GetEDRExecutiveReport)
 	// 已保存的报告
 	router.GET("/reports/generated", handler.ListGeneratedReports)
 	router.GET("/reports/generated/:id", handler.GetGeneratedReport)
@@ -402,7 +406,7 @@ func setupAlertsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	handler := api.NewAlertsHandler(db, logger)
 	router.GET("/alerts", handler.ListAlerts)
 	router.GET("/alerts/statistics", handler.GetAlertStatistics)
-	router.GET("/alerts/runtime-statistics", handler.GetRuntimeAlertStatistics)
+	router.GET("/alerts/edr-statistics", handler.GetEDRAlertStatistics)
 	router.GET("/alerts/:id", handler.GetAlert)
 	router.POST("/alerts/:id/resolve", handler.ResolveAlert)
 	router.POST("/alerts/:id/ignore", handler.IgnoreAlert)
@@ -655,6 +659,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/vulnerabilities/scan", handler.TriggerScan)
 	router.GET("/vulnerabilities/scan-status", handler.GetScanStatus)
 	router.GET("/vulnerabilities/scan-history", handler.GetScanHistory)
+	router.GET("/vulnerabilities/scan-history/:id", handler.GetScanHistoryDetail)
 
 	router.GET("/vulnerabilities/:id", handler.GetVulnerability)
 
@@ -665,6 +670,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/vulnerabilities/:id/verify", remHandler.VerifyRemediation)
 	router.GET("/vulnerabilities/stats/remediation", remHandler.GetRemediationStats)
 	router.GET("/vulnerabilities/stats/trend", remHandler.GetRemediationTrend)
+	router.GET("/vulnerabilities/stats/priority", handler.GetPriorityStats)
 
 	// 修复任务管理
 	taskHandler := api.NewRemediationTasksHandler(db, logger)
@@ -680,6 +686,70 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/remediation-tasks/batch-confirm", taskHandler.BatchConfirm)
 	router.POST("/remediation-tasks/batch-retry", taskHandler.BatchRetry)
 	router.POST("/remediation-tasks/batch-cancel", taskHandler.BatchCancel)
+
+	// 扫描计划管理
+	vulnScanner := biz.NewVulnScanner(db, logger)
+	scanScheduler := biz.NewScanScheduler(db, logger, vulnScanner)
+	schedHandler := api.NewScanSchedulesHandler(db, logger, scanScheduler)
+	router.GET("/vulnerabilities/schedules", schedHandler.ListSchedules)
+	router.POST("/vulnerabilities/schedules", schedHandler.CreateSchedule)
+	router.PUT("/vulnerabilities/schedules/:id", schedHandler.UpdateSchedule)
+	router.DELETE("/vulnerabilities/schedules/:id", schedHandler.DeleteSchedule)
+	router.POST("/vulnerabilities/schedules/:id/toggle", schedHandler.ToggleSchedule)
+	router.GET("/vulnerabilities/schedules/:id/executions", schedHandler.ListExecutions)
+	router.GET("/vulnerabilities/schedules/executions/:execId", schedHandler.GetExecution)
+
+	// 漏洞库缓存管理
+	cacheHandler := api.NewVulnCacheHandler(db, logger)
+	router.GET("/vulnerabilities/cache/stats", cacheHandler.GetStats)
+	router.POST("/vulnerabilities/cache/import", cacheHandler.ImportDB)
+	router.GET("/vulnerabilities/cache/imports", cacheHandler.GetImportHistory)
+	router.POST("/vulnerabilities/cache/purge", cacheHandler.PurgeExpired)
+
+	// 镜像扫描
+	imageHandler := api.NewImageScansHandler(db, logger)
+	router.POST("/images/scan", imageHandler.ScanImage)
+	router.GET("/images/scans", imageHandler.ListScans)
+	router.GET("/images/scans/:id", imageHandler.GetScan)
+	router.GET("/images/scans/:id/vulns", imageHandler.GetScanVulns)
+	router.POST("/images/registries", imageHandler.CreateRegistry)
+	router.GET("/images/registries", imageHandler.ListRegistries)
+	router.PUT("/images/registries/:id", imageHandler.UpdateRegistry)
+	router.DELETE("/images/registries/:id", imageHandler.DeleteRegistry)
+	router.POST("/images/registries/:id/scan", imageHandler.ScanRegistryImages)
+
+	// SBOM 导入
+	sbomHandler := api.NewSBOMImportHandler(db, logger)
+	router.POST("/sbom/import", sbomHandler.ImportSBOM)
+	router.GET("/sbom/projects", sbomHandler.ListProjects)
+	router.GET("/sbom/projects/:name", sbomHandler.GetProject)
+
+	// 修复策略管理
+	remExecutor := biz.NewRemediationExecutor(db, logger)
+	policyHandler := api.NewRemediationPoliciesHandler(db, logger, remExecutor)
+	router.POST("/remediation-policies", policyHandler.CreatePolicy)
+	router.GET("/remediation-policies", policyHandler.ListPolicies)
+	router.GET("/remediation-policies/:id", policyHandler.GetPolicy)
+	router.PUT("/remediation-policies/:id", policyHandler.UpdatePolicy)
+	router.DELETE("/remediation-policies/:id", policyHandler.DeletePolicy)
+	router.POST("/remediation-policies/:id/execute", policyHandler.ExecutePolicy)
+	router.POST("/remediation-policies/:id/preview", policyHandler.PreviewPolicy)
+	router.GET("/remediation-policies/:id/executions", policyHandler.ListExecutions)
+}
+
+// setupVulnBulletinsAPI 设置漏洞通报 API 路由
+func setupVulnBulletinsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	handler := api.NewVulnBulletinsHandler(db, logger)
+	router.GET("/vuln-bulletins", handler.ListBulletins)
+	router.GET("/vuln-bulletins/statistics", handler.GetBulletinStatistics)
+	router.GET("/vuln-bulletins/config", handler.GetBulletinConfig)
+	router.PUT("/vuln-bulletins/config", handler.UpdateBulletinConfig)
+	router.GET("/vuln-bulletins/:id", handler.GetBulletin)
+	router.PUT("/vuln-bulletins/:id/acknowledge", handler.AcknowledgeBulletin)
+	router.PUT("/vuln-bulletins/:id/resolve", handler.ResolveBulletin)
+	router.PUT("/vuln-bulletins/:id/ignore", handler.IgnoreBulletin)
+	router.PUT("/vuln-bulletins/:id/reopen", handler.ReopenBulletin)
+	router.POST("/vuln-bulletins/batch", handler.BatchBulletins)
 }
 
 // setupAlertContextAPI 设置告警溯源 API 路由

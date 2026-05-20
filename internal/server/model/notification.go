@@ -25,13 +25,13 @@ const (
 type NotifyCategory string
 
 const (
-	NotifyCategoryBaselineAlert      NotifyCategory = "baseline_alert"      // 基线告警通知
-	NotifyCategoryAgentOffline       NotifyCategory = "agent_offline"       // Agent 离线通知
-	NotifyCategoryVulnerabilityAlert NotifyCategory = "vulnerability_alert" // 漏洞告警通知
-	NotifyCategoryVirusAlert         NotifyCategory = "virus_alert"         // 病毒查杀告警通知
-	NotifyCategoryFIMAlert           NotifyCategory = "fim_alert"           // 文件完整性告警通知
-	NotifyCategoryRuntimeAlert       NotifyCategory = "runtime_alert"       // 运行时检测告警通知
-	NotifyCategoryKubeAlert          NotifyCategory = "kube_alert"          // K8s 安全告警通知
+	NotifyCategoryBaselineAlert NotifyCategory = "baseline_alert" // 基线告警通知
+	NotifyCategoryAgentOffline  NotifyCategory = "agent_offline"  // Agent 离线通知
+	NotifyCategoryVirusAlert    NotifyCategory = "virus_alert"    // 病毒查杀告警通知
+	NotifyCategoryFIMAlert      NotifyCategory = "fim_alert"      // 文件完整性告警通知
+	NotifyCategoryEDRAlert      NotifyCategory = "edr_alert"      // EDR 告警通知
+	NotifyCategoryKubeAlert     NotifyCategory = "kube_alert"     // K8s 安全告警通知
+	NotifyCategoryVulnBulletin  NotifyCategory = "vuln_bulletin"  // 漏洞通报通知
 )
 
 // NotificationSeverity 通知等级

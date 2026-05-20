@@ -155,7 +155,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
-import { reportsApi, type RuntimeReport } from '@/api/reports'
+import { reportsApi, type EDRReport } from '@/api/reports'
 
 interface Props {
   dateRange: [Dayjs, Dayjs]
@@ -164,7 +164,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const loading = ref(false)
-const report = ref<RuntimeReport>({
+const report = ref<EDRReport>({
   summary: {
     totalAlerts: 0,
     activeAlerts: 0,
@@ -288,7 +288,7 @@ const hostColumns = [
 const loadData = async () => {
   loading.value = true
   try {
-    const data = await reportsApi.getRuntimeReport({
+    const data = await reportsApi.getEDRReport({
       start_time: props.dateRange[0].format('YYYY-MM-DD'),
       end_time: props.dateRange[1].format('YYYY-MM-DD'),
     })

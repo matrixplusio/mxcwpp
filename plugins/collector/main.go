@@ -66,6 +66,7 @@ func main() {
 	collectEngine.RegisterHandler("kmod", 12*time.Hour, &handlers.KmodHandler{Logger: logger})
 	collectEngine.RegisterHandler("service", 6*time.Hour, &handlers.ServiceHandler{Logger: logger})
 	collectEngine.RegisterHandler("cron", 12*time.Hour, &handlers.CronHandler{Logger: logger})
+	collectEngine.RegisterHandler("dep_scan", 12*time.Hour, &handlers.DepScannerHandler{Logger: logger})
 
 	// 5. 创建上下文
 	ctx, cancel := context.WithCancel(context.Background())

@@ -59,7 +59,7 @@
               <img src="/logo.png" alt="Logo" style="width: 80px; height: 80px; object-fit: contain;" />
             </div>
             <h1 class="cover-title">{{ report.meta.reportTitle }}</h1>
-            <div class="cover-subtitle">Runtime Detection Analysis Report</div>
+            <div class="cover-subtitle">EDR Detection Analysis Report</div>
             <div class="cover-info">
               <div class="cover-info-item">
                 <span class="label">报告周期：</span>
@@ -341,14 +341,14 @@ import {
   ExclamationCircleOutlined,
   ArrowLeftOutlined,
 } from '@ant-design/icons-vue'
-import { reportsApi, type RuntimeExecutiveReport, type GeneratedReportItem } from '@/api/reports'
+import { reportsApi, type EDRExecutiveReport, type GeneratedReportItem } from '@/api/reports'
 import html2pdf from 'html2pdf.js'
 
 const loading = ref(false)
 const exportingPDF = ref(false)
 const loadingSaved = ref(false)
 const dateRange = ref<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day'), dayjs()])
-const report = ref<RuntimeExecutiveReport | null>(null)
+const report = ref<EDRExecutiveReport | null>(null)
 const reportContent = ref<HTMLElement | null>(null)
 const savedReports = ref<GeneratedReportItem[]>([])
 
@@ -363,7 +363,7 @@ const reportColumns = [
 const loadSavedReports = async () => {
   loadingSaved.value = true
   try {
-    const res = await reportsApi.listGeneratedReports('runtime')
+    const res = await reportsApi.listGeneratedReports('edr')
     savedReports.value = res.items || []
   } catch { /* ignore */ } finally {
     loadingSaved.value = false
@@ -398,7 +398,7 @@ const generateReport = async () => {
   }
   loading.value = true
   try {
-    report.value = await reportsApi.getRuntimeExecutiveReport({
+    report.value = await reportsApi.getEDRExecutiveReport({
       start_time: dateRange.value[0].format('YYYY-MM-DD'),
       end_time: dateRange.value[1].format('YYYY-MM-DD'),
     })

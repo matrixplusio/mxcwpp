@@ -1,7 +1,7 @@
 import apiClient from './client'
 import type { PaginatedResponse } from './types'
 
-export type AlertSource = 'baseline' | 'runtime' | 'agent' | 'vulnerability' | 'fim' | 'virus' | 'kube'
+export type AlertSource = 'baseline' | 'edr' | 'agent' | 'vulnerability' | 'fim' | 'virus' | 'kube'
 
 export interface Alert {
   id: number
@@ -65,7 +65,7 @@ export interface ListAlertsParams {
   end_time?: string
 }
 
-export interface RuntimeAlertStatistics {
+export interface EDRAlertStatistics {
   total: number
   active: number
   today: number
@@ -113,9 +113,9 @@ export const alertsApi = {
     return apiClient.get<AlertStatistics>('/alerts/statistics')
   },
 
-  // 获取运行时告警统计
-  runtimeStatistics: () => {
-    return apiClient.get<RuntimeAlertStatistics>('/alerts/runtime-statistics')
+  // 获取 EDR 告警统计
+  edrStatistics: () => {
+    return apiClient.get<EDRAlertStatistics>('/alerts/edr-statistics')
   },
 
   // 解决告警

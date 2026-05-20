@@ -195,13 +195,13 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	} else {
 		stats["vulnHostPercent"] = 0.0
 	}
-	// 运行时安全告警：来自 CEL 规则引擎的告警（category = 'detection_rule'）
-	var runtimeAlertHostCount int64
-	h.db.Model(&model.Alert{}).Where("status = ? AND category = ?", model.AlertStatusActive, "detection_rule").Distinct("host_id").Count(&runtimeAlertHostCount)
+	// EDR 告警：来自 CEL 规则引擎的告警（category = 'detection_rule'）
+	var edrAlertHostCount int64
+	h.db.Model(&model.Alert{}).Where("status = ? AND category = ?", model.AlertStatusActive, "detection_rule").Distinct("host_id").Count(&edrAlertHostCount)
 	if totalHosts > 0 {
-		stats["runtimeAlertPercent"] = math.Round(float64(runtimeAlertHostCount)/float64(totalHosts)*1000) / 10
+		stats["edrAlertPercent"] = math.Round(float64(edrAlertHostCount)/float64(totalHosts)*1000) / 10
 	} else {
-		stats["runtimeAlertPercent"] = 0.0
+		stats["edrAlertPercent"] = 0.0
 	}
 	// 病毒主机百分比：扫描结果中有未处理威胁的主机
 	var virusHostCount int64

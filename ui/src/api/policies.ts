@@ -93,11 +93,7 @@ export const policiesApi = {
       skipped: number
       total: number
       errors?: string[]
-    }>(`/policies/import?mode=${mode}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    }>(`/policies/import?mode=${mode}`, formData)
   },
 
   // 批量启用/禁用策略

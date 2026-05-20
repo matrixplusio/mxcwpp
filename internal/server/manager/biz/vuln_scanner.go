@@ -27,9 +27,10 @@ const (
 
 // VulnScanner 漏洞扫描器，基于 OSV.dev API
 type VulnScanner struct {
-	db         *gorm.DB
-	httpClient *http.Client
-	logger     *zap.Logger
+	db           *gorm.DB
+	httpClient   *http.Client
+	logger       *zap.Logger
+	cacheManager *VulnCacheManager
 }
 
 // NewVulnScanner 创建漏洞扫描器
@@ -39,7 +40,8 @@ func NewVulnScanner(db *gorm.DB, logger *zap.Logger) *VulnScanner {
 		httpClient: &http.Client{
 			Timeout: osvTimeout,
 		},
-		logger: logger,
+		logger:       logger,
+		cacheManager: NewVulnCacheManager(db, logger),
 	}
 }
 
@@ -123,33 +125,72 @@ func (v *VulnScanner) SyncOnly() error {
 
 	v.logger.Info("开始漏洞库同步（仅同步，不扫描主机）")
 
-	var lastErr error
-	// NVD 同步
-	if err := v.SyncNVD(); err != nil {
-		v.logger.Warn("NVD 同步失败", zap.Error(err))
-		lastErr = err
+	// 逐个数据源同步，记录每个源的状态
+	type sourceResult struct {
+		Name   string `json:"name"`
+		Status string `json:"status"` // success / failed / skipped
+		Error  string `json:"error,omitempty"`
 	}
-	// Red Hat Security Data 同步
-	if err := v.SyncRedHat(); err != nil {
-		v.logger.Warn("Red Hat 同步失败", zap.Error(err))
-		if lastErr == nil {
-			lastErr = err
+	var results []sourceResult
+	var coreErr error // 核心数据源失败
+
+	// 核心数据源
+	for _, src := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"NVD", v.SyncNVD},
+		{"RedHat", v.SyncRedHat},
+	} {
+		if err := src.fn(); err != nil {
+			v.logger.Warn(src.name+" 同步失败", zap.Error(err))
+			results = append(results, sourceResult{Name: src.name, Status: "failed", Error: err.Error()})
+			if coreErr == nil {
+				coreErr = err
+			}
+		} else {
+			results = append(results, sourceResult{Name: src.name, Status: "success"})
 		}
 	}
 
+	// 增强数据源（失败不影响整体状态）
+	for _, src := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"CNVD", v.SyncCNVD},
+		{"CNNVD", v.SyncCNNVD},
+		{"Exploit", v.SyncExploit},
+	} {
+		if err := src.fn(); err != nil {
+			v.logger.Warn(src.name+" 同步失败，跳过", zap.Error(err))
+			results = append(results, sourceResult{Name: src.name, Status: "failed", Error: err.Error()})
+		} else {
+			results = append(results, sourceResult{Name: src.name, Status: "success"})
+		}
+	}
+
+	// 重算漏洞优先级
+	pc := NewPriorityCalculator(v.db, v.logger)
+	if err := pc.RecalculateAll(); err != nil {
+		v.logger.Warn("优先级重算失败", zap.Error(err))
+	}
+
+	// 写入同步结果
 	duration := int(time.Since(startedAt).Seconds())
-	updates := map[string]interface{}{"duration": duration}
-	if lastErr != nil {
+	updates := map[string]any{"duration": duration}
+	resultsJSON, _ := json.Marshal(results)
+	if coreErr != nil {
 		updates["status"] = "failed"
-		updates["error_msg"] = lastErr.Error()
 	} else {
 		updates["status"] = "success"
 		updates["version"] = time.Now().Format("20060102.150405")
 	}
+	updates["error_msg"] = string(resultsJSON)
 	v.db.Model(&record).Updates(updates)
 
 	v.logger.Info("漏洞库同步完成", zap.Int("duration_seconds", duration))
-	return lastErr
+	return coreErr
 }
 
 // GetLatestSyncStatus 查询最近一条漏洞相关同步记录
@@ -168,7 +209,7 @@ func (v *VulnScanner) GetLatestSyncStatus() (*model.SecurityDBSyncRecord, error)
 // GetSyncHistory 分页查询漏洞相关同步历史记录
 func (v *VulnScanner) GetSyncHistory(page, pageSize int) ([]model.SecurityDBSyncRecord, int64, error) {
 	var total int64
-	query := v.db.Model(&model.SecurityDBSyncRecord{}).Where("db_type IN ?", []string{"osv", "vuln-sync"})
+	query := v.db.Model(&model.SecurityDBSyncRecord{}).Where("db_type IN ?", []string{"osv", "osv-incremental", "vuln-sync"})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -176,6 +217,133 @@ func (v *VulnScanner) GetSyncHistory(page, pageSize int) ([]model.SecurityDBSync
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order("id DESC").Find(&records).Error
 	return records, total, err
+}
+
+// ScanIncremental 增量漏洞扫描：仅扫描自上次扫描以来新增/变更的软件包
+// 通过 software.collected_at > 上次扫描时间 筛选变更软件，大幅降低扫描耗时
+func (v *VulnScanner) ScanIncremental() error {
+	startedAt := time.Now()
+
+	// 查询上次成功扫描的开始时间（osv 全量 或 osv-incremental 增量）
+	var lastRecord model.SecurityDBSyncRecord
+	var since time.Time
+	err := v.db.Where("db_type IN ? AND status = ?", []string{"osv", "osv-incremental"}, "success").
+		Order("started_at DESC").First(&lastRecord).Error
+	if err != nil {
+		// 无历史记录 → 回退到全量
+		v.logger.Info("无增量基线记录，回退全量扫描")
+		return v.ScanAll()
+	}
+	since = lastRecord.StartedAt
+
+	// 插入 running 记录
+	record := model.SecurityDBSyncRecord{
+		DBType:    "osv-incremental",
+		Status:    "running",
+		StartedAt: startedAt,
+	}
+	v.db.Create(&record)
+
+	v.logger.Info("开始增量漏洞扫描", zap.Time("since", since))
+
+	// 查询自 since 以来新增/变更的软件包
+	var packages []purlInfo
+	if err := v.db.Table("software AS s").
+		Select("s.purl AS purl, s.name AS name, s.version AS version, s.host_id AS host_id, COALESCE(h.hostname, '') AS hostname, COALESCE(JSON_UNQUOTE(JSON_EXTRACT(h.ipv4, '$[0]')), '') AS ip").
+		Joins("LEFT JOIN hosts h ON h.host_id = s.host_id").
+		Where("s.purl != '' AND s.purl IS NOT NULL AND s.collected_at > ?", since).
+		Scan(&packages).Error; err != nil {
+		updates := map[string]any{"status": "failed", "error_msg": err.Error(), "duration": int(time.Since(startedAt).Seconds())}
+		v.db.Model(&record).Updates(updates)
+		return fmt.Errorf("查询增量软件包失败: %w", err)
+	}
+
+	if len(packages) == 0 {
+		v.logger.Info("无新增/变更软件包，增量扫描跳过")
+		duration := int(time.Since(startedAt).Seconds())
+		v.db.Model(&record).Updates(map[string]any{
+			"status":    "success",
+			"version":   time.Now().Format("20060102.150405"),
+			"error_msg": "无新增软件包，跳过",
+			"duration":  duration,
+		})
+		return nil
+	}
+
+	v.logger.Info("增量软件包数", zap.Int("count", len(packages)))
+
+	// 按 PURL 去重
+	purlHosts := make(map[string][]string)
+	purlPkgInfo := make(map[string]purlInfo)
+	hostnameMap := make(map[string]string)
+	ipMap := make(map[string]string)
+	for _, pkg := range packages {
+		purlHosts[pkg.PURL] = append(purlHosts[pkg.PURL], pkg.HostID)
+		if _, exists := purlPkgInfo[pkg.PURL]; !exists {
+			purlPkgInfo[pkg.PURL] = pkg
+		}
+		if pkg.Hostname != "" {
+			hostnameMap[pkg.HostID] = pkg.Hostname
+		}
+		if pkg.IP != "" {
+			ipMap[pkg.HostID] = pkg.IP
+		}
+	}
+
+	uniquePURLs := make([]string, 0, len(purlHosts))
+	for purl := range purlHosts {
+		uniquePURLs = append(uniquePURLs, purl)
+	}
+
+	v.logger.Info("增量去重后 PURL 数", zap.Int("count", len(uniquePURLs)))
+
+	// 预加载已有漏洞标识
+	knownVulnIDs := make(map[string]struct{})
+	var cveIDs []string
+	v.db.Model(&model.Vulnerability{}).Pluck("cve_id", &cveIDs)
+	for _, id := range cveIDs {
+		knownVulnIDs[id] = struct{}{}
+	}
+	var osvIDs []string
+	v.db.Model(&model.Vulnerability{}).Where("osv_id != ''").Pluck("DISTINCT osv_id", &osvIDs)
+	for _, id := range osvIDs {
+		knownVulnIDs[id] = struct{}{}
+	}
+
+	detailCache := make(map[string]*osvVuln)
+
+	// 分批调用 OSV.dev API
+	totalVulns := 0
+	for i := 0; i < len(uniquePURLs); i += osvBatchSize {
+		end := i + osvBatchSize
+		if end > len(uniquePURLs) {
+			end = len(uniquePURLs)
+		}
+		batch := uniquePURLs[i:end]
+
+		vulnCount, err := v.queryBatch(batch, purlHosts, purlPkgInfo, hostnameMap, ipMap, detailCache, knownVulnIDs)
+		if err != nil {
+			v.logger.Error("增量 OSV.dev 查询失败", zap.Int("batch_start", i), zap.Error(err))
+			continue
+		}
+		totalVulns += vulnCount
+	}
+
+	duration := int(time.Since(startedAt).Seconds())
+	summary := fmt.Sprintf("增量扫描 %d 个 PURL，发现 %d 个漏洞", len(uniquePURLs), totalVulns)
+
+	v.logger.Info("增量漏洞扫描完成",
+		zap.Int("total_purls", len(uniquePURLs)),
+		zap.Int("total_vulns", totalVulns),
+		zap.Int("duration_seconds", duration))
+
+	v.db.Model(&record).Updates(map[string]any{
+		"status":    "success",
+		"version":   time.Now().Format("20060102.150405"),
+		"error_msg": summary,
+		"duration":  duration,
+	})
+	return nil
 }
 
 // ScanAll 全量漏洞扫描：查询所有软件包 PURL → OSV.dev API → 写入漏洞表
@@ -221,7 +389,8 @@ func (v *VulnScanner) ScanAll() error {
 		newVulns, criticalCount, highCount, affectedHosts)
 
 	updates["status"] = "success"
-	updates["version"] = fmt.Sprintf("%s | %s", time.Now().Format("20060102.150405"), summary)
+	updates["version"] = time.Now().Format("20060102.150405")
+	updates["error_msg"] = summary // 非错误，记录扫描摘要
 
 	v.logger.Info("全量漏洞扫描完成",
 		zap.Int64("new_vulns", newVulns),
@@ -343,6 +512,17 @@ func (v *VulnScanner) doScanAll() error {
 		v.logger.Warn("Red Hat 补充同步失败（不影响其他数据）", zap.Error(err))
 	}
 
+	// Exploit 利用标记同步
+	if err := v.SyncExploit(); err != nil {
+		v.logger.Warn("Exploit 标记同步失败（不影响其他数据）", zap.Error(err))
+	}
+
+	// 重算漏洞优先级
+	pc := NewPriorityCalculator(v.db, v.logger)
+	if err := pc.RecalculateAll(); err != nil {
+		v.logger.Warn("优先级重算失败（不影响扫描结果）", zap.Error(err))
+	}
+
 	return nil
 }
 
@@ -361,19 +541,40 @@ func (v *VulnScanner) queryBatch(purls []string, purlHosts map[string][]string, 
 		return 0, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
+	// 根据缓存模式选择查询策略
+	mode := CacheModeOnline
+	if v.cacheManager != nil {
+		mode = v.cacheManager.GetMode()
+	}
+
+	// 离线模式：直接使用本地数据库匹配
+	if mode == CacheModeOffline {
+		v.logger.Info("离线模式：使用本地漏洞库匹配")
+		return v.queryBatchFromDB(purls, purlHosts, purlPkgInfo, hostnameMap, ipMap)
+	}
+
 	// 调用 API
+	var result osvQueryBatchResponse
 	resp, err := v.httpClient.Post(osvBatchURL, "application/json", bytes.NewReader(body))
 	if err != nil {
+		if mode == CacheModeHybrid {
+			v.logger.Warn("OSV.dev API 不可用，回退本地漏洞库", zap.Error(err))
+			return v.queryBatchFromDB(purls, purlHosts, purlPkgInfo, hostnameMap, ipMap)
+		}
 		return 0, fmt.Errorf("调用 OSV.dev API 失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
+		if mode == CacheModeHybrid {
+			v.logger.Warn("OSV.dev API 返回非 200，回退本地漏洞库",
+				zap.Int("status", resp.StatusCode))
+			return v.queryBatchFromDB(purls, purlHosts, purlPkgInfo, hostnameMap, ipMap)
+		}
 		return 0, fmt.Errorf("OSV.dev API 返回 %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var result osvQueryBatchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return 0, fmt.Errorf("解析 OSV.dev 响应失败: %w", err)
 	}
@@ -451,28 +652,37 @@ func (v *VulnScanner) queryBatch(purls []string, purlHosts map[string][]string, 
 				cveIDs := v.extractCVEs(*fullVuln)
 				severity := v.mapSeverity(*fullVuln)
 				cvssScore := v.extractCVSS(*fullVuln)
+				cvssVector := v.extractCVSSVector(*fullVuln)
 				fixedVersion := v.extractFixedVersion(*fullVuln)
 				referenceURL := v.extractReferenceURL(*fullVuln)
+				affectedVersions := v.extractAffectedVersions(*fullVuln)
+				attackVector, vulnType := classifyFromCVSSVector(cvssVector, "")
 
 				for _, cveID := range cveIDs {
 					vulnRecord := &model.Vulnerability{
-						CveID:          cveID,
-						OsvID:          fullVuln.ID,
-						PURL:           purl,
-						Severity:       severity,
-						CvssScore:      cvssScore,
-						Component:      pkgInfo.Name,
-						Description:    fullVuln.Summary,
-						Status:         "unpatched",
-						DiscoveredAt:   model.LocalTime(time.Now()),
-						CurrentVersion: pkgInfo.Version,
-						FixedVersion:   fixedVersion,
-						ReferenceUrl:   referenceURL,
+						CveID:            cveID,
+						OsvID:            fullVuln.ID,
+						PURL:             purl,
+						Severity:         severity,
+						CvssScore:        cvssScore,
+						CvssVector:       cvssVector,
+						AttackVector:     attackVector,
+						VulnType:         vulnType,
+						AffectedVersions: affectedVersions,
+						Source:           "osv",
+						PatchAvailable:   fixedVersion != "",
+						Component:        pkgInfo.Name,
+						Description:      fullVuln.Summary,
+						Status:           "unpatched",
+						DiscoveredAt:     model.LocalTime(time.Now()),
+						CurrentVersion:   pkgInfo.Version,
+						FixedVersion:     fixedVersion,
+						ReferenceUrl:     referenceURL,
 					}
 
 					if err := v.db.Clauses(clause.OnConflict{
 						Columns:   []clause.Column{{Name: "cve_id"}},
-						DoUpdates: clause.AssignmentColumns([]string{"osv_id", "purl", "cvss_score", "description", "fixed_version", "reference_url"}),
+						DoUpdates: clause.AssignmentColumns([]string{"osv_id", "purl", "cvss_score", "cvss_vector", "attack_vector", "vuln_type", "affected_versions", "source", "patch_available", "description", "fixed_version", "reference_url"}),
 					}).Create(vulnRecord).Error; err != nil {
 						v.logger.Error("写入漏洞记录失败", zap.String("cve_id", cveID), zap.Error(err))
 						continue
@@ -486,29 +696,19 @@ func (v *VulnScanner) queryBatch(purls []string, purlHosts map[string][]string, 
 
 					v.upsertHostVulns(vulnRecord.ID, purl, pkgInfo.Version, purlHosts, hostnameMap, ipMap)
 
-					// 异步发送漏洞告警通知
-					if len(purlHosts[purl]) > 0 {
-						firstHost := purlHosts[purl][0]
-						go func(vuln *model.Vulnerability, hostID, hostname string) {
-							var host model.Host
-							ip := ""
-							if v.db.Select("ipv4").First(&host, "host_id = ?", hostID).Error == nil && len(host.IPv4) > 0 {
-								ip = host.IPv4[0]
-							}
-							var affected int64
-							v.db.Model(&model.HostVulnerability{}).Where("vuln_id = ? AND status = ?", vuln.ID, "unpatched").Count(&affected)
+					// 异步创建漏洞通报 + 发送通知
+					go func(vuln *model.Vulnerability) {
+						bs := NewVulnBulletinService(v.db, v.logger)
+						bulletin := bs.TryCreateBulletin(vuln)
+						if bulletin != nil {
 							ns := NewNotificationService(v.db, v.logger)
-							if err := ns.SendVulnerabilityAlertNotification(&VulnerabilityAlertData{
-								HostID: hostID, Hostname: hostname, IP: ip,
-								CveID: vuln.CveID, Severity: vuln.Severity, CvssScore: vuln.CvssScore,
-								Component: vuln.Component, CurrentVersion: vuln.CurrentVersion,
-								FixedVersion: vuln.FixedVersion, Description: vuln.Description,
-								AffectedHosts: int(affected),
-							}); err != nil {
-								v.logger.Error("发送漏洞告警通知失败", zap.String("cve_id", vuln.CveID), zap.Error(err))
+							if err := ns.SendVulnBulletinNotification(bulletin); err != nil {
+								v.logger.Error("发送漏洞通报通知失败",
+									zap.String("bulletin_no", bulletin.BulletinNo),
+									zap.Error(err))
 							}
-						}(vulnRecord, firstHost, hostnameMap[firstHost])
-					}
+						}
+					}(vulnRecord)
 					vulnCount++
 				}
 				continue
@@ -524,6 +724,31 @@ func (v *VulnScanner) queryBatch(purls []string, purlHosts map[string][]string, 
 		}
 	}
 
+	return vulnCount, nil
+}
+
+// queryBatchFromDB 本地数据库漏洞匹配（离线/混合模式 API 不可用时的回退方案）
+// 根据包名匹配 DB 中已知的漏洞记录，更新主机关联
+func (v *VulnScanner) queryBatchFromDB(purls []string, purlHosts map[string][]string, purlPkgInfo map[string]purlInfo, hostnameMap, ipMap map[string]string) (int, error) {
+	vulnCount := 0
+	for _, purl := range purls {
+		pkgInfo := purlPkgInfo[purl]
+
+		// 按组件名查找 DB 中已知的未修复漏洞
+		var vulns []model.Vulnerability
+		v.db.Where("component = ? AND status != ?", pkgInfo.Name, "patched").Find(&vulns)
+
+		for _, vuln := range vulns {
+			// 如果有修复版本，检查当前版本是否仍受影响
+			if vuln.FixedVersion != "" && compareVersionStrings(pkgInfo.Version, vuln.FixedVersion) >= 0 {
+				continue
+			}
+			v.upsertHostVulns(vuln.ID, purl, pkgInfo.Version, purlHosts, hostnameMap, ipMap)
+			vulnCount++
+		}
+	}
+
+	v.logger.Info("本地漏洞库匹配完成", zap.Int("matched", vulnCount))
 	return vulnCount, nil
 }
 
@@ -621,9 +846,41 @@ func (v *VulnScanner) upsertHostVulnsBatch(vulnID uint, entries []hostVulnEntry)
 }
 
 // fetchVulnDetail 获取单个漏洞的完整详情（querybatch 仅返回 id + modified）
+// 支持缓存：非在线模式优先读缓存 → API 调用 → 写缓存 → API 失败时回退缓存
 func (v *VulnScanner) fetchVulnDetail(id string) (*osvVuln, error) {
+	mode := CacheModeOnline
+	if v.cacheManager != nil {
+		mode = v.cacheManager.GetMode()
+	}
+
+	// 非在线模式：优先读缓存
+	if mode != CacheModeOnline && v.cacheManager != nil {
+		if cached, err := v.cacheManager.GetCachedVuln(id); err == nil && cached != nil {
+			var vuln osvVuln
+			if err := json.Unmarshal(cached, &vuln); err == nil {
+				return &vuln, nil
+			}
+		}
+	}
+
+	// 离线模式：缓存未命中直接报错
+	if mode == CacheModeOffline {
+		return nil, fmt.Errorf("离线模式下缓存未命中: %s", id)
+	}
+
+	// 调用 API
 	resp, err := v.httpClient.Get(osvVulnURL + id)
 	if err != nil {
+		// 混合模式 API 失败：尝试过期缓存兜底
+		if mode == CacheModeHybrid && v.cacheManager != nil {
+			if cached, cacheErr := v.cacheManager.GetCachedVulnIncludeExpired(id); cacheErr == nil && cached != nil {
+				var vuln osvVuln
+				if json.Unmarshal(cached, &vuln) == nil {
+					v.logger.Info("API 失败，使用缓存数据", zap.String("id", id))
+					return &vuln, nil
+				}
+			}
+		}
 		return nil, fmt.Errorf("调用 OSV.dev 详情 API 失败: %w", err)
 	}
 	defer resp.Body.Close()
@@ -633,10 +890,23 @@ func (v *VulnScanner) fetchVulnDetail(id string) (*osvVuln, error) {
 		return nil, fmt.Errorf("OSV.dev 详情 API 返回 %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	// 读取响应体并解析
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应体失败: %w", err)
+	}
 	var vuln osvVuln
-	if err := json.NewDecoder(resp.Body).Decode(&vuln); err != nil {
+	if err := json.Unmarshal(bodyBytes, &vuln); err != nil {
 		return nil, fmt.Errorf("解析漏洞详情失败: %w", err)
 	}
+
+	// 写入缓存
+	if v.cacheManager != nil {
+		if err := v.cacheManager.PutCache(id, bodyBytes); err != nil {
+			v.logger.Warn("写入漏洞缓存失败", zap.String("id", id), zap.Error(err))
+		}
+	}
+
 	return &vuln, nil
 }
 
@@ -745,6 +1015,43 @@ func (v *VulnScanner) extractCVSS(vuln osvVuln) float64 {
 		}
 	}
 	return 0
+}
+
+// extractCVSSVector 提取 CVSS v3 向量字符串原文
+func (v *VulnScanner) extractCVSSVector(vuln osvVuln) string {
+	for _, sev := range vuln.Severity {
+		if sev.Type == "CVSS_V3" && sev.Score != "" {
+			return sev.Score
+		}
+	}
+	return ""
+}
+
+// extractAffectedVersions 提取影响版本范围描述
+func (v *VulnScanner) extractAffectedVersions(vuln osvVuln) string {
+	for _, affected := range vuln.Affected {
+		for _, r := range affected.Ranges {
+			var introduced, fixed string
+			for _, event := range r.Events {
+				if event.Introduced != "" && event.Introduced != "0" {
+					introduced = event.Introduced
+				}
+				if event.Fixed != "" {
+					fixed = event.Fixed
+				}
+			}
+			if fixed != "" && introduced != "" {
+				return ">= " + introduced + ", < " + fixed
+			}
+			if fixed != "" {
+				return "< " + fixed
+			}
+			if introduced != "" {
+				return ">= " + introduced
+			}
+		}
+	}
+	return ""
 }
 
 // parseCVSSv3Vector 解析 CVSS v3.x 向量字符串，返回 Base Score

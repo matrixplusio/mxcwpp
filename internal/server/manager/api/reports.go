@@ -2658,12 +2658,12 @@ func (h *ReportsHandler) GetKubeReport(c *gin.Context) {
 }
 
 // ============================================================
-// 运行时检测报告
+// EDR 检测报告
 // ============================================================
 
-// GetRuntimeReport 获取运行时检测报告
-// GET /api/v1/reports/runtime
-func (h *ReportsHandler) GetRuntimeReport(c *gin.Context) {
+// GetEDRReport 获取 EDR 检测报告
+// GET /api/v1/reports/edr
+func (h *ReportsHandler) GetEDRReport(c *gin.Context) {
 	startTime, endTime, ok := parseReportTimeRange(c)
 	if !ok {
 		return
@@ -2673,14 +2673,14 @@ func (h *ReportsHandler) GetRuntimeReport(c *gin.Context) {
 	const celPrefix = "cel-%"
 
 	// 1. summary
-	type runtimeSummary struct {
+	type edrSummary struct {
 		TotalAlerts    int64
 		ActiveAlerts   int64
 		ResolvedAlerts int64
 		TodayAlerts    int64
 		AffectedHosts  int64
 	}
-	var summary runtimeSummary
+	var summary edrSummary
 
 	h.db.Model(&model.Alert{}).
 		Where("rule_id LIKE ? AND last_seen_at >= ? AND last_seen_at <= ?", celPrefix, startTime, endTime).
@@ -3629,9 +3629,9 @@ func (h *ReportsHandler) GetKubeExecutiveReport(c *gin.Context) {
 	Success(c, reportData)
 }
 
-// GetRuntimeExecutiveReport 获取运行时检测 Executive 报告
-// GET /api/v1/reports/runtime/executive
-func (h *ReportsHandler) GetRuntimeExecutiveReport(c *gin.Context) {
+// GetEDRExecutiveReport 获取 EDR 检测 Executive 报告
+// GET /api/v1/reports/edr/executive
+func (h *ReportsHandler) GetEDRExecutiveReport(c *gin.Context) {
 	startTime, endTime, ok := parseReportTimeRange(c)
 	if !ok {
 		return
@@ -3797,18 +3797,18 @@ func (h *ReportsHandler) GetRuntimeExecutiveReport(c *gin.Context) {
 
 	var overallConclusion, alertOverview string
 	if totalAlerts == 0 {
-		overallConclusion = "未检测到运行时威胁"
-		alertOverview = "报告周期内未检测到运行时告警。"
+		overallConclusion = "未检测到 EDR 威胁"
+		alertOverview = "报告周期内未检测到 EDR 告警。"
 	} else if hasCritical {
-		overallConclusion = "发现严重运行时威胁"
+		overallConclusion = "发现严重 EDR 威胁"
 		alertOverview = fmt.Sprintf("共检测到 %d 条告警，其中 %d 条严重、%d 条高危，影响 %d 台主机。",
 			totalAlerts, bySeverity["critical"], bySeverity["high"], affectedHosts)
 	} else if hasHigh {
-		overallConclusion = "发现高危运行时威胁"
+		overallConclusion = "发现高危 EDR 威胁"
 		alertOverview = fmt.Sprintf("共检测到 %d 条告警，其中 %d 条高危，影响 %d 台主机。",
 			totalAlerts, bySeverity["high"], affectedHosts)
 	} else {
-		overallConclusion = "运行时检测正常"
+		overallConclusion = "EDR 检测正常"
 		alertOverview = fmt.Sprintf("共检测到 %d 条告警，均为中低风险。", totalAlerts)
 	}
 
@@ -3822,7 +3822,7 @@ func (h *ReportsHandler) GetRuntimeExecutiveReport(c *gin.Context) {
 	if activeAlerts > 0 {
 		actionSuggestions = append(actionSuggestions, fmt.Sprintf("处理 %d 条活跃告警，确认并关闭已处理的事件", activeAlerts))
 	}
-	actionSuggestions = append(actionSuggestions, "建议持续监控运行时检测告警，及时响应安全事件")
+	actionSuggestions = append(actionSuggestions, "建议持续监控 EDR 告警，及时响应安全事件")
 	actionSuggestions = append(actionSuggestions, "定期审查检测规则，根据业务场景优化误报规则")
 
 	periodStr := fmt.Sprintf("%s 至 %s", startTime.Format("2006-01-02"), endTime.Format("2006-01-02"))
@@ -3830,7 +3830,7 @@ func (h *ReportsHandler) GetRuntimeExecutiveReport(c *gin.Context) {
 	reportData := gin.H{
 		"meta": gin.H{
 			"reportId":     reportID,
-			"reportTitle":  "运行时检测分析报告",
+			"reportTitle":  "EDR 检测分析报告",
 			"generatedAt":  time.Now().Format("2006-01-02 15:04:05"),
 			"companyName":  companyName,
 			"reportPeriod": periodStr,
@@ -3855,13 +3855,13 @@ func (h *ReportsHandler) GetRuntimeExecutiveReport(c *gin.Context) {
 		"hostDetails": hostDetails,
 		"topRules":    topRulesOut,
 		"recommendation": gin.H{
-			"overallAssessment": fmt.Sprintf("报告周期内 %d 台主机共产生 %d 条运行时告警。%s", affectedHosts, totalAlerts, alertOverview),
+			"overallAssessment": fmt.Sprintf("报告周期内 %d 台主机共产生 %d 条 EDR 告警。%s", affectedHosts, totalAlerts, alertOverview),
 			"actionSuggestions": actionSuggestions,
-			"disclaimer":        "本报告基于运行时检测规则生成，告警可能包含误报。建议结合实际业务场景进行人工确认。",
+			"disclaimer":        "本报告基于 EDR 检测规则生成，告警可能包含误报。建议结合实际业务场景进行人工确认。",
 		},
 	}
 
-	h.saveGeneratedReport(model.ReportTypeRuntime, "运行时检测分析报告", reportID, periodStr, reportData)
+	h.saveGeneratedReport(model.ReportTypeEDR, "EDR 检测分析报告", reportID, periodStr, reportData)
 	Success(c, reportData)
 }
 

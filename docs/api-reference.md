@@ -118,6 +118,9 @@
 | PUT | `/api/v1/hosts/:host_id/tags` | 更新主机标签 |
 | PUT | `/api/v1/hosts/:host_id/business-line` | 更新主机业务线 |
 | DELETE | `/api/v1/hosts/:host_id` | 删除主机 |
+| POST | `/api/v1/hosts/batch-delete` | 批量删除主机（上限 100，支持 force 参数） |
+| POST | `/api/v1/hosts/batch-update-tags` | 批量更新标签（append/replace 模式，上限 100） |
+| POST | `/api/v1/hosts/batch-update-business-line` | 批量更新业务线（上限 100） |
 
 ---
 
@@ -259,12 +262,12 @@
 | GET | `/api/v1/reports/antivirus` | 病毒查杀报告 |
 | GET | `/api/v1/reports/vulnerability` | 漏洞报告 |
 | GET | `/api/v1/reports/kube` | 容器安全报告 |
-| GET | `/api/v1/reports/runtime` | 运行时安全报告 |
+| GET | `/api/v1/reports/edr` | EDR 检测报告 |
 | GET | `/api/v1/reports/antivirus/:task_id/executive` | 病毒查杀执行摘要 |
 | GET | `/api/v1/reports/vulnerability/executive` | 漏洞执行摘要 |
 | GET | `/api/v1/reports/remediation/executive` | 修复执行摘要 |
 | GET | `/api/v1/reports/kube/executive` | 容器安全执行摘要 |
-| GET | `/api/v1/reports/runtime/executive` | 运行时安全执行摘要 |
+| GET | `/api/v1/reports/edr/executive` | EDR 检测执行摘要 |
 | GET | `/api/v1/reports/generated` | 已生成报告列表 |
 | GET | `/api/v1/reports/generated/:id` | 已生成报告详情 |
 | DELETE | `/api/v1/reports/generated/:id` | 删除已生成报告 |
@@ -315,7 +318,7 @@
 |------|------|------|
 | GET | `/api/v1/alerts` | 告警列表 |
 | GET | `/api/v1/alerts/statistics` | 告警统计 |
-| GET | `/api/v1/alerts/runtime-statistics` | 运行时告警统计 |
+| GET | `/api/v1/alerts/edr-statistics` | EDR 告警统计 |
 | GET | `/api/v1/alerts/:id` | 告警详情 |
 | POST | `/api/v1/alerts/:id/resolve` | 解决告警 |
 | POST | `/api/v1/alerts/:id/ignore` | 忽略告警 |
@@ -620,6 +623,8 @@
 | POST | `/api/v1/remediation-tasks/:id/verify` | 验证修复任务 |
 | POST | `/api/v1/remediation-tasks/batch` | 批量创建修复任务 |
 | POST | `/api/v1/remediation-tasks/batch-confirm` | 批量确认修复任务 |
+| POST | `/api/v1/remediation-tasks/batch-retry` | 批量重试修复任务 |
+| POST | `/api/v1/remediation-tasks/batch-cancel` | 批量取消修复任务 |
 
 ---
 

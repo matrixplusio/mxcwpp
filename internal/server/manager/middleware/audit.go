@@ -17,6 +17,9 @@ import (
 // 审计请求体最大捕获大小（4KB，超出截断）
 const maxAuditBodySize = 4096
 
+// 请求体最大读取大小（1MB），超出部分不读取也不恢复
+const maxBodyReadSize = 1 << 20
+
 // 不应作为 resourceID 的路径段（非资源操作的固定路由段）
 var nonResourceSegments = map[string]bool{
 	"batch":               true,
@@ -106,12 +109,12 @@ func captureRequestBody(c *gin.Context) string {
 		return ""
 	}
 
-	// 读取请求体（限制大小）
-	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxAuditBodySize+1))
+	// 读取完整请求体并恢复，审计日志仅截断记录内容
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBodyReadSize))
 	if err != nil {
 		return ""
 	}
-	// 恢复 Body 以供后续 handler 使用
+	// 恢复完整 Body 以供后续 handler 使用
 	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 
 	if len(body) == 0 {

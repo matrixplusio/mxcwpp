@@ -1,5 +1,5 @@
 <template>
-  <div class="host-runtime-alerts">
+  <div class="host-edr-alerts">
     <a-row :gutter="[16, 16]" style="margin-bottom: 16px">
       <a-col :xs="12" :md="6">
         <div class="stat-card">
@@ -250,7 +250,7 @@ watch(
 </script>
 
 <style scoped>
-.host-runtime-alerts {
+.host-edr-alerts {
   width: 100%;
 }
 

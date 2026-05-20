@@ -77,22 +77,31 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 	switch pkgType {
 	case "rpm":
 		if fixedVersion != "" {
-			commands = append(commands, RemediationCommand{
-				PackageType: "rpm",
-				Command:     fmt.Sprintf("yum update %s-%s -y", component, fixedVersion),
-				Description: fmt.Sprintf("使用 yum 升级 %s 到修复版本 %s", component, fixedVersion),
-			})
-			commands = append(commands, RemediationCommand{
-				PackageType: "rpm",
-				Command:     fmt.Sprintf("dnf upgrade %s-%s -y", component, fixedVersion),
-				Description: fmt.Sprintf("使用 dnf 升级 %s 到修复版本 %s（RHEL 8+/Fedora）", component, fixedVersion),
-			})
+			commands = append(commands,
+				RemediationCommand{
+					PackageType: "rpm-yum",
+					Command:     fmt.Sprintf("yum update %s-%s -y", component, fixedVersion),
+					Description: fmt.Sprintf("使用 yum 升级 %s 到修复版本 %s（CentOS 7/RHEL 7）", component, fixedVersion),
+				},
+				RemediationCommand{
+					PackageType: "rpm-dnf",
+					Command:     fmt.Sprintf("dnf upgrade %s-%s -y", component, fixedVersion),
+					Description: fmt.Sprintf("使用 dnf 升级 %s 到修复版本 %s（RHEL 8+/Rocky/Fedora）", component, fixedVersion),
+				},
+			)
 		} else {
-			commands = append(commands, RemediationCommand{
-				PackageType: "rpm",
-				Command:     fmt.Sprintf("yum update %s -y", component),
-				Description: fmt.Sprintf("升级 %s 到最新可用版本", component),
-			})
+			commands = append(commands,
+				RemediationCommand{
+					PackageType: "rpm-yum",
+					Command:     fmt.Sprintf("yum update %s -y", component),
+					Description: fmt.Sprintf("使用 yum 升级 %s 到最新可用版本", component),
+				},
+				RemediationCommand{
+					PackageType: "rpm-dnf",
+					Command:     fmt.Sprintf("dnf upgrade %s -y", component),
+					Description: fmt.Sprintf("使用 dnf 升级 %s 到最新可用版本", component),
+				},
+			)
 		}
 	case "deb":
 		if fixedVersion != "" {
@@ -108,14 +117,59 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 				Description: fmt.Sprintf("升级 %s 到最新可用版本", component),
 			})
 		}
+	case "golang":
+		if fixedVersion != "" {
+			commands = append(commands, RemediationCommand{
+				PackageType: "golang",
+				Command:     fmt.Sprintf("go get %s@v%s", component, fixedVersion),
+				Description: fmt.Sprintf("升级 Go 依赖 %s 到修复版本 %s（需在项目目录执行）", component, fixedVersion),
+			})
+		}
+	case "npm":
+		if fixedVersion != "" {
+			commands = append(commands, RemediationCommand{
+				PackageType: "npm",
+				Command:     fmt.Sprintf("npm install %s@%s", component, fixedVersion),
+				Description: fmt.Sprintf("升级 npm 包 %s 到修复版本 %s", component, fixedVersion),
+			})
+		}
+	case "pypi":
+		if fixedVersion != "" {
+			commands = append(commands, RemediationCommand{
+				PackageType: "pypi",
+				Command:     fmt.Sprintf("pip install %s==%s --upgrade", component, fixedVersion),
+				Description: fmt.Sprintf("升级 Python 包 %s 到修复版本 %s", component, fixedVersion),
+			})
+		}
+	case "maven":
+		if fixedVersion != "" {
+			commands = append(commands, RemediationCommand{
+				PackageType: "maven",
+				Command:     fmt.Sprintf("<!-- 修改 pom.xml 中 %s 的版本为 %s -->", component, fixedVersion),
+				Description: fmt.Sprintf("更新 Maven 依赖 %s 到 %s（需手动修改 pom.xml）", component, fixedVersion),
+			})
+		}
+	case "cargo":
+		if fixedVersion != "" {
+			commands = append(commands, RemediationCommand{
+				PackageType: "cargo",
+				Command:     fmt.Sprintf("cargo update -p %s --precise %s", component, fixedVersion),
+				Description: fmt.Sprintf("升级 Rust 依赖 %s 到修复版本 %s", component, fixedVersion),
+			})
+		}
 	default:
-		// 无法判断包管理器时，同时提供两种
+		// 无法判断包管理器时，同时提供三种 OS 包修复方案
 		if fixedVersion != "" {
 			commands = append(commands,
 				RemediationCommand{
-					PackageType: "rpm",
+					PackageType: "rpm-yum",
 					Command:     fmt.Sprintf("yum update %s-%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("RPM 系统：升级 %s 到 %s", component, fixedVersion),
+					Description: fmt.Sprintf("RPM 系统 (yum)：升级 %s 到 %s", component, fixedVersion),
+				},
+				RemediationCommand{
+					PackageType: "rpm-dnf",
+					Command:     fmt.Sprintf("dnf upgrade %s-%s -y", component, fixedVersion),
+					Description: fmt.Sprintf("RPM 系统 (dnf)：升级 %s 到 %s", component, fixedVersion),
 				},
 				RemediationCommand{
 					PackageType: "deb",
@@ -126,9 +180,14 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 		} else {
 			commands = append(commands,
 				RemediationCommand{
-					PackageType: "rpm",
+					PackageType: "rpm-yum",
 					Command:     fmt.Sprintf("yum update %s -y", component),
-					Description: fmt.Sprintf("RPM 系统：升级 %s 到最新版本", component),
+					Description: fmt.Sprintf("RPM 系统 (yum)：升级 %s 到最新版本", component),
+				},
+				RemediationCommand{
+					PackageType: "rpm-dnf",
+					Command:     fmt.Sprintf("dnf upgrade %s -y", component),
+					Description: fmt.Sprintf("RPM 系统 (dnf)：升级 %s 到最新版本", component),
 				},
 				RemediationCommand{
 					PackageType: "deb",
@@ -144,13 +203,24 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 
 // detectPackageType 从 PURL 中检测包管理器类型
 func (s *RemediationService) detectPackageType(purl string) string {
-	if strings.HasPrefix(purl, "pkg:rpm/") {
+	switch {
+	case strings.HasPrefix(purl, "pkg:rpm/"):
 		return "rpm"
-	}
-	if strings.HasPrefix(purl, "pkg:deb/") {
+	case strings.HasPrefix(purl, "pkg:deb/"):
 		return "deb"
+	case strings.HasPrefix(purl, "pkg:golang/"):
+		return "golang"
+	case strings.HasPrefix(purl, "pkg:npm/"):
+		return "npm"
+	case strings.HasPrefix(purl, "pkg:pypi/"):
+		return "pypi"
+	case strings.HasPrefix(purl, "pkg:maven/"):
+		return "maven"
+	case strings.HasPrefix(purl, "pkg:cargo/"):
+		return "cargo"
+	default:
+		return ""
 	}
-	return ""
 }
 
 // generateWorkaround 生成临时缓解建议

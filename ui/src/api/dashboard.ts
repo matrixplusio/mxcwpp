@@ -53,7 +53,7 @@ export interface DashboardStats {
   hostAlertPercent?: number
   vulnHostPercent?: number
   baselineHostPercent?: number
-  runtimeAlertPercent?: number
+  edrAlertPercent?: number
   virusHostPercent?: number
   serviceStatus?: ServiceStatus
   alertTrend?: AlertTrendItem[]

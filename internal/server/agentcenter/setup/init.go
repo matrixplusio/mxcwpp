@@ -210,6 +210,9 @@ func (s *AgentCenterServices) StartBackgroundServices() {
 	// 启动定期告警调度器（按配置间隔发送告警通知）
 	go scheduler.StartAlertScheduler(s.DB, s.Logger)
 
+	// 启动漏洞通报升级调度器（SLA 检查、升级通知、自动关闭）
+	go scheduler.StartBulletinEscalationScheduler(s.DB, s.Logger)
+
 	// 启动插件更新调度器（检查插件配置更新并广播）
 	go s.PluginUpdateScheduler.Start(s.StatusCtx)
 

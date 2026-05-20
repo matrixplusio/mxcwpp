@@ -1,5 +1,5 @@
-// Package main 是 Sensor Plugin 的主程序入口
-// Sensor Plugin 作为 Agent 的子进程运行，通过 Pipe 与 Agent 通信
+// Package main 是 EDR Plugin 的主程序入口
+// EDR Plugin 作为 Agent 的子进程运行，通过 Pipe 与 Agent 通信
 // 基于 Tetragon eBPF 采集内核级安全事件（进程、文件、网络）
 package main
 
@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/plugins/sensor/engine"
+	"github.com/imkerbos/mxsec-platform/plugins/edr/engine"
 
 	plugins "github.com/imkerbos/mxsec-platform/plugins/lib/go"
 )
@@ -42,7 +42,7 @@ func main() {
 	}
 	defer logger.Sync()
 
-	logger.Info("sensor plugin starting",
+	logger.Info("edr plugin starting",
 		zap.Int("pid", os.Getpid()),
 		zap.String("version", buildVersion),
 		zap.String("build_time", buildTime))
@@ -72,18 +72,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("sensor plugin initialization completed, entering event loop")
+	logger.Info("edr plugin initialization completed, entering event loop")
 
 	// 6.5 后台 goroutine 读取 Agent Pipe（处理心跳 ping/pong + 任务下发）
 	go func() {
 		for {
 			task, err := client.ReceiveTask()
 			if err != nil {
-				logger.Warn("pipe read error, sensor will exit", zap.Error(err))
+				logger.Warn("pipe read error, edr plugin will exit", zap.Error(err))
 				cancel()
 				return
 			}
-			// Sensor 暂不处理下发任务，仅靠 ReceiveTask 自动回复心跳
+			// EDR 暂不处理下发任务，仅靠 ReceiveTask 自动回复心跳
 			logger.Debug("received task from agent",
 				zap.Int32("data_type", task.DataType),
 				zap.String("object", task.ObjectName))
@@ -94,7 +94,7 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("sensor plugin shutting down")
+			logger.Info("edr plugin shutting down")
 			return
 		case sig := <-sigCh:
 			logger.Info("received signal", zap.String("signal", sig.String()))

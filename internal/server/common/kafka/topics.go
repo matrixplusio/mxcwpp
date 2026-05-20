@@ -2,13 +2,14 @@ package kafka
 
 // Topic 常量（对应设计文档 § 3.2.1）
 const (
-	TopicHeartbeat  = "mxsec.agent.heartbeat"   // DataType 1000/1001, Retention 24h
-	TopicEvents     = "mxsec.agent.events"      // DataType 6001 (FIM), Retention 72h
-	TopicBaseline   = "mxsec.agent.baseline"    // DataType 8000~8004, Retention 7d
-	TopicAsset      = "mxsec.agent.asset"       // DataType 5050~5060, Retention 7d
-	TopicCommandAck = "mxsec.agent.command-ack" // 命令执行回包, Retention 7d
-	TopicScanner    = "mxsec.agent.scanner"     // DataType 7000~7004, Retention 7d
-	TopicEBPF       = "mxsec.agent.ebpf"        // DataType 3000~3002, Retention 3d
+	TopicHeartbeat   = "mxsec.agent.heartbeat"   // DataType 1000/1001, Retention 24h
+	TopicEvents      = "mxsec.agent.events"      // DataType 6001 (FIM), Retention 72h
+	TopicBaseline    = "mxsec.agent.baseline"    // DataType 8000~8004, Retention 7d
+	TopicAsset       = "mxsec.agent.asset"       // DataType 5050~5060, Retention 7d
+	TopicCommandAck  = "mxsec.agent.command-ack" // 命令执行回包, Retention 7d
+	TopicScanner     = "mxsec.agent.scanner"     // DataType 7000~7004, Retention 7d
+	TopicEBPF        = "mxsec.agent.ebpf"        // DataType 3000~3002, Retention 3d
+	TopicRemediation = "mxsec.agent.remediation" // DataType 9100~9299, Retention 7d
 
 	// DLQ 后缀约定：{topic}.dlq
 	DLQSuffix = ".dlq"
@@ -35,6 +36,8 @@ func RouteDataType(dataType int32, topicPrefix string) string {
 		topic = TopicScanner
 	case dataType >= 3000 && dataType <= 3099:
 		topic = TopicEBPF
+	case dataType >= 9100 && dataType <= 9299:
+		topic = TopicRemediation
 	case dataType == 9999:
 		topic = TopicCommandAck
 	default:

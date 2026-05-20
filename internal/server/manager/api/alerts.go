@@ -308,10 +308,10 @@ func (h *AlertsHandler) GetAlertStatistics(c *gin.Context) {
 	Success(c, stats)
 }
 
-// GetRuntimeAlertStatistics 获取运行时告警统计
-// GET /api/v1/alerts/runtime-statistics
-func (h *AlertsHandler) GetRuntimeAlertStatistics(c *gin.Context) {
-	runtimeCondition := "source = 'runtime'"
+// GetEDRAlertStatistics 获取 EDR 告警统计
+// GET /api/v1/alerts/edr-statistics
+func (h *AlertsHandler) GetEDRAlertStatistics(c *gin.Context) {
+	edrCondition := "source = 'edr'"
 
 	var stats struct {
 		Total    int64 `json:"total"`
@@ -330,7 +330,7 @@ func (h *AlertsHandler) GetRuntimeAlertStatistics(c *gin.Context) {
 	}
 	h.db.Model(&model.Alert{}).
 		Select("status, COUNT(*) AS cnt").
-		Where(runtimeCondition).
+		Where(edrCondition).
 		Group("status").
 		Scan(&statusRows)
 	for _, r := range statusRows {
@@ -342,7 +342,7 @@ func (h *AlertsHandler) GetRuntimeAlertStatistics(c *gin.Context) {
 
 	// 今日新增（活跃状态 + 今天 last_seen_at）
 	h.db.Model(&model.Alert{}).
-		Where(runtimeCondition).
+		Where(edrCondition).
 		Where("status = ? AND DATE(last_seen_at) = CURDATE()", model.AlertStatusActive).
 		Count(&stats.Today)
 
@@ -353,7 +353,7 @@ func (h *AlertsHandler) GetRuntimeAlertStatistics(c *gin.Context) {
 	}
 	h.db.Model(&model.Alert{}).
 		Select("severity, COUNT(*) AS cnt").
-		Where(runtimeCondition).
+		Where(edrCondition).
 		Where("status = ?", model.AlertStatusActive).
 		Group("severity").
 		Scan(&severityRows)

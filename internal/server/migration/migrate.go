@@ -3,6 +3,7 @@ package migration
 
 import (
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -23,11 +24,26 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("组件表迁移处理", zap.Error(err))
 	}
 
-	// 执行自动迁移
+	// 执行自动迁移（带连接恢复和重试）
 	for _, m := range model.AllModels {
-		if err := db.AutoMigrate(m); err != nil {
-			logger.Error("数据库迁移失败", zap.Error(err), zap.String("model", fmt.Sprintf("%T", m)))
-			return fmt.Errorf("迁移模型 %T 失败: %w", m, err)
+		var migrateErr error
+		for attempt := range 3 {
+			if attempt > 0 {
+				// 重试前探活连接，必要时让连接池重建
+				if sqlDB, err := db.DB(); err == nil {
+					sqlDB.SetConnMaxLifetime(0) // 强制回收旧连接
+					_ = sqlDB.Ping()
+					sqlDB.SetConnMaxLifetime(time.Hour)
+				}
+				logger.Info("重试迁移", zap.String("model", fmt.Sprintf("%T", m)), zap.Int("attempt", attempt+1))
+			}
+			if migrateErr = db.AutoMigrate(m); migrateErr == nil {
+				break
+			}
+		}
+		if migrateErr != nil {
+			logger.Error("数据库迁移失败", zap.Error(migrateErr), zap.String("model", fmt.Sprintf("%T", m)))
+			return fmt.Errorf("迁移模型 %T 失败: %w", m, migrateErr)
 		}
 		logger.Info("模型迁移成功", zap.String("model", fmt.Sprintf("%T", m)))
 	}
@@ -67,6 +83,11 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("告警来源迁移处理", zap.Error(err))
 	}
 
+	// 执行数据迁移：sensor → edr 重命名
+	if err := migrateSensorToEDR(db, logger); err != nil {
+		logger.Warn("sensor→edr 迁移处理", zap.Error(err))
+	}
+
 	// 添加性能优化索引（幂等）
 	if err := AddPerformanceIndexes(db, logger); err != nil {
 		logger.Warn("添加性能索引失败", zap.Error(err))
@@ -95,12 +116,12 @@ func migrateAlertSource(db *gorm.DB, logger *zap.Logger) error {
 		logger.Info("回填 agent 来源", zap.Int64("count", r.RowsAffected))
 	}
 
-	// 2. 运行时检测告警（CEL 规则 + 端口扫描）
+	// 2. EDR 告警（CEL 规则 + 端口扫描）
 	r = db.Model(&model.Alert{}).
 		Where("(source IS NULL OR source = '') AND (rule_id LIKE ? OR rule_id = ?)", "cel-%", "scan-detector").
-		Update("source", model.AlertSourceRuntime)
+		Update("source", model.AlertSourceEDR)
 	if r.RowsAffected > 0 {
-		logger.Info("回填 runtime 来源", zap.Int64("count", r.RowsAffected))
+		logger.Info("回填 edr 来源", zap.Int64("count", r.RowsAffected))
 	}
 
 	// 3. 其余未标记的 → 基线告警
@@ -109,6 +130,45 @@ func migrateAlertSource(db *gorm.DB, logger *zap.Logger) error {
 		Update("source", model.AlertSourceBaseline)
 	if r.RowsAffected > 0 {
 		logger.Info("回填 baseline 来源", zap.Int64("count", r.RowsAffected))
+	}
+
+	return nil
+}
+
+// migrateSensorToEDR 将数据库中残留的 sensor/runtime 相关数据迁移为 edr
+func migrateSensorToEDR(db *gorm.DB, logger *zap.Logger) error {
+	// 1. plugin_configs 表：name='sensor' → 'edr', type='sensor' → 'edr'
+	r := db.Table("plugin_configs").
+		Where("name = ? AND deleted_at IS NULL", "sensor").
+		Updates(map[string]interface{}{"name": "edr", "type": "edr", "description": "EDR 插件，基于 Tetragon eBPF 采集进程/文件/网络事件"})
+	if r.RowsAffected > 0 {
+		logger.Info("plugin_configs: sensor → edr", zap.Int64("count", r.RowsAffected))
+	}
+
+	// 2. components 表：name='sensor' → 'edr'
+	r = db.Table("components").
+		Where("name = ?", "sensor").
+		Updates(map[string]interface{}{"name": "edr", "description": "EDR 插件，基于 Tetragon eBPF 采集进程/文件/网络事件"})
+	if r.RowsAffected > 0 {
+		logger.Info("components: sensor → edr", zap.Int64("count", r.RowsAffected))
+	}
+
+	// 3. alerts 表：source='runtime' → 'edr'
+	r = db.Table("alerts").Where("source = ?", "runtime").Update("source", "edr")
+	if r.RowsAffected > 0 {
+		logger.Info("alerts: source runtime → edr", zap.Int64("count", r.RowsAffected))
+	}
+
+	// 4. notifications 表：notify_category='runtime_alert' → 'edr_alert'
+	r = db.Table("notifications").Where("notify_category = ?", "runtime_alert").Update("notify_category", "edr_alert")
+	if r.RowsAffected > 0 {
+		logger.Info("notifications: runtime_alert → edr_alert", zap.Int64("count", r.RowsAffected))
+	}
+
+	// 5. generated_reports 表：report_type='runtime' → 'edr'
+	r = db.Table("generated_reports").Where("report_type = ?", "runtime").Update("report_type", "edr")
+	if r.RowsAffected > 0 {
+		logger.Info("generated_reports: runtime → edr", zap.Int64("count", r.RowsAffected))
 	}
 
 	return nil

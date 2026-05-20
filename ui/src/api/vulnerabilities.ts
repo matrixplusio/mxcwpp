@@ -2,6 +2,21 @@ import apiClient from './client'
 import type { Vulnerability, VulnerabilityListResult } from './types'
 import type { SecurityDBSyncRecord } from './antivirus'
 
+export interface ScanHistoryDetail {
+  record: SecurityDBSyncRecord
+  vulns: {
+    items: Vulnerability[]
+    total: number
+    page: number
+  }
+  affectedHosts: {
+    hostId: string
+    hostname: string
+    ip: string
+    vulnCount: number
+  }[]
+}
+
 export interface RemediationCommand {
   packageType: string
   command: string
@@ -63,6 +78,9 @@ export const vulnerabilitiesApi = {
     severity?: string
     status?: string
     component?: string
+    exploit_status?: string
+    priority?: string
+    sort?: string
   }) => {
     return apiClient.get<VulnerabilityListResult>('/vulnerabilities', { params })
   },
@@ -75,8 +93,8 @@ export const vulnerabilitiesApi = {
     return apiClient.post('/vulnerabilities/sync')
   },
 
-  triggerScan: () => {
-    return apiClient.post('/vulnerabilities/scan')
+  triggerScan: (scanType: 'full_scan' | 'incremental_scan' = 'full_scan') => {
+    return apiClient.post('/vulnerabilities/scan', { scan_type: scanType })
   },
 
   getScanStatus: () => {
@@ -85,6 +103,13 @@ export const vulnerabilitiesApi = {
 
   getScanHistory: (params?: { page?: number; page_size?: number }) => {
     return apiClient.get<{ total: number; items: SecurityDBSyncRecord[] }>('/vulnerabilities/scan-history', { params })
+  },
+
+  getScanHistoryDetail: (id: number, vulnPage = 1, vulnPageSize = 20) => {
+    return apiClient.get<ScanHistoryDetail>(
+      `/vulnerabilities/scan-history/${id}`,
+      { params: { vulnPage, vulnPageSize } },
+    )
   },
 
   // 修复建议
@@ -105,5 +130,15 @@ export const vulnerabilitiesApi = {
   // 修复趋势
   getRemediationTrend: (days?: number) => {
     return apiClient.get<DailyTrend[]>('/vulnerabilities/stats/trend', { params: { days } })
+  },
+
+  // 取消忽略
+  unignore: (id: number) => {
+    return apiClient.post(`/vulnerabilities/${id}/unignore`)
+  },
+
+  // 优先级分布统计
+  getPriorityStats: () => {
+    return apiClient.get<{ level: string; count: number }[]>('/vulnerabilities/stats/priority')
   },
 }

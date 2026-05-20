@@ -18,7 +18,7 @@ func TestDetectPackageType(t *testing.T) {
 		{"pkg:deb/debian/nginx@1.25.0?arch=amd64", "deb"},
 		{"pkg:deb/debian/openssh-server@8.2p1~1?arch=amd64", "deb"},
 		{"", ""},
-		{"pkg:npm/@angular/core@12.0.0", ""},
+		{"pkg:npm/@angular/core@12.0.0", "npm"},
 	}
 
 	for _, tt := range tests {
@@ -43,11 +43,14 @@ func TestGenerateCommands_RPM(t *testing.T) {
 		t.Fatalf("expected 2 commands (yum + dnf), got %d", len(commands))
 	}
 
-	if commands[0].PackageType != "rpm" {
-		t.Errorf("expected package type 'rpm', got %q", commands[0].PackageType)
+	if commands[0].PackageType != "rpm-yum" {
+		t.Errorf("expected package type 'rpm-yum', got %q", commands[0].PackageType)
 	}
 	if commands[0].Command != "yum update openssl-1.1.1k -y" {
 		t.Errorf("unexpected command: %q", commands[0].Command)
+	}
+	if commands[1].PackageType != "rpm-dnf" {
+		t.Errorf("expected package type 'rpm-dnf', got %q", commands[1].PackageType)
 	}
 	if commands[1].Command != "dnf upgrade openssl-1.1.1k -y" {
 		t.Errorf("unexpected command: %q", commands[1].Command)
@@ -86,14 +89,17 @@ func TestGenerateCommands_UnknownPURL(t *testing.T) {
 	}
 
 	commands := svc.generateCommands(vuln)
-	if len(commands) != 2 {
-		t.Fatalf("expected 2 commands (rpm + deb fallback), got %d", len(commands))
+	if len(commands) != 3 {
+		t.Fatalf("expected 3 commands (rpm-yum + rpm-dnf + deb fallback), got %d", len(commands))
 	}
-	if commands[0].PackageType != "rpm" {
-		t.Errorf("first command should be rpm, got %q", commands[0].PackageType)
+	if commands[0].PackageType != "rpm-yum" {
+		t.Errorf("first command should be rpm-yum, got %q", commands[0].PackageType)
 	}
-	if commands[1].PackageType != "deb" {
-		t.Errorf("second command should be deb, got %q", commands[1].PackageType)
+	if commands[1].PackageType != "rpm-dnf" {
+		t.Errorf("second command should be rpm-dnf, got %q", commands[1].PackageType)
+	}
+	if commands[2].PackageType != "deb" {
+		t.Errorf("third command should be deb, got %q", commands[2].PackageType)
 	}
 }
 
@@ -107,11 +113,14 @@ func TestGenerateCommands_NoFixedVersion(t *testing.T) {
 	}
 
 	commands := svc.generateCommands(vuln)
-	if len(commands) != 1 {
-		t.Fatalf("expected 1 command, got %d", len(commands))
+	if len(commands) != 2 {
+		t.Fatalf("expected 2 commands (yum + dnf), got %d", len(commands))
 	}
 	if commands[0].Command != "yum update openssl -y" {
-		t.Errorf("unexpected command: %q", commands[0].Command)
+		t.Errorf("unexpected yum command: %q", commands[0].Command)
+	}
+	if commands[1].Command != "dnf upgrade openssl -y" {
+		t.Errorf("unexpected dnf command: %q", commands[1].Command)
 	}
 }
 

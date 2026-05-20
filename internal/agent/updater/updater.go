@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
 	"github.com/imkerbos/mxsec-platform/internal/common/fileutil"
 )
 
@@ -96,10 +97,26 @@ func InstallPackage(pkgType string, pkgPath string) (string, error) {
 	return outputStr, nil
 }
 
+// restartStrategy 根据运行时环境决定重启策略
+// 返回 "exit"（容器模式）或 "systemctl"（systemd 模式）
+func restartStrategy() string {
+	if agentrt.IsContainer() {
+		return "exit"
+	}
+	return "systemctl"
+}
+
 // RestartAgent 重启 Agent 服务（延迟执行，给调用方时间完成清理）
+// 容器环境中直接退出，由容器编排器（Docker restart policy / K8s）负责重启
 func RestartAgent() {
 	go func() {
 		time.Sleep(2 * time.Second)
+
+		if restartStrategy() == "exit" {
+			// 容器中没有 systemd，直接退出让编排器重启
+			os.Exit(0)
+			return
+		}
 
 		cmd := exec.Command("systemctl", "restart", "mxsec-agent")
 		if err := cmd.Start(); err != nil {

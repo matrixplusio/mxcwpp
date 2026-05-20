@@ -98,10 +98,14 @@
       <div class="action-bar">
         <div class="action-left">
           <a-space>
-            <a-button>Agent离线通知</a-button>
-            <a-button>批量导出主机</a-button>
-            <a-button>批量添加标签</a-button>
-            <a-button>批量下发任务</a-button>
+            <a-tooltip title="功能开发中，敬请期待">
+              <a-button disabled>Agent离线通知</a-button>
+            </a-tooltip>
+            <a-button @click="handleBatchExportHosts">批量导出主机</a-button>
+            <a-button @click="handleBatchAddTags">批量添加标签</a-button>
+            <a-tooltip title="功能开发中，敬请期待">
+              <a-button disabled>批量下发任务</a-button>
+            </a-tooltip>
             <a-dropdown>
               <a-button>
                 更多
@@ -111,9 +115,12 @@
                 <a-menu>
                   <a-menu-item @click="handleBatchRestartAgent">重启 Agent</a-menu-item>
                   <a-menu-item @click="handleBatchBindBusinessLine">批量绑定业务线</a-menu-item>
-                  <a-menu-item>批量导入标签</a-menu-item>
-                  <a-menu-item>清理离线数据</a-menu-item>
-                  <a-menu-item>删除未安装记录</a-menu-item>
+                  <a-menu-item disabled>
+                    <a-tooltip title="功能开发中，敬请期待" placement="left">
+                      <span>批量导入标签</span>
+                    </a-tooltip>
+                  </a-menu-item>
+                  <a-menu-item @click="handleBatchDeleteHost" danger>批量删除主机</a-menu-item>
                 </a-menu>
               </template>
             </a-dropdown>
@@ -266,15 +273,22 @@
               <a-button type="link" size="small" class="action-link" :disabled="record.status !== 'online'">重启</a-button>
             </a-popconfirm>
             <a-divider type="vertical" />
-            <a-popconfirm
-              title="确定要删除这台主机吗？"
-              description="删除后将同时删除该主机的所有扫描结果、告警和相关数据，此操作不可恢复。"
-              ok-text="确定"
-              cancel-text="取消"
-              @confirm="handleDeleteHost(record)"
-            >
-              <a-button type="link" size="small" class="action-link action-link-danger">删除</a-button>
-            </a-popconfirm>
+            <template v-if="record.status === 'online'">
+              <a-tooltip title="在线主机不允许删除，请先确认主机已离线">
+                <a-button type="link" size="small" class="action-link action-link-danger" disabled>删除</a-button>
+              </a-tooltip>
+            </template>
+            <template v-else>
+              <a-popconfirm
+                title="确定要删除这台主机吗？"
+                description="删除后将同时删除该主机的所有扫描结果、告警和相关数据，此操作不可恢复。"
+                ok-text="确定"
+                cancel-text="取消"
+                @confirm="handleDeleteHost(record)"
+              >
+                <a-button type="link" size="small" class="action-link action-link-danger">删除</a-button>
+              </a-popconfirm>
+            </template>
           </div>
         </template>
       </template>
@@ -294,7 +308,7 @@
     >
       <div style="margin-bottom: 16px;">
         <div style="margin-bottom: 8px; color: #4E5969;">
-          已选择 <strong>{{ selectedRowKeys.length }}</strong> 台主机
+          已选择 <strong>{{ batchBindHostIds.length }}</strong> 台主机
         </div>
       </div>
       <div style="margin-bottom: 16px;">
@@ -313,6 +327,41 @@
         </a-select>
         <div style="margin-top: 8px; color: #86909C; font-size: 12px;">
           提示：选择业务线后，所选主机将绑定到该业务线。留空表示取消业务线绑定。
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 批量添加标签对话框 -->
+    <a-modal
+      v-model:open="batchTagsModalVisible"
+      title="批量更新标签"
+      :width="500"
+      @ok="handleConfirmBatchTags"
+      @cancel="batchTagsModalVisible = false"
+    >
+      <div style="margin-bottom: 16px;">
+        <div style="margin-bottom: 8px; color: #4E5969;">
+          已选择 <strong>{{ selectedRowKeys.length }}</strong> 台主机
+        </div>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <div style="margin-bottom: 8px; font-weight: 500;">更新模式</div>
+        <a-radio-group v-model:value="batchTagsMode">
+          <a-radio value="append">追加标签（保留原有标签）</a-radio>
+          <a-radio value="replace">替换标签（覆盖原有标签）</a-radio>
+        </a-radio-group>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <div style="margin-bottom: 8px; font-weight: 500;">输入标签</div>
+        <a-select
+          v-model:value="batchTagsValue"
+          mode="tags"
+          placeholder="输入标签后按回车添加"
+          style="width: 100%"
+          :token-separators="[',']"
+        />
+        <div style="margin-top: 8px; color: #86909C; font-size: 12px;">
+          每个标签最长 50 个字符，每台主机最多 10 个标签。
         </div>
       </div>
     </a-modal>
@@ -360,6 +409,12 @@ const businessLines = ref<BusinessLine[]>([])
 // 批量绑定业务线
 const batchBindBusinessLineModalVisible = ref(false)
 const batchBindBusinessLine = ref<string>('')
+const batchBindHostIds = ref<string[]>([]) // 打开模态框时快照选中的主机 ID
+
+// 批量添加标签
+const batchTagsModalVisible = ref(false)
+const batchTagsMode = ref<'append' | 'replace'>('append')
+const batchTagsValue = ref<string[]>([])
 const statusDistribution = ref<HostStatusDistribution>({
   running: 0,
   abnormal: 0,
@@ -649,7 +704,7 @@ const handleDeleteHost = async (record: Host) => {
   try {
     await hostsApi.delete(record.host_id)
     message.success(`主机 ${record.hostname} 删除成功`)
-    
+
     // 刷新主机列表和统计
     loadHosts()
     loadStatusDistribution()
@@ -702,45 +757,188 @@ const doRestartAgent = async (hostIds: string[]) => {
   }
 }
 
+// 批量删除主机
+const handleBatchDeleteHost = () => {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('请先选择要删除的主机')
+    return
+  }
+
+  // 检查选中主机中是否包含在线主机
+  const selectedHosts = hosts.value.filter(h => selectedRowKeys.value.includes(h.host_id))
+  const onlineCount = selectedHosts.filter(h => h.status === 'online').length
+  const offlineCount = selectedRowKeys.value.length - onlineCount
+
+  if (onlineCount > 0 && offlineCount > 0) {
+    // 混合状态：先确认删除离线主机
+    Modal.confirm({
+      title: '批量删除主机',
+      content: `选中的 ${selectedRowKeys.value.length} 台主机中有 ${onlineCount} 台在线、${offlineCount} 台离线。是否仅删除离线主机？`,
+      okText: `删除 ${offlineCount} 台离线主机`,
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        await doBatchDelete(false)
+      },
+    })
+  } else if (onlineCount > 0) {
+    // 全部在线：仅提供强制删除选项
+    Modal.confirm({
+      title: '批量删除主机',
+      content: `选中的 ${selectedRowKeys.value.length} 台主机全部在线。在线主机删除后 Agent 将无法上报数据，确定要强制删除吗？`,
+      okText: '强制删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        await doBatchDelete(true)
+      },
+    })
+  } else {
+    // 全部离线，直接确认删除
+    Modal.confirm({
+      title: '批量删除主机',
+      content: `确定要删除选中的 ${selectedRowKeys.value.length} 台主机及其所有关联数据吗？此操作不可恢复。`,
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        await doBatchDelete(false)
+      },
+    })
+  }
+}
+
+// 执行批量删除
+const doBatchDelete = async (force: boolean) => {
+  try {
+    const res = await hostsApi.batchDelete(selectedRowKeys.value, force)
+    const parts: string[] = [`成功删除 ${res.deleted} 台主机`]
+    if (res.skipped > 0) parts.push(`${res.skipped} 台在线已跳过`)
+    if (res.failed > 0) parts.push(`${res.failed} 台失败`)
+    message.success(parts.join('，'))
+    selectedRowKeys.value = []
+    loadHosts()
+    loadStatusDistribution()
+    loadRiskDistribution()
+  } catch (error: any) {
+    message.error(error?.message || '批量删除失败')
+  }
+}
+
+// 批量添加标签
+const handleBatchAddTags = () => {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('请先选择要操作的主机')
+    return
+  }
+  batchTagsMode.value = 'append'
+  batchTagsValue.value = []
+  batchTagsModalVisible.value = true
+}
+
+// 确认批量更新标签
+const handleConfirmBatchTags = async () => {
+  if (batchTagsValue.value.length === 0) {
+    message.warning('请输入至少一个标签')
+    return
+  }
+  // 校验标签长度
+  for (const tag of batchTagsValue.value) {
+    if (tag.length > 50) {
+      message.warning('标签长度不能超过 50 个字符')
+      return
+    }
+  }
+  try {
+    const res = await hostsApi.batchUpdateTags(selectedRowKeys.value, batchTagsValue.value, batchTagsMode.value)
+    message.success(`成功更新 ${res.updated} 台主机标签${res.failed > 0 ? `，${res.failed} 台失败` : ''}`)
+    selectedRowKeys.value = []
+    batchTagsModalVisible.value = false
+    loadHosts()
+  } catch (error: any) {
+    message.error(error?.message || '批量更新标签失败')
+  }
+}
+
+// 批量导出主机
+const handleBatchExportHosts = () => {
+  const exportHosts = selectedRowKeys.value.length > 0
+    ? hosts.value.filter(h => selectedRowKeys.value.includes(h.host_id))
+    : hosts.value
+
+  if (exportHosts.length === 0) {
+    message.warning('没有可导出的主机数据')
+    return
+  }
+
+  // 构建 CSV 内容
+  const headers = ['主机名称', 'Host ID', 'IP 地址', '操作系统', '状态', '业务线', '标签', '最后心跳时间']
+  const rows = exportHosts.map(h => {
+    const bl = businessLines.value.find(b => b.code === h.business_line)
+    return [
+      h.hostname,
+      h.host_id,
+      (h.ipv4 || []).join(';'),
+      `${h.os_family} ${h.os_version}`,
+      h.status === 'online' ? '在线' : '离线',
+      bl ? bl.name : (h.business_line || ''),
+      (h.tags || []).join(';'),
+      h.last_heartbeat || '',
+    ]
+  })
+
+  // 生成 CSV（BOM 头确保 Excel 正确识别 UTF-8）
+  const csvContent = '\uFEFF' + [headers, ...rows].map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+  ).join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', `hosts_export_${new Date().toISOString().slice(0, 10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+
+  message.success(`已导出 ${exportHosts.length} 台主机数据`)
+}
+
 // 批量绑定业务线
 const handleBatchBindBusinessLine = () => {
   if (selectedRowKeys.value.length === 0) {
     message.warning('请先选择要绑定的主机')
     return
   }
+  batchBindHostIds.value = [...selectedRowKeys.value]
   batchBindBusinessLine.value = ''
   batchBindBusinessLineModalVisible.value = true
 }
 
 // 确认批量绑定业务线
 const handleConfirmBatchBindBusinessLine = async () => {
-  if (selectedRowKeys.value.length === 0) {
+  const hostIds = [...batchBindHostIds.value]
+  if (hostIds.length === 0) {
     message.warning('请先选择要绑定的主机')
     return
   }
 
   try {
     const businessLine = batchBindBusinessLine.value || ''
-    
-    // 批量更新业务线
-    const promises = selectedRowKeys.value.map((hostId) =>
-      hostsApi.updateBusinessLine(hostId, businessLine)
-    )
-    
-    await Promise.all(promises)
-    
-    message.success(`成功绑定 ${selectedRowKeys.value.length} 台主机到业务线`)
-    
+    const res = await hostsApi.batchUpdateBusinessLine(hostIds, businessLine)
+    message.success(`成功更新 ${res.updated} 台主机业务线`)
+
     // 清空选择并关闭对话框
     selectedRowKeys.value = []
+    batchBindHostIds.value = []
     batchBindBusinessLineModalVisible.value = false
     batchBindBusinessLine.value = ''
-    
+
     // 刷新主机列表
     loadHosts()
   } catch (error: any) {
     console.error('批量绑定业务线失败:', error)
-    message.error(error?.message || '批量绑定业务线失败，请重试')
   }
 }
 
@@ -748,6 +946,7 @@ const handleConfirmBatchBindBusinessLine = async () => {
 const handleCancelBatchBindBusinessLine = () => {
   batchBindBusinessLineModalVisible.value = false
   batchBindBusinessLine.value = ''
+  batchBindHostIds.value = []
 }
 
 onMounted(() => {

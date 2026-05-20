@@ -208,7 +208,7 @@
               <a-select-option value="collector">Collector (资产采集插件)</a-select-option>
               <a-select-option value="fim">FIM (文件完整性监控插件)</a-select-option>
               <a-select-option value="scanner">Scanner (病毒查杀插件)</a-select-option>
-              <a-select-option value="sensor">Sensor (EDR 插件)</a-select-option>
+              <a-select-option value="edr">EDR (EDR 插件)</a-select-option>
             </template>
           </a-select>
           <a-input
@@ -1143,7 +1143,7 @@ const getNameColor = (name: string): string => {
     collector: 'purple',
     fim: 'orange',
     scanner: 'red',
-    sensor: 'cyan',
+    edr: 'cyan',
   }
   return colors[name] || 'default'
 }

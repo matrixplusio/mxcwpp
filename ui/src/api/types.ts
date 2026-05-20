@@ -214,6 +214,13 @@ export interface Vulnerability {
   currentVersion: string
   fixedVersion?: string
   referenceUrl?: string
+  cnvdId?: string
+  cnnvdId?: string
+  hasExploit?: boolean
+  inKev?: boolean
+  exploitRef?: string
+  priorityScore?: number
+  exposureScore?: number
   createdAt?: string
   updatedAt?: string
   hosts?: VulnerabilityHost[]

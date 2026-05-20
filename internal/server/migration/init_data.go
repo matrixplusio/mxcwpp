@@ -84,6 +84,20 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 		logger.Warn("初始化内置 CEL 表达式模板失败", zap.Error(err))
 	}
 
+	// 默认扫描计划
+	var scheduleCount int64
+	db.Model(&model.ScanSchedule{}).Count(&scheduleCount)
+	if scheduleCount == 0 {
+		schedules := []model.ScanSchedule{
+			{Name: "每日漏洞库同步", ScanType: "sync_only", CronExpr: "0 0 2 * * *", Enabled: true, CreatedBy: "system"},
+			{Name: "每周全量扫描", ScanType: "full_scan", CronExpr: "0 0 3 * * 0", Enabled: true, CreatedBy: "system"},
+		}
+		for _, s := range schedules {
+			db.Create(&s)
+		}
+		logger.Info("初始化默认扫描计划")
+	}
+
 	// 检查是否已完成首次数据初始化
 	if isDataInitialized(db) {
 		logger.Info("默认数据已初始化过，跳过策略组和策略重建")
@@ -390,10 +404,10 @@ func initDefaultPluginConfigs(db *gorm.DB, logger *zap.Logger, pluginsCfg *confi
 			Detail:       `{"quarantine_dir": "/var/mxsec/quarantine", "yara_rules_dir": "/var/mxsec/yara-rules"}`,
 		},
 		{
-			Name:         "sensor",
-			Type:         model.PluginTypeSensor,
+			Name:         "edr",
+			Type:         model.PluginTypeEDR,
 			RuntimeTypes: model.StringArray{"vm"},
-			Description:  "eBPF 实时监控插件，基于 Tetragon 采集进程/文件/网络事件",
+			Description:  "EDR 插件，基于 Tetragon eBPF 采集进程/文件/网络事件",
 			Detail:       `{"tetragon_socket": "/var/run/tetragon/tetragon.sock"}`,
 		},
 	}
@@ -790,9 +804,9 @@ func initDefaultComponents(db *gorm.DB, logger *zap.Logger) error {
 		{Name: "collector", Category: model.ComponentCategoryPlugin, Description: "资产采集插件，采集主机进程、端口、用户等信息"},
 		{Name: "fim", Category: model.ComponentCategoryPlugin, Description: "文件完整性监控插件，基于 AIDE 检测文件变更"},
 		{Name: "scanner", Category: model.ComponentCategoryPlugin, Description: "病毒查杀插件，基于 ClamAV + YARA-X 双引擎检测恶意文件"},
-		{Name: "sensor", Category: model.ComponentCategoryPlugin, Description: "eBPF 实时监控插件，基于 Tetragon 采集进程/文件/网络事件"},
+		{Name: "edr", Category: model.ComponentCategoryPlugin, Description: "EDR 插件，基于 Tetragon eBPF 采集进程/文件/网络事件"},
 		{Name: "virus-database", Category: model.ComponentCategoryPlugin, Description: "ClamAV 病毒特征库，由 freshclam 自动更新"},
-		{Name: "tetragon", Category: model.ComponentCategoryDependency, Description: "Cilium Tetragon eBPF 运行时安全引擎"},
+		{Name: "tetragon", Category: model.ComponentCategoryDependency, Description: "Cilium Tetragon eBPF 安全引擎"},
 	}
 
 	for _, c := range components {

@@ -2,7 +2,7 @@ import apiClient from './client'
 import type { PaginatedResponse } from './types'
 
 // 通知类别
-export type NotifyCategory = 'baseline_alert' | 'agent_offline' | 'vulnerability_alert' | 'virus_alert' | 'fim_alert' | 'runtime_alert' | 'kube_alert'
+export type NotifyCategory = 'baseline_alert' | 'agent_offline' | 'virus_alert' | 'fim_alert' | 'edr_alert' | 'kube_alert' | 'vuln_bulletin'
 
 export interface Notification {
   id: number

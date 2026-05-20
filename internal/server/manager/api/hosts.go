@@ -3,6 +3,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -714,96 +715,74 @@ func (h *HostsHandler) GetHostPlugins(c *gin.Context) {
 	Success(c, response)
 }
 
+// deleteHostByID 删除单台主机及其所有关联数据（事务内执行）
+func (h *HostsHandler) deleteHostByID(tx *gorm.DB, hostID string) error {
+	var host model.Host
+	if err := tx.Where("host_id = ?", hostID).First(&host).Error; err != nil {
+		return err
+	}
+
+	// 1. 删除扫描结果
+	if err := tx.Where("host_id = ?", hostID).Delete(&model.ScanResult{}).Error; err != nil {
+		return err
+	}
+	// 2. 删除告警
+	if err := tx.Where("host_id = ?", hostID).Delete(&model.Alert{}).Error; err != nil {
+		return err
+	}
+	// 3. 删除主机监控数据
+	if err := tx.Where("host_id = ?", hostID).Delete(&model.HostMetric{}).Error; err != nil {
+		return err
+	}
+	// 4. 删除主机插件信息
+	if err := tx.Where("host_id = ?", hostID).Delete(&model.HostPlugin{}).Error; err != nil {
+		return err
+	}
+	// 5. 删除资产数据（进程、端口、软件、容器等）
+	for _, m := range []any{
+		&model.Process{}, &model.Port{}, &model.Software{}, &model.Container{},
+		&model.AssetUser{}, &model.Cron{}, &model.Service{},
+		&model.NetInterface{}, &model.Volume{}, &model.Kmod{}, &model.App{},
+	} {
+		if err := tx.Where("host_id = ?", hostID).Delete(m).Error; err != nil {
+			return err
+		}
+	}
+	// 6. 删除主机漏洞关联数据
+	if err := tx.Where("host_id = ?", hostID).Delete(&model.HostVulnerability{}).Error; err != nil {
+		return err
+	}
+	// 7. 清除基线得分缓存
+	if h.scoreCache != nil {
+		h.scoreCache.InvalidateHostScore(hostID)
+	}
+	// 8. 最后删除主机记录
+	return tx.Delete(&host).Error
+}
+
 // DeleteHost 删除主机
 // DELETE /api/v1/hosts/:host_id
 func (h *HostsHandler) DeleteHost(c *gin.Context) {
 	hostID := c.Param("host_id")
 
-	// 查询主机是否存在
+	// 安全校验：在线主机不允许直接删除
 	var host model.Host
 	if err := h.db.Where("host_id = ?", hostID).First(&host).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			NotFound(c, "主机不存在")
 			return
 		}
-		h.logger.Error("查询主机失败", zap.String("host_id", hostID), zap.Error(err))
+		h.logger.Error("查询主机失败", zap.Error(err))
 		InternalError(c, "查询主机失败")
 		return
 	}
+	if host.Status == model.HostStatusOnline {
+		BadRequest(c, "在线主机不允许删除，请先确认主机已离线")
+		return
+	}
 
-	// 使用事务删除主机及其所有关联数据
 	err := h.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 删除扫描结果
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.ScanResult{}).Error; err != nil {
-			return err
-		}
-
-		// 2. 删除告警
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Alert{}).Error; err != nil {
-			return err
-		}
-
-		// 3. 删除主机监控数据
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.HostMetric{}).Error; err != nil {
-			return err
-		}
-
-		// 4. 删除主机插件信息
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.HostPlugin{}).Error; err != nil {
-			return err
-		}
-
-		// 5. 删除资产数据（进程、端口、软件、容器等）
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Process{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Port{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Software{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Container{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.AssetUser{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Cron{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Service{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.NetInterface{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Volume{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.Kmod{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.App{}).Error; err != nil {
-			return err
-		}
-
-		// 6. 删除主机漏洞关联数据
-		if err := tx.Where("host_id = ?", hostID).Delete(&model.HostVulnerability{}).Error; err != nil {
-			return err
-		}
-
-		// 7. 清除基线得分缓存
-		if h.scoreCache != nil {
-			h.scoreCache.InvalidateHostScore(hostID)
-		}
-
-		// 8. 最后删除主机记录
-		if err := tx.Delete(&host).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return h.deleteHostByID(tx, hostID)
 	})
 
 	if err != nil {
@@ -812,8 +791,107 @@ func (h *HostsHandler) DeleteHost(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("主机已删除", zap.String("host_id", hostID), zap.String("hostname", host.Hostname))
+	h.logger.Info("主机已删除", zap.String("host_id", hostID))
 	SuccessMessage(c, "主机删除成功")
+}
+
+// BatchDeleteHost 批量删除主机
+// POST /api/v1/hosts/batch-delete
+func (h *HostsHandler) BatchDeleteHost(c *gin.Context) {
+	var req struct {
+		HostIDs []string `json:"host_ids" binding:"required,min=1"`
+		Force   bool     `json:"force"` // 强制删除（包括在线主机）
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "请求参数错误：host_ids 不能为空")
+		return
+	}
+
+	if len(req.HostIDs) > 100 {
+		BadRequest(c, "单次最多删除 100 台主机")
+		return
+	}
+
+	// 单次查询获取所有请求主机的状态
+	var hosts []model.Host
+	if err := h.db.Where("host_id IN ?", req.HostIDs).Select("host_id, status").Find(&hosts).Error; err != nil {
+		h.logger.Error("查询主机状态失败", zap.Error(err))
+		InternalError(c, "查询主机状态失败")
+		return
+	}
+
+	existSet := make(map[string]string, len(hosts)) // host_id -> status
+	for _, host := range hosts {
+		existSet[host.HostID] = string(host.Status)
+	}
+
+	// 分类：待删除 / 跳过 / 不存在
+	var deleteIDs []string
+	var skipped, failed int
+	for _, id := range req.HostIDs {
+		status, exists := existSet[id]
+		if !exists {
+			failed++
+		} else if !req.Force && status == string(model.HostStatusOnline) {
+			skipped++
+		} else {
+			deleteIDs = append(deleteIDs, id)
+		}
+	}
+
+	if len(deleteIDs) == 0 {
+		Success(c, gin.H{"deleted": 0, "failed": failed, "skipped": skipped, "total": len(req.HostIDs)})
+		return
+	}
+
+	// 单事务批量删除所有关联数据和主机记录
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		return h.deleteHostsByIDs(tx, deleteIDs)
+	})
+	if err != nil {
+		h.logger.Error("批量删除主机失败", zap.Error(err), zap.Int("count", len(deleteIDs)))
+		InternalError(c, "批量删除主机失败")
+		return
+	}
+
+	deleted := len(deleteIDs)
+	h.logger.Info("批量删除主机完成", zap.Int("deleted", deleted), zap.Int("failed", failed), zap.Int("skipped", skipped))
+	Success(c, gin.H{"deleted": deleted, "failed": failed, "skipped": skipped, "total": len(req.HostIDs)})
+}
+
+// deleteHostsByIDs 批量删除主机及其关联数据（单事务内执行，WHERE host_id IN 批量操作）
+func (h *HostsHandler) deleteHostsByIDs(tx *gorm.DB, hostIDs []string) error {
+	if len(hostIDs) == 0 {
+		return nil
+	}
+
+	// 按依赖顺序批量删除所有关联表
+	relatedModels := []any{
+		&model.ScanResult{}, &model.Alert{}, &model.HostMetric{}, &model.HostPlugin{},
+		&model.Process{}, &model.Port{}, &model.Software{}, &model.Container{},
+		&model.AssetUser{}, &model.Cron{}, &model.Service{},
+		&model.NetInterface{}, &model.Volume{}, &model.Kmod{}, &model.App{},
+		&model.HostVulnerability{},
+	}
+	for _, m := range relatedModels {
+		if err := tx.Where("host_id IN ?", hostIDs).Delete(m).Error; err != nil {
+			return fmt.Errorf("删除关联数据失败: %w", err)
+		}
+	}
+
+	// 清除基线得分缓存
+	if h.scoreCache != nil {
+		for _, id := range hostIDs {
+			h.scoreCache.InvalidateHostScore(id)
+		}
+	}
+
+	// 最后删除主机记录
+	if err := tx.Where("host_id IN ?", hostIDs).Delete(&model.Host{}).Error; err != nil {
+		return fmt.Errorf("删除主机记录失败: %w", err)
+	}
+
+	return nil
 }
 
 // RestartAgentRequest Agent 重启请求
@@ -890,4 +968,118 @@ func (h *HostsHandler) GetRestartRecords(c *gin.Context) {
 	}
 
 	Success(c, records)
+}
+
+// BatchUpdateTags 批量更新主机标签
+// POST /api/v1/hosts/batch-update-tags
+func (h *HostsHandler) BatchUpdateTags(c *gin.Context) {
+	var req struct {
+		HostIDs []string `json:"host_ids" binding:"required,min=1"`
+		Tags    []string `json:"tags" binding:"required"`
+		Mode    string   `json:"mode" binding:"required,oneof=append replace"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "请求参数错误：host_ids、tags、mode(append/replace) 必填")
+		return
+	}
+
+	if len(req.HostIDs) > 100 {
+		BadRequest(c, "单次最多操作 100 台主机")
+		return
+	}
+
+	// 校验标签
+	for _, tag := range req.Tags {
+		if len(tag) > 50 {
+			BadRequest(c, "标签长度不能超过50个字符")
+			return
+		}
+	}
+
+	var updated, failed int
+	for _, hostID := range req.HostIDs {
+		var finalTags model.StringArray
+
+		if req.Mode == "append" {
+			// 追加模式：读取现有标签，合并去重
+			var host model.Host
+			if err := h.db.Where("host_id = ?", hostID).First(&host).Error; err != nil {
+				failed++
+				continue
+			}
+			tagSet := make(map[string]struct{})
+			for _, t := range host.Tags {
+				tagSet[t] = struct{}{}
+			}
+			for _, t := range req.Tags {
+				tagSet[t] = struct{}{}
+			}
+			for t := range tagSet {
+				finalTags = append(finalTags, t)
+			}
+		} else {
+			// 替换模式
+			finalTags = model.StringArray(req.Tags)
+		}
+
+		// 校验合并后标签总数
+		if len(finalTags) > 10 {
+			failed++
+			continue
+		}
+
+		if err := h.db.Model(&model.Host{}).Where("host_id = ?", hostID).Update("tags", finalTags).Error; err != nil {
+			failed++
+			h.logger.Warn("批量更新标签失败", zap.String("host_id", hostID), zap.Error(err))
+			continue
+		}
+		updated++
+	}
+
+	h.logger.Info("批量更新标签完成", zap.Int("updated", updated), zap.Int("failed", failed))
+	Success(c, gin.H{"updated": updated, "failed": failed})
+}
+
+// BatchUpdateBusinessLine 批量更新主机业务线
+// POST /api/v1/hosts/batch-update-business-line
+func (h *HostsHandler) BatchUpdateBusinessLine(c *gin.Context) {
+	var req struct {
+		HostIDs      []string `json:"host_ids" binding:"required,min=1"`
+		BusinessLine string   `json:"business_line"` // 空字符串表示取消绑定
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warn("批量更新业务线参数绑定失败", zap.Error(err))
+		BadRequest(c, "请求参数错误：host_ids 不能为空")
+		return
+	}
+
+	if len(req.HostIDs) > 100 {
+		BadRequest(c, "单次最多操作 100 台主机")
+		return
+	}
+
+	// 如果指定了业务线，验证其存在且启用
+	if req.BusinessLine != "" {
+		var businessLine model.BusinessLine
+		if err := h.db.Where("code = ? AND enabled = ?", req.BusinessLine, true).First(&businessLine).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				BadRequest(c, "业务线不存在或已禁用")
+				return
+			}
+			h.logger.Error("查询业务线失败", zap.Error(err))
+			InternalError(c, "查询业务线失败")
+			return
+		}
+	}
+
+	// 单事务批量更新
+	result := h.db.Model(&model.Host{}).Where("host_id IN ?", req.HostIDs).Update("business_line", req.BusinessLine)
+	if result.Error != nil {
+		h.logger.Error("批量更新业务线失败", zap.Error(result.Error))
+		InternalError(c, "批量更新业务线失败")
+		return
+	}
+
+	h.logger.Info("批量更新业务线完成", zap.Int64("updated", result.RowsAffected))
+	Success(c, gin.H{"updated": result.RowsAffected})
 }

@@ -12,6 +12,8 @@ type Software struct {
 	Vendor       string    `gorm:"column:vendor;type:varchar(255)" json:"vendor"`
 	InstallTime  string    `gorm:"column:install_time;type:varchar(50)" json:"install_time"`
 	PURL         string    `gorm:"column:purl;type:varchar(500);index" json:"purl"`
+	Ecosystem    string    `gorm:"column:ecosystem;type:varchar(30);index" json:"ecosystem"` // 生态系统：OS / Go / npm / PyPI / Maven / Cargo
+	SourceFile   string    `gorm:"column:source_file;type:varchar(500)" json:"source_file"`  // 依赖文件来源路径
 	CollectedAt  LocalTime `gorm:"column:collected_at;type:timestamp;not null;index" json:"collected_at"`
 }
 

@@ -75,6 +75,9 @@ func (u *VirusDBUpdater) Start(ctx context.Context) {
 		zap.String("data_dir", u.dataDir),
 	)
 
+	// 初始化文件 hash 基线，避免重启后误判所有文件为"变化"
+	u.initFileHashes()
+
 	// 启动时执行一次
 	u.runOnce(ctx)
 
@@ -309,6 +312,27 @@ func (u *VirusDBUpdater) packageVirusDB() (string, string, error) {
 	)
 
 	return archivePath, version, nil
+}
+
+// initFileHashes 启动时扫描当前病毒库文件，建立 hash 基线
+// 避免每次重启后 fileHashes 为空导致所有文件被误判为"变化"并重新打包
+func (u *VirusDBUpdater) initFileHashes() {
+	patterns := []string{"*.cvd", "*.cld"}
+	for _, pattern := range patterns {
+		matches, _ := filepath.Glob(filepath.Join(u.dataDir, pattern))
+		for _, filePath := range matches {
+			filename := filepath.Base(filePath)
+			hash, _, err := u.fileSHA256(filePath)
+			if err != nil {
+				u.logger.Warn("初始化病毒库 hash 失败", zap.String("file", filename), zap.Error(err))
+				continue
+			}
+			u.fileHashes[filename] = hash
+		}
+	}
+	if len(u.fileHashes) > 0 {
+		u.logger.Info("病毒库 hash 基线已建立", zap.Int("files", len(u.fileHashes)))
+	}
 }
 
 // detectChangedFiles 检测病毒库文件中哪些发生了变化

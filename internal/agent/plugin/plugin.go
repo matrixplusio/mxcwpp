@@ -24,6 +24,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
 	"github.com/imkerbos/mxsec-platform/internal/agent/config"
+	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
 	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
 	"github.com/imkerbos/mxsec-platform/internal/common/fileutil"
 	"github.com/imkerbos/mxsec-platform/internal/common/signing"
@@ -356,8 +357,12 @@ func (m *Manager) loadPlugin(ctx context.Context, cfg *grpc.Config) (*Plugin, er
 	}
 
 	// 设置环境变量（注入 PLUGIN_DIR 供插件查找内置二进制）
+	rtInfo := agentrt.Get()
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("PLUGIN_DIR=%s", workDir),
+		fmt.Sprintf("MXSEC_RUNTIME_TYPE=%s", rtInfo.Type),
+		fmt.Sprintf("MXSEC_IS_CONTAINER=%t", rtInfo.IsContainer),
+		fmt.Sprintf("MXSEC_CONTAINER_ID=%s", rtInfo.ContainerID),
 	)
 
 	if err := cmd.Start(); err != nil {

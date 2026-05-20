@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-**版本**: v1.0.0（开发中）  
+**版本**: v1.1.0（开发中）  
 **MVP 完成度**: 100%  
 **阶段**: 质量加固 + 能力补齐
 
@@ -16,7 +16,8 @@
 | FIM | 策略/事件/任务闭环，ClickHouse 归档 |
 | 容器安全 | 集群/告警/事件/CIS 基线（80 条规则）/白名单/K8s Audit Webhook |
 | 病毒查杀 | ClamAV + YARA-X 双引擎，任务/结果/隔离箱 |
-| 漏洞管理 | PURL 采集 + OSV.dev/NVD/Red Hat 三源匹配 + CVSS v3.1 评分 |
+| 漏洞管理 | PURL 采集 + OSV.dev/NVD/Red Hat 三源匹配 + CVSS v3.1 评分 + CNVD/CNNVD/KEV 标记 |
+| 漏洞修复 | 一键修复 + 预检 + 诊断 + 自动验证 + 批量操作 + yum/dnf/apt 自动适配 |
 | CEL 规则引擎 | 38 条内置规则 + MITRE 映射 + 热加载 |
 | eBPF 检测 | Tetragon 事件采集 → ClickHouse 归档 |
 | 行为序列检测 | 滑动窗口 + 状态机 + Redis |
@@ -200,7 +201,7 @@ CVSS 基础分 + 运行状态 + 对外暴露 + 补丁可用性加权评分，前
 
 | 决策 | 选型 | 理由 |
 |------|------|------|
-| 运行时检测 | Tetragon（非自研 eBPF） | CNCF 生产就绪，避免内核兼容性问题 |
+| EDR 检测 | Tetragon（非自研 eBPF） | CNCF 生产就绪，避免内核兼容性问题 |
 | 规则引擎 | CEL-Go（非 Falco/Sigma） | 嵌入式，无独立进程开销 |
 | 漏洞库 | OSV.dev + NVD + Red Hat（已接入）；CNVD + CNNVD + ExploitDB/KEV（待接入） | 多源分层：OSV 主扫描，NVD/Red Hat 补充，CNVD/CNNVD 满足国内合规，KEV 标记在野利用 |
 | 病毒引擎 | YARA-X（非经典 YARA） | Rust 重写，经典 YARA 已 EOL |

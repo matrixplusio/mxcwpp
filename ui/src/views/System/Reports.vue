@@ -23,7 +23,7 @@
       <a-tab-pane key="antivirus" tab="病毒查杀" />
       <a-tab-pane key="vulnerability" tab="漏洞管理" />
       <a-tab-pane key="kube" tab="容器安全" />
-      <a-tab-pane key="runtime" tab="EDR" />
+      <a-tab-pane key="edr" tab="EDR" />
     </a-tabs>
 
     <template v-if="activeTab === 'overview'">
@@ -305,9 +305,9 @@
       ref="kubeRef"
       :date-range="dateRange"
     />
-    <RuntimeReport
-      v-else-if="activeTab === 'runtime'"
-      ref="runtimeRef"
+    <EDRReport
+      v-else-if="activeTab === 'edr'"
+      ref="edrRef"
       :date-range="dateRange"
     />
   </div>
@@ -339,7 +339,7 @@ import type { EChartsOption } from 'echarts'
 import AntivirusReport from './reports/AntivirusReport.vue'
 import VulnerabilityReport from './reports/VulnerabilityReport.vue'
 import KubeReport from './reports/KubeReport.vue'
-import RuntimeReport from './reports/RuntimeReport.vue'
+import EDRReport from './reports/EDRReport.vue'
 
 // 报表专用风险分布接口
 interface ReportRiskDistribution {
@@ -355,7 +355,7 @@ const router = useRouter()
 const loading = ref(false)
 const loadingTopLists = ref(false)
 
-const validTabs = ['overview', 'antivirus', 'vulnerability', 'kube', 'runtime']
+const validTabs = ['overview', 'antivirus', 'vulnerability', 'kube', 'edr']
 const initialTab = validTabs.includes(route.query.tab as string) ? (route.query.tab as string) : 'overview'
 const activeTab = ref<string>(initialTab)
 
@@ -371,7 +371,7 @@ const dateRange = ref<[Dayjs, Dayjs]>([
 const antivirusRef = ref<InstanceType<typeof AntivirusReport> | null>(null)
 const vulnerabilityRef = ref<InstanceType<typeof VulnerabilityReport> | null>(null)
 const kubeRef = ref<InstanceType<typeof KubeReport> | null>(null)
-const runtimeRef = ref<InstanceType<typeof RuntimeReport> | null>(null)
+const edrRef = ref<InstanceType<typeof EDRReport> | null>(null)
 
 const datePresets = [
   { label: '最近7天', value: [dayjs().subtract(7, 'day'), dayjs()] },
@@ -835,8 +835,8 @@ const handleRefresh = () => {
     vulnerabilityRef.value?.refresh()
   } else if (activeTab.value === 'kube') {
     kubeRef.value?.refresh()
-  } else if (activeTab.value === 'runtime') {
-    runtimeRef.value?.refresh()
+  } else if (activeTab.value === 'edr') {
+    edrRef.value?.refresh()
   }
 }
 

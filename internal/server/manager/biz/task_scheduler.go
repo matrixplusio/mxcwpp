@@ -26,8 +26,12 @@ const (
 	fimPolicyCheckInterval = 5 * time.Minute
 	// FIM 事件超时升级检查间隔
 	fimEscalationCheckInterval = 5 * time.Minute
-	// 漏洞扫描周期（一天一次；也会在首次启动发现库为空时立刻跑）
-	vulnScanInterval = 24 * time.Hour
+	// 增量扫描周期（1 天 1 次：扫描自上次以来新增/变更的软件包）
+	vulnIncrementalInterval = 24 * time.Hour
+	// 漏洞库同步周期（1 天 1 次：NVD/RedHat/CNNVD 等数据源同步）
+	vulnSyncInterval = 24 * time.Hour
+	// 全量扫描周期（1 周 1 次：遍历所有 PURL，兜底确保无遗漏）
+	vulnFullScanInterval = 7 * 24 * time.Hour
 	// 漏洞扫描检查间隔（避免每 5 秒都判断一次）
 	vulnScanCheckInterval = 10 * time.Minute
 	// 僵尸任务超时时间（running 状态超过此时长自动标记为 failed）
@@ -53,7 +57,9 @@ type TaskScheduler struct {
 	lastFIMCheck           time.Time // 上次 FIM 策略扫描时间（用于节流）
 	lastFIMEscalationCheck time.Time // 上次 FIM 事件超时升级检查时间
 	lastVulnCheck          time.Time // 上次漏洞扫描判断时间（节流）
-	lastVulnScanStart      time.Time // 上次实际触发漏洞扫描的时间
+	lastIncrementalStart   time.Time // 上次增量扫描触发时间
+	lastSyncStart          time.Time // 上次漏洞库同步触发时间
+	lastFullScanStart      time.Time // 上次全量扫描触发时间
 	lastZombieCheck        time.Time // 上次僵尸任务检查时间
 }
 
@@ -293,26 +299,23 @@ func (s *TaskScheduler) acquireLock(ctx context.Context) bool {
 	return result == "OK"
 }
 
-// maybeTriggerVulnScan 根据周期或"首次启动库为空"策略触发一次漏洞扫描
-// - 首次启动：若 vulnerabilities 表为空但 software 表有带 PURL 的记录，立即扫一次
-// - 周期：距离上次扫描 >= vulnScanInterval 时扫一次
+// maybeTriggerVulnScan 三层调度策略：
+// - 增量扫描：每天 1 次，仅扫描新增/变更软件包（快，几十秒~几分钟）
+// - 漏洞库同步：每天 1 次，从 NVD/RedHat/CNNVD 同步新发布的 CVE（几分钟）
+// - 全量扫描：每周 1 次，遍历所有 PURL 兜底（3000-4000s）
+// 首次启动：若 vulnerabilities 表为空但 software 表有带 PURL 的记录，立即全量扫描
 // 扫描本身异步执行，避免阻塞调度循环
 func (s *TaskScheduler) maybeTriggerVulnScan() {
 	if s.db == nil {
 		return
 	}
 
-	shouldScan := false
-	reason := ""
+	now := time.Now()
+	scanner := NewVulnScanner(s.db, s.logger)
 
-	// 周期触发
-	if !s.lastVulnScanStart.IsZero() && time.Since(s.lastVulnScanStart) >= vulnScanInterval {
-		shouldScan = true
-		reason = "periodic"
-	}
-
-	// 首次启动触发：库为空且存在待扫描的 PURL
-	if !shouldScan && s.lastVulnScanStart.IsZero() {
+	// 首次启动检查
+	allZero := s.lastFullScanStart.IsZero() && s.lastIncrementalStart.IsZero() && s.lastSyncStart.IsZero()
+	if allZero {
 		var vulnCount int64
 		s.db.Model(&model.Vulnerability{}).Count(&vulnCount)
 
@@ -320,31 +323,65 @@ func (s *TaskScheduler) maybeTriggerVulnScan() {
 		s.db.Model(&model.Software{}).Where("purl != '' AND purl IS NOT NULL").Count(&swCount)
 
 		if vulnCount == 0 && swCount > 0 {
-			shouldScan = true
-			reason = "initial"
+			// 库为空但有软件包 → 立即全量
+			s.lastFullScanStart = now
+			s.lastIncrementalStart = now
+			s.lastSyncStart = now
+			s.logger.Info("触发漏洞扫描", zap.String("type", "full_scan"), zap.String("reason", "initial"))
+			go func() {
+				if err := scanner.ScanAll(); err != nil {
+					s.logger.Error("首次全量漏洞扫描失败", zap.Error(err))
+				}
+			}()
+			return
 		} else if vulnCount == 0 && swCount == 0 {
-			// 尚无软件包上报，稍后再试（不打标记）
-			return
-		} else {
-			// 库非空说明之前已有人工触发过，按周期模式开始计时
-			s.lastVulnScanStart = time.Now()
-			return
+			return // 尚无软件包上报
 		}
-	}
-
-	if !shouldScan {
+		// 库非空，按周期模式开始计时
+		s.lastFullScanStart = now
+		s.lastIncrementalStart = now
+		s.lastSyncStart = now
 		return
 	}
 
-	s.lastVulnScanStart = time.Now()
-	s.logger.Info("触发周期漏洞扫描", zap.String("reason", reason))
+	// 优先级：全量 > 增量 > 同步（同一轮只触发一个，避免并发竞争）
 
-	go func() {
-		scanner := NewVulnScanner(s.db, s.logger)
-		if err := scanner.ScanAll(); err != nil {
-			s.logger.Error("周期漏洞扫描失败", zap.Error(err))
-		}
-	}()
+	// 全量扫描（每周 1 次）
+	if time.Since(s.lastFullScanStart) >= vulnFullScanInterval {
+		s.lastFullScanStart = now
+		s.lastIncrementalStart = now // 全量包含增量，重置增量计时
+		s.logger.Info("触发漏洞扫描", zap.String("type", "full_scan"), zap.String("reason", "weekly"))
+		go func() {
+			if err := scanner.ScanAll(); err != nil {
+				s.logger.Error("周期全量漏洞扫描失败", zap.Error(err))
+			}
+		}()
+		return
+	}
+
+	// 增量扫描（每天 1 次）
+	if time.Since(s.lastIncrementalStart) >= vulnIncrementalInterval {
+		s.lastIncrementalStart = now
+		s.logger.Info("触发漏洞扫描", zap.String("type", "incremental_scan"), zap.String("reason", "daily"))
+		go func() {
+			if err := scanner.ScanIncremental(); err != nil {
+				s.logger.Error("增量漏洞扫描失败", zap.Error(err))
+			}
+		}()
+		return
+	}
+
+	// 漏洞库同步（每天 1 次，与增量错开）
+	if time.Since(s.lastSyncStart) >= vulnSyncInterval {
+		s.lastSyncStart = now
+		s.logger.Info("触发漏洞扫描", zap.String("type", "sync_only"), zap.String("reason", "daily"))
+		go func() {
+			if err := scanner.SyncOnly(); err != nil {
+				s.logger.Error("漏洞库同步失败", zap.Error(err))
+			}
+		}()
+		return
+	}
 }
 
 // releaseLock 原子释放 Redis 分布式锁（只释放自己加的锁）

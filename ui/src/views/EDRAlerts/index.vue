@@ -1,5 +1,5 @@
 <template>
-  <div class="runtime-alerts-page">
+  <div class="edr-alerts-page">
     <div class="page-header">
       <h2 class="page-title">EDR 告警事件</h2>
     </div>
@@ -238,7 +238,7 @@ import {
   WarningOutlined,
   SearchOutlined,
 } from '@ant-design/icons-vue'
-import { alertsApi, type Alert, type RuntimeAlertStatistics, type ListAlertsParams } from '@/api/alerts'
+import { alertsApi, type Alert, type EDRAlertStatistics, type ListAlertsParams } from '@/api/alerts'
 import { detectionRulesAPI } from '@/api/detection-rules'
 import { businessLinesApi } from '@/api/business-lines'
 import { formatDateTime } from '@/utils/date'
@@ -249,7 +249,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const alerts = ref<Alert[]>([])
-const statistics = ref<RuntimeAlertStatistics>({
+const statistics = ref<EDRAlertStatistics>({
   total: 0, active: 0, today: 0, critical: 0, high: 0, medium: 0, low: 0,
 })
 
@@ -335,9 +335,9 @@ const parseEventType = (actual: string | undefined) => {
 
 const loadStatistics = async () => {
   try {
-    statistics.value = await alertsApi.runtimeStatistics()
+    statistics.value = await alertsApi.edrStatistics()
   } catch (error: any) {
-    console.error('加载运行时告警统计失败:', error)
+    console.error('加载 EDR 告警统计失败:', error)
   }
 }
 
@@ -347,7 +347,7 @@ const loadAlerts = async () => {
     const params: ListAlertsParams = {
       page: pagination.value.current,
       page_size: pagination.value.pageSize,
-      alert_type: 'runtime',
+      alert_type: 'edr',
     }
 
     if (activeTab.value === 'active') {
@@ -467,7 +467,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
-.runtime-alerts-page {
+.edr-alerts-page {
   padding: 0;
 }
 

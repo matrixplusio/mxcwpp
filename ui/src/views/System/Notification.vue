@@ -170,7 +170,17 @@
           />
         </a-form-item>
 
-        <a-form-item label="主机范围" name="scope" required>
+        <!-- 漏洞通报通知的说明 -->
+        <a-form-item v-if="formData.notify_category === 'vuln_bulletin'" label="通知说明">
+          <a-alert
+            type="info"
+            show-icon
+            message="漏洞通报通知"
+            description="漏洞通报创建时自动发送到此渠道。通报的优先级过滤在「漏洞管理 → 漏洞通报 → 通报配置」中管理，此处仅配置通知渠道。"
+          />
+        </a-form-item>
+
+        <a-form-item v-if="formData.notify_category !== 'vuln_bulletin'" label="主机范围" name="scope" required>
           <a-radio-group
             v-model:value="formData.scope"
             @change="handleScopeChange"
@@ -375,21 +385,21 @@ import { hostsApi, type Host } from '@/api/hosts'
 const notifyCategoryOptions = [
   { value: 'baseline_alert', label: '基线安全告警', description: '基线检测发现安全问题时发送通知', hasSeverity: true },
   { value: 'agent_offline', label: 'Agent 离线通知', description: 'Agent 断开连接时发送通知', hasSeverity: false },
-  { value: 'vulnerability_alert', label: '漏洞告警', description: '漏洞扫描发现高危漏洞时发送通知', hasSeverity: true },
   { value: 'virus_alert', label: '病毒查杀告警', description: '检测到病毒或恶意文件时发送通知', hasSeverity: true },
   { value: 'fim_alert', label: '文件完整性告警', description: '关键文件被篡改、新增或删除时发送通知', hasSeverity: true },
-  { value: 'runtime_alert', label: 'EDR 告警', description: 'EDR 检测规则触发告警时发送通知', hasSeverity: true },
+  { value: 'edr_alert', label: 'EDR 告警', description: 'EDR 检测规则触发告警时发送通知', hasSeverity: true },
   { value: 'kube_alert', label: 'K8s 安全告警', description: 'K8s 审计检测规则触发告警时发送通知', hasSeverity: true },
+  { value: 'vuln_bulletin', label: '漏洞通报', description: '漏洞通报创建时发送通知，通报等级在漏洞通报配置中管理', hasSeverity: false },
 ]
 
 // 通知类别文本映射
 const NOTIFY_CATEGORY_TEXT_MAP: Record<string, string> = {
   baseline_alert: '基线安全告警',
   agent_offline: 'Agent 离线通知',
-  vulnerability_alert: '漏洞告警',
+  vuln_bulletin: '漏洞通报',
   virus_alert: '病毒查杀告警',
   fim_alert: '文件完整性告警',
-  runtime_alert: 'EDR 告警',
+  edr_alert: 'EDR 告警',
   kube_alert: 'K8s 安全告警',
 }
 
@@ -397,10 +407,10 @@ const NOTIFY_CATEGORY_TEXT_MAP: Record<string, string> = {
 const NOTIFY_CATEGORY_COLOR_MAP: Record<string, string> = {
   baseline_alert: 'green',
   agent_offline: 'orange',
-  vulnerability_alert: 'red',
+  vuln_bulletin: 'magenta',
   virus_alert: 'volcano',
   fim_alert: 'gold',
-  runtime_alert: 'purple',
+  edr_alert: 'purple',
   kube_alert: 'blue',
 }
 
@@ -484,7 +494,19 @@ const formRules = {
     },
     trigger: 'change',
   }],
-  scope: [{ required: true, message: '请选择主机范围', trigger: 'change' }],
+  scope: [{
+    validator: () => {
+      // 漏洞通报不需要主机范围
+      if (formData.notify_category === 'vuln_bulletin') {
+        return Promise.resolve()
+      }
+      if (!formData.scope) {
+        return Promise.reject('请选择主机范围')
+      }
+      return Promise.resolve()
+    },
+    trigger: 'change',
+  }],
   type: [{ required: true, message: '请选择通知方式', trigger: 'change' }],
   frontend_url: [{ required: true, message: '请输入前端地址', trigger: 'blur' }],
 }
@@ -786,14 +808,18 @@ const handleScopeChange = () => {
 const handleNotifyCategoryChange = () => {
   // 切换通知类别时，清空 severities
   formData.severities = []
+  // 漏洞通报是 CVE 维度，不需要主机范围，自动设为全局
+  if (formData.notify_category === 'vuln_bulletin') {
+    formData.scope = 'global'
+  }
   // 根据类别设置默认名称
   const defaultNames: Record<string, string> = {
     baseline_alert: '基线安全告警',
     agent_offline: 'Agent 离线通知',
-    vulnerability_alert: '漏洞告警',
+    vuln_bulletin: '漏洞通报通知',
     virus_alert: '病毒查杀告警',
     fim_alert: '文件完整性告警',
-    runtime_alert: 'EDR 告警',
+    edr_alert: 'EDR 告警',
     kube_alert: 'K8s 安全告警',
   }
   formData.name = formData.name || defaultNames[formData.notify_category] || ''

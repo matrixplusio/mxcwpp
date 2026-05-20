@@ -19,6 +19,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/agent/id"
 	"github.com/imkerbos/mxsec-platform/internal/agent/logger"
 	"github.com/imkerbos/mxsec-platform/internal/agent/plugin"
+	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
 	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
 	"github.com/imkerbos/mxsec-platform/internal/agent/updater"
 )
@@ -102,6 +103,14 @@ func main() {
 		zap.String("product", cfg.GetProduct()),
 		zap.String("server", serverHost),
 		zap.Bool("remote_config_loaded", cfg.Remote.Loaded),
+	)
+
+	// 3.5 初始化运行时环境检测（全局单例，供所有模块使用）
+	rtInfo := agentrt.Init(log)
+	log.Info("runtime environment detected",
+		zap.String("type", string(rtInfo.Type)),
+		zap.Bool("is_container", rtInfo.IsContainer),
+		zap.String("container_id", rtInfo.ContainerID),
 	)
 
 	// 4. 初始化 Agent ID

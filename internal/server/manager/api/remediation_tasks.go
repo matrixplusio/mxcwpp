@@ -14,8 +14,62 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
+// detectPackageManager 根据主机 OS 和版本判断应使用的包管理器类型
+// 返回值与 RemediationCommand.PackageType 对应：rpm-yum / rpm-dnf / deb
+func detectPackageManager(osFamily, osVersion string) string {
+	osLower := strings.ToLower(osFamily)
+
+	switch osLower {
+	case "debian", "ubuntu":
+		return "deb"
+	case "fedora":
+		// Fedora 22+ 默认 dnf
+		return "rpm-dnf"
+	case "centos":
+		// CentOS 8+ 使用 dnf
+		major := parseMajorVersion(osVersion)
+		if major >= 8 {
+			return "rpm-dnf"
+		}
+		return "rpm-yum"
+	case "rocky", "almalinux", "alma":
+		// Rocky/AlmaLinux 均为 8+，默认 dnf
+		return "rpm-dnf"
+	case "rhel":
+		// RHEL 8+ 使用 dnf
+		major := parseMajorVersion(osVersion)
+		if major >= 8 {
+			return "rpm-dnf"
+		}
+		return "rpm-yum"
+	case "oracle":
+		// Oracle Linux 8+ 使用 dnf
+		major := parseMajorVersion(osVersion)
+		if major >= 8 {
+			return "rpm-dnf"
+		}
+		return "rpm-yum"
+	default:
+		// 无法识别的 RPM 系发行版，yum 兜底（多数 dnf 系统上 yum 是软链接）
+		return "rpm-yum"
+	}
+}
+
+// parseMajorVersion 从版本号字符串中提取主版本号（如 "9.3" → 9）
+func parseMajorVersion(version string) int {
+	if version == "" {
+		return 0
+	}
+	parts := strings.SplitN(version, ".", 2)
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0
+	}
+	return major
+}
+
 // selectCommandForHost 根据主机 OS 选择正确的包管理器命令
-func selectCommandForHost(commands []biz.RemediationCommand, osFamily string) string {
+func selectCommandForHost(commands []biz.RemediationCommand, osFamily, osVersion string) string {
 	if len(commands) == 0 {
 		return ""
 	}
@@ -25,16 +79,20 @@ func selectCommandForHost(commands []biz.RemediationCommand, osFamily string) st
 		return commands[0].Command
 	}
 
-	// 根据 OS Family 选择对应的包管理器
-	osLower := strings.ToLower(osFamily)
-	isDeb := strings.Contains(osLower, "debian") || strings.Contains(osLower, "ubuntu")
+	pkgMgr := detectPackageManager(osFamily, osVersion)
 
 	for _, cmd := range commands {
-		if isDeb && cmd.PackageType == "deb" {
+		if cmd.PackageType == pkgMgr {
 			return cmd.Command
 		}
-		if !isDeb && cmd.PackageType == "rpm" {
-			return cmd.Command
+	}
+
+	// 降级匹配：rpm-dnf/rpm-yum 互相兼容（dnf 系统上 yum 是软链接）
+	if strings.HasPrefix(pkgMgr, "rpm-") {
+		for _, cmd := range commands {
+			if strings.HasPrefix(cmd.PackageType, "rpm") {
+				return cmd.Command
+			}
 		}
 	}
 
@@ -94,10 +152,11 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 		hostIDs = append(hostIDs, hv.HostID)
 	}
 	var hosts []model.Host
-	h.db.Select("host_id, os_family").Where("host_id IN ?", hostIDs).Find(&hosts)
-	osMap := make(map[string]string, len(hosts))
+	h.db.Select("host_id, os_family, os_version").Where("host_id IN ?", hostIDs).Find(&hosts)
+	type hostOS struct{ Family, Version string }
+	osMap := make(map[string]hostOS, len(hosts))
 	for _, host := range hosts {
-		osMap[host.HostID] = host.OSFamily
+		osMap[host.HostID] = hostOS{Family: host.OSFamily, Version: host.OSVersion}
 	}
 
 	username, _ := c.Get("username")
@@ -115,7 +174,8 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 		}
 
 		// 根据主机 OS 选择正确的命令
-		cmd := selectCommandForHost(advice.Commands, osMap[hv.HostID])
+		os := osMap[hv.HostID]
+		cmd := selectCommandForHost(advice.Commands, os.Family, os.Version)
 
 		task := model.RemediationTask{
 			VulnID:       vuln.ID,
@@ -335,11 +395,12 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 	}
 	var hosts []model.Host
 	if len(hostIDList) > 0 {
-		h.db.Select("host_id, os_family").Where("host_id IN ?", hostIDList).Find(&hosts)
+		h.db.Select("host_id, os_family, os_version").Where("host_id IN ?", hostIDList).Find(&hosts)
 	}
-	osMap := make(map[string]string, len(hosts))
+	type hostOS struct{ Family, Version string }
+	osMap := make(map[string]hostOS, len(hosts))
 	for _, host := range hosts {
-		osMap[host.HostID] = host.OSFamily
+		osMap[host.HostID] = hostOS{Family: host.OSFamily, Version: host.OSVersion}
 	}
 
 	// 批量查询已有进行中的任务
@@ -354,6 +415,9 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 
 	remSvc := biz.NewRemediationService(h.db, h.logger)
 	var allTasks []model.RemediationTask
+	vulnSet := make(map[uint]struct{})   // 去重统计涉及的漏洞
+	hostSet := make(map[string]struct{}) // 去重统计涉及的主机
+	skipped := 0
 
 	for _, vulnID := range req.VulnIDs {
 		vuln, ok := vulnMap[vulnID]
@@ -370,10 +434,12 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 		for _, hv := range hostVulns {
 			key := fmt.Sprintf("%d:%s", vulnID, hv.HostID)
 			if _, exists := existingSet[key]; exists {
+				skipped++
 				continue
 			}
 
-			cmd := selectCommandForHost(advice.Commands, osMap[hv.HostID])
+			os := osMap[hv.HostID]
+			cmd := selectCommandForHost(advice.Commands, os.Family, os.Version)
 			allTasks = append(allTasks, model.RemediationTask{
 				VulnID:       vuln.ID,
 				CveID:        vuln.CveID,
@@ -386,6 +452,8 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 				Status:       "pending",
 				CreatedBy:    createdBy,
 			})
+			vulnSet[vulnID] = struct{}{}
+			hostSet[hv.HostID] = struct{}{}
 		}
 	}
 
@@ -399,7 +467,12 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 		totalCreated = len(allTasks)
 	}
 
-	Success(c, gin.H{"created": totalCreated})
+	Success(c, gin.H{
+		"created":   totalCreated,
+		"vulnCount": len(vulnSet),
+		"hostCount": len(hostSet),
+		"skipped":   skipped,
+	})
 }
 
 // RetryTask 重试失败的修复任务

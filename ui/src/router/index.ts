@@ -194,6 +194,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Whitelist/index.vue'),
         meta: { title: '白名单' },
       },
+      // 漏洞通报
+      {
+        path: 'vuln-bulletins',
+        name: 'VulnBulletins',
+        component: () => import('@/views/VulnBulletins/index.vue'),
+        meta: { title: '漏洞通报' },
+      },
+      {
+        path: 'vuln-bulletins/:id',
+        name: 'VulnBulletinDetail',
+        component: () => import('@/views/VulnBulletins/Detail.vue'),
+        meta: { title: '通报详情' },
+      },
       // 漏洞列表
       {
         path: 'vuln-list',
@@ -206,6 +219,12 @@ const routes: RouteRecordRaw[] = [
         name: 'VulnDetail',
         component: () => import('@/views/VulnList/Detail.vue'),
         meta: { title: '漏洞详情' },
+      },
+      {
+        path: 'vuln-scan-history/:id',
+        name: 'ScanHistoryDetail',
+        component: () => import('@/views/VulnList/ScanHistoryDetail.vue'),
+        meta: { title: '扫描记录详情' },
       },
       {
         path: 'vuln-remediation',
@@ -225,6 +244,36 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/VulnRemediation/TaskDetail.vue'),
         meta: { title: '任务详情' },
       },
+      {
+        path: 'vuln-remediation/policies',
+        name: 'RemediationPolicies',
+        component: () => import('@/views/VulnRemediation/Policies.vue'),
+        meta: { title: '修复策略' },
+      },
+      {
+        path: 'vuln-scan-schedules',
+        name: 'VulnScanSchedules',
+        component: () => import('@/views/VulnList/ScanSchedules.vue'),
+        meta: { title: '扫描计划' },
+      },
+      {
+        path: 'vuln-scan-executions/:id',
+        name: 'VulnScanExecutionDetail',
+        component: () => import('@/views/VulnList/ExecutionDetail.vue'),
+        meta: { title: '执行详情' },
+      },
+      {
+        path: 'vuln-db-manage',
+        name: 'VulnDBManage',
+        component: () => import('@/views/System/VulnDBManage.vue'),
+        meta: { title: '漏洞库管理' },
+      },
+      {
+        path: 'sbom-import',
+        name: 'SBOMImport',
+        component: () => import('@/views/System/SBOMImport.vue'),
+        meta: { title: 'SBOM 导入' },
+      },
       // 病毒查杀
       {
         path: 'virus/scan',
@@ -241,8 +290,8 @@ const routes: RouteRecordRaw[] = [
       // EDR 告警事件
       {
         path: 'detection/events',
-        name: 'RuntimeAlerts',
-        component: () => import('@/views/RuntimeAlerts/index.vue'),
+        name: 'EDRAlerts',
+        component: () => import('@/views/EDRAlerts/index.vue'),
         meta: { title: 'EDR 告警事件' },
       },
       // 检测规则管理
@@ -342,7 +391,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Kube/Whitelist.vue'),
         meta: { title: '容器白名单' },
       },
-      // RASP 已弃用，由 Tetragon eBPF 运行时检测替代
+      {
+        path: 'kube/image-scan',
+        name: 'ImageScan',
+        component: () => import('@/views/Kube/ImageScan.vue'),
+        meta: { title: '镜像扫描' },
+      },
+      // RASP 已弃用，由 Tetragon eBPF EDR 替代
       // 保留路由兼容旧书签，重定向到检测规则页
       {
         path: 'rasp/apps',

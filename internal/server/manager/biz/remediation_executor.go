@@ -14,7 +14,9 @@ import (
 
 const (
 	// RemediationDataType 漏洞修复任务的 DataType
-	RemediationDataType = 9000
+	// 注意：不能使用 9000/9001，9000 是 Agent→Plugin 心跳 Ping，9001 是 Pong
+	// 插件 SDK 的 ReceiveTask() 会拦截 DataType=9000 作为心跳自动回复，导致任务被吞
+	RemediationDataType = 9100
 	// RemediationPluginName Agent 端处理修复任务的插件名称
 	RemediationPluginName = "remediation"
 )
@@ -266,6 +268,10 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 	status := "success"
 	if exitCode != 0 {
 		status = "failed"
+		// 对失败任务进行错误诊断，追加中文提示帮助用户定位问题
+		if diagnosis := DiagnoseError(stdout, stderr); diagnosis != "" {
+			output += "\n\n--- 诊断建议 ---\n" + diagnosis
+		}
 	}
 
 	updates := map[string]any{

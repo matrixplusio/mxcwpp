@@ -54,6 +54,13 @@ func setupVulnLifecycleDB(t *testing.T) *gorm.DB {
 			current_version TEXT,
 			fixed_version   TEXT,
 			reference_url   TEXT,
+			cnvd_id         TEXT,
+			cnnvd_id        TEXT,
+			has_exploit     INTEGER DEFAULT 0,
+			in_kev          INTEGER DEFAULT 0,
+			exploit_ref     TEXT,
+			priority_score  REAL DEFAULT 0,
+			exposure_score  REAL DEFAULT 0,
 			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -101,8 +108,9 @@ func setupVulnLifecycleDB(t *testing.T) *gorm.DB {
 			vendor       TEXT,
 			install_time TEXT,
 			purl         TEXT,
-			collected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+			ecosystem    TEXT,
+			source_file  TEXT,
+			collected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 	}
 	for _, ddl := range tables {
@@ -213,7 +221,7 @@ func TestScenario_Remediation_FullLifecycle_WithVerification(t *testing.T) {
 		VulnID: vuln.ID, HostID: "host-001", Hostname: "web-01", IP: "10.0.0.1",
 		CurrentVersion: "1.1.1k", Status: "unpatched",
 	})
-	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, updated_at)
+	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, collected_at)
 		VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`, "host-001-openssl", "host-001", "openssl", "1.1.1k")
 
 	// Step 2: 创建修复任务（pending）
@@ -241,7 +249,7 @@ func TestScenario_Remediation_FullLifecycle_WithVerification(t *testing.T) {
 	})
 
 	// Step 5: Agent 执行成功，软件版本已更新
-	db.Exec(`UPDATE software SET version = ?, updated_at = datetime('now') WHERE id = ?`,
+	db.Exec(`UPDATE software SET version = ?, collected_at = datetime('now') WHERE id = ?`,
 		"1.1.1l", "host-001-openssl")
 
 	// Step 6: Agent 上报执行结果
@@ -551,7 +559,7 @@ func TestScenario_VerifyHost_EpochVersion(t *testing.T) {
 	})
 
 	// 软件已升级到修复版本
-	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, updated_at)
+	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, collected_at)
 		VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
 		"host-001-openssl-libs", "host-001", "openssl-libs", "1:3.0.7-18.el9")
 
@@ -608,7 +616,7 @@ func TestScenario_VerifyHost_VersionNotUpgraded(t *testing.T) {
 	})
 
 	// 软件版本仍然是旧版本
-	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, updated_at)
+	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, collected_at)
 		VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
 		"host-001-openssl", "host-001", "openssl", "1.1.1")
 
@@ -748,9 +756,9 @@ func TestScenario_BatchVerify(t *testing.T) {
 	db.Create(&model.HostVulnerability{VulnID: vuln.ID, HostID: "host-001", Status: "unpatched"})
 	db.Create(&model.HostVulnerability{VulnID: vuln.ID, HostID: "host-002", Status: "unpatched"})
 
-	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, updated_at) VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
+	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, collected_at) VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
 		"h1-openssl", "host-001", "openssl", "1.1.2") // 已升级
-	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, updated_at) VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
+	db.Exec(`INSERT INTO software (id, host_id, name, version, package_type, collected_at) VALUES (?, ?, ?, ?, 'rpm', datetime('now'))`,
 		"h2-openssl", "host-002", "openssl", "1.1.1") // 未升级
 
 	verifier := NewRemediationVerifier(db, nopLogger())

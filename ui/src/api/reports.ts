@@ -262,7 +262,7 @@ export interface ExecutiveTaskReport {
 }
 
 // ============================================================
-// 分类报告 - 病毒查杀 / 漏洞管理 / 容器安全 / 运行时检测
+// 分类报告 - 病毒查杀 / 漏洞管理 / 容器安全 / EDR 检测
 // ============================================================
 
 // 病毒查杀报告
@@ -349,8 +349,8 @@ export interface KubeReport {
   baselineByCategory: Record<string, number>
 }
 
-// 运行时检测报告
-export interface RuntimeReport {
+// EDR 检测报告
+export interface EDRReport {
   summary: {
     totalAlerts: number
     activeAlerts: number
@@ -564,8 +564,8 @@ export interface KubeExecutiveReport {
   }
 }
 
-// 运行时检测 Executive 报告
-export interface RuntimeExecutiveReport {
+// EDR 检测 Executive 报告
+export interface EDRExecutiveReport {
   meta: {
     reportId: string
     reportTitle: string
@@ -760,9 +760,9 @@ export const reportsApi = {
     return apiClient.get('/reports/kube', { params })
   },
 
-  // 获取运行时检测报告
-  getRuntimeReport: async (params?: CategoryReportParams): Promise<RuntimeReport> => {
-    return apiClient.get('/reports/runtime', { params })
+  // 获取 EDR 检测报告
+  getEDRReport: async (params?: CategoryReportParams): Promise<EDRReport> => {
+    return apiClient.get('/reports/edr', { params })
   },
 
   // Executive 报告（可导出 PDF）
@@ -778,8 +778,8 @@ export const reportsApi = {
     return apiClient.get('/reports/kube/executive', { params })
   },
 
-  getRuntimeExecutiveReport: async (params: { start_time: string; end_time: string }): Promise<RuntimeExecutiveReport> => {
-    return apiClient.get('/reports/runtime/executive', { params })
+  getEDRExecutiveReport: async (params: { start_time: string; end_time: string }): Promise<EDRExecutiveReport> => {
+    return apiClient.get('/reports/edr/executive', { params })
   },
 
   getRemediationExecutiveReport: async (params: { start_time: string; end_time: string }): Promise<RemediationExecutiveReport> => {

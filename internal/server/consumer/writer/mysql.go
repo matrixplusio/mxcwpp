@@ -467,6 +467,17 @@ func (w *MySQLWriter) WriteCommandAck(msg *kafka.MQMessage) error {
 	}).Create(record).Error
 }
 
+// WriteRemediationResult 处理漏洞修复结果（DataType 9200）
+func (w *MySQLWriter) WriteRemediationResult(msg *kafka.MQMessage) error {
+	fields, err := ParseRecordFields(msg.Body)
+	if err != nil {
+		return fmt.Errorf("解析修复结果失败: %w", err)
+	}
+
+	executor := biz.NewRemediationExecutor(w.db, w.logger)
+	return executor.HandleResult(msg.AgentID, fields)
+}
+
 // WriteScanResult 处理 Scanner 扫描结果（DataType 7001）
 func (w *MySQLWriter) WriteScanResult(msg *kafka.MQMessage) error {
 	fields, err := ParseRecordFields(msg.Body)

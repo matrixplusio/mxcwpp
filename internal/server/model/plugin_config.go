@@ -13,7 +13,7 @@ const (
 	PluginTypeCollector PluginType = "collector"      // 资产采集插件
 	PluginTypeFIM       PluginType = "fim"            // 文件完整性监控插件
 	PluginTypeScanner   PluginType = "scanner"        // 病毒查杀插件 (ClamAV + YARA-X)
-	PluginTypeSensor    PluginType = "sensor"         // eBPF 实时监控插件 (Tetragon)
+	PluginTypeEDR       PluginType = "edr"            // EDR 插件 (eBPF/Tetragon)
 	PluginTypeVirusDB   PluginType = "virus-database" // ClamAV 病毒库（自动更新）
 )
 

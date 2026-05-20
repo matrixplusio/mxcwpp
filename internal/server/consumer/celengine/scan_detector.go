@@ -132,7 +132,7 @@ func (d *ScanDetector) triggerScanAlert(ctx context.Context, hostID, remoteAddr 
 		ResultID:    resultID,
 		HostID:      hostID,
 		RuleID:      "scan-detector",
-		Source:      model.AlertSourceRuntime,
+		Source:      model.AlertSourceEDR,
 		Severity:    d.classifySeverity(portCount),
 		Category:    "port_scan",
 		Title:       fmt.Sprintf("端口扫描检测 - 来自 %s", remoteAddr),
@@ -154,7 +154,7 @@ func (d *ScanDetector) triggerScanAlert(ctx context.Context, hostID, remoteAddr 
 		zap.String("ports", portsStr),
 	)
 
-	// 异步发送运行时告警通知
+	// 异步发送 EDR 告警通知
 	go func() {
 		var host model.Host
 		hostname, ip := "", ""
@@ -165,7 +165,7 @@ func (d *ScanDetector) triggerScanAlert(ctx context.Context, hostID, remoteAddr 
 			}
 		}
 		ns := biz.NewNotificationService(d.db, d.logger)
-		if err := ns.SendRuntimeAlertNotification(&biz.RuntimeAlertData{
+		if err := ns.SendEDRAlertNotification(&biz.EDRAlertData{
 			HostID:      hostID,
 			Hostname:    hostname,
 			IP:          ip,

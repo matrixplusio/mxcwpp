@@ -54,13 +54,13 @@ func (v *RemediationVerifier) VerifyHost(vulnID uint, hostID string) (*VerifyRes
 
 	// 查询主机上该组件的当前版本
 	var software struct {
-		Version   string    `gorm:"column:version"`
-		UpdatedAt time.Time `gorm:"column:updated_at"`
+		Version     string    `gorm:"column:version"`
+		CollectedAt time.Time `gorm:"column:collected_at"`
 	}
 	err := v.db.Table("software").
-		Select("version, updated_at").
+		Select("version, collected_at").
 		Where("host_id = ? AND name = ?", hostID, vuln.Component).
-		Order("updated_at DESC").
+		Order("collected_at DESC").
 		Limit(1).
 		Scan(&software).Error
 
@@ -71,10 +71,10 @@ func (v *RemediationVerifier) VerifyHost(vulnID uint, hostID string) (*VerifyRes
 
 	result.CurrentVersion = software.Version
 
-	// 检查数据时效性：如果软件信息超过 1 小时未更新，提示可能不准确
-	if time.Since(software.UpdatedAt) > time.Hour {
-		result.Message = fmt.Sprintf("注意：软件清单数据较旧（最后更新于 %s），验证结果可能不准确，建议等待 Agent 上报最新数据后重试",
-			software.UpdatedAt.Format("2006-01-02 15:04"))
+	// 检查数据时效性：如果软件信息超过 1 小时未采集，提示可能不准确
+	if time.Since(software.CollectedAt) > time.Hour {
+		result.Message = fmt.Sprintf("注意：软件清单数据较旧（最后采集于 %s），验证结果可能不准确，建议等待 Agent 上报最新数据后重试",
+			software.CollectedAt.Format("2006-01-02 15:04"))
 	}
 
 	// 比对版本：当前版本 >= 修复版本 则视为已修复

@@ -53,6 +53,16 @@ func main() {
 	// 启动病毒库自动更新器
 	go services.VirusDBUpdater.Start(ctx)
 
+	// 启动漏洞扫描定时调度器
+	vulnScanner := biz.NewVulnScanner(services.DB, services.Logger)
+	scanScheduler := biz.NewScanScheduler(services.DB, services.Logger, vulnScanner)
+	go func() {
+		if err := scanScheduler.Start(); err != nil {
+			services.Logger.Error("漏洞扫描调度器启动失败", zap.Error(err))
+		}
+	}()
+	defer scanScheduler.Stop()
+
 	// 启动 GCP Pub/Sub 消费者管理器（GKE 审计日志接入，per-cluster 配置）
 	alarmService := biz.NewKubeAlarmService(services.DB, services.Logger)
 	consumerManager := gcppubsub.NewConsumerManager(services.DB, services.Logger, alarmService)

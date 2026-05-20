@@ -9,7 +9,7 @@
 [![Last Commit](https://img.shields.io/github/last-commit/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform/commits/main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/imkerbos/mxsec-platform)](https://goreportcard.com/report/github.com/imkerbos/mxsec-platform)
 
-开源的企业级主机与容器安全管理平台。覆盖安全基线、资产管理、漏洞扫描、病毒查杀、运行时检测与合规审计，面向安全运营团队提供统一管控视图。
+开源的企业级主机与容器安全管理平台。覆盖安全基线、资产管理、漏洞扫描、病毒查杀、EDR 检测与合规审计，面向安全运营团队提供统一管控视图。
 
 ## 社区版说明
 
@@ -18,7 +18,7 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 - **全部端上能力**：Agent 数据采集、资产指纹、eBPF 运行时探针、基线检查插件等；
 - **全部后端能力**：AgentCenter、Manager、Consumer、服务发现，均支持水平扩展；
 - **完整管理控制台**：安全概览、资产中心、告警管理、基线检查、漏洞管理、容器安全等全功能 UI；
-- **内置检测规则**：212 条 CIS 基线规则、80 条容器基线规则、CEL 运行时检测策略样例。
+- **内置检测规则**：212 条 CIS 基线规则、80 条容器基线规则、CEL EDR 检测策略样例。
 
 如需构建更完善的安全运营体系，建议基于平台提供的 CEL 规则引擎进行策略扩展，并结合威胁情报进行二次加工。
 
@@ -33,7 +33,7 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 | 资产指纹（全局视图） | :white_check_mark: | :white_check_mark: |
 | K8s 集群资产采集 | :white_check_mark: | :white_check_mark: |
 | 主机/容器入侵检测 | `内置样例` | :white_check_mark: |
-| 运行时检测（eBPF + CEL） | `内置样例` | :white_check_mark: |
+| EDR 检测（eBPF + CEL） | `内置样例` | :white_check_mark: |
 | K8s Audit 入侵检测 | `内置样例` | :white_check_mark: |
 | 行为序列检测 | :x: | :white_check_mark: |
 | 告警白名单 | :white_check_mark: | :white_check_mark: |
@@ -68,7 +68,7 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 | 漏洞管理 | 软件包 PURL 采集 + OSV.dev 匹配 + CVSS v3.1 评分 + SBOM 导出 |
 | 病毒查杀 | ClamAV + YARA-X 双引擎扫描，任务管理 + 隔离箱处置 |
 | 文件完整性 | 基于 AIDE 的 FIM 检查，策略、事件、任务全链路闭环 |
-| 运行时检测 | Tetragon/eBPF 事件采集 + CEL 规则引擎 + MITRE ATT&CK 映射 |
+| EDR 检测 | Tetragon/eBPF 事件采集 + CEL 规则引擎 + MITRE ATT&CK 映射 |
 | 容器安全 | K8s 集群管理、容器 CIS 基线（80 条规则）、Audit Webhook 接入 |
 | 告警中心 | 告警聚合、白名单、自动响应（kill/隔离）、溯源时间线 |
 | 威胁情报 | MISP IOC 导入 + Redis 缓存 + CEL 实时碰撞 |

@@ -128,6 +128,21 @@ export const hostsApi = {
     return apiClient.delete(`/hosts/${hostId}`)
   },
 
+  // 批量删除主机
+  batchDelete: (hostIds: string[], force = false) => {
+    return apiClient.post<{ deleted: number; failed: number; skipped: number; total: number }>('/hosts/batch-delete', { host_ids: hostIds, force })
+  },
+
+  // 批量更新标签
+  batchUpdateTags: (hostIds: string[], tags: string[], mode: 'append' | 'replace') => {
+    return apiClient.post<{ updated: number; failed: number }>('/hosts/batch-update-tags', { host_ids: hostIds, tags, mode })
+  },
+
+  // 批量更新业务线
+  batchUpdateBusinessLine: (hostIds: string[], businessLine: string) => {
+    return apiClient.post<{ updated: number }>('/hosts/batch-update-business-line', { host_ids: hostIds, business_line: businessLine })
+  },
+
   // 重启 Agent
   restartAgent: (hostIds?: string[]) => {
     return apiClient.post('/hosts/restart-agent', { host_ids: hostIds || [] })

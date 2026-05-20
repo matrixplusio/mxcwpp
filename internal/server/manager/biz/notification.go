@@ -1464,94 +1464,6 @@ func larkHR() map[string]interface{} {
 }
 
 // ============================================================
-// 漏洞告警通知
-// ============================================================
-
-// VulnerabilityAlertData 漏洞告警数据
-type VulnerabilityAlertData struct {
-	HostID         string
-	Hostname       string
-	IP             string
-	CveID          string
-	Severity       string
-	CvssScore      float64
-	Component      string
-	CurrentVersion string
-	FixedVersion   string
-	Description    string
-	AffectedHosts  int
-	FrontendURL    string
-}
-
-// SendVulnerabilityAlertNotification 发送漏洞告警通知
-func (s *NotificationService) SendVulnerabilityAlertNotification(data *VulnerabilityAlertData) error {
-	var notifications []model.Notification
-	if err := s.db.Where("enabled = ? AND notify_category = ?", true, model.NotifyCategoryVulnerabilityAlert).Find(&notifications).Error; err != nil {
-		return err
-	}
-	for _, n := range notifications {
-		if len(n.Severities) > 0 && !s.matchSeverity(n.Severities, data.Severity) {
-			continue
-		}
-		if !s.matchScopeByHostID(&n, data.HostID) {
-			continue
-		}
-		var msg map[string]interface{}
-		if n.Type == model.NotificationTypeLark {
-			msg = s.buildLarkVulnerabilityCard(&n, data)
-		} else {
-			msg = s.buildWebhookVulnerability(data)
-		}
-		if err := s.postWebhook(n.Config.WebhookURL, msg); err != nil {
-			s.logger.Error("发送漏洞告警通知失败", zap.Uint("notification_id", n.ID), zap.Error(err))
-		}
-	}
-	return nil
-}
-
-func (s *NotificationService) buildLarkVulnerabilityCard(notification *model.Notification, data *VulnerabilityAlertData) map[string]interface{} {
-	desc := fmt.Sprintf(
-		"矩阵云安全平台检测到漏洞风险，请及时处理。\n\n"+
-			"**漏洞编号：** %s\n"+
-			"**CVSS 评分：** %.1f\n"+
-			"**主机名称：** %s\n"+
-			"**主机 IP：** %s\n"+
-			"**受影响组件：** %s\n"+
-			"**当前版本：** %s\n"+
-			"**修复版本：** %s\n"+
-			"**影响主机数：** %d",
-		data.CveID, data.CvssScore, data.Hostname, data.IP,
-		data.Component, data.CurrentVersion, data.FixedVersion, data.AffectedHosts,
-	)
-	elements := []map[string]interface{}{larkTextDiv(desc)}
-	if data.Description != "" {
-		elements = append(elements, larkHR(), larkTextDiv("**漏洞描述：**\n"+data.Description))
-	}
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/vulnerabilities?cve=%s", strings.TrimSuffix(notification.FrontendURL, "/"), data.CveID)
-		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
-	}
-	return s.buildLarkCardMessage(notification, "🔓 漏洞告警通知", s.getSeverityTemplate(data.Severity), elements)
-}
-
-func (s *NotificationService) buildWebhookVulnerability(data *VulnerabilityAlertData) map[string]interface{} {
-	return map[string]interface{}{
-		"alert_type":      "vulnerability",
-		"host_id":         data.HostID,
-		"hostname":        data.Hostname,
-		"ip":              data.IP,
-		"cve_id":          data.CveID,
-		"severity":        data.Severity,
-		"cvss_score":      data.CvssScore,
-		"component":       data.Component,
-		"current_version": data.CurrentVersion,
-		"fixed_version":   data.FixedVersion,
-		"description":     data.Description,
-		"affected_hosts":  data.AffectedHosts,
-	}
-}
-
-// ============================================================
 // 病毒查杀告警通知
 // ============================================================
 
@@ -1744,11 +1656,11 @@ func (s *NotificationService) buildWebhookFIM(data *FIMAlertData) map[string]int
 }
 
 // ============================================================
-// 运行时检测告警通知
+// EDR 告警通知
 // ============================================================
 
-// RuntimeAlertData 运行时检测告警数据
-type RuntimeAlertData struct {
+// EDRAlertData EDR 告警数据
+type EDRAlertData struct {
 	HostID      string
 	Hostname    string
 	IP          string
@@ -1761,10 +1673,10 @@ type RuntimeAlertData struct {
 	FrontendURL string
 }
 
-// SendRuntimeAlertNotification 发送运行时检测告警通知
-func (s *NotificationService) SendRuntimeAlertNotification(data *RuntimeAlertData) error {
+// SendEDRAlertNotification 发送 EDR 告警通知
+func (s *NotificationService) SendEDRAlertNotification(data *EDRAlertData) error {
 	var notifications []model.Notification
-	if err := s.db.Where("enabled = ? AND notify_category = ?", true, model.NotifyCategoryRuntimeAlert).Find(&notifications).Error; err != nil {
+	if err := s.db.Where("enabled = ? AND notify_category = ?", true, model.NotifyCategoryEDRAlert).Find(&notifications).Error; err != nil {
 		return err
 	}
 	for _, n := range notifications {
@@ -1776,24 +1688,24 @@ func (s *NotificationService) SendRuntimeAlertNotification(data *RuntimeAlertDat
 		}
 		var msg map[string]interface{}
 		if n.Type == model.NotificationTypeLark {
-			msg = s.buildLarkRuntimeCard(&n, data)
+			msg = s.buildLarkEDRCard(&n, data)
 		} else {
-			msg = s.buildWebhookRuntime(data)
+			msg = s.buildWebhookEDR(data)
 		}
 		if err := s.postWebhook(n.Config.WebhookURL, msg); err != nil {
-			s.logger.Error("发送运行时告警通知失败", zap.Uint("notification_id", n.ID), zap.Error(err))
+			s.logger.Error("发送 EDR 告警通知失败", zap.Uint("notification_id", n.ID), zap.Error(err))
 		}
 	}
 	return nil
 }
 
-func (s *NotificationService) buildLarkRuntimeCard(notification *model.Notification, data *RuntimeAlertData) map[string]interface{} {
+func (s *NotificationService) buildLarkEDRCard(notification *model.Notification, data *EDRAlertData) map[string]interface{} {
 	mitreInfo := ""
 	if data.MitreID != "" {
 		mitreInfo = fmt.Sprintf("\n**MITRE ATT&CK：** %s", data.MitreID)
 	}
 	desc := fmt.Sprintf(
-		"矩阵云安全平台运行时检测引擎触发安全告警。\n\n"+
+		"矩阵云安全平台 EDR 引擎触发安全告警。\n\n"+
 			"**规则名称：** %s\n"+
 			"**告警分类：** %s%s\n"+
 			"**主机名称：** %s\n"+
@@ -1811,12 +1723,12 @@ func (s *NotificationService) buildLarkRuntimeCard(notification *model.Notificat
 		url := fmt.Sprintf("%s/detection/alerts?host_id=%s", strings.TrimSuffix(notification.FrontendURL, "/"), data.HostID)
 		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
 	}
-	return s.buildLarkCardMessage(notification, "🛡️ 运行时检测告警", s.getSeverityTemplate(data.Severity), elements)
+	return s.buildLarkCardMessage(notification, "🛡️ EDR 告警", s.getSeverityTemplate(data.Severity), elements)
 }
 
-func (s *NotificationService) buildWebhookRuntime(data *RuntimeAlertData) map[string]interface{} {
+func (s *NotificationService) buildWebhookEDR(data *EDRAlertData) map[string]interface{} {
 	return map[string]interface{}{
-		"alert_type":  "runtime_detection",
+		"alert_type":  "edr_detection",
 		"host_id":     data.HostID,
 		"hostname":    data.Hostname,
 		"ip":          data.IP,
@@ -1931,6 +1843,282 @@ func (s *NotificationService) buildWebhookKube(data *KubeAlertData) map[string]i
 }
 
 // ============================================================
+// 漏洞通报通知
+// ============================================================
+
+// SendVulnBulletinNotification 发送漏洞通报通知
+func (s *NotificationService) SendVulnBulletinNotification(bulletin *model.VulnBulletin) error {
+	var notifications []model.Notification
+	if err := s.db.Where("enabled = ? AND notify_category = ?", true, model.NotifyCategoryVulnBulletin).
+		Find(&notifications).Error; err != nil {
+		return err
+	}
+
+	sentCount := 0
+	for _, n := range notifications {
+		// 通报不按严重级别二次过滤，等级控制已在通报配置中完成
+
+		var msg map[string]interface{}
+		if n.Type == model.NotificationTypeLark {
+			msg = s.buildLarkBulletinCard(&n, bulletin)
+		} else {
+			msg = s.buildWebhookBulletin(bulletin)
+		}
+		if err := s.postWebhook(n.Config.WebhookURL, msg); err != nil {
+			s.logger.Error("发送漏洞通报通知失败", zap.Uint("notification_id", n.ID), zap.Error(err))
+			continue
+		}
+		sentCount++
+	}
+
+	if sentCount > 0 {
+		// 更新通报状态和通知追踪
+		now := model.Now()
+		s.db.Model(bulletin).Updates(map[string]interface{}{
+			"status":           model.BulletinStatusNotified,
+			"notified_at":      &now,
+			"last_notified_at": &now,
+			"notify_count":     bulletin.NotifyCount + 1,
+		})
+	}
+
+	return nil
+}
+
+// buildLarkBulletinCard 构建飞书漏洞通报卡片
+func (s *NotificationService) buildLarkBulletinCard(notification *model.Notification, b *model.VulnBulletin) map[string]interface{} {
+	// 优先级标题和颜色
+	priorityLabel := bulletinPriorityLabel(b.Priority)
+	template := bulletinPriorityTemplate(b.Priority)
+	title := fmt.Sprintf("%s %s 漏洞通报 · %s", bulletinPriorityEmoji(b.Priority), priorityLabel, b.BulletinNo)
+
+	// 攻击向量中文
+	avText := attackVectorLabel(b.AttackVector)
+	// 漏洞类型中文
+	vtText := vulnTypeLabel(b.VulnType)
+
+	// 基础信息段
+	info := fmt.Sprintf(
+		"矩阵云安全平台检测到安全漏洞，请及时处理。\n\n"+
+			"**漏洞编号：** %s\n"+
+			"**受影响组件：** %s\n"+
+			"**漏洞类型：** %s\n"+
+			"**CVSS 评分：** %.1f (%s)\n"+
+			"**攻击向量：** %s",
+		b.CveID, b.Component, vtText,
+		b.CvssScore, getSeverityLabel(b.Severity), avText,
+	)
+
+	elements := []map[string]interface{}{larkTextDiv(info), larkHR()}
+
+	// 影响范围段
+	impact := fmt.Sprintf(
+		"**影响资产：** %d 台\n"+
+			"**影响版本：** %s",
+		b.AffectedAssets, defaultStr(b.AffectedVersions, "未知"),
+	)
+	elements = append(elements, larkTextDiv(impact), larkHR())
+
+	// 威胁情报段
+	kevText := "否"
+	if b.InKEV {
+		kevText = "是 (CISA KEV)"
+	}
+	expText := "否"
+	if b.HasExploit {
+		expText = "是"
+	}
+	intel := fmt.Sprintf(
+		"**在野利用：** %s\n"+
+			"**公开 EXP：** %s",
+		kevText, expText,
+	)
+	elements = append(elements, larkTextDiv(intel), larkHR())
+
+	// 修复建议段
+	fixText := defaultStr(b.FixSuggestion, "暂无修复建议")
+	if b.FixedVersion != "" {
+		fixText = fmt.Sprintf("升级至 %s 及以上", b.FixedVersion)
+	}
+	fix := fmt.Sprintf("**修复建议：** %s", fixText)
+	if b.Workaround != "" {
+		fix += fmt.Sprintf("\n**临时缓解：** %s", b.Workaround)
+	}
+	elements = append(elements, larkTextDiv(fix), larkHR())
+
+	// SLA 段
+	sla := ""
+	if b.SLAAckDeadline != nil {
+		sla += fmt.Sprintf("**确认截止：** %s\n", b.SLAAckDeadline.String())
+	}
+	if b.SLAResolveDeadline != nil {
+		sla += fmt.Sprintf("**修复截止：** %s", b.SLAResolveDeadline.String())
+	}
+	if sla != "" {
+		elements = append(elements, larkTextDiv(sla), larkHR())
+	}
+
+	// 底部元信息
+	meta := fmt.Sprintf("漏洞来源：%s　·　通报状态：%s",
+		defaultStr(b.Source, "未知"), bulletinStatusLabel(b.Status))
+	elements = append(elements, larkTextDiv(meta))
+
+	// 跳转按钮
+	if notification.FrontendURL != "" {
+		url := fmt.Sprintf("%s/vuln-bulletins/%d",
+			strings.TrimSuffix(notification.FrontendURL, "/"), b.ID)
+		elements = append(elements, larkActionButton("查看详情", url))
+	}
+
+	return s.buildLarkCardMessage(notification, title, template, elements)
+}
+
+// buildWebhookBulletin 构建 Webhook 通报消息
+func (s *NotificationService) buildWebhookBulletin(b *model.VulnBulletin) map[string]interface{} {
+	msg := map[string]interface{}{
+		"alert_type":        "vuln_bulletin",
+		"bulletin_no":       b.BulletinNo,
+		"priority":          b.Priority,
+		"cve_id":            b.CveID,
+		"component":         b.Component,
+		"vuln_type":         b.VulnType,
+		"severity":          b.Severity,
+		"cvss_score":        b.CvssScore,
+		"cvss_vector":       b.CvssVector,
+		"attack_vector":     b.AttackVector,
+		"affected_assets":   b.AffectedAssets,
+		"affected_versions": b.AffectedVersions,
+		"fixed_version":     b.FixedVersion,
+		"fix_suggestion":    b.FixSuggestion,
+		"has_exploit":       b.HasExploit,
+		"in_kev":            b.InKEV,
+		"source":            b.Source,
+		"status":            b.Status,
+		"description":       b.Description,
+	}
+	if b.SLAAckDeadline != nil {
+		msg["sla_ack_deadline"] = b.SLAAckDeadline.Time().Format(time.RFC3339)
+	}
+	if b.SLAResolveDeadline != nil {
+		msg["sla_resolve_deadline"] = b.SLAResolveDeadline.Time().Format(time.RFC3339)
+	}
+	return msg
+}
+
+// ---- 通报辅助函数 ----
+
+func bulletinPriorityLabel(p string) string {
+	switch p {
+	case model.BulletinPriorityP0:
+		return "P0 紧急"
+	case model.BulletinPriorityP1:
+		return "P1 高"
+	case model.BulletinPriorityP2:
+		return "P2 中"
+	case model.BulletinPriorityP3:
+		return "P3 低"
+	default:
+		return p
+	}
+}
+
+func bulletinPriorityEmoji(p string) string {
+	switch p {
+	case model.BulletinPriorityP0:
+		return "🚨"
+	case model.BulletinPriorityP1:
+		return "🔴"
+	case model.BulletinPriorityP2:
+		return "🟡"
+	case model.BulletinPriorityP3:
+		return "🔵"
+	default:
+		return "🔔"
+	}
+}
+
+func bulletinPriorityTemplate(p string) string {
+	switch p {
+	case model.BulletinPriorityP0:
+		return "red"
+	case model.BulletinPriorityP1:
+		return "orange"
+	case model.BulletinPriorityP2:
+		return "blue"
+	case model.BulletinPriorityP3:
+		return "grey"
+	default:
+		return "blue"
+	}
+}
+
+func bulletinStatusLabel(s string) string {
+	switch s {
+	case model.BulletinStatusPending:
+		return "待处理"
+	case model.BulletinStatusNotified:
+		return "已通知"
+	case model.BulletinStatusAcknowledged:
+		return "已确认"
+	case model.BulletinStatusResolved:
+		return "已修复"
+	case model.BulletinStatusIgnored:
+		return "已忽略"
+	default:
+		return s
+	}
+}
+
+func attackVectorLabel(av string) string {
+	switch av {
+	case model.AttackVectorNetwork:
+		return "网络"
+	case model.AttackVectorAdjacent:
+		return "相邻网络"
+	case model.AttackVectorLocal:
+		return "本地"
+	case model.AttackVectorPhysical:
+		return "物理"
+	default:
+		return "未知"
+	}
+}
+
+func vulnTypeLabel(vt string) string {
+	switch vt {
+	case model.VulnTypeRCE:
+		return "远程代码执行 (RCE)"
+	case model.VulnTypeLPE:
+		return "本地提权 (LPE)"
+	case model.VulnTypeDoS:
+		return "拒绝服务 (DoS)"
+	case model.VulnTypeInfoDisclosure:
+		return "信息泄露"
+	case model.VulnTypeAuthBypass:
+		return "认证绕过"
+	case model.VulnTypeXSS:
+		return "跨站脚本 (XSS)"
+	case model.VulnTypeSQLi:
+		return "SQL 注入"
+	case model.VulnTypeSSRF:
+		return "服务端请求伪造 (SSRF)"
+	case model.VulnTypeOther:
+		return "其他"
+	case model.VulnTypeUnknown:
+		return "未知"
+	default:
+		return vt
+	}
+}
+
+func defaultStr(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+// ============================================================
 // 测试通知辅助方法（公开，供 API 层调用）
 // ============================================================
 
@@ -1938,14 +2126,6 @@ func (s *NotificationService) buildWebhookKube(data *KubeAlertData) map[string]i
 func (s *NotificationService) BuildTestLarkCard(notification *model.Notification, category model.NotifyCategory) map[string]interface{} {
 	now := time.Now()
 	switch category {
-	case model.NotifyCategoryVulnerabilityAlert:
-		return s.buildLarkVulnerabilityCard(notification, &VulnerabilityAlertData{
-			HostID: "test-host-001", Hostname: "测试主机", IP: "192.168.1.100",
-			CveID: "CVE-2024-1234", Severity: "critical", CvssScore: 9.8,
-			Component: "openssl", CurrentVersion: "1.1.1k", FixedVersion: "1.1.1w",
-			Description: "OpenSSL 远程代码执行漏洞", AffectedHosts: 5,
-			FrontendURL: notification.FrontendURL,
-		})
 	case model.NotifyCategoryVirusAlert:
 		return s.buildLarkVirusCard(notification, &VirusAlertData{
 			HostID: "test-host-001", Hostname: "测试主机", IP: "192.168.1.100",
@@ -1959,8 +2139,8 @@ func (s *NotificationService) BuildTestLarkCard(notification *model.Notification
 			FilePath: "/etc/passwd", ChangeType: "changed", Category: "auth",
 			Severity: "high", DetectedAt: now, FrontendURL: notification.FrontendURL,
 		})
-	case model.NotifyCategoryRuntimeAlert:
-		return s.buildLarkRuntimeCard(notification, &RuntimeAlertData{
+	case model.NotifyCategoryEDRAlert:
+		return s.buildLarkEDRCard(notification, &EDRAlertData{
 			HostID: "test-host-001", Hostname: "测试主机", IP: "192.168.1.100",
 			RuleName: "检测可疑进程执行", Severity: "high", Category: "process",
 			MitreID: "T1059", Description: "检测到可疑的命令执行行为",
