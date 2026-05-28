@@ -60,7 +60,7 @@
           {{ record.completed_host_count }} / {{ record.dispatched_host_count }}
         </template>
         <template v-if="column.key === 'total_events'">
-          <span :style="{ color: record.total_events > 0 ? '#fa541c' : '#00B42A', fontWeight: 600 }">
+          <span :style="{ color: record.total_events > 0 ? '#fa541c' : '#22C55E', fontWeight: 600 }">
             {{ record.total_events }}
           </span>
         </template>
@@ -152,9 +152,9 @@
                 <a-tag :color="getStatusColor(hr.status)">{{ getStatusText(hr.status) }}</a-tag>
               </template>
               <template v-if="column.key === 'changes'">
-                <span v-if="hr.added_count" style="color: #00B42A">+{{ hr.added_count }}</span>
-                <span v-if="hr.changed_count" style="color: #FF7D00; margin-left: 4px">~{{ hr.changed_count }}</span>
-                <span v-if="hr.removed_count" style="color: #F53F3F; margin-left: 4px">-{{ hr.removed_count }}</span>
+                <span v-if="hr.added_count" style="color: #22C55E">+{{ hr.added_count }}</span>
+                <span v-if="hr.changed_count" style="color: #F59E0B; margin-left: 4px">~{{ hr.changed_count }}</span>
+                <span v-if="hr.removed_count" style="color: #EF4444; margin-left: 4px">-{{ hr.removed_count }}</span>
                 <span v-if="!hr.added_count && !hr.changed_count && !hr.removed_count">-</span>
               </template>
               <template v-if="column.key === 'run_time'">

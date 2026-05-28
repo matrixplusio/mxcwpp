@@ -67,7 +67,7 @@
           </a-form-item>
         </a-form>
         <div v-if="isLocalhost" class="warning-tip">
-          <WarningOutlined style="color: #FF7D00" />
+          <WarningOutlined style="color: #F59E0B" />
           <span>检测到您正在使用 localhost 访问，请输入服务器的实际 IP 地址。</span>
         </div>
       </a-card>
@@ -408,7 +408,7 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 16px;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .prereq-alert {
@@ -420,13 +420,13 @@ onMounted(() => {
 }
 
 .config-card {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
 }
 
 .warning-tip {
   margin-top: 12px;
   padding: 8px 12px;
-  background: #fffbe6;
+  background: var(--mxsec-card-bg)be6;
   border: 1px solid #ffe58f;
   border-radius: 4px;
   display: flex;
@@ -458,7 +458,7 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .os-list {
@@ -477,7 +477,7 @@ onMounted(() => {
 .os-badge {
   display: inline-block;
   padding: 4px 12px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -500,7 +500,7 @@ onMounted(() => {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
   border-radius: 4px;
   margin: 12px 0;
   position: relative;
@@ -510,7 +510,7 @@ onMounted(() => {
   flex: 1;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 13px;
-  color: #262626;
+  color: var(--mxsec-text-1);
   word-break: break-all;
   white-space: pre-wrap;
   line-height: 1.6;
@@ -540,25 +540,25 @@ onMounted(() => {
 .tip {
   margin: 8px 0;
   padding: 8px 12px;
-  background: #E8F3FF;
-  border-left: 3px solid #165DFF;
+  background: var(--mxsec-primary-bg);
+  border-left: 3px solid #3B82F6;
   border-radius: 2px;
   color: #595959;
   font-size: 13px;
 }
 
 .tip.success {
-  background: #f6ffed;
-  border-left-color: #00B42A;
+  background: var(--mxsec-success-bg);
+  border-left-color: #22C55E;
 }
 
 .tip code {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   padding: 2px 6px;
   border-radius: 2px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 12px;
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 p {
@@ -587,7 +587,7 @@ p {
 }
 
 :deep(.ant-collapse-content-box code) {
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
   padding: 2px 6px;
   border-radius: 2px;
   font-family: monospace;

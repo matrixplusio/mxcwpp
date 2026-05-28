@@ -8,7 +8,7 @@
             <a-statistic
               title="告警总数"
               :value="report.summary.totalAlarms"
-              :value-style="{ color: '#165DFF' }"
+              :value-style="{ color: '#3B82F6' }"
             />
           </a-card>
         </a-col>
@@ -17,7 +17,7 @@
             <a-statistic
               title="待处理"
               :value="report.summary.pendingAlarms"
-              :value-style="{ color: '#F53F3F' }"
+              :value-style="{ color: '#EF4444' }"
             />
           </a-card>
         </a-col>
@@ -26,7 +26,7 @@
             <a-statistic
               title="已处理"
               :value="report.summary.processedAlarms"
-              :value-style="{ color: '#00B42A' }"
+              :value-style="{ color: '#22C55E' }"
             />
           </a-card>
         </a-col>
@@ -57,7 +57,7 @@
             <a-statistic
               title="基线检查项"
               :value="report.baselineOverview.totalChecks"
-              :value-style="{ color: '#165DFF' }"
+              :value-style="{ color: '#3B82F6' }"
             />
           </a-card>
         </a-col>
@@ -66,7 +66,7 @@
             <a-statistic
               title="通过"
               :value="report.baselineOverview.passed"
-              :value-style="{ color: '#00B42A' }"
+              :value-style="{ color: '#22C55E' }"
             />
           </a-card>
         </a-col>
@@ -75,7 +75,7 @@
             <a-statistic
               title="不合规"
               :value="report.baselineOverview.failed"
-              :value-style="{ color: '#F53F3F' }"
+              :value-style="{ color: '#EF4444' }"
             />
           </a-card>
         </a-col>
@@ -86,7 +86,7 @@
               :value="report.baselineOverview.passRate"
               :precision="1"
               suffix="%"
-              :value-style="{ color: report.baselineOverview.passRate >= 80 ? '#00B42A' : report.baselineOverview.passRate >= 60 ? '#FF7D00' : '#F53F3F' }"
+              :value-style="{ color: report.baselineOverview.passRate >= 80 ? '#22C55E' : report.baselineOverview.passRate >= 60 ? '#F59E0B' : '#EF4444' }"
             />
           </a-card>
         </a-col>
@@ -95,7 +95,7 @@
             <a-statistic
               title="活跃告警"
               :value="report.baselineAlerts.active"
-              :value-style="{ color: report.baselineAlerts.active > 0 ? '#F53F3F' : '#00B42A' }"
+              :value-style="{ color: report.baselineAlerts.active > 0 ? '#EF4444' : '#22C55E' }"
             />
           </a-card>
         </a-col>
@@ -260,7 +260,7 @@ const alarmTypeTextMap: Record<string, string> = {
 }
 
 const severityColors: Record<string, string> = {
-  critical: '#F53F3F',
+  critical: '#EF4444',
   high: '#ff7875',
   medium: '#ffa940',
   low: '#ffc53d',
@@ -333,7 +333,7 @@ const baselineCategoryChartOption = computed<EChartsOption>(() => {
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', data: labels, axisLabel: { rotate: 30, interval: 0 } },
     yAxis: { type: 'value' },
-    series: [{ name: '不合规数', type: 'bar', data: values, itemStyle: { color: '#F53F3F' } }],
+    series: [{ name: '不合规数', type: 'bar', data: values, itemStyle: { color: '#EF4444' } }],
   }
 })
 
@@ -375,7 +375,7 @@ const alarmTypeChartOption = computed<EChartsOption>(() => {
         name: '数量',
         type: 'bar',
         data: values,
-        itemStyle: { color: '#FF7D00' },
+        itemStyle: { color: '#F59E0B' },
       },
     ],
   }
@@ -397,7 +397,7 @@ const clusterChartOption = computed<EChartsOption>(() => {
         name: '告警数',
         type: 'bar',
         data: data.map(item => item.count),
-        itemStyle: { color: '#165DFF' },
+        itemStyle: { color: '#3B82F6' },
       },
     ],
   }

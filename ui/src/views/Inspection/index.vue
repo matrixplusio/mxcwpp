@@ -12,12 +12,12 @@
             <div class="stat-divider" />
             <div class="stat-item">
               <div class="stat-label">在线</div>
-              <div class="stat-value" style="color: #00B42A">{{ summary.online_hosts }}</div>
+              <div class="stat-value" style="color: #22C55E">{{ summary.online_hosts }}</div>
             </div>
             <div class="stat-divider" />
             <div class="stat-item">
               <div class="stat-label">离线</div>
-              <div class="stat-value" style="color: #F53F3F">{{ summary.offline_hosts }}</div>
+              <div class="stat-value" style="color: #EF4444">{{ summary.offline_hosts }}</div>
             </div>
           </div>
         </a-card>
@@ -27,13 +27,13 @@
           <div class="stat-group">
             <div class="stat-item stat-item-wide">
               <div class="stat-label">Agent 待更新</div>
-              <div class="stat-value" :style="summary.agent_outdated_count > 0 ? { color: '#FF7D00' } : {}">{{ summary.agent_outdated_count }}</div>
+              <div class="stat-value" :style="summary.agent_outdated_count > 0 ? { color: '#F59E0B' } : {}">{{ summary.agent_outdated_count }}</div>
               <div class="stat-hint">最新版本: {{ latestAgentVersion || '-' }}</div>
             </div>
             <div class="stat-divider" />
             <div class="stat-item stat-item-wide">
               <div class="stat-label">插件异常</div>
-              <div class="stat-value" :style="summary.plugin_error_count > 0 ? { color: '#F53F3F' } : {}">{{ summary.plugin_error_count }}</div>
+              <div class="stat-value" :style="summary.plugin_error_count > 0 ? { color: '#EF4444' } : {}">{{ summary.plugin_error_count }}</div>
               <div class="stat-hint">停止或错误</div>
             </div>
           </div>
@@ -44,7 +44,7 @@
           <div class="stat-group">
             <div class="stat-item stat-item-full">
               <div class="stat-label">插件待更新</div>
-              <div class="stat-value" :style="summary.plugin_outdated_count > 0 ? { color: '#FF7D00' } : {}">{{ summary.plugin_outdated_count }}</div>
+              <div class="stat-value" :style="summary.plugin_outdated_count > 0 ? { color: '#F59E0B' } : {}">{{ summary.plugin_outdated_count }}</div>
               <div class="stat-hint">
                 <span v-for="(ver, name) in latestPluginVersions" :key="name" class="plugin-ver-tag">{{ name }} {{ ver }}</span>
                 <span v-if="Object.keys(latestPluginVersions).length === 0">-</span>
@@ -367,20 +367,20 @@ onMounted(() => {
 .stat-divider {
   width: 1px;
   height: 48px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
   flex-shrink: 0;
 }
 
 .stat-label {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-bottom: 8px;
 }
 
 .stat-value {
   font-size: 28px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   line-height: 1.2;
 }
 
@@ -394,13 +394,13 @@ onMounted(() => {
   display: inline-block;
   padding: 0 6px;
   margin: 0 2px;
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
   border-radius: 3px;
   font-size: 11px;
 }
 
 .host-link {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   text-decoration: none;
 }
 
@@ -427,19 +427,19 @@ onMounted(() => {
 }
 
 .plugin-name {
-  color: #4E5969;
+  color: var(--mxsec-text-2);
   min-width: 58px;
 }
 
 .plugin-ver {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
 }
 
 .batch-bar {
   margin-top: 12px;
   padding: 8px 16px;
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
   border: 1px solid #91d5ff;
   border-radius: 4px;
   display: flex;

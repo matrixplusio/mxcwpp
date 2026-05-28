@@ -76,49 +76,39 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 
 	switch pkgType {
 	case "rpm":
-		if fixedVersion != "" {
-			commands = append(commands,
-				RemediationCommand{
-					PackageType: "rpm-yum",
-					Command:     fmt.Sprintf("yum update %s-%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("使用 yum 升级 %s 到修复版本 %s（CentOS 7/RHEL 7）", component, fixedVersion),
-				},
-				RemediationCommand{
-					PackageType: "rpm-dnf",
-					Command:     fmt.Sprintf("dnf upgrade %s-%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("使用 dnf 升级 %s 到修复版本 %s（RHEL 8+/Rocky/Fedora）", component, fixedVersion),
-				},
-			)
-		} else {
-			commands = append(commands,
-				RemediationCommand{
-					PackageType: "rpm-yum",
-					Command:     fmt.Sprintf("yum update %s -y", component),
-					Description: fmt.Sprintf("使用 yum 升级 %s 到最新可用版本", component),
-				},
-				RemediationCommand{
-					PackageType: "rpm-dnf",
-					Command:     fmt.Sprintf("dnf upgrade %s -y", component),
-					Description: fmt.Sprintf("使用 dnf 升级 %s 到最新可用版本", component),
-				},
-			)
+		// OS pkg：始终用 latest（不带 version），让 yum/dnf 自动选满足 CVE 修复的版本
+		// 原因：vuln DB 的 fixed_version 经常是 NVD 上游通用版本号（如 openssl 4.1.0.2），
+		// 与 OS 实际可用的 erratum 版本不匹配（如 RHEL 实际 errata 是 openssl-3.5.5-1.el10），
+		// 精确版本 install 会因 "No matching Packages" 失败
+		desc := fmt.Sprintf("升级 %s 到最新可用版本", component)
+		if fixedVersionValid(fixedVersion) {
+			desc = fmt.Sprintf("升级 %s 到最新（目标 ≥%s 以修复 %s）", component, fixedVersion, vuln.CveID)
 		}
+		commands = append(commands,
+			RemediationCommand{
+				PackageType: "rpm-yum",
+				Command:     fmt.Sprintf("yum update %s -y", component),
+				Description: desc + "（CentOS 7/RHEL 7 yum）",
+			},
+			RemediationCommand{
+				PackageType: "rpm-dnf",
+				Command:     fmt.Sprintf("dnf upgrade %s -y", component),
+				Description: desc + "（RHEL 8+/Rocky/Fedora dnf）",
+			},
+		)
 	case "deb":
-		if fixedVersion != "" {
-			commands = append(commands, RemediationCommand{
-				PackageType: "deb",
-				Command:     fmt.Sprintf("apt-get install --only-upgrade %s=%s -y", component, fixedVersion),
-				Description: fmt.Sprintf("使用 apt 升级 %s 到修复版本 %s", component, fixedVersion),
-			})
-		} else {
-			commands = append(commands, RemediationCommand{
-				PackageType: "deb",
-				Command:     fmt.Sprintf("apt-get install --only-upgrade %s -y", component),
-				Description: fmt.Sprintf("升级 %s 到最新可用版本", component),
-			})
+		// 同 rpm，apt-get --only-upgrade 让 apt 自选 latest
+		desc := fmt.Sprintf("升级 %s 到最新可用版本", component)
+		if fixedVersionValid(fixedVersion) {
+			desc = fmt.Sprintf("升级 %s 到最新（目标 ≥%s 以修复 %s）", component, fixedVersion, vuln.CveID)
 		}
+		commands = append(commands, RemediationCommand{
+			PackageType: "deb",
+			Command:     fmt.Sprintf("apt-get install --only-upgrade %s -y", component),
+			Description: desc,
+		})
 	case "golang":
-		if fixedVersion != "" {
+		if fixedVersionValid(fixedVersion) {
 			commands = append(commands, RemediationCommand{
 				PackageType: "golang",
 				Command:     fmt.Sprintf("go get %s@v%s", component, fixedVersion),
@@ -126,7 +116,7 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 			})
 		}
 	case "npm":
-		if fixedVersion != "" {
+		if fixedVersionValid(fixedVersion) {
 			commands = append(commands, RemediationCommand{
 				PackageType: "npm",
 				Command:     fmt.Sprintf("npm install %s@%s", component, fixedVersion),
@@ -134,7 +124,7 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 			})
 		}
 	case "pypi":
-		if fixedVersion != "" {
+		if fixedVersionValid(fixedVersion) {
 			commands = append(commands, RemediationCommand{
 				PackageType: "pypi",
 				Command:     fmt.Sprintf("pip install %s==%s --upgrade", component, fixedVersion),
@@ -142,7 +132,7 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 			})
 		}
 	case "maven":
-		if fixedVersion != "" {
+		if fixedVersionValid(fixedVersion) {
 			commands = append(commands, RemediationCommand{
 				PackageType: "maven",
 				Command:     fmt.Sprintf("<!-- 修改 pom.xml 中 %s 的版本为 %s -->", component, fixedVersion),
@@ -150,7 +140,7 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 			})
 		}
 	case "cargo":
-		if fixedVersion != "" {
+		if fixedVersionValid(fixedVersion) {
 			commands = append(commands, RemediationCommand{
 				PackageType: "cargo",
 				Command:     fmt.Sprintf("cargo update -p %s --precise %s", component, fixedVersion),
@@ -158,47 +148,76 @@ func (s *RemediationService) generateCommands(vuln *model.Vulnerability) []Remed
 			})
 		}
 	default:
-		// 无法判断包管理器时，同时提供三种 OS 包修复方案
-		if fixedVersion != "" {
-			commands = append(commands,
-				RemediationCommand{
-					PackageType: "rpm-yum",
-					Command:     fmt.Sprintf("yum update %s-%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("RPM 系统 (yum)：升级 %s 到 %s", component, fixedVersion),
-				},
-				RemediationCommand{
-					PackageType: "rpm-dnf",
-					Command:     fmt.Sprintf("dnf upgrade %s-%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("RPM 系统 (dnf)：升级 %s 到 %s", component, fixedVersion),
-				},
-				RemediationCommand{
-					PackageType: "deb",
-					Command:     fmt.Sprintf("apt-get install --only-upgrade %s=%s -y", component, fixedVersion),
-					Description: fmt.Sprintf("DEB 系统：升级 %s 到 %s", component, fixedVersion),
-				},
-			)
-		} else {
-			commands = append(commands,
-				RemediationCommand{
-					PackageType: "rpm-yum",
-					Command:     fmt.Sprintf("yum update %s -y", component),
-					Description: fmt.Sprintf("RPM 系统 (yum)：升级 %s 到最新版本", component),
-				},
-				RemediationCommand{
-					PackageType: "rpm-dnf",
-					Command:     fmt.Sprintf("dnf upgrade %s -y", component),
-					Description: fmt.Sprintf("RPM 系统 (dnf)：升级 %s 到最新版本", component),
-				},
-				RemediationCommand{
-					PackageType: "deb",
-					Command:     fmt.Sprintf("apt-get install --only-upgrade %s -y", component),
-					Description: fmt.Sprintf("DEB 系统：升级 %s 到最新版本", component),
-				},
-			)
+		// PURL 缺失时，提供 latest 升级（不带版本号）让 OS pkg manager 自选 erratum 满足 CVE。
+		// 不再拼接 fixed_version：upstream vuln DB 的版本号（如 Debian 的 6.1.170-1~deb11u1）
+		// 在 CentOS 仓库不存在，必失败 "No match for argument"。
+		desc := fmt.Sprintf("升级 %s 到最新可用版本", component)
+		if fixedVersionValid(fixedVersion) {
+			desc = fmt.Sprintf("升级 %s 到最新（目标 ≥%s 以修复 %s）", component, fixedVersion, vuln.CveID)
 		}
+		commands = append(commands,
+			RemediationCommand{
+				PackageType: "rpm-yum",
+				Command:     fmt.Sprintf("yum update %s -y", component),
+				Description: desc + "（CentOS 7/RHEL 7 yum）",
+			},
+			RemediationCommand{
+				PackageType: "rpm-dnf",
+				Command:     fmt.Sprintf("dnf upgrade %s -y", component),
+				Description: desc + "（RHEL 8+/Rocky/Fedora dnf）",
+			},
+			RemediationCommand{
+				PackageType: "deb",
+				Command:     fmt.Sprintf("apt-get install --only-upgrade %s -y", component),
+				Description: desc + "（Debian/Ubuntu apt）",
+			},
+		)
 	}
 
 	return commands
+}
+
+// fixedVersionValid 判断 fixed_version 是否可用于命令生成/校验。
+// upstream vuln DB 的脏数据：空字符串 / "0" / "unknown" / "-" / "any" 不能拼到命令里，否则
+// 生成 "dnf upgrade linux-0 -y" 等必失败命令。
+func fixedVersionValid(v string) bool {
+	v = strings.TrimSpace(strings.ToLower(v))
+	switch v {
+	case "", "0", "unknown", "-", "any", "n/a", "none", "null":
+		return false
+	}
+	return true
+}
+
+// VulnApplicableToHost 判断漏洞是否适用于该主机的 OS family。
+// vuln.Source 来自 OS Advisory 数据源（rhsa/rocky-apollo/usn/debian-tracker/alpine 等）—
+// 这些是 OS 专属的，必须匹配主机 OS family；不匹配则跳过 task 创建，避免把 Debian 内核包
+// 命令下发给 CentOS 主机（必失败 "No match for argument linux-6.1-6.1.170-1~deb11u1"）。
+//
+// 通用源（mitre-cve / nvd / osv / cisa-kev / exploit-db / cnnvd / cnvd）返回 true —
+// 这些 source 没有 OS scope，由 PURL / pkg manager 推断包类型。
+func VulnApplicableToHost(vulnSource, hostOSFamily string) bool {
+	source := strings.ToLower(strings.TrimSpace(vulnSource))
+	osFamily := strings.ToLower(strings.TrimSpace(hostOSFamily))
+	rhelFamily := map[string]bool{"rhel": true, "centos": true, "rocky": true, "almalinux": true, "alma": true, "oracle": true, "fedora": true}
+
+	switch source {
+	case "rhsa", "rhel", "redhat":
+		return rhelFamily[osFamily]
+	case "rocky-apollo", "rocky":
+		return osFamily == "rocky" || osFamily == "almalinux" || osFamily == "alma"
+	case "centos":
+		return osFamily == "centos"
+	case "usn", "ubuntu":
+		return osFamily == "ubuntu"
+	case "debian-tracker", "debian":
+		return osFamily == "debian"
+	case "alpine":
+		return osFamily == "alpine"
+	}
+	// 通用情报源（mitre-cve / nvd / osv / cisa-kev / exploit-db / cnnvd / cnvd / 空）
+	// 没有 OS scope，由 PURL 推断包类型，统一放行
+	return true
 }
 
 // detectPackageType 从 PURL 中检测包管理器类型

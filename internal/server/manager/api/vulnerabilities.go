@@ -150,6 +150,44 @@ func (h *VulnerabilitiesHandler) countAffectedHosts(filter vulnerabilityListFilt
 
 // ListVulnerabilities 获取漏洞列表
 // GET /api/v1/vulnerabilities
+// UpdateCategoryOverride PUT /api/v1/vulnerabilities/:id/category
+// admin 手动覆盖漏洞分类 / 重启动作（auto categorize 错时的兜底）。
+// body: {vuln_category_override?: string, restart_action_override?: string}
+// 空字符串 = 清除 override 回归 auto
+func (h *VulnerabilitiesHandler) UpdateCategoryOverride(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		BadRequest(c, "无效的漏洞 ID")
+		return
+	}
+	var req struct {
+		VulnCategoryOverride  *string `json:"vuln_category_override"`
+		RestartActionOverride *string `json:"restart_action_override"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数无效")
+		return
+	}
+	updates := map[string]any{}
+	if req.VulnCategoryOverride != nil {
+		updates["vuln_category_override"] = *req.VulnCategoryOverride
+	}
+	if req.RestartActionOverride != nil {
+		updates["restart_action_override"] = *req.RestartActionOverride
+	}
+	if len(updates) == 0 {
+		BadRequest(c, "至少需提供 vuln_category_override 或 restart_action_override")
+		return
+	}
+	if err := h.db.Model(&model.Vulnerability{}).
+		Where("id = ?", id).UpdateColumns(updates).Error; err != nil {
+		h.logger.Error("更新漏洞分类 override 失败", zap.Uint64("id", id), zap.Error(err))
+		InternalError(c, "更新失败")
+		return
+	}
+	Success(c, gin.H{"id": id, "updated": updates})
+}
+
 func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))

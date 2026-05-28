@@ -186,10 +186,10 @@ onMounted(() => {
 .sbom-import-page { width: 100%; }
 .page-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.page-header-hint { font-size: 13px; color: #86909C; }
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
+.page-header-hint { font-size: 13px; color: var(--mxsec-text-3); }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
 .card-body { padding: 20px; }
 .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
 .filter-actions { margin-left: auto; }
-.section-title { font-size: 14px; font-weight: 600; color: #262626; }
+.section-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 </style>

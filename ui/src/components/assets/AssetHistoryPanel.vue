@@ -194,12 +194,12 @@ onMounted(() => {
 .title-text {
   font-size: 14px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .title-meta {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .summary-row {
@@ -211,14 +211,14 @@ onMounted(() => {
 
 .summary-card {
   padding: 16px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 10px;
-  background: #FFFFFF;
+  background: var(--mxsec-card-bg);
 }
 
 .summary-label {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .summary-value {
@@ -226,7 +226,7 @@ onMounted(() => {
   font-size: 28px;
   line-height: 1.1;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .summary-value.positive {
@@ -240,15 +240,15 @@ onMounted(() => {
 .summary-hint {
   margin-top: 8px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .chart-card {
   margin-bottom: 16px;
   padding: 12px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 10px;
-  background: #FFFFFF;
+  background: var(--mxsec-card-bg);
 }
 
 .snapshot-list {
@@ -259,9 +259,9 @@ onMounted(() => {
 
 .snapshot-card {
   padding: 14px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 10px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFD 100%);
+  background: var(--mxsec-card-bg);
 }
 
 .snapshot-header {
@@ -273,7 +273,7 @@ onMounted(() => {
 
 .snapshot-time {
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .snapshot-total {
@@ -281,13 +281,13 @@ onMounted(() => {
   font-size: 30px;
   line-height: 1;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .snapshot-total-label {
   margin-top: 6px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .snapshot-metrics {
@@ -296,6 +296,6 @@ onMounted(() => {
   gap: 10px;
   margin-top: 12px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 </style>

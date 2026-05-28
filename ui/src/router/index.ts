@@ -227,6 +227,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '扫描记录详情' },
       },
       {
+        path: 'vuln-data-sources',
+        name: 'VulnDataSources',
+        component: () => import('@/views/VulnDataSources/index.vue'),
+        meta: { title: '漏洞源管理' },
+      },
+      {
         path: 'vuln-remediation',
         name: 'VulnRemediation',
         component: () => import('@/views/VulnRemediation/index.vue'),
@@ -479,15 +485,19 @@ const router = createRouter({
 })
 
 // 路由守卫
+//
+// authInitialized: 进程级标记。authStore.initAuth() 真正拉 /auth/me 仅一次（首次 navigate），
+//   之后 navigate 直接复用 store 中已有 user，避免每跳路由都 GET /auth/me。
+//   登出会清 store + token，再 navigate 时 isAuthenticated() 返回 false 直接跳登录页，不会复用旧 user。
+let authInitialized = false
+
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   const { useSiteConfigStore } = await import('@/stores/site-config')
   const siteConfigStore = useSiteConfigStore()
 
-  // 初始化站点配置（如果还未初始化）
-  if (!siteConfigStore.config.site_name || siteConfigStore.config.site_name === '矩阵云安全平台') {
-    await siteConfigStore.init()
-  }
+  // 初始化站点配置（store 内部 init 已幂等，多次调用不会重复 HTTP）
+  await siteConfigStore.init()
 
   // 更新页面标题
   if (to.meta.title) {
@@ -510,17 +520,21 @@ router.beforeEach(async (to, _from, next) => {
   // 需要认证的路由
   if (to.meta.requiresAuth) {
     if (!authStore.isAuthenticated()) {
+      authInitialized = false // 未登录态重置，下次登录后首跳重新拉 /auth/me
       next('/login')
       return
     }
-    // 初始化认证信息
-    try {
-      await authStore.initAuth()
-    } catch (error) {
-      console.error('认证初始化失败:', error)
-      // 认证失败，跳转到登录页
-      next('/login')
-      return
+    // 初始化认证信息（仅首次 navigate 真拉 /auth/me，避免每跳路由都打后端）
+    if (!authInitialized) {
+      try {
+        await authStore.initAuth()
+        authInitialized = true
+      } catch (error) {
+        console.error('认证初始化失败:', error)
+        authInitialized = false
+        next('/login')
+        return
+      }
     }
 
     // 管理员路由权限检查

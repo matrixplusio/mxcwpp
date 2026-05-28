@@ -184,7 +184,7 @@ plugins/<plugin-name>/
 └── engine/          # 核心逻辑（部分插件有）
 ```
 
-所有插件共用项目根目录的 `go.mod`，不是独立 module。当前已有 6 个插件：baseline、collector、fim、scanner、remediation、sensor。
+所有插件共用项目根目录的 `go.mod`，不是独立 module。当前已有 5 个插件：baseline、collector、fim、scanner、remediation。EDR/eBPF 运行时检测已内置于 agent，不再作为独立 plugin。
 
 ### 插件 SDK
 

@@ -48,7 +48,7 @@
                     <div>{{ task.confirmedAt }}</div>
                   </div>
                   <div v-else-if="task.status === 'pending'" class="step-desc">
-                    <div style="color: #FF7D00">等待管理员确认</div>
+                    <div style="color: #F59E0B">等待管理员确认</div>
                   </div>
                 </template>
               </a-step>
@@ -59,7 +59,7 @@
                     <div>{{ task.startedAt }}</div>
                   </div>
                   <div v-else-if="task.status === 'confirmed'" class="step-desc">
-                    <div style="color: #165DFF">等待 Agent 拉取任务</div>
+                    <div style="color: #3B82F6">等待 Agent 拉取任务</div>
                   </div>
                 </template>
               </a-step>
@@ -366,8 +366,8 @@ onMounted(() => {
 .page-header h2 { margin: 0; }
 
 .detail-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
 }
@@ -375,7 +375,7 @@ onMounted(() => {
 .detail-card h4 {
   margin-bottom: 12px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .steps-wrapper {
@@ -384,7 +384,7 @@ onMounted(() => {
 
 .step-desc {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   line-height: 1.6;
 }
 
@@ -402,11 +402,11 @@ onMounted(() => {
 .command-label {
   font-weight: 600;
   font-size: 13px;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .command-block {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   padding: 12px 16px;
   border-radius: 6px;
   word-break: break-all;
@@ -415,11 +415,11 @@ onMounted(() => {
 .command-block code {
   font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .exec-output {
-  background: #1D2129;
+  background: var(--mxsec-text-1);
   color: #E8F3E8;
   padding: 16px;
   border-radius: 6px;
@@ -434,14 +434,14 @@ onMounted(() => {
 .action-bar {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #E5E8EF;
+  border-top: 1px solid var(--mxsec-border);
 }
 
-.text-muted { font-size: 12px; color: #86909C; }
+.text-muted { font-size: 12px; color: var(--mxsec-text-3); }
 
 .confirm-warning {
   margin-top: 12px;
-  color: #FF7D00;
+  color: #F59E0B;
   font-size: 13px;
 }
 </style>

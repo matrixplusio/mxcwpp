@@ -2,6 +2,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -101,9 +102,20 @@ func Init(cfg config.DatabaseConfig, zapLogger *zap.Logger, logCfg ...config.Log
 		return nil, fmt.Errorf("不支持的数据库类型: %s", cfg.Type)
 	}
 
-	// 执行数据库迁移
-	if err := migration.Migrate(db, zapLogger); err != nil {
+	// 执行数据库迁移（用 MySQL user-level lock 串行化多进程并发迁移）
+	//
+	// 背景：mxctl deploy 同时启动 manager + agentcenter + consumer 3 进程，
+	// 各自 gorm.AutoMigrate 同表 ALTER → MySQL deadlock (Error 1213) → fatal exit。
+	// 解决：用 GET_LOCK('mxsec_migration', 120) 互斥，串行迁移；其他进程等待。
+	// 仅 MySQL 支持 GET_LOCK；其他 driver 跳过。
+	if err := runMigrationWithLock(db, cfg.Type, zapLogger); err != nil {
 		return nil, fmt.Errorf("数据库迁移失败: %w", err)
+	}
+
+	// 注册 Prometheus 埋点 callback（gorm 每次 SQL 后记录耗时 histogram）
+	// 失败仅警告，不阻塞启动（监控埋点非关键路径）
+	if err := RegisterPromCallback(db); err != nil && zapLogger != nil {
+		zapLogger.Warn("注册 gorm Prometheus callback 失败", zap.Error(err))
 	}
 
 	// 保存全局实例
@@ -114,6 +126,70 @@ func Init(cfg config.DatabaseConfig, zapLogger *zap.Logger, logCfg ...config.Log
 	}
 
 	return db, nil
+}
+
+// runMigrationWithLock 在 MySQL user-level lock 保护下跑迁移。
+//
+// 多进程同时启动时，只有持锁者跑 AutoMigrate，其他等待。
+// 锁基于 client session（持锁连接独立 Conn，保证 GET_LOCK/RELEASE_LOCK 同 session）。
+// 锁超时 120s（覆盖单次迁移最长时间）；超时则降级跑迁移（最坏情况退回 deadlock 重试逻辑）。
+func runMigrationWithLock(db *gorm.DB, dbType string, zapLogger *zap.Logger) error {
+	// 非 MySQL 直接迁移
+	if dbType != "mysql" {
+		return migration.Migrate(db, zapLogger)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("获取 *sql.DB 失败: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	defer cancel()
+
+	// 独立 Conn 用于持锁（与 gorm 内部 pool 隔离）
+	lockConn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		if zapLogger != nil {
+			zapLogger.Warn("无法获取迁移锁连接，跳过锁直接迁移", zap.Error(err))
+		}
+		return migration.Migrate(db, zapLogger)
+	}
+	defer lockConn.Close()
+
+	const lockName = "mxsec_migration"
+	const lockTimeoutSec = 120
+
+	var got int
+	if err := lockConn.QueryRowContext(ctx,
+		"SELECT GET_LOCK(?, ?)", lockName, lockTimeoutSec).Scan(&got); err != nil {
+		if zapLogger != nil {
+			zapLogger.Warn("GET_LOCK 失败，降级直接迁移", zap.Error(err))
+		}
+		return migration.Migrate(db, zapLogger)
+	}
+	if got != 1 {
+		if zapLogger != nil {
+			zapLogger.Warn("GET_LOCK 等待超时，降级直接迁移",
+				zap.Int("got", got),
+				zap.Int("timeout_sec", lockTimeoutSec))
+		}
+		return migration.Migrate(db, zapLogger)
+	}
+
+	if zapLogger != nil {
+		zapLogger.Info("已获取迁移锁，开始迁移", zap.String("lock", lockName))
+	}
+
+	// 持锁期间跑迁移；锁连接独立，gorm 走自己的 pool 跑 ALTER
+	migErr := migration.Migrate(db, zapLogger)
+
+	// 释放锁（即使迁移失败也要释放，避免阻塞下一个进程）
+	if _, relErr := lockConn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", lockName); relErr != nil && zapLogger != nil {
+		zapLogger.Warn("RELEASE_LOCK 失败（连接 Close 时会自动释放）", zap.Error(relErr))
+	}
+
+	return migErr
 }
 
 // Close 关闭数据库连接

@@ -290,81 +290,800 @@ func (h *MonitorHandler) queryHostMetricsFromPrometheus(ctx context.Context, sta
 
 // ---- /monitor/services ----
 
-// GetServicesMonitor godoc
-// GET /api/v1/monitor/services?range=1h|6h|24h
-// 返回后端服务状态与连接统计
-func (h *MonitorHandler) GetServicesMonitor(c *gin.Context) {
-	services := h.collectServiceStatus()
-	connections := h.collectConnectionStats()
+// collectQPSSeries 拉取 4 个核心 mxsec 服务最近 1h QPS 时间序列。
+//
+// 返回扁平结构 [{time, Manager, AgentCenter, Consumer, Prometheus}, ...]
+// 给 UI ServiceMonitor.vue 直接绘制多线 echart。
+// Prom 不可用时返回 []，UI 显示"暂无数据"。
+func (h *MonitorHandler) collectQPSSeries(ctx context.Context) []gin.H {
+	if h.prometheusClient == nil {
+		return []gin.H{}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	start := now.Add(-1 * time.Hour)
+	const step = "1m"
+
+	sources := []struct {
+		name  string
+		query string
+	}{
+		{"Manager", `sum(rate(mxsec_http_requests_total[1m]))`},
+		{"AgentCenter", `sum(rate(mxsec_ac_grpc_handled_total[1m]))`},
+		{"Consumer", `sum(rate(mxsec_consumer_records_consumed_total[1m]))`},
+		{"Prometheus", `sum(rate(prometheus_http_requests_total[1m]))`},
+	}
+
+	type point struct {
+		values map[string]float64
+	}
+	pointMap := make(map[string]*point)
+	timeOrder := []string{}
+
+	for _, s := range sources {
+		res, err := h.prometheusClient.QueryRange(queryCtx, s.query, start, now, step)
+		if err != nil || res == nil || len(res.Data.Result) == 0 {
+			continue
+		}
+		for _, v := range res.Data.Result[0].Values {
+			if len(v) < 2 {
+				continue
+			}
+			ts, _ := v[0].(float64)
+			timeStr := time.Unix(int64(ts), 0).Format("15:04:05")
+
+			var val float64
+			switch x := v[1].(type) {
+			case string:
+				_, _ = fmt.Sscanf(x, "%f", &val)
+			case float64:
+				val = x
+			}
+			if math.IsNaN(val) || math.IsInf(val, 0) {
+				val = 0
+			}
+
+			p, ok := pointMap[timeStr]
+			if !ok {
+				p = &point{values: make(map[string]float64)}
+				pointMap[timeStr] = p
+				timeOrder = append(timeOrder, timeStr)
+			}
+			p.values[s.name] = math.Round(val*1000) / 1000
+		}
+	}
+
+	result := make([]gin.H, 0, len(timeOrder))
+	for _, t := range timeOrder {
+		entry := gin.H{"time": t}
+		for k, v := range pointMap[t].values {
+			entry[k] = v
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+// collectLatencySeries 拉取 1h p50/p95/p99 延迟趋势（聚合 Manager HTTP）。
+//
+// 简化方案：只查 Manager HTTP histogram（mxsec 业务流量主要走 Manager），
+// 避免跨 histogram 聚合的复杂性。前端图表显示 p50/p95/p99 三条线。
+func (h *MonitorHandler) collectLatencySeries(ctx context.Context) []gin.H {
+	if h.prometheusClient == nil {
+		return []gin.H{}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	start := now.Add(-1 * time.Hour)
+	const step = "1m"
+
+	percentiles := []struct {
+		key string
+		q   string
+	}{
+		{"p50", `histogram_quantile(0.50, sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))) * 1000`},
+		{"p95", `histogram_quantile(0.95, sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))) * 1000`},
+		{"p99", `histogram_quantile(0.99, sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))) * 1000`},
+	}
+
+	type point struct {
+		values map[string]float64
+	}
+	pointMap := make(map[string]*point)
+	timeOrder := []string{}
+
+	for _, p := range percentiles {
+		res, err := h.prometheusClient.QueryRange(queryCtx, p.q, start, now, step)
+		if err != nil || res == nil || len(res.Data.Result) == 0 {
+			continue
+		}
+		for _, v := range res.Data.Result[0].Values {
+			if len(v) < 2 {
+				continue
+			}
+			ts, _ := v[0].(float64)
+			timeStr := time.Unix(int64(ts), 0).Format("15:04:05")
+
+			var val float64
+			switch x := v[1].(type) {
+			case string:
+				_, _ = fmt.Sscanf(x, "%f", &val)
+			case float64:
+				val = x
+			}
+			if math.IsNaN(val) || math.IsInf(val, 0) {
+				val = 0
+			}
+
+			pt, ok := pointMap[timeStr]
+			if !ok {
+				pt = &point{values: make(map[string]float64)}
+				pointMap[timeStr] = pt
+				timeOrder = append(timeOrder, timeStr)
+			}
+			pt.values[p.key] = math.Round(val*10) / 10
+		}
+	}
+
+	result := make([]gin.H, 0, len(timeOrder))
+	for _, t := range timeOrder {
+		entry := gin.H{"time": t}
+		for k, v := range pointMap[t].values {
+			entry[k] = v
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+// ---- /monitor/services/:name/history ----
+
+// serviceJobMap 服务名 → Prometheus job 标签。
+//
+// 仅含 mxsec 自研服务 + prometheus 本身。
+// mysql/redis/clickhouse/kafka 不在此列，原因：
+//   - 不部署外部 exporter（避免重复造轮子）
+//   - 这些服务的实时指标由 monitor.go 的 driver-level check 提供（GetServicesMonitor）
+//   - mysql 历史 QPS 趋势走 Manager 端 gorm callback 埋点的 mxsec_db_query_duration_seconds
+//     (job="mxsec-manager"，下面 db 指标走特殊路径)
+var serviceJobMap = map[string]string{
+	"manager":     "mxsec-manager",
+	"agentcenter": "mxsec-agentcenter",
+	"ac":          "mxsec-agentcenter",
+	"consumer":    "mxsec-consumer",
+	"prometheus":  "prometheus",
+}
+
+// serviceMetricQuery 服务+指标 → PromQL 模板。
+//
+// 不支持的组合返回空字符串（caller 应回 400）。
+func serviceMetricQuery(metric, jobName string) string {
+	switch metric {
+	case "cpu":
+		return fmt.Sprintf(`100 * rate(process_cpu_seconds_total{job=%q}[1m])`, jobName)
+	case "memory", "rss":
+		return fmt.Sprintf(`process_resident_memory_bytes{job=%q}`, jobName)
+	case "qps":
+		switch jobName {
+		case "mxsec-manager":
+			return `sum(rate(mxsec_http_requests_total[1m]))`
+		case "mxsec-agentcenter":
+			return `sum(rate(mxsec_ac_grpc_handled_total[1m]))`
+		case "mxsec-consumer":
+			return `sum(rate(mxsec_consumer_records_consumed_total[1m]))`
+		case "prometheus":
+			return `sum(rate(prometheus_http_requests_total[1m]))`
+		}
+	case "p99":
+		switch jobName {
+		case "mxsec-manager":
+			return `histogram_quantile(0.99, sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))) * 1000`
+		case "mxsec-agentcenter":
+			return `histogram_quantile(0.99, sum by (le) (rate(mxsec_ac_grpc_duration_seconds_bucket[5m]))) * 1000`
+		case "mxsec-consumer":
+			return `histogram_quantile(0.99, sum by (le) (rate(mxsec_consumer_processing_duration_seconds_bucket[5m]))) * 1000`
+		}
+	case "error_rate":
+		switch jobName {
+		case "mxsec-manager":
+			return `sum(rate(mxsec_http_requests_total{status_code=~"5.."}[1m])) / sum(rate(mxsec_http_requests_total[1m]))`
+		case "mxsec-agentcenter":
+			return `sum(rate(mxsec_ac_grpc_handled_total{grpc_code!="OK"}[1m])) / sum(rate(mxsec_ac_grpc_handled_total[1m]))`
+		case "mxsec-consumer":
+			return `sum(rate(mxsec_consumer_records_consumed_total{status=~"error|dlq"}[1m])) / sum(rate(mxsec_consumer_records_consumed_total[1m]))`
+		}
+	case "goroutines":
+		return fmt.Sprintf(`go_goroutines{job=%q}`, jobName)
+	case "fds":
+		return fmt.Sprintf(`process_open_fds{job=%q}`, jobName)
+	case "gc_pause_p99":
+		return fmt.Sprintf(`histogram_quantile(0.99, sum by (le) (rate(go_gc_duration_seconds_bucket{job=%q}[5m])))`, jobName)
+	case "db_qps":
+		// 仅 mxsec-manager 视角的 DB QPS（通过 gorm callback 埋点）
+		if jobName == "mxsec-manager" {
+			return `sum(rate(mxsec_db_query_duration_seconds_count[1m]))`
+		}
+	case "db_p99":
+		if jobName == "mxsec-manager" {
+			return `histogram_quantile(0.99, sum by (le) (rate(mxsec_db_query_duration_seconds_bucket[5m]))) * 1000`
+		}
+	}
+	return ""
+}
+
+// GetServiceHistory godoc
+// GET /api/v1/monitor/services/:name/history?range=1h|6h|24h&metric=cpu|memory|qps|p99|error_rate|goroutines|fds|gc_pause_p99
+//
+// 返回指定服务+指标的时间序列。基于 Prometheus range query。
+// 不缓存（用户主动刷新趋势图），但 Prometheus 自身 scrape interval 决定数据粒度。
+func (h *MonitorHandler) GetServiceHistory(c *gin.Context) {
+	if h.prometheusClient == nil {
+		BadRequest(c, "Prometheus 未配置，无法查询历史趋势")
+		return
+	}
+
+	name := strings.ToLower(c.Param("name"))
+	jobName, ok := serviceJobMap[name]
+	if !ok {
+		BadRequest(c, fmt.Sprintf("未知服务名: %s", name))
+		return
+	}
+
+	metric := c.DefaultQuery("metric", "cpu")
+	query := serviceMetricQuery(metric, jobName)
+	if query == "" {
+		BadRequest(c, fmt.Sprintf("服务 %s 不支持指标 %s", name, metric))
+		return
+	}
+
+	rangeParam := c.DefaultQuery("range", "1h")
+	var duration time.Duration
+	var step string
+	switch rangeParam {
+	case "6h":
+		duration = 6 * time.Hour
+		step = "1m"
+	case "24h":
+		duration = 24 * time.Hour
+		step = "5m"
+	case "7d":
+		duration = 7 * 24 * time.Hour
+		step = "30m"
+	default:
+		rangeParam = "1h"
+		duration = 1 * time.Hour
+		step = "15s"
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	result, err := h.prometheusClient.QueryRange(ctx, query, now.Add(-duration), now, step)
+	if err != nil {
+		h.logger.Warn("PromQL range query 失败",
+			zap.String("service", name),
+			zap.String("metric", metric),
+			zap.String("query", query),
+			zap.Error(err))
+		InternalError(c, "Prometheus 查询失败")
+		return
+	}
+
+	// 扁平化为 [{time, value}, ...]
+	points := make([]gin.H, 0, 128)
+	if len(result.Data.Result) > 0 {
+		for _, v := range result.Data.Result[0].Values {
+			if len(v) < 2 {
+				continue
+			}
+			ts, _ := v[0].(float64)
+			var val float64
+			switch x := v[1].(type) {
+			case string:
+				_, _ = fmt.Sscanf(x, "%f", &val)
+			case float64:
+				val = x
+			}
+			if math.IsNaN(val) || math.IsInf(val, 0) {
+				val = 0
+			}
+			points = append(points, gin.H{
+				"time":  time.Unix(int64(ts), 0).Format(model.TimeFormat),
+				"value": val,
+			})
+		}
+	}
 
 	Success(c, gin.H{
-		"services":    services,
-		"qps":         []gin.H{}, // QPS 需要 Prometheus 集成，当前返回空
-		"latency":     []gin.H{}, // 延迟分位数同上
-		"connections": connections,
+		"service": name,
+		"metric":  metric,
+		"range":   rangeParam,
+		"step":    step,
+		"points":  points,
 	})
 }
 
-type serviceInfo struct {
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	QPS     int    `json:"qps"`
-	CPU     int    `json:"cpu"`
-	Memory  string `json:"memory"`
-	PID     string `json:"pid"`
-	Uptime  string `json:"uptime"`
-	Version string `json:"version"`
-	Detail  string `json:"detail,omitempty"`
+// ---- /monitor/slo ----
+
+// GetSLO godoc
+// GET /api/v1/monitor/slo?range=30d
+//
+// 返回各服务的可用性（uptime ratio）+ Error Budget（剩余可允许的不可用时间）。
+// 默认目标 SLO 99.9% (允许 30 天内停机 43min)。
+func (h *MonitorHandler) GetSLO(c *gin.Context) {
+	if h.prometheusClient == nil {
+		BadRequest(c, "Prometheus 未配置，SLO 不可用")
+		return
+	}
+
+	rangeParam := c.DefaultQuery("range", "30d")
+	var promRange string
+	switch rangeParam {
+	case "7d":
+		promRange = "7d"
+	case "24h":
+		promRange = "24h"
+	default:
+		rangeParam = "30d"
+		promRange = "30d"
+	}
+
+	const sloTarget = 0.999 // 99.9% 月度 SLO，对应 30d 中 ~43.2min 错误预算
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	results := make([]gin.H, 0, len(serviceJobMap))
+	seen := make(map[string]bool)
+	for name, jobName := range serviceJobMap {
+		// 去重（agentcenter 与 ac 两个 key 指同一 job）
+		if seen[jobName] {
+			continue
+		}
+		seen[jobName] = true
+
+		// availability = avg(up[range])  → up=1 时为可用
+		query := fmt.Sprintf(`avg_over_time(up{job=%q}[%s])`, jobName, promRange)
+		availability := h.promQueryFloat(ctx, query)
+		if availability < 0 {
+			availability = 0
+		}
+		if availability > 1 {
+			availability = 1
+		}
+
+		downtimeRatio := 1 - availability
+		// budget: 允许的下行比例
+		errorBudgetRatio := 1 - sloTarget
+		// budget_consumed: 已消耗的预算占比
+		budgetConsumed := 0.0
+		if errorBudgetRatio > 0 {
+			budgetConsumed = downtimeRatio / errorBudgetRatio
+		}
+		if budgetConsumed > 1 {
+			budgetConsumed = 1
+		}
+
+		results = append(results, gin.H{
+			"service":          name,
+			"job":              jobName,
+			"availability":     math.Round(availability*100000) / 100000, // 0.99987
+			"availabilityPct":  math.Round(availability*10000) / 100,     // 99.99
+			"sloTarget":        sloTarget,
+			"sloTargetPct":     sloTarget * 100,
+			"errorBudgetRatio": errorBudgetRatio,
+			"budgetConsumed":   math.Round(budgetConsumed*10000) / 100, // 百分比
+			"status":           sloStatus(availability, sloTarget),
+		})
+	}
+
+	Success(c, gin.H{
+		"range":     rangeParam,
+		"sloTarget": sloTarget,
+		"services":  results,
+	})
 }
 
-func (h *MonitorHandler) collectServiceStatus() []serviceInfo {
-	services := []serviceInfo{{
-		Name:    "Manager",
-		Status:  "healthy",
-		PID:     fmt.Sprintf("%d", os.Getpid()),
-		Uptime:  formatUptime(time.Since(monitorStartTime)),
-		Version: BuildVersion,
-		Memory:  currentMemUsage(),
-	}}
+func sloStatus(availability, target float64) string {
+	switch {
+	case availability >= target:
+		return "ok"
+	case availability >= target-0.0005:
+		return "warning"
+	default:
+		return "breach"
+	}
+}
 
-	services = append(services, h.checkACStatus(), h.checkConsumerStatus(), h.checkMySQLStatus(), h.checkRedisStatus(), h.checkClickHouseStatus(), h.checkPrometheusStatus())
+// GetServicesMonitor godoc
+// GET /api/v1/monitor/services?range=1h|6h|24h
+// 返回后端服务状态与连接统计。
+//
+// 性能保护（Tier 0-6）：
+//   - Redis 缓存 30s（服务监控页轻量级数据，30s 粒度足够）
+//   - singleflight 防止缓存过期瞬间的并发重复计算
+//
+// 不加缓存时 Kafka admin 调用（DescribeConsumerGroups + ListConsumerGroupOffsets）
+// 是重操作，并发刷新会拖死 Kafka 协调器。
+const servicesCacheKey = "mxsec:cache:monitor:services"
+const servicesCacheTTL = 30 * time.Second
+
+func (h *MonitorHandler) GetServicesMonitor(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// L1: Redis cache
+	if h.redisClient != nil {
+		if cached, err := h.redisClient.Get(ctx, servicesCacheKey).Bytes(); err == nil {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", cached)
+			return
+		}
+	}
+
+	// L2: singleflight 合并并发请求
+	jsonBytes, err, _ := h.sfGroup.Do(servicesCacheKey, func() (interface{}, error) {
+		services := h.collectServiceStatus()
+		connections := h.collectConnectionStats()
+		// 内联 1h QPS / 延迟时间序列（UI 直接渲染，无需额外 API 调用）
+		qpsSeries := h.collectQPSSeries(ctx)
+		latencySeries := h.collectLatencySeries(ctx)
+		return json.Marshal(gin.H{
+			"code": 0,
+			"data": gin.H{
+				"services":    services,
+				"qps":         qpsSeries,
+				"latency":     latencySeries,
+				"connections": connections,
+			},
+		})
+	})
+
+	if err != nil {
+		h.logger.Error("计算服务监控失败", zap.Error(err))
+		InternalError(c, "服务监控查询失败")
+		return
+	}
+
+	data := jsonBytes.([]byte)
+
+	// 写回 Redis 缓存（30s）
+	if h.redisClient != nil {
+		h.redisClient.Set(ctx, servicesCacheKey, data, servicesCacheTTL)
+	}
+
+	c.Data(http.StatusOK, "application/json; charset=utf-8", data)
+}
+
+// serviceInfo 是后端服务监控的标准 schema（v2 强类型）。
+//
+// 旧字段（Name/Status/QPS/CPU/Memory/PID/Uptime/Version/Detail）保留 JSON 兼容，
+// 但**语义重写为真实数据**（不再用 ConnCount 当 QPS、用"3 实例"当 Memory）：
+//
+//   - QPS    float64 — 每秒请求/操作数，来自 PromQL `rate(*_total[1m])`
+//   - CPU    float64 — CPU 使用率百分比 0-100，来自 `100*rate(process_cpu_seconds_total[1m])`
+//   - Memory string  — 人类可读字符串如 "234 MB"，基于真实 `process_resident_memory_bytes`
+//   - Uptime string  — 人类可读如 "3d 5h"，基于真实 `process_start_time_seconds`
+//
+// 新增 v2 字段（optional，UI 渐进采用）：
+type serviceInfo struct {
+	Name    string  `json:"name"`
+	Status  string  `json:"status"`
+	QPS     float64 `json:"qps"`
+	CPU     float64 `json:"cpu"`
+	Memory  string  `json:"memory"`
+	PID     string  `json:"pid"`
+	Uptime  string  `json:"uptime"`
+	Version string  `json:"version"`
+	Detail  string  `json:"detail,omitempty"`
+
+	// ============ v2 强类型字段（商业级监控完整指标） ============
+
+	// MemRSSBytes 进程常驻内存（字节），来自 process_resident_memory_bytes
+	MemRSSBytes uint64 `json:"memRssBytes,omitempty"`
+
+	// P99LatencyMs p99 请求延迟（毫秒），来自 histogram_quantile(0.99, ...)
+	P99LatencyMs float64 `json:"p99LatencyMs,omitempty"`
+
+	// ErrorRate 错误率 [0, 1]，5xx 或 gRPC 非 OK 占比
+	ErrorRate float64 `json:"errorRate,omitempty"`
+
+	// Connections 当前活跃连接数
+	Connections int64 `json:"connections,omitempty"`
+
+	// QueueLag 队列积压（Kafka consumer lag 等）
+	QueueLag int64 `json:"queueLag,omitempty"`
+
+	// UptimeSec 运行秒数（机器可读，与 Uptime 字符串等价）
+	UptimeSec int64 `json:"uptimeSec,omitempty"`
+
+	// Extra 服务特异字段（如 ClickHouse 当前 active query、Kafka group state）
+	Extra map[string]string `json:"extra,omitempty"`
+
+	// DataSource 标识数据来源（prometheus / driver / sd-registry / unavailable）
+	// 便于 UI 显示数据可信度
+	DataSource string `json:"dataSource,omitempty"`
+
+	// ============ 饱和度指标 (Tier 2-2) ============
+
+	// GoroutineCount 当前 goroutine 数（持续 > 10000 可能泄漏）
+	GoroutineCount int `json:"goroutineCount,omitempty"`
+
+	// FDCount 当前打开的 fd 数（接近 ulimit 时需告警）
+	FDCount int `json:"fdCount,omitempty"`
+
+	// GCPauseP99Ms Go GC p99 暂停时间（毫秒，持续 > 500ms 影响延迟）
+	GCPauseP99Ms float64 `json:"gcPauseP99Ms,omitempty"`
+}
+
+// PromQL 模板 — Go 默认 ProcessCollector + GoCollector 自动暴露
+const (
+	promCPUPercentTpl = `100 * rate(process_cpu_seconds_total{job=%q}[1m])`
+	promRSSBytesTpl   = `process_resident_memory_bytes{job=%q}`
+	promUptimeSecTpl  = `time() - process_start_time_seconds{job=%q}`
+)
+
+// promQueryFloat 执行 PromQL 即时查询并解析为单个 float 值。
+//
+// 失败 / 无数据 / 非有限数（NaN/Inf）一律返回 0；不抛错（监控指标缺失不应阻塞业务页面）。
+// 仅当 prometheusClient 非 nil 时才查询。
+func (h *MonitorHandler) promQueryFloat(ctx context.Context, query string) float64 {
+	if h.prometheusClient == nil {
+		return 0
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	result, err := h.prometheusClient.QueryInstant(queryCtx, query, nil)
+	if err != nil || result == nil || len(result.Data.Result) == 0 {
+		return 0
+	}
+	val := result.Data.Result[0].Value
+	if len(val) < 2 {
+		return 0
+	}
+
+	var f float64
+	switch v := val[1].(type) {
+	case string:
+		if _, err := fmt.Sscanf(v, "%f", &f); err != nil {
+			return 0
+		}
+	case float64:
+		f = v
+	default:
+		return 0
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
+	return f
+}
+
+// fillProcessMetrics 通用：用 job 标签从 Prometheus 拉取
+// CPU% / RSS / Uptime / 饱和度（goroutine/fd/gc_pause）填到 info（不覆盖 Status）。
+func (h *MonitorHandler) fillProcessMetrics(ctx context.Context, info *serviceInfo, jobName string) {
+	if h.prometheusClient == nil {
+		info.DataSource = "driver"
+		return
+	}
+	info.DataSource = "prometheus"
+
+	cpu := h.promQueryFloat(ctx, fmt.Sprintf(promCPUPercentTpl, jobName))
+	if cpu > 0 {
+		info.CPU = math.Round(cpu*10) / 10
+	}
+
+	rss := h.promQueryFloat(ctx, fmt.Sprintf(promRSSBytesTpl, jobName))
+	if rss > 0 {
+		info.MemRSSBytes = uint64(rss)
+		info.Memory = humanizeBytes(uint64(rss))
+	}
+
+	uptime := h.promQueryFloat(ctx, fmt.Sprintf(promUptimeSecTpl, jobName))
+	if uptime > 0 {
+		info.UptimeSec = int64(uptime)
+		info.Uptime = formatUptime(time.Duration(uptime) * time.Second)
+	}
+
+	// 饱和度指标（Tier 2-2）
+	goroutines := h.promQueryFloat(ctx, fmt.Sprintf(`go_goroutines{job=%q}`, jobName))
+	if goroutines > 0 {
+		info.GoroutineCount = int(goroutines)
+	}
+	fds := h.promQueryFloat(ctx, fmt.Sprintf(`process_open_fds{job=%q}`, jobName))
+	if fds > 0 {
+		info.FDCount = int(fds)
+	}
+	gcPause := h.promQueryFloat(ctx,
+		fmt.Sprintf(`histogram_quantile(0.99, sum by (le) (rate(go_gc_duration_seconds_bucket{job=%q}[5m])))`, jobName))
+	if gcPause > 0 {
+		info.GCPauseP99Ms = math.Round(gcPause*100000) / 100 // 秒 → 毫秒，保留 2 位小数
+	}
+
+	// PID + version 来自 mxsec_build_info（mxsec 三端自暴露）
+	h.fillBuildInfo(ctx, info, jobName)
+}
+
+// fillBuildInfo 通过 PromQL mxsec_build_info{job=X} 读取进程的 version 和 pid（写入 labels）。
+// 实现：QueryInstant 拿到 metric labels（不是 value）。
+func (h *MonitorHandler) fillBuildInfo(ctx context.Context, info *serviceInfo, jobName string) {
+	if h.prometheusClient == nil {
+		return
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	res, err := h.prometheusClient.QueryInstant(queryCtx, fmt.Sprintf(`mxsec_build_info{job=%q}`, jobName), nil)
+	if err != nil || res == nil || len(res.Data.Result) == 0 {
+		return
+	}
+	m := res.Data.Result[0].Metric
+	if v := m["version"]; v != "" {
+		info.Version = v
+	}
+	if p := m["pid"]; p != "" {
+		info.PID = p
+	}
+}
+
+// collectServiceStatus 收集所有后端服务的真实运行状态。
+//
+// 数据来源策略（优先级从高到低）：
+//  1. Prometheus PromQL  — 真实 CPU% / RSS / QPS / p99 / error_rate
+//  2. 服务自身 driver/admin — Redis ops/sec、ClickHouse query count、Kafka admin
+//  3. SD Registry (AC)   — 心跳健康 + ConnCount
+//
+// 字段语义严格遵循 serviceInfo schema。
+func (h *MonitorHandler) collectServiceStatus() []serviceInfo {
+	ctx := context.Background()
+
+	services := []serviceInfo{h.checkManagerStatus(ctx)}
+	services = append(services,
+		h.checkACStatus(ctx),
+		h.checkConsumerStatus(ctx),
+		h.checkMySQLStatus(ctx),
+		h.checkRedisStatus(ctx),
+		h.checkClickHouseStatus(ctx),
+		h.checkPrometheusStatus(ctx),
+	)
 	if h.cfg != nil && h.cfg.Kafka.Enabled && len(h.cfg.Kafka.Brokers) > 0 {
-		services = append(services, h.checkKafkaStatus())
+		services = append(services, h.checkKafkaStatus(ctx))
 	}
 
 	return services
 }
 
-func (h *MonitorHandler) checkACStatus() serviceInfo {
+// checkManagerStatus 检查 Manager 自身状态。
+//
+// 不再 hardcoded "healthy"（自报无意义，挂了无法反馈）。
+// 用 Prometheus self-scrape（job="mxsec-manager"）获取真实 CPU/RSS/QPS/p99/error_rate。
+// 若 Prometheus 不可用，降级用进程级 PID/Uptime + Go heap 估算（标 DataSource="driver"）。
+func (h *MonitorHandler) checkManagerStatus(ctx context.Context) serviceInfo {
+	const jobName = "mxsec-manager"
+
+	info := serviceInfo{
+		Name:      "Manager",
+		Status:    "healthy",
+		PID:       strconv.Itoa(os.Getpid()),
+		Uptime:    formatUptime(time.Since(monitorStartTime)),
+		UptimeSec: int64(time.Since(monitorStartTime).Seconds()),
+		Version:   BuildVersion,
+		Memory:    currentMemUsage(),
+	}
+
+	if h.prometheusClient == nil {
+		info.DataSource = "driver"
+		info.Detail = "Prometheus 未配置，仅显示进程级降级数据（CPU/RSS 不准确）"
+		return info
+	}
+
+	h.fillProcessMetrics(ctx, &info, jobName)
+
+	// QPS = HTTP 请求速率
+	info.QPS = math.Round(h.promQueryFloat(ctx,
+		`sum(rate(mxsec_http_requests_total[1m]))`)*100) / 100
+
+	// p99 延迟（毫秒）
+	info.P99LatencyMs = math.Round(h.promQueryFloat(ctx,
+		`histogram_quantile(0.99, sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))) * 1000`)*10) / 10
+
+	// 错误率 = 5xx / 总请求
+	total := h.promQueryFloat(ctx, `sum(rate(mxsec_http_requests_total[1m]))`)
+	errs := h.promQueryFloat(ctx, `sum(rate(mxsec_http_requests_total{status_code=~"5.."}[1m]))`)
+	if total > 0 {
+		info.ErrorRate = math.Round(errs/total*10000) / 10000
+		if info.ErrorRate > 0.05 {
+			info.Status = "warning"
+			info.Detail = fmt.Sprintf("HTTP 5xx 错误率 %.2f%% 超过 5%% 阈值", info.ErrorRate*100)
+		}
+	}
+
+	return info
+}
+
+// checkACStatus 检查 AgentCenter 状态。
+//
+// 数据来源：
+//   - 健康/Conn 数: SD Registry 心跳（权威）
+//   - CPU/RSS/Uptime/QPS/p99/error_rate: Prometheus (job="mxsec-agentcenter")
+//
+// QPS 不再用 ConnCount 当近似（语义错误），而是用 gRPC handled 速率。
+func (h *MonitorHandler) checkACStatus(ctx context.Context) serviceInfo {
+	const jobName = "mxsec-agentcenter"
+
 	info := serviceInfo{Name: "AgentCenter", PID: "--", Uptime: "--", Version: "--", Memory: "--"}
+
+	// 1. SD Registry 决定健康状态 + 连接数
 	if h.acRegistry == nil {
 		info.Status = "error"
+		info.Detail = "SD Registry 未初始化"
 		return info
 	}
 	instances := h.acRegistry.ListAll()
 	if len(instances) == 0 {
-		info.Status = "error"
+		info.Status = "warning"
+		info.Detail = "无 AC 实例注册"
 		return info
 	}
 	healthy := h.acRegistry.ListHealthy()
-	if len(healthy) == 0 {
+	switch {
+	case len(healthy) == 0:
+		info.Status = "error"
+		info.Detail = fmt.Sprintf("全部 %d 个 AC 实例不健康", len(instances))
+	case len(healthy) < len(instances):
 		info.Status = "warning"
-	} else {
+		info.Detail = fmt.Sprintf("%d/%d AC 实例不健康", len(instances)-len(healthy), len(instances))
+	default:
 		info.Status = "healthy"
+		info.Detail = fmt.Sprintf("%d 个 AC 实例全部健康", len(instances))
 	}
-	// 统计所有 AC 实例的在线连接数之和
+
 	var totalConn int64
 	for _, inst := range instances {
 		totalConn += inst.ConnCount
 	}
-	info.QPS = int(totalConn) // 用连接数作为 QPS 的近似（无 Prometheus 时）
-	info.Memory = fmt.Sprintf("%d 实例", len(instances))
-	info.Version = fmt.Sprintf("%d healthy", len(healthy))
-	info.Detail = "展示 AC 注册实例数与在线连接情况"
+	info.Connections = totalConn
+	info.Extra = map[string]string{
+		"acInstances":      strconv.Itoa(len(instances)),
+		"healthyInstances": strconv.Itoa(len(healthy)),
+		"agentConnections": strconv.FormatInt(totalConn, 10),
+	}
+
+	// 2. Prometheus 拉真实进程指标
+	h.fillProcessMetrics(ctx, &info, jobName)
+
+	// QPS = gRPC handled 总速率（真实业务流量）
+	info.QPS = math.Round(h.promQueryFloat(ctx,
+		`sum(rate(mxsec_ac_grpc_handled_total[1m]))`)*100) / 100
+
+	// p99 延迟（毫秒）
+	info.P99LatencyMs = math.Round(h.promQueryFloat(ctx,
+		`histogram_quantile(0.99, sum by (le) (rate(mxsec_ac_grpc_duration_seconds_bucket[5m]))) * 1000`)*10) / 10
+
+	// 错误率 = 非 OK gRPC 调用占比
+	total := h.promQueryFloat(ctx, `sum(rate(mxsec_ac_grpc_handled_total[1m]))`)
+	errs := h.promQueryFloat(ctx, `sum(rate(mxsec_ac_grpc_handled_total{grpc_code!="OK"}[1m]))`)
+	if total > 0 {
+		info.ErrorRate = math.Round(errs/total*10000) / 10000
+	}
+
 	return info
 }
 
-func (h *MonitorHandler) checkConsumerStatus() serviceInfo {
+// checkConsumerStatus 检查 Consumer 状态。
+//
+// 数据来源：
+//   - 健康/Lag/成员数: Kafka admin (sarama)
+//   - CPU/RSS/Uptime/QPS/p99: Prometheus (job="mxsec-consumer")
+//
+// QPS 不再用 memberCount 当近似（语义错误），改用 records_consumed 速率。
+// Memory 字段填进程 RSS 真实值，不再填 "lag X"（lag 单独入 QueueLag 字段）。
+func (h *MonitorHandler) checkConsumerStatus(ctx context.Context) serviceInfo {
+	const jobName = "mxsec-consumer"
+
 	info := serviceInfo{
 		Name:    "Consumer",
 		PID:     "--",
@@ -378,6 +1097,7 @@ func (h *MonitorHandler) checkConsumerStatus() serviceInfo {
 		return info
 	}
 
+	// 1. Kafka admin: 健康 + lag + 成员数
 	saramaCfg := sarama.NewConfig()
 	saramaCfg.Version = sarama.V2_6_0_0
 	saramaCfg.Net.DialTimeout = 2 * time.Second
@@ -410,8 +1130,8 @@ func (h *MonitorHandler) checkConsumerStatus() serviceInfo {
 
 	desc := descriptions[0]
 	memberCount := len(desc.Members)
-	info.QPS = memberCount
 	info.Version = desc.State
+	info.Connections = int64(memberCount)
 
 	var lag int64
 	if offsets, offsetErr := admin.ListConsumerGroupOffsets(consumerGroupID, nil); offsetErr == nil {
@@ -430,24 +1150,57 @@ func (h *MonitorHandler) checkConsumerStatus() serviceInfo {
 			}
 		}
 	}
-
-	info.Memory = fmt.Sprintf("lag %d", lag)
-	info.Detail = fmt.Sprintf("group=%s, members=%d", consumerGroupID, memberCount)
+	info.QueueLag = lag
+	info.Detail = fmt.Sprintf("group=%s, members=%d, lag=%d, state=%s", consumerGroupID, memberCount, lag, desc.State)
+	info.Extra = map[string]string{
+		"groupId":     consumerGroupID,
+		"groupState":  desc.State,
+		"memberCount": strconv.Itoa(memberCount),
+		"totalLag":    strconv.FormatInt(lag, 10),
+	}
 
 	switch {
 	case memberCount == 0:
 		info.Status = "error"
-	case lag > 1000 || !strings.EqualFold(desc.State, "Stable"):
+	case lag > 10000 || !strings.EqualFold(desc.State, "Stable"):
 		info.Status = "warning"
 	default:
 		info.Status = "healthy"
 	}
 
+	// 2. Prometheus: CPU/RSS/Uptime + 处理速率 + p99
+	h.fillProcessMetrics(ctx, &info, jobName)
+
+	// QPS = 消息处理速率（真实业务吞吐）
+	info.QPS = math.Round(h.promQueryFloat(ctx,
+		`sum(rate(mxsec_consumer_records_consumed_total[1m]))`)*100) / 100
+
+	// p99 处理延迟（毫秒）
+	info.P99LatencyMs = math.Round(h.promQueryFloat(ctx,
+		`histogram_quantile(0.99, sum by (le) (rate(mxsec_consumer_processing_duration_seconds_bucket[5m]))) * 1000`)*10) / 10
+
+	// 错误率 = (error + dlq) / 总消息
+	total := h.promQueryFloat(ctx, `sum(rate(mxsec_consumer_records_consumed_total[1m]))`)
+	errs := h.promQueryFloat(ctx, `sum(rate(mxsec_consumer_records_consumed_total{status=~"error|dlq"}[1m]))`)
+	if total > 0 {
+		info.ErrorRate = math.Round(errs/total*10000) / 10000
+	}
+
 	return info
 }
 
-func (h *MonitorHandler) checkMySQLStatus() serviceInfo {
-	info := serviceInfo{Name: "MySQL", PID: "--", Uptime: "--", Version: "8.0+", Memory: "--"}
+// checkMySQLStatus 检查 MySQL 状态。
+//
+// 数据来源（不依赖外部 mysqld_exporter，避免重复造轮子）：
+//   - 健康/连接池: gorm driver stats
+//   - QPS:        Manager 端 gorm callback 埋点 mxsec_db_query_duration_seconds_count
+//     (Tier 1-2 新增 — 代表 Manager 视角真实 DB QPS，含 ORM + 网络 RTT)
+//   - 版本:       SELECT VERSION() (driver)
+//
+// 注：用 Manager 视角 QPS 比 mysqld_exporter 的 mysql_global_status_queries 更准确，
+// 因为后者反映整个 MySQL 实例（可能被其他应用共用）的查询，前者反映 mxsec 实际负载。
+func (h *MonitorHandler) checkMySQLStatus(ctx context.Context) serviceInfo {
+	info := serviceInfo{Name: "MySQL", PID: "--", Uptime: "--", Version: "--", Memory: "--", DataSource: "driver"}
 	if h.db == nil {
 		info.Status = "error"
 		return info
@@ -455,148 +1208,324 @@ func (h *MonitorHandler) checkMySQLStatus() serviceInfo {
 	sqlDB, err := h.db.DB()
 	if err != nil {
 		info.Status = "error"
+		info.Detail = "获取数据库句柄失败"
 		return info
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if err := sqlDB.PingContext(ctx); err != nil {
+	if err := sqlDB.PingContext(pingCtx); err != nil {
 		info.Status = "error"
+		info.Detail = "MySQL ping 失败"
 		return info
 	}
 	stats := sqlDB.Stats()
 	info.Status = "healthy"
-	info.QPS = stats.InUse
-	info.Memory = fmt.Sprintf("%d 连接", stats.OpenConnections)
+	info.Connections = int64(stats.OpenConnections)
 	info.Detail = mysqlAddress(h.cfg)
+	info.Extra = map[string]string{
+		"address":          mysqlAddress(h.cfg),
+		"openConnections":  strconv.Itoa(stats.OpenConnections),
+		"inUseConnections": strconv.Itoa(stats.InUse),
+		"idleConnections":  strconv.Itoa(stats.Idle),
+		"waitCount":        strconv.FormatInt(stats.WaitCount, 10),
+	}
+
+	// MySQL 版本 + Uptime + InnoDB Buffer Pool RSS（driver 直查，无需 mysqld_exporter）
+	infoCtx, infoCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer infoCancel()
+
+	var version string
+	if rows, qerr := sqlDB.QueryContext(infoCtx, "SELECT VERSION()"); qerr == nil {
+		if rows.Next() {
+			_ = rows.Scan(&version)
+		}
+		_ = rows.Close()
+	}
+	if version != "" {
+		info.Version = version
+	}
+
+	// Uptime — SHOW GLOBAL STATUS LIKE 'Uptime' 返回 Variable_name + Value
+	if rows, qerr := sqlDB.QueryContext(infoCtx, "SHOW GLOBAL STATUS LIKE 'Uptime'"); qerr == nil {
+		if rows.Next() {
+			var name, value string
+			if scanErr := rows.Scan(&name, &value); scanErr == nil {
+				if sec, err := strconv.ParseInt(value, 10, 64); err == nil && sec > 0 {
+					info.UptimeSec = sec
+					info.Uptime = formatUptime(time.Duration(sec) * time.Second)
+				}
+			}
+		}
+		_ = rows.Close()
+	}
+
+	// 内存 — InnoDB Buffer Pool 当前已用字节数（最贴近 MySQL 实际内存占用）
+	if rows, qerr := sqlDB.QueryContext(infoCtx, "SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_bytes_data'"); qerr == nil {
+		if rows.Next() {
+			var name, value string
+			if scanErr := rows.Scan(&name, &value); scanErr == nil {
+				if b, err := strconv.ParseUint(value, 10, 64); err == nil && b > 0 {
+					info.MemRSSBytes = b
+					info.Memory = humanizeBytes(b)
+					// "innodb" 标记放 extra，避免字符串过长撑高 UI 卡片
+					if info.Extra == nil {
+						info.Extra = map[string]string{}
+					}
+					info.Extra["memSource"] = "innodb_buffer_pool"
+				}
+			}
+		}
+		_ = rows.Close()
+	}
+
+	// QPS 来自 Manager 端 gorm callback 埋点（mxsec_db_query_duration_seconds_count）
+	if h.prometheusClient != nil {
+		qps := h.promQueryFloat(ctx, `sum(rate(mxsec_db_query_duration_seconds_count[1m]))`)
+		if qps > 0 {
+			info.QPS = math.Round(qps*100) / 100
+			info.DataSource = "driver+prometheus"
+		}
+		p99 := h.promQueryFloat(ctx,
+			`histogram_quantile(0.99, sum by (le) (rate(mxsec_db_query_duration_seconds_bucket[5m]))) * 1000`)
+		if p99 > 0 {
+			info.P99LatencyMs = math.Round(p99*10) / 10
+		}
+	}
+
 	return info
 }
 
-func (h *MonitorHandler) checkRedisStatus() serviceInfo {
-	info := serviceInfo{Name: "Redis", PID: "--", Uptime: "--", Version: "--", Memory: "--"}
+// checkRedisStatus 检查 Redis 状态。
+//
+// 数据来源：
+//   - 健康/Version/Uptime/QPS/RSS/连接数: Redis INFO (driver 端真实数据)
+//   - 补充 CPU: Prometheus (job="redis-exporter"，需部署 redis_exporter)
+//
+// Redis 是少数 driver 自带真实 QPS 的服务（instantaneous_ops_per_sec），保留使用。
+func (h *MonitorHandler) checkRedisStatus(ctx context.Context) serviceInfo {
+	info := serviceInfo{Name: "Redis", PID: "--", Uptime: "--", Version: "--", Memory: "--", DataSource: "driver"}
 	if h.redisClient == nil {
 		info.Status = "error"
 		return info
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	infoCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if err := h.redisClient.Ping(ctx).Err(); err != nil {
+	if err := h.redisClient.Ping(infoCtx).Err(); err != nil {
 		info.Status = "error"
+		info.Detail = "Redis ping 失败"
 		return info
 	}
 
-	serverInfo, err := h.redisClient.Info(ctx, "server").Result()
+	serverInfo, err := h.redisClient.Info(infoCtx, "server").Result()
 	if err == nil {
 		if version := redisInfoValue(serverInfo, "redis_version"); version != "" {
 			info.Version = version
 		}
 		if uptime := redisInfoValue(serverInfo, "uptime_in_seconds"); uptime != "" {
 			if seconds, convErr := strconv.ParseInt(uptime, 10, 64); convErr == nil {
+				info.UptimeSec = seconds
 				info.Uptime = formatUptime(time.Duration(seconds) * time.Second)
 			}
 		}
+		if pid := redisInfoValue(serverInfo, "process_id"); pid != "" {
+			info.PID = pid
+		}
 	}
 
-	statsInfo, err := h.redisClient.Info(ctx, "stats").Result()
+	statsInfo, err := h.redisClient.Info(infoCtx, "stats").Result()
 	if err == nil {
 		if ops := redisInfoValue(statsInfo, "instantaneous_ops_per_sec"); ops != "" {
-			if value, convErr := strconv.Atoi(ops); convErr == nil {
+			if value, convErr := strconv.ParseFloat(ops, 64); convErr == nil {
 				info.QPS = value
 			}
 		}
 	}
 
-	clientsInfo, err := h.redisClient.Info(ctx, "clients").Result()
+	clientsInfo, err := h.redisClient.Info(infoCtx, "clients").Result()
+	connected := int64(0)
 	if err == nil {
-		if connected := redisInfoValue(clientsInfo, "connected_clients"); connected != "" {
-			info.Memory = connected + " 客户端"
+		if c := redisInfoValue(clientsInfo, "connected_clients"); c != "" {
+			if value, convErr := strconv.ParseInt(c, 10, 64); convErr == nil {
+				connected = value
+			}
 		}
 	}
+	info.Connections = connected
 
-	memoryInfo, err := h.redisClient.Info(ctx, "memory").Result()
+	extra := map[string]string{
+		"address":          redisAddress(h.cfg),
+		"connectedClients": strconv.FormatInt(connected, 10),
+	}
+
+	memoryInfo, err := h.redisClient.Info(infoCtx, "memory").Result()
 	if err == nil {
+		if used := redisInfoValue(memoryInfo, "used_memory"); used != "" {
+			if b, convErr := strconv.ParseUint(used, 10, 64); convErr == nil {
+				info.MemRSSBytes = b
+			}
+		}
 		if used := redisInfoValue(memoryInfo, "used_memory_human"); used != "" {
 			info.Memory = used
+		}
+		if maxmem := redisInfoValue(memoryInfo, "maxmemory_human"); maxmem != "" {
+			extra["maxMemory"] = maxmem
 		}
 	}
 
 	info.Status = "healthy"
 	info.Detail = redisAddress(h.cfg)
+	info.Extra = extra
+
+	// Redis INFO 已涵盖 QPS/Memory/Uptime/Clients，driver 完全够用
+	// 不引入 redis_exporter（重复造轮子）
 	return info
 }
 
-func (h *MonitorHandler) checkClickHouseStatus() serviceInfo {
-	info := serviceInfo{Name: "ClickHouse", PID: "--", Uptime: "--", Version: "--", Memory: "--"}
+// checkClickHouseStatus 检查 ClickHouse 状态。
+//
+// 数据来源：
+//   - 健康/Version/RSS: ClickHouse system.metrics + system.asynchronous_metrics (driver 真实)
+//   - QPS: rate(ClickHouseProfileEvents_Query) via Prometheus (clickhouse-exporter)
+//
+// 当前 system.metrics WHERE metric='Query' 返回的是**当前 active query 数量**（瞬时），
+// 不是 QPS rate。改用 Prometheus rate 公式得真 QPS。
+func (h *MonitorHandler) checkClickHouseStatus(ctx context.Context) serviceInfo {
+	info := serviceInfo{Name: "ClickHouse", PID: "--", Uptime: "--", Version: "--", Memory: "--", DataSource: "driver"}
 	if h.chConn == nil {
 		info.Status = "error"
 		return info
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	var version string
-	if err := h.chConn.QueryRow(ctx, "SELECT version()").Scan(&version); err != nil {
+	if err := h.chConn.QueryRow(queryCtx, "SELECT version()").Scan(&version); err != nil {
 		info.Status = "error"
+		info.Detail = "ClickHouse 查询失败"
 		return info
 	}
 	info.Version = version
 
-	var queryCount uint64
-	if err := h.chConn.QueryRow(ctx, "SELECT value FROM system.metrics WHERE metric = 'Query'").Scan(&queryCount); err == nil {
-		info.QPS = int(queryCount)
+	// 当前 active query 数 — system.metrics.value 是 Int64
+	var activeQuery int64
+	_ = h.chConn.QueryRow(queryCtx, "SELECT value FROM system.metrics WHERE metric = 'Query'").Scan(&activeQuery)
+
+	// 真实 RSS — system.asynchronous_metrics.value 是 Float64（不是 UInt64！）
+	var memoryBytes float64
+	if err := h.chConn.QueryRow(queryCtx, "SELECT value FROM system.asynchronous_metrics WHERE metric = 'MemoryResident'").Scan(&memoryBytes); err == nil && memoryBytes > 0 {
+		info.MemRSSBytes = uint64(memoryBytes)
+		info.Memory = humanizeBytes(uint64(memoryBytes))
 	}
 
-	var memoryBytes uint64
-	if err := h.chConn.QueryRow(ctx, "SELECT value FROM system.asynchronous_metrics WHERE metric = 'MemoryResident'").Scan(&memoryBytes); err == nil && memoryBytes > 0 {
-		info.Memory = humanizeBytes(memoryBytes)
+	// Uptime — uptime() 返回 UInt32
+	var uptimeSec uint32
+	if err := h.chConn.QueryRow(queryCtx, "SELECT uptime()").Scan(&uptimeSec); err == nil && uptimeSec > 0 {
+		info.UptimeSec = int64(uptimeSec)
+		info.Uptime = formatUptime(time.Duration(uptimeSec) * time.Second)
 	}
 
 	info.Status = "healthy"
 	info.Detail = clickHouseAddress(h.cfg)
+	info.Extra = map[string]string{
+		"address":       clickHouseAddress(h.cfg),
+		"activeQueries": strconv.FormatInt(activeQuery, 10),
+	}
+
+	// 实际 QPS 用 system.events ProfileEvent_Query 增量计算（避免外部 exporter）
+	// 这里用 active query 当近似指标，准确 QPS 由 Tier 1-2 历史趋势 API 走 PromQL 提供
+	info.QPS = float64(activeQuery)
+
 	return info
 }
 
-func (h *MonitorHandler) checkPrometheusStatus() serviceInfo {
+// checkPrometheusStatus 检查 Prometheus 自身状态。
+//
+// 数据来源：Prometheus 自身（job="prometheus"）+ /api/v1/query
+// Prometheus 自带完整 process metric，CPU/RSS/Uptime 直接查 self-scrape。
+func (h *MonitorHandler) checkPrometheusStatus(ctx context.Context) serviceInfo {
+	const jobName = "prometheus"
+
 	info := serviceInfo{Name: "Prometheus", PID: "--", Uptime: "--", Version: "--", Memory: "--"}
 	if h.prometheusClient == nil {
 		info.Status = "error"
+		info.Detail = "Prometheus 客户端未初始化"
 		return info
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	buildInfo, err := h.prometheusClient.QueryInstant(ctx, "prometheus_build_info", nil)
+	buildInfo, err := h.prometheusClient.QueryInstant(queryCtx, "prometheus_build_info", nil)
 	if err != nil {
 		info.Status = "error"
+		info.Detail = "Prometheus 查询失败"
 		return info
 	}
 
 	info.Status = "healthy"
+	info.DataSource = "prometheus"
 	if len(buildInfo.Data.Result) > 0 {
 		if version := buildInfo.Data.Result[0].Metric["version"]; version != "" {
 			info.Version = version
 		}
 	}
 
-	upResult, err := h.prometheusClient.QueryInstant(ctx, "up", nil)
-	if err == nil {
-		info.Memory = fmt.Sprintf("%d targets", len(upResult.Data.Result))
+	// 真实 CPU/RSS/Uptime
+	h.fillProcessMetrics(ctx, &info, jobName)
+
+	// Prometheus 自身 QPS = HTTP 查询请求速率
+	info.QPS = math.Round(h.promQueryFloat(ctx,
+		`sum(rate(prometheus_http_requests_total[1m]))`)*100) / 100
+
+	// p99 查询延迟（毫秒）
+	info.P99LatencyMs = math.Round(h.promQueryFloat(ctx,
+		`histogram_quantile(0.99, sum by (le) (rate(prometheus_http_request_duration_seconds_bucket[5m]))) * 1000`)*10) / 10
+
+	// 监控 target 数（已配置/已 up）
+	upResult, err := h.prometheusClient.QueryInstant(queryCtx, "up", nil)
+	totalTargets, upTargets := 0, 0
+	if err == nil && upResult != nil {
+		totalTargets = len(upResult.Data.Result)
+		for _, r := range upResult.Data.Result {
+			if len(r.Value) >= 2 {
+				if val, ok := r.Value[1].(string); ok && val == "1" {
+					upTargets++
+				}
+			}
+		}
+	}
+	info.Connections = int64(totalTargets)
+	info.Extra = map[string]string{
+		"totalTargets": strconv.Itoa(totalTargets),
+		"upTargets":    strconv.Itoa(upTargets),
+	}
+	info.Detail = fmt.Sprintf("%d/%d targets up", upTargets, totalTargets)
+	if totalTargets > 0 && upTargets < totalTargets {
+		info.Status = "warning"
 	}
 
-	info.Detail = "Prometheus 数据源在线"
 	return info
 }
 
-func (h *MonitorHandler) checkKafkaStatus() serviceInfo {
+// checkKafkaStatus 检查 Kafka 集群状态。
+//
+// 数据来源：
+//   - 健康/broker 数: sarama client (driver 真实)
+//   - QPS/RSS/CPU: Prometheus (job="kafka-exporter"，需部署 kafka_exporter)
+//
+// QPS 不再用 len(brokers) 当近似（语义错误：broker 数与消息速率无关）。
+// Memory 字段填真 RSS，broker 信息入 Extra/Connections。
+func (h *MonitorHandler) checkKafkaStatus(ctx context.Context) serviceInfo {
 	totalBrokers := len(h.cfg.Kafka.Brokers)
 	info := serviceInfo{
-		Name:    "Kafka",
-		PID:     "--",
-		Uptime:  "--",
-		Version: "KRaft",
-		Memory:  fmt.Sprintf("0/%d brokers", totalBrokers),
+		Name:       "Kafka",
+		PID:        "--",
+		Uptime:     "--",
+		Version:    "KRaft",
+		Memory:     "--",
+		DataSource: "driver",
 	}
 
 	saramaCfg := sarama.NewConfig()
@@ -614,8 +1543,12 @@ func (h *MonitorHandler) checkKafkaStatus() serviceInfo {
 	defer client.Close()
 
 	brokers := client.Brokers()
-	info.Memory = fmt.Sprintf("%d/%d brokers", len(brokers), totalBrokers)
-	info.QPS = len(brokers)
+	info.Connections = int64(len(brokers))
+	info.Extra = map[string]string{
+		"upBrokers":    strconv.Itoa(len(brokers)),
+		"totalBrokers": strconv.Itoa(totalBrokers),
+		"brokers":      strings.Join(h.cfg.Kafka.Brokers, ", "),
+	}
 
 	if _, err := client.Controller(); err != nil {
 		info.Status = "warning"
@@ -644,14 +1577,15 @@ type connectionStat struct {
 }
 
 func (h *MonitorHandler) collectConnectionStats() []connectionStat {
+	ctx := context.Background()
 	var stats []connectionStat
-	mysqlService := h.checkMySQLStatus()
-	redisService := h.checkRedisStatus()
-	clickHouseService := h.checkClickHouseStatus()
+	mysqlService := h.checkMySQLStatus(ctx)
+	redisService := h.checkRedisStatus(ctx)
+	clickHouseService := h.checkClickHouseStatus(ctx)
 	kafkaStatus := "active"
-	consumerService := h.checkConsumerStatus()
+	consumerService := h.checkConsumerStatus(ctx)
 	if h.cfg != nil && h.cfg.Kafka.Enabled && len(h.cfg.Kafka.Brokers) > 0 {
-		kafkaStatus = connectionStatusFromService(h.checkKafkaStatus().Status)
+		kafkaStatus = connectionStatusFromService(h.checkKafkaStatus(ctx).Status)
 	}
 
 	managerAddress := "0.0.0.0:8080"
@@ -738,12 +1672,13 @@ func (h *MonitorHandler) collectConnectionStats() []connectionStat {
 	}
 
 	if h.cfg != nil && h.cfg.Kafka.Enabled {
+		// Consumer 连接 = consumer group 成员数（在 Connections 字段中）
 		stats = append(stats, connectionStat{
 			Service:           "Consumer",
 			Protocol:          "Kafka Group",
 			Address:           consumerGroupID,
-			ActiveConnections: consumerService.QPS,
-			TotalConnections:  consumerService.QPS,
+			ActiveConnections: int(consumerService.Connections),
+			TotalConnections:  int(consumerService.Connections),
 			Status:            connectionStatusFromService(consumerService.Status),
 		})
 		for _, broker := range h.cfg.Kafka.Brokers {

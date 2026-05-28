@@ -30,6 +30,6 @@ const goHome = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
 }
 </style>

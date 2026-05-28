@@ -105,7 +105,7 @@
                 </a-descriptions-item>
                 <a-descriptions-item label="漏洞来源">{{ bulletin.source || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="受影响资产">
-                  <span style="font-weight: 600; color: #F53F3F">{{ bulletin.affectedAssets }}</span> 台主机
+                  <span style="font-weight: 600; color: #EF4444">{{ bulletin.affectedAssets }}</span> 台主机
                 </a-descriptions-item>
                 <a-descriptions-item label="补丁状态">
                   <a-tag v-if="bulletin.patchAvailable" color="green" :bordered="false">补丁可用</a-tag>
@@ -515,8 +515,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 12px 20px;
 }
@@ -529,12 +529,12 @@ onMounted(() => {
 
 .status-badge {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .detail-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
 }
@@ -542,15 +542,15 @@ onMounted(() => {
 .detail-card h4 {
   margin-bottom: 12px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
-.score-critical { color: #F53F3F; font-weight: 700; }
-.score-high { color: #FF7D00; font-weight: 700; }
-.score-normal { color: #1D2129; font-weight: 600; }
+.score-critical { color: #EF4444; font-weight: 700; }
+.score-high { color: #F59E0B; font-weight: 700; }
+.score-normal { color: var(--mxsec-text-1); font-weight: 600; }
 
 .sla-overdue {
-  color: #F53F3F;
+  color: #EF4444;
   font-weight: 600;
 }
 </style>

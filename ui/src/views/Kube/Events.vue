@@ -165,8 +165,8 @@ onMounted(() => { loadClusters(); loadEvents() })
 
 <style scoped>
 .kube-events-page { width: 100%; }
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
 .card-body { padding: 20px; }
-.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #F7F8FA; border-radius: 4px; border: 1px solid #E5E8EF; flex-wrap: wrap; }
-.raw-json { background: #F7F8FA; padding: 16px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace; overflow-x: auto; max-height: 300px; color: #1D2129; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: var(--mxsec-fill-1); border-radius: 4px; border: 1px solid var(--mxsec-border); flex-wrap: wrap; }
+.raw-json { background: var(--mxsec-fill-1); padding: 16px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace; overflow-x: auto; max-height: 300px; color: var(--mxsec-text-1); }
 </style>

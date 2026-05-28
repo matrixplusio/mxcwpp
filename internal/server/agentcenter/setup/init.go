@@ -16,6 +16,7 @@ import (
 
 	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/httptrans"
+	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/scheduler"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/sdclient"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/server"
@@ -161,6 +162,9 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 	mgmtHandler := httptrans.NewHandler(transferService, logger)
 	mgmtHandler.RegisterRoutes(httpRouter.Group("/"))
 	httpRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// 自暴露 build 元信息（version + PID），monitor.go 通过 PromQL 拉取
+	acmetrics.SetBuildInfo("dev", "")
 	httpServer := &http.Server{
 		Addr:    cfg.Server.HTTP.Address(),
 		Handler: httpRouter,

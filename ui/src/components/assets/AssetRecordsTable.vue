@@ -710,8 +710,8 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-fill-1);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   flex-wrap: wrap;
 }
@@ -729,7 +729,7 @@ onMounted(() => {
 }
 
 .host-meta {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
   margin-top: 2px;
 }
@@ -743,6 +743,6 @@ onMounted(() => {
 }
 
 .empty-text {
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 </style>

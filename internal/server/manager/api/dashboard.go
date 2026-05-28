@@ -4,8 +4,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
-	"net"
 	"net/http"
 	"time"
 
@@ -16,7 +16,9 @@ import (
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
 )
 
 const (
@@ -28,18 +30,22 @@ const (
 type DashboardHandler struct {
 	db          *gorm.DB
 	logger      *zap.Logger
-	chConn      chdriver.Conn // 可为 nil（ClickHouse 未启用时降级为 0）
-	redisClient *redis.Client // 可为 nil（Redis 未启用时不缓存）
+	chConn      chdriver.Conn      // 可为 nil（ClickHouse 未启用时降级为 0）
+	redisClient *redis.Client      // 可为 nil（Redis 未启用时不缓存）
+	acRegistry  *sd.Registry       // 可为 nil（单机部署降级为始终 healthy）
+	promClient  *prometheus.Client // 可为 nil；用于 Manager 自检（5xx 错误率）
 	sfGroup     singleflight.Group
 }
 
 // NewDashboardHandler 创建 Dashboard 处理器
-func NewDashboardHandler(db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client) *DashboardHandler {
+func NewDashboardHandler(db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client, acRegistry *sd.Registry, promClient *prometheus.Client) *DashboardHandler {
 	return &DashboardHandler{
 		db:          db,
 		logger:      logger,
 		chConn:      chConn,
 		redisClient: redisClient,
+		acRegistry:  acRegistry,
+		promClient:  promClient,
 	}
 }
 
@@ -216,7 +222,7 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	serviceStatus := gin.H{
 		"database":    h.checkDatabaseStatus(),
 		"agentcenter": h.checkAgentCenterStatus(),
-		"manager":     "healthy",
+		"manager":     h.checkManagerSelfStatus(), // 5xx 错误率自检，不再硬编码 healthy
 	}
 	stats["serviceStatus"] = serviceStatus
 
@@ -226,9 +232,109 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	// 10. 最新告警（最近 5 条 active 告警，精简字段）
 	stats["latestAlerts"] = h.queryLatestAlerts()
 
+	// 11. 安全态势综合评分
+	// 替代 UI 端硬编码的 82 默认值；综合 critical/high 告警 + 漏洞 + 受影响主机比例 + 合规率
+	criticalAlertCount, highAlertCount := h.countAlertsBySeverity()
+	criticalVulnCount, highVulnCount := h.countVulnsBySeverity()
+	stats["criticalAlerts"] = criticalAlertCount
+	stats["highAlerts"] = highAlertCount
+	stats["securityScore"] = h.computeSecurityScore(
+		criticalAlertCount, highAlertCount,
+		criticalVulnCount, highVulnCount,
+		vulnHostCount, totalHosts,
+		baselineHardeningPercent,
+	)
+
 	stats = sanitizeDashboardValue(stats).(gin.H)
 
 	return json.Marshal(gin.H{"code": 0, "data": stats})
+}
+
+// countAlertsBySeverity 按 severity 统计活跃告警数（仅 critical/high）
+func (h *DashboardHandler) countAlertsBySeverity() (critical, high int64) {
+	var rows []struct {
+		Severity string `gorm:"column:severity"`
+		Cnt      int64  `gorm:"column:cnt"`
+	}
+	h.db.Model(&model.Alert{}).
+		Select("severity, COUNT(*) as cnt").
+		Where("status = ?", model.AlertStatusActive).
+		Group("severity").
+		Scan(&rows)
+	for _, r := range rows {
+		switch r.Severity {
+		case "critical":
+			critical = r.Cnt
+		case "high":
+			high = r.Cnt
+		}
+	}
+	return
+}
+
+// countVulnsBySeverity 按 severity 统计未修复漏洞数（仅 critical/high）
+func (h *DashboardHandler) countVulnsBySeverity() (critical, high int64) {
+	var rows []struct {
+		Severity string `gorm:"column:severity"`
+		Cnt      int64  `gorm:"column:cnt"`
+	}
+	h.db.Model(&model.Vulnerability{}).
+		Select("severity, COUNT(*) as cnt").
+		Where("status = ?", "unpatched").
+		Group("severity").
+		Scan(&rows)
+	for _, r := range rows {
+		switch r.Severity {
+		case "critical":
+			critical = r.Cnt
+		case "high":
+			high = r.Cnt
+		}
+	}
+	return
+}
+
+// computeSecurityScore 计算安全态势综合评分（0-100）
+//
+// 维度（基础 100 分，按权重扣分；最后用合规率修正 ±）：
+//
+//	告警：critical × 2（封顶 -30），high × 0.5（封顶 -20）
+//	漏洞：critical × 0.05（封顶 -20），high × 0.01（封顶 -10）
+//	影响范围：受漏洞影响主机比例 × 20（最多 -20）
+//	合规率：(baseline_hardening_percent - 80) × 0.1（范围 ±2）
+//
+// 设计目标：避免 UI 端硬编码"健康"误导；与漏洞/告警数量同向变化。
+func (h *DashboardHandler) computeSecurityScore(
+	criticalAlerts, highAlerts int64,
+	criticalVulns, highVulns int64,
+	vulnHosts, totalHosts int64,
+	baselineCompliance float64,
+) float64 {
+	score := 100.0
+
+	score -= math.Min(float64(criticalAlerts)*2.0, 30.0)
+	score -= math.Min(float64(highAlerts)*0.5, 20.0)
+
+	score -= math.Min(float64(criticalVulns)*0.05, 20.0)
+	score -= math.Min(float64(highVulns)*0.01, 10.0)
+
+	if totalHosts > 0 {
+		affectedRatio := float64(vulnHosts) / float64(totalHosts)
+		if affectedRatio > 1.0 {
+			affectedRatio = 1.0
+		}
+		score -= affectedRatio * 20.0
+	}
+
+	score += (baselineCompliance - 80.0) * 0.1
+
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	return math.Round(score*10) / 10
 }
 
 // calculateAgentChanges 计算Agent数量变化（较昨日）
@@ -539,21 +645,86 @@ func (h *DashboardHandler) checkDatabaseStatus() string {
 	}
 }
 
-// checkAgentCenterStatus 检查 AgentCenter 服务状态
-func (h *DashboardHandler) checkAgentCenterStatus() string {
-	addresses := []string{
-		"localhost:6751",
-		"agentcenter:6751",
-		"127.0.0.1:6751",
+// checkManagerSelfStatus Manager 自身健康自检（不再硬编码 "healthy"）。
+//
+// 自检逻辑：
+//  1. 本进程在跑 → 进程级 alive（默认前提）
+//  2. 若已注入 Prometheus 客户端，查 1 分钟 HTTP 5xx 错误率：
+//     - 错误率 > 5% → "warning"
+//     - 否则 → "healthy"
+//  3. Prom 未配置时 → "healthy"（无数据等价于无异常）
+//
+// 真正的"挂了"由外部探针检测（Prometheus blackbox / k8s liveness probe），
+// 这里只能反映"运行中但不健康"的灰色状态。
+func (h *DashboardHandler) checkManagerSelfStatus() string {
+	if h.promClient == nil {
+		return "healthy"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	totalRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxsec_http_requests_total[1m]))`, nil)
+	if err != nil || totalRes == nil || len(totalRes.Data.Result) == 0 {
+		return "healthy"
+	}
+	totalVal := parsePromScalar(totalRes.Data.Result[0].Value)
+	if totalVal <= 0 {
+		return "healthy" // 无流量
 	}
 
-	for _, addr := range addresses {
-		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-		if err == nil {
-			conn.Close()
-			return "healthy"
+	errRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxsec_http_requests_total{status_code=~"5.."}[1m]))`, nil)
+	if err != nil || errRes == nil || len(errRes.Data.Result) == 0 {
+		return "healthy"
+	}
+	errVal := parsePromScalar(errRes.Data.Result[0].Value)
+	if errVal/totalVal > 0.05 {
+		return "warning"
+	}
+	return "healthy"
+}
+
+// parsePromScalar 从 PromQL 即时查询的 Value（[timestamp, value]）解析 float。
+// 无法解析时返回 0。
+func parsePromScalar(v []interface{}) float64 {
+	if len(v) < 2 {
+		return 0
+	}
+	switch val := v[1].(type) {
+	case string:
+		var f float64
+		if _, err := fmt.Sscanf(val, "%f", &f); err != nil {
+			return 0
 		}
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return 0
+		}
+		return f
+	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0
+		}
+		return val
+	}
+	return 0
+}
+
+// checkAgentCenterStatus 检查 AgentCenter 服务状态
+// 通过 SD registry 查询 AC 实例心跳健康状态（取代原 TCP 端口探测，避免硬编码 hostname）
+func (h *DashboardHandler) checkAgentCenterStatus() string {
+	if h.acRegistry == nil {
+		// 未注入 registry（理论上不会出现，兜底）
+		return "warning"
 	}
 
+	healthy := h.acRegistry.ListHealthy()
+	if len(healthy) > 0 {
+		return "healthy"
+	}
+
+	// 区分"无任何 AC 注册"和"全部 AC 不健康"
+	all := h.acRegistry.ListAll()
+	if len(all) == 0 {
+		return "warning"
+	}
 	return "error"
 }

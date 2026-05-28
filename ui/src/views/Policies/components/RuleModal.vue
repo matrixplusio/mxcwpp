@@ -470,13 +470,13 @@ const handleCancel = () => {
 
 <style scoped>
 .check-rules-container {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   padding: 16px;
   border-radius: 8px;
 }
 
 .check-rule-item {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   padding: 12px;
   border-radius: 6px;
   margin-bottom: 12px;
@@ -494,7 +494,7 @@ const handleCancel = () => {
 
 .check-rule-index {
   font-weight: 500;
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 .form-tip {
@@ -503,6 +503,6 @@ const handleCancel = () => {
 }
 
 .form-tip.warning {
-  color: #FF7D00;
+  color: #F59E0B;
 }
 </style>

@@ -53,6 +53,9 @@ func main() {
 	// 启动病毒库自动更新器
 	go services.VirusDBUpdater.Start(ctx)
 
+	// 启动 pre-check 周期巡检（每 6h 对 unpatched + 未检/过期的 host_vuln 自动 pre-check）
+	go services.PreCheckCron.Run(ctx)
+
 	// 启动漏洞扫描定时调度器
 	vulnScanner := biz.NewVulnScanner(services.DB, services.Logger)
 	scanScheduler := biz.NewScanScheduler(services.DB, services.Logger, vulnScanner)

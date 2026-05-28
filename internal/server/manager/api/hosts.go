@@ -237,12 +237,15 @@ func (h *HostsHandler) GetHost(c *gin.Context) {
 	}
 
 	// 查询最新监控数据（只取需要的字段，避免 SELECT * 回表开销）
+	// 必须用 Take() 不能用 First()：First 会隐式追加 `ORDER BY id ASC`，
+	// 与 collected_at DESC 形成混合排序 → MySQL 放弃 (host_id, collected_at) 复合索引 → filesort 全表扫
+	// 实测 prod 7.99M 行表 24.9s → 改 Take() 走索引后毫秒级
 	var latestMetric model.HostMetric
 	if err := h.db.Select("id, cpu_usage, mem_usage").
 		Where("host_id = ?", hostID).
 		Order("collected_at DESC").
 		Limit(1).
-		First(&latestMetric).Error; err != nil && err != gorm.ErrRecordNotFound {
+		Take(&latestMetric).Error; err != nil && err != gorm.ErrRecordNotFound {
 		h.logger.Error("查询主机监控数据失败", zap.Error(err))
 	}
 

@@ -204,8 +204,8 @@ onMounted(() => { loadBackups(); loadAutoBackupConfig() })
 .section-row { margin-bottom: 16px; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-header {
@@ -213,8 +213,8 @@ onMounted(() => { loadBackups(); loadAutoBackupConfig() })
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
-.card-title { font-size: 14px; font-weight: 600; color: #1D2129; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 .card-body { padding: 20px; }
 </style>

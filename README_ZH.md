@@ -73,6 +73,23 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 | 告警中心 | 告警聚合、白名单、自动响应（kill/隔离）、溯源时间线 |
 | 威胁情报 | MISP IOC 导入 + Redis 缓存 + CEL 实时碰撞 |
 
+## 产品截图
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/dashboard.png" alt="安全概览" width="100%"><br><b>安全概览</b> — 实时安全态势评分、告警趋势、风险雷达</td>
+    <td><img src="docs/screenshots/vulnerability-list.png" alt="漏洞列表" width="100%"><br><b>漏洞管理</b> — CVE 扫描、CVSS 评分、修复优先级</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/baseline-remediation.png" alt="基线修复" width="100%"><br><b>基线修复</b> — CIS Benchmark 自动修复，一键合规</td>
+    <td><img src="docs/screenshots/vulnerability-bulletin.png" alt="漏洞通报" width="100%"><br><b>漏洞通报</b> — CVE 情报跟踪、SLA 管理</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/ml-anomaly-detection.png" alt="ML 异常检测" width="100%"><br><b>ML 异常检测</b> — Isolation Forest 行为异常评分</td>
+    <td><img src="docs/screenshots/component-management.png" alt="组件管理" width="100%"><br><b>组件管理</b> — 插件分发、版本管理、远程推送</td>
+  </tr>
+</table>
+
 ## 架构概览
 
 ```

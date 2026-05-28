@@ -26,7 +26,7 @@
               <div class="card-title">
                 <span
                   class="group-icon"
-                  :style="{ backgroundColor: group.color || '#165DFF' }"
+                  :style="{ backgroundColor: group.color || '#3B82F6' }"
                 >
                   {{ group.icon || group.name.charAt(0) }}
                 </span>
@@ -115,7 +115,7 @@
           <a-divider type="vertical" />
           <span
             class="group-icon small"
-            :style="{ backgroundColor: currentGroup.color || '#165DFF' }"
+            :style="{ backgroundColor: currentGroup.color || '#3B82F6' }"
           >
             {{ currentGroup.icon || currentGroup.name.charAt(0) }}
           </span>
@@ -402,7 +402,7 @@ const groupFormState = reactive({
   name: '',
   description: '',
   icon: '',
-  color: '#165DFF',
+  color: '#3B82F6',
   sort_order: 0,
   enabled: true,
 })
@@ -515,8 +515,8 @@ const loadGroupPolicies = async () => {
 
 // 获取通过率颜色
 const getPassRateColor = (rate: number) => {
-  if (rate >= 80) return '#00B42A'
-  if (rate >= 60) return '#FF7D00'
+  if (rate >= 80) return '#22C55E'
+  if (rate >= 60) return '#F59E0B'
   return '#f5222d'
 }
 
@@ -558,7 +558,7 @@ const handleEditGroup = (group: PolicyGroup) => {
   groupFormState.name = group.name
   groupFormState.description = group.description || ''
   groupFormState.icon = group.icon || ''
-  groupFormState.color = group.color || '#165DFF'
+  groupFormState.color = group.color || '#3B82F6'
   groupFormState.sort_order = group.sort_order || 0
   groupFormState.enabled = group.enabled
   groupModalVisible.value = true
@@ -682,7 +682,7 @@ const resetGroupForm = () => {
   groupFormState.name = ''
   groupFormState.description = ''
   groupFormState.icon = ''
-  groupFormState.color = '#165DFF'
+  groupFormState.color = '#3B82F6'
   groupFormState.sort_order = 0
   groupFormState.enabled = true
   groupFormRef.value?.resetFields()
@@ -980,7 +980,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--mxsec-card-bg);
   font-weight: bold;
   font-size: 16px;
 }
@@ -997,7 +997,7 @@ watch(
 }
 
 .group-description {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-bottom: 16px;
   min-height: 44px;
   display: -webkit-box;
@@ -1009,9 +1009,9 @@ watch(
 .group-stats {
   margin-bottom: 16px;
   padding: 16px;
-  background: linear-gradient(135deg, #F7F8FA 0%, #f0f5ff 100%);
+  background: var(--mxsec-fill-1);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .group-footer {
@@ -1019,11 +1019,11 @@ watch(
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--mxsec-border);
 }
 
 .host-count {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
 }
 

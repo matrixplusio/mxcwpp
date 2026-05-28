@@ -5,89 +5,114 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { theme } from 'ant-design-vue'
+import { useThemeStore } from '@/stores/theme'
 
-/**
- * 主题配置 — 对齐 Elkeid / Arco Design 配色
- * 主色: #165DFF (Arco Blue)
- */
-const themeConfig = {
-  algorithm: theme.defaultAlgorithm,
-  token: {
-    // 主色系
-    colorPrimary: '#165DFF',
-    colorInfo: '#165DFF',
-    colorSuccess: '#00B42A',
-    colorWarning: '#FF7D00',
-    colorError: '#F53F3F',
+const themeStore = useThemeStore()
 
-    // 圆角
-    borderRadius: 4,
-    borderRadiusLG: 8,
-    borderRadiusSM: 2,
-
-    // 背景
-    colorBgContainer: '#FFFFFF',
-    colorBgLayout: '#F2F3F5',
-    colorBgElevated: '#FFFFFF',
-
-    // 文字
-    colorText: '#1D2129',
-    colorTextSecondary: '#4E5969',
-    colorTextTertiary: '#86909C',
-    colorTextQuaternary: '#C9CDD4',
-
-    // 边框
-    colorBorder: '#E5E6EB',
-    colorBorderSecondary: '#E5E8EF',
-
-    // 填充
-    colorFillSecondary: '#F2F3F5',
-    colorFillTertiary: '#F7F8FA',
-    colorFillQuaternary: '#FAFAFA',
-
-    // 字体
-    fontFamily: "'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif",
-    fontSize: 14,
-
-    // 阴影
-    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
-    boxShadowSecondary: '0 1px 2px rgba(0, 0, 0, 0.03), 0 2px 4px rgba(0, 0, 0, 0.04)',
-  },
-  components: {
-    Button: {
-      borderRadius: 4,
-    },
-    Card: {
-      borderRadiusLG: 8,
-    },
-    Input: {
-      borderRadius: 4,
-    },
-    Select: {
-      borderRadius: 4,
-    },
-    Table: {
-      borderRadiusLG: 8,
-      headerBg: '#F7F8FA',
-      rowHoverBg: '#F7F8FA',
-      headerColor: '#1D2129',
-    },
-    Modal: {
-      borderRadiusLG: 8,
-    },
-    Tag: {
-      borderRadiusSM: 2,
-    },
-    Menu: {
-      itemBorderRadius: 4,
-      subMenuItemBorderRadius: 4,
-    },
-    Tabs: {
-      cardBorderRadius: 4,
-    },
-  },
+// 共享 token（浅色/暗色通用）
+const sharedToken = {
+  colorPrimary: '#3B82F6',
+  colorInfo: '#3B82F6',
+  colorSuccess: '#22C55E',
+  colorWarning: '#F59E0B',
+  colorError: '#EF4444',
+  borderRadius: 6,
+  borderRadiusLG: 10,
+  borderRadiusSM: 4,
+  fontFamily: "'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif",
+  fontSize: 14,
 }
+
+// 共享组件 token
+const sharedComponents = {
+  Button: { borderRadius: 6 },
+  Card: { borderRadiusLG: 10 },
+  Input: { borderRadius: 6 },
+  Select: { borderRadius: 6 },
+  Modal: { borderRadiusLG: 10 },
+  Tag: { borderRadiusSM: 4 },
+  Tabs: { cardBorderRadius: 6 },
+}
+
+const themeConfig = computed(() => {
+  if (themeStore.isDark) {
+    return {
+      algorithm: theme.darkAlgorithm,
+      token: {
+        ...sharedToken,
+        colorBgContainer: '#161B22',
+        colorBgLayout: '#0D1117',
+        colorBgElevated: '#1C2333',
+        colorText: '#E5E5E5',
+        colorTextSecondary: '#AAAAAA',
+        colorTextTertiary: '#888888',
+        colorTextQuaternary: '#555555',
+        colorBorder: 'rgba(30, 58, 95, 0.4)',
+        colorBorderSecondary: 'rgba(30, 58, 95, 0.2)',
+        colorFillSecondary: '#1C2333',
+        colorFillTertiary: '#161B22',
+        colorFillQuaternary: '#0D1117',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        boxShadowSecondary: '0 2px 8px rgba(0, 0, 0, 0.2)',
+      },
+      components: {
+        ...sharedComponents,
+        Table: {
+          borderRadiusLG: 10,
+          headerBg: '#1C2333',
+          rowHoverBg: 'rgba(59, 130, 246, 0.06)',
+          headerColor: '#E5E5E5',
+        },
+        Menu: {
+          itemBorderRadius: 6,
+          subMenuItemBorderRadius: 6,
+          darkItemBg: 'transparent',
+          darkSubMenuItemBg: 'transparent',
+          darkItemSelectedBg: 'rgba(59, 130, 246, 0.15)',
+          darkItemHoverBg: 'rgba(59, 130, 246, 0.08)',
+          darkItemSelectedColor: '#3B82F6',
+        },
+      },
+    }
+  }
+
+  // 浅色主题
+  return {
+    algorithm: theme.defaultAlgorithm,
+    token: {
+      ...sharedToken,
+      colorBgContainer: '#FFFFFF',
+      colorBgLayout: '#F0F2F5',
+      colorBgElevated: '#FFFFFF',
+      colorText: '#1D2129',
+      colorTextSecondary: '#4E5969',
+      colorTextTertiary: '#86909C',
+      colorTextQuaternary: '#C9CDD4',
+      colorBorder: '#E5E8EF',
+      colorBorderSecondary: '#F2F3F5',
+      colorFillSecondary: '#F7F8FA',
+      colorFillTertiary: '#F2F3F5',
+      colorFillQuaternary: '#F7F8FA',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+      boxShadowSecondary: '0 1px 4px rgba(0, 0, 0, 0.05)',
+    },
+    components: {
+      ...sharedComponents,
+      Table: {
+        borderRadiusLG: 10,
+        headerBg: '#F7F8FA',
+        rowHoverBg: 'rgba(59, 130, 246, 0.04)',
+        headerColor: '#1D2129',
+      },
+      Menu: {
+        itemBorderRadius: 6,
+        subMenuItemBorderRadius: 6,
+      },
+    },
+  }
+})
 </script>
 
 <style>

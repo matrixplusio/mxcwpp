@@ -22,6 +22,18 @@
         <span class="navbar-version">{{ appVersion }}</span>
       </div>
       <div class="header-right">
+        <div class="theme-toggle" @click="themeStore.toggle" :title="themeStore.isDark ? '切换到浅色模式' : '切换到暗色模式'">
+          <svg v-if="themeStore.isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </div>
         <a-dropdown>
           <a class="user-dropdown" @click.prevent>
             <a-avatar :size="28" class="user-avatar">
@@ -49,13 +61,13 @@
 
     <!-- ========== Body (侧边栏 + 内容) ========== -->
     <a-layout class="body-layout">
-      <!-- 浅色侧边栏 -->
+      <!-- 暗色侧边栏 -->
       <a-layout-sider
         v-model:collapsed="collapsed"
         :width="200"
         :collapsed-width="48"
         class="sider"
-        theme="light"
+        :theme="themeStore.isDark ? 'dark' : 'light'"
         :trigger="null"
       >
         <div class="sider-wrapper">
@@ -110,7 +122,11 @@
 
       <!-- 内容区 -->
       <a-layout-content class="content" :style="{ marginLeft: collapsed ? '48px' : '200px' }">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </a-layout-content>
     </a-layout>
 
@@ -151,6 +167,7 @@ import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfigStore } from '@/stores/site-config'
+import { useThemeStore } from '@/stores/theme'
 import { authApi } from '@/api/auth'
 import apiClient from '@/api/client'
 import { menuConfig, filterMenuByRole, routeMap, resolveMenuKeys } from '@/config/menu'
@@ -159,6 +176,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const siteConfigStore = useSiteConfigStore()
+const themeStore = useThemeStore()
 
 // 应用版本号
 const appVersion = ref('--')
@@ -327,9 +345,9 @@ const resetChangePasswordForm = () => {
   top: 0;
   left: 0;
   height: 60px;
-  background: #FFFFFF;
-  border-bottom: 1px solid #E5E8EF;
-  border-right: 1px solid #E5E8EF;
+  background: var(--mxsec-navbar-bg);
+  border-bottom: 1px solid var(--mxsec-border);
+  border-right: 1px solid var(--mxsec-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -356,8 +374,8 @@ const resetChangePasswordForm = () => {
   top: 0;
   right: 0;
   height: 60px;
-  background: #FFFFFF;
-  border-bottom: 1px solid #E5E8EF;
+  background: var(--mxsec-navbar-bg);
+  border-bottom: 1px solid var(--mxsec-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -374,8 +392,8 @@ const resetChangePasswordForm = () => {
 
 .navbar-version {
   font-size: 12px;
-  color: #86909C;
-  background: #F2F3F5;
+  color: var(--mxsec-text-3);
+  background: var(--mxsec-fill-1);
   padding: 2px 8px;
   border-radius: 10px;
   line-height: 1.5;
@@ -384,6 +402,24 @@ const resetChangePasswordForm = () => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 4px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--mxsec-text-3);
+  transition: all 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--mxsec-fill-1);
+  color: var(--mxsec-text-1);
 }
 
 .user-dropdown {
@@ -391,18 +427,18 @@ const resetChangePasswordForm = () => {
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  border-radius: 4px;
-  color: #4E5969;
+  border-radius: 6px;
+  color: var(--mxsec-text-2);
   transition: background 0.2s;
 }
 
 .user-dropdown:hover {
-  background: #F2F3F5;
-  color: #1D2129;
+  background: var(--mxsec-fill-1);
+  color: var(--mxsec-text-1);
 }
 
 .user-avatar {
-  background: linear-gradient(135deg, #165DFF, #0E42D2);
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -414,7 +450,7 @@ const resetChangePasswordForm = () => {
 
 .user-arrow {
   font-size: 10px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 /* ========== Body Layout ========== */
@@ -422,14 +458,14 @@ const resetChangePasswordForm = () => {
   margin-top: 60px;
 }
 
-/* ========== Sider — 浅色主题 ========== */
+/* ========== Sider — 暗色主题 ========== */
 .sider {
   position: fixed !important;
   left: 0;
   top: 60px;
   height: calc(100vh - 60px);
-  background: #FFFFFF !important;
-  border-right: 1px solid #E5E8EF;
+  background: var(--mxsec-sider-bg) !important;
+  border-right: 1px solid var(--mxsec-border);
   z-index: 1000;
   overflow: hidden;
 }
@@ -464,11 +500,11 @@ const resetChangePasswordForm = () => {
 }
 
 .sider-menu::-webkit-scrollbar-thumb {
-  background: #E5E6EB;
+  background: var(--mxsec-scrollbar-thumb);
   border-radius: 2px;
 }
 
-/* 菜单样式覆盖 — Elkeid 浅色风格 */
+/* 菜单样式覆盖 — 暗色风格 */
 .sider :deep(.ant-menu) {
   border-right: none;
   background: transparent;
@@ -476,18 +512,18 @@ const resetChangePasswordForm = () => {
 
 .sider :deep(.ant-menu-item) {
   margin: 2px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   height: 40px;
   line-height: 40px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .sider :deep(.ant-menu-submenu-title) {
   margin: 2px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   height: 40px;
   line-height: 40px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .sider :deep(.ant-menu-submenu .ant-menu-item) {
@@ -497,10 +533,10 @@ const resetChangePasswordForm = () => {
   padding-left: 44px !important;
 }
 
-/* 选中态 — 蓝色竖条 + 浅蓝背景 */
+/* 选中态 — 蓝色竖条 + 蓝色半透明背景 */
 .sider :deep(.ant-menu-item-selected) {
-  background: #E8F3FF;
-  color: #165DFF;
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #3B82F6 !important;
   font-weight: 500;
   position: relative;
 }
@@ -513,7 +549,7 @@ const resetChangePasswordForm = () => {
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: #165DFF;
+  background: #3B82F6;
   border-radius: 0 2px 2px 0;
 }
 
@@ -524,13 +560,13 @@ const resetChangePasswordForm = () => {
 /* 悬停态 */
 .sider :deep(.ant-menu-item:not(.ant-menu-item-selected):hover),
 .sider :deep(.ant-menu-submenu-title:hover) {
-  background: #F2F3F5;
-  color: #1D2129;
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: var(--mxsec-text-1) !important;
 }
 
 /* 子菜单展开区域 */
 .sider :deep(.ant-menu-sub.ant-menu-inline) {
-  background: transparent;
+  background: transparent !important;
 }
 
 /* 菜单图标 */
@@ -546,22 +582,22 @@ const resetChangePasswordForm = () => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-top: 1px solid #E5E8EF;
-  color: #86909C;
+  border-top: 1px solid var(--mxsec-border);
+  color: var(--mxsec-text-3);
   font-size: 14px;
   transition: all 0.2s;
   flex-shrink: 0;
 }
 
 .sider-trigger:hover {
-  background: #F2F3F5;
-  color: #1D2129;
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--mxsec-text-1);
 }
 
 /* ========== Content ========== */
 .content {
   padding: 20px;
-  background: #F2F3F5;
+  background: var(--mxsec-body-bg);
   min-height: calc(100vh - 60px);
   transition: margin-left 0.2s;
 }

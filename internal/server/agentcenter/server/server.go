@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	_ "github.com/imkerbos/mxsec-platform/internal/common/compressor" // 注册 Snappy 解压器（Agent 端压缩，Server 端解压）
+	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 )
 
@@ -78,6 +79,9 @@ func CreateGRPCServer(cfg *config.Config, logger *zap.Logger) (*grpc.Server, err
 	opts = append(opts,
 		grpc.KeepaliveParams(keepaliveParams),
 		grpc.KeepaliveEnforcementPolicy(keepaliveEnforcementPolicy),
+		// 服务端指标：暴露 mxsec_ac_grpc_handled_total / duration_seconds 给 Prometheus 抓取
+		grpc.UnaryInterceptor(acmetrics.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(acmetrics.StreamServerInterceptor()),
 	)
 
 	logger.Info("gRPC Server keepalive 配置",

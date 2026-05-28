@@ -138,10 +138,10 @@
                 <a @click="showDetail(record)">详情</a>
                 <template v-if="record.status === 'quarantined'">
                   <a-popconfirm title="确认恢复该文件到原始路径？" @confirm="handleRestore(record.id)">
-                    <a style="color: #00B42A">恢复</a>
+                    <a style="color: #22C55E">恢复</a>
                   </a-popconfirm>
                   <a-popconfirm title="确认永久删除该文件？此操作不可逆。" @confirm="handleDelete(record.id)">
-                    <a style="color: #F53F3F">删除</a>
+                    <a style="color: #EF4444">删除</a>
                   </a-popconfirm>
                 </template>
               </a-space>
@@ -410,8 +410,8 @@ onMounted(() => {
 .section-row { margin-bottom: 16px; }
 
 .stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -420,20 +420,20 @@ onMounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
-.stat-value.critical { color: #F53F3F; }
-.stat-value.primary { color: #165DFF; }
+.stat-value.critical { color: #EF4444; }
+.stat-value.primary { color: var(--mxsec-primary); }
 
 .stat-label {
   margin-top: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 

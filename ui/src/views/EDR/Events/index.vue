@@ -29,12 +29,12 @@
       </a-col>
       <a-col :span="5">
         <a-card size="small">
-          <a-statistic title="进程执行" :value="stats.process_exec" :value-style="{ color: '#165DFF' }" />
+          <a-statistic title="进程执行" :value="stats.process_exec" :value-style="{ color: '#3B82F6' }" />
         </a-card>
       </a-col>
       <a-col :span="5">
         <a-card size="small">
-          <a-statistic title="文件访问" :value="stats.file_open" :value-style="{ color: '#FF7D00' }" />
+          <a-statistic title="文件访问" :value="stats.file_open" :value-style="{ color: '#F59E0B' }" />
         </a-card>
       </a-col>
       <a-col :span="5">

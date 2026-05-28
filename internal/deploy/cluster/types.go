@@ -84,6 +84,8 @@ type App struct {
 	HTTPPort           int    `yaml:"http_port"`
 	HTTPSPort          int    `yaml:"https_port"`
 	ExposeHTTPS        bool   `yaml:"expose_https"`
+	// 插件下载并发上限（Manager 端 /api/v1/plugins/download 信号量），0 → render 默认 50
+	PluginDownloadConcurrency int `yaml:"plugin_download_concurrency"`
 }
 
 type Infrastructure struct {
@@ -198,6 +200,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.App.HeartbeatInterval == 0 {
 		c.App.HeartbeatInterval = 60
+	}
+	if c.App.PluginDownloadConcurrency <= 0 {
+		c.App.PluginDownloadConcurrency = 50
 	}
 	if c.App.ManagerHTTPPort == 0 {
 		c.App.ManagerHTTPPort = 8080

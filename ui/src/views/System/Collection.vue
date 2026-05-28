@@ -153,7 +153,7 @@ onMounted(async () => {
 .license-status {
   text-align: center;
   padding: 24px 24px 20px;
-  background: linear-gradient(135deg, #f6ffed 0%, #E8F3FF 100%);
+  background: var(--mxsec-primary-bg);
   border-radius: 12px;
   margin-bottom: 16px;
 }
@@ -167,22 +167,22 @@ onMounted(async () => {
 .status-title {
   font-size: 20px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin: 0 0 4px 0;
 }
 
 .status-desc {
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--mxsec-text-3);
   margin: 0;
 }
 
 /* 详情区域 */
 .license-details {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 12px;
   padding: 20px 24px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .license-details :deep(.ant-divider) {
@@ -199,12 +199,12 @@ onMounted(async () => {
   gap: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin-bottom: 12px;
 }
 
 .section-title :deep(.anticon) {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   font-size: 16px;
 }
 
@@ -226,11 +226,11 @@ onMounted(async () => {
 .info-label {
   width: 80px;
   flex-shrink: 0;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .info-value {
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 /* 功能列表 */
@@ -251,14 +251,14 @@ onMounted(async () => {
 }
 
 .feature-check {
-  color: #00B42A;
+  color: #22C55E;
   font-size: 13px;
   margin-top: 3px;
   flex-shrink: 0;
 }
 
 .feature-close {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 13px;
   margin-top: 3px;
   flex-shrink: 0;
@@ -282,11 +282,11 @@ onMounted(async () => {
 
 .link-item :deep(.anticon) {
   font-size: 14px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .link-item a {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   text-decoration: none;
 }
 

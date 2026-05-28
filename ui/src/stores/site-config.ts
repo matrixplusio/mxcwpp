@@ -51,11 +51,20 @@ export const useSiteConfigStore = defineStore('siteConfig', () => {
     }
   }
 
-  // 初始化
+  // 初始化（幂等：多次调用只触发一次 loadConfig + 一次 listener 绑定）
+  // 旧实现每次 init 都 addEventListener，加上 router beforeEach 反复触发 init，
+  // 导致 listener 累积 N 个，一次事件触发 N 次 loadConfig → 雪崩
+  let initialized = false
+  let initPromise: Promise<void> | null = null
   const init = async () => {
-    await loadConfig()
-    // 监听配置更新事件
-    window.addEventListener('site-config-updated', loadConfig)
+    if (initialized) return
+    if (initPromise) return initPromise
+    initPromise = (async () => {
+      await loadConfig()
+      window.addEventListener('site-config-updated', loadConfig)
+      initialized = true
+    })()
+    return initPromise
   }
 
   return {

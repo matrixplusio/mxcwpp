@@ -31,6 +31,29 @@ export interface LatestAlert {
   last_seen_at: string
 }
 
+export interface IocByType {
+  ip: number
+  hash: number
+  url: number
+}
+
+export interface StorylineTop {
+  story_id: string
+  title: string
+  risk_score: number
+  phase: string
+  hostname: string
+}
+
+export interface RecentEvent {
+  id: number
+  event_type: string
+  title: string
+  hostname: string
+  severity: string
+  timestamp: string
+}
+
 export interface DashboardStats {
   hosts: number
   clusters: number
@@ -58,6 +81,16 @@ export interface DashboardStats {
   serviceStatus?: ServiceStatus
   alertTrend?: AlertTrendItem[]
   latestAlerts?: LatestAlert[]
+  // SOC Dashboard 扩展
+  securityScore?: number
+  iocTotal?: number
+  iocByType?: IocByType
+  storylineCount?: number
+  storylineTop?: StorylineTop[]
+  recentEvents?: RecentEvent[]
+  anomalyCount?: number
+  criticalAlerts?: number
+  highAlerts?: number
 }
 
 export const dashboardApi = {

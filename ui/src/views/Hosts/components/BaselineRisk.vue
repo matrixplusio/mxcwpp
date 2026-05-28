@@ -161,7 +161,7 @@
             </a-tooltip>
             <span v-else class="failure-reason">检查失败</span>
           </template>
-          <span v-else style="color: #00B42A;">-</span>
+          <span v-else style="color: #22C55E;">-</span>
         </template>
       </template>
     </a-table>
@@ -393,7 +393,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03),
     0 2px 4px rgba(0, 0, 0, 0.04),
@@ -420,7 +420,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--mxsec-card-bg);
 }
 
 .total-bg {
@@ -428,19 +428,19 @@ onMounted(() => {
 }
 
 .pass-bg {
-  background: linear-gradient(135deg, #00B42A, #009A29);
+  background: linear-gradient(135deg, #22C55E, #009A29);
 }
 
 .fail-bg {
-  background: linear-gradient(135deg, #F53F3F, #CB2634);
+  background: linear-gradient(135deg, #EF4444, #DC2626);
 }
 
 .error-bg {
-  background: linear-gradient(135deg, #FF7D00, #d48806);
+  background: linear-gradient(135deg, #F59E0B, #d48806);
 }
 
 .critical-bg {
-  background: linear-gradient(135deg, #F53F3F, #a8071a);
+  background: linear-gradient(135deg, #EF4444, #a8071a);
 }
 
 .high-bg {
@@ -448,11 +448,11 @@ onMounted(() => {
 }
 
 .medium-bg {
-  background: linear-gradient(135deg, #FF7D00, #d48806);
+  background: linear-gradient(135deg, #F59E0B, #d48806);
 }
 
 .low-bg {
-  background: linear-gradient(135deg, #165DFF, #0E42D2);
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
 }
 
 .stat-info {
@@ -463,22 +463,22 @@ onMounted(() => {
 .stat-value {
   font-size: 22px;
   font-weight: 700;
-  color: #262626;
+  color: var(--mxsec-text-1);
   line-height: 1;
   margin-bottom: 4px;
 
-  &.pass { color: #00B42A; }
-  &.fail { color: #F53F3F; }
-  &.error { color: #FF7D00; }
-  &.critical { color: #CB2634; }
+  &.pass { color: #22C55E; }
+  &.fail { color: #EF4444; }
+  &.error { color: #F59E0B; }
+  &.critical { color: #DC2626; }
   &.high { color: #fa541c; }
-  &.medium { color: #FF7D00; }
-  &.low { color: #165DFF; }
+  &.medium { color: #F59E0B; }
+  &.low { color: var(--mxsec-primary); }
 }
 
 .stat-label {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-weight: 400;
 }
 
@@ -496,9 +496,9 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .filter-left {
@@ -514,7 +514,7 @@ onMounted(() => {
 }
 
 .failure-reason {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   cursor: help;
 }

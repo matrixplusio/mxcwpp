@@ -106,7 +106,7 @@
           </template>
           <template v-else-if="column.key === 'errorMsg'">
             <a-tooltip v-if="record.errorMsg" :title="record.errorMsg">
-              <span style="color: #F53F3F; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
+              <span style="color: #EF4444; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
             </a-tooltip>
             <span v-else>-</span>
           </template>
@@ -282,8 +282,8 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  background: #FAFAFA;
-  border: 1px solid #F0F0F0;
+  background: var(--mxsec-fill-1);
+  border: 1px solid var(--mxsec-border);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -298,18 +298,18 @@ onMounted(() => {
 
 .sync-status-label {
   font-weight: 500;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   white-space: nowrap;
 }
 
 .sync-status-info {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .sync-status-error {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;

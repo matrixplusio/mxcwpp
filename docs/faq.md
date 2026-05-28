@@ -219,13 +219,13 @@ openssl x509 -in deploy/certs/ca.crt -noout -dates
    ```bash
    docker compose logs consumer | grep -i "cel\|detection\|rule"
    ```
-3. **检查数据源**：确认 Tetragon 已安装且 Sensor 插件正常运行
+3. **检查数据源**：EDR/eBPF 已内置于 agent（不再独立 sensor/tetragon plugin），确认 agent 进程含 EDR 采集器
    ```bash
    # 在 Agent 所在主机检查
-   kubectl get pods -n kube-system | grep tetragon
-   ls -la /var/lib/mxsec-agent/plugin/sensor
+   sudo systemctl status mxsec-agent
+   sudo journalctl -u mxsec-agent --since=10min | grep -iE "edr|ebpf|tetragon"
    ```
-4. **检查数据流转**：确认原始事件数据已写入 Kafka，Consumer 正常消费
+4. **检查数据流转**：确认 EDR 事件已写入 Kafka，Consumer 正常消费
 
 ### 任务创建后一直 pending 不执行
 

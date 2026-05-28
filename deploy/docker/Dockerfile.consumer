@@ -35,20 +35,20 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -g 10001 -S mxsec && adduser -u 10001 -S mxsec -G mxsec
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/consumer /usr/bin/consumer
 
-RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform && \
-    chown -R mxsec:mxsec /var/log/mxsec-platform /opt/mxsec-platform
+RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform
 
 WORKDIR /opt/mxsec-platform
+
+EXPOSE 9100
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
     CMD kill -0 1 || exit 1
 
-USER mxsec
+# 容器内 root 运行：避免 host bind-mount log 目录 owner 不一致导致权限拒绝
 
 ENTRYPOINT ["/usr/bin/consumer"]
 CMD ["-config", "/etc/mxsec-platform/server.yaml"]

@@ -21,7 +21,7 @@
       </a-col>
       <a-col :span="8">
         <div class="q-stat-card">
-          <div class="q-stat-value" style="color: #00B42A">{{ stats.restored }}</div>
+          <div class="q-stat-value" style="color: #22C55E">{{ stats.restored }}</div>
           <div class="q-stat-label">已恢复</div>
         </div>
       </a-col>
@@ -168,18 +168,18 @@ onMounted(() => { loadFiles() })
 .section-row { margin-bottom: 16px; }
 
 .q-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
 }
-.q-stat-value { font-size: 28px; font-weight: 700; color: #1D2129; line-height: 1.2; }
-.q-stat-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.q-stat-value { font-size: 28px; font-weight: 700; color: var(--mxsec-text-1); line-height: 1.2; }
+.q-stat-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-body { padding: 20px; }
@@ -190,8 +190,8 @@ onMounted(() => { loadFiles() })
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
 }
 </style>

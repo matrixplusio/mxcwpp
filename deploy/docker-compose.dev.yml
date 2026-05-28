@@ -364,6 +364,7 @@ services:
       - "9090:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus-rules.yml:/etc/prometheus/rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -372,6 +373,14 @@ services:
       - "--web.enable-lifecycle"
     networks:
       - mxsec-net
+
+  # 撤销：原计划部署 mysql/redis/kafka/clickhouse exporter + alertmanager
+  # 重新评估后判定全部重复造轮子：
+  #   - mysql/redis/clickhouse 指标已由 driver (gorm/redis INFO/system.metrics) 真实采集
+  #   - kafka 指标已由 sarama admin 真实采集
+  #   - 告警路由已由 mxsec alerts 表 + notification 系统覆盖 (Lark/Webhook)
+  # 替代：Prometheus 直 webhook 到 manager /api/v1/internal/alerts/prometheus，
+  #       告警入 alerts 表 (source=prometheus_infra)，复用现有 notification 分发。
 
 networks:
   mxsec-net:

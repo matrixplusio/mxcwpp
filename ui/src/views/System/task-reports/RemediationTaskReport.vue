@@ -101,19 +101,19 @@
               <p class="summary-paragraph">{{ report.summary.remediationOverview }}</p>
               <div class="summary-stats">
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #165DFF">{{ report.statistics.totalTasks }}</div>
+                  <div class="stat-value" style="color: #3B82F6">{{ report.statistics.totalTasks }}</div>
                   <div class="stat-label">修复任务</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #00B42A">{{ report.statistics.successTasks }}</div>
+                  <div class="stat-value" style="color: #22C55E">{{ report.statistics.successTasks }}</div>
                   <div class="stat-label">成功</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #F53F3F">{{ report.statistics.failedTasks }}</div>
+                  <div class="stat-value" style="color: #EF4444">{{ report.statistics.failedTasks }}</div>
                   <div class="stat-label">失败</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #FF7D00">{{ report.statistics.unpatchedVulns }}</div>
+                  <div class="stat-value" style="color: #F59E0B">{{ report.statistics.unpatchedVulns }}</div>
                   <div class="stat-label">未修复漏洞</div>
                 </div>
               </div>
@@ -129,15 +129,15 @@
             <div class="section-subtitle">Remediation Statistics</div>
           </div>
           <div class="stats-grid">
-            <div class="stats-card" style="border-left: 4px solid #165DFF">
+            <div class="stats-card" style="border-left: 4px solid #3B82F6">
               <div class="stats-info">
-                <div class="stats-value" style="color: #165DFF">{{ report.statistics.remediationRate.toFixed(1) }}%</div>
+                <div class="stats-value" style="color: #3B82F6">{{ report.statistics.remediationRate.toFixed(1) }}%</div>
                 <div class="stats-label">修复率</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #00B42A">
+            <div class="stats-card" style="border-left: 4px solid #22C55E">
               <div class="stats-info">
-                <div class="stats-value" style="color: #00B42A">{{ report.statistics.successRate.toFixed(1) }}%</div>
+                <div class="stats-value" style="color: #22C55E">{{ report.statistics.successRate.toFixed(1) }}%</div>
                 <div class="stats-label">任务成功率</div>
               </div>
             </div>
@@ -147,9 +147,9 @@
                 <div class="stats-label">MTTR</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #F53F3F">
+            <div class="stats-card" style="border-left: 4px solid #EF4444">
               <div class="stats-info">
-                <div class="stats-value" style="color: #F53F3F">{{ report.statistics.unpatchedVulns }}</div>
+                <div class="stats-value" style="color: #EF4444">{{ report.statistics.unpatchedVulns }}</div>
                 <div class="stats-label">待修复</div>
               </div>
             </div>
@@ -252,8 +252,8 @@
                 <td>{{ host.hostname || host.hostId }}</td>
                 <td>{{ host.ip || '-' }}</td>
                 <td>{{ host.total }}</td>
-                <td><span style="color: #00B42A">{{ host.success }}</span></td>
-                <td><span v-if="host.failed > 0" style="color: #F53F3F; font-weight: 600">{{ host.failed }}</span><span v-else>0</span></td>
+                <td><span style="color: #22C55E">{{ host.success }}</span></td>
+                <td><span v-if="host.failed > 0" style="color: #EF4444; font-weight: 600">{{ host.failed }}</span><span v-else>0</span></td>
               </tr>
             </tbody>
           </table>
@@ -282,7 +282,7 @@
                 <td>{{ task.hostname || task.ip }}</td>
                 <td>{{ task.component }}</td>
                 <td>
-                  <span :style="{ color: task.status === 'success' ? '#00B42A' : '#F53F3F' }">
+                  <span :style="{ color: task.status === 'success' ? '#22C55E' : '#EF4444' }">
                     {{ task.status === 'success' ? '成功' : '失败' }}
                   </span>
                 </td>
@@ -490,7 +490,7 @@ onMounted(() => { loadSavedReports() })
 <style lang="less" scoped>
 .time-range-selector {
   padding: 24px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }

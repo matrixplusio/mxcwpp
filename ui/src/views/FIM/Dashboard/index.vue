@@ -19,16 +19,16 @@
         <a-card>
           <a-statistic title="总变更事件" :value="stats.total" :value-style="{ fontSize: '28px' }">
             <template #prefix>
-              <FileSearchOutlined style="color: #165DFF" />
+              <FileSearchOutlined style="color: #3B82F6" />
             </template>
           </a-statistic>
         </a-card>
       </a-col>
       <a-col :span="4">
         <a-card>
-          <a-statistic title="待确认事件" :value="stats.pending" :value-style="{ color: '#FF7D00', fontSize: '28px' }">
+          <a-statistic title="待确认事件" :value="stats.pending" :value-style="{ color: '#F59E0B', fontSize: '28px' }">
             <template #prefix>
-              <ClockCircleOutlined style="color: #FF7D00" />
+              <ClockCircleOutlined style="color: #F59E0B" />
             </template>
           </a-statistic>
         </a-card>
@@ -44,27 +44,27 @@
       </a-col>
       <a-col :span="4">
         <a-card>
-          <a-statistic title="严重/高危" :value="stats.critical + stats.high" :value-style="{ color: '#CB2634', fontSize: '28px' }">
+          <a-statistic title="严重/高危" :value="stats.critical + stats.high" :value-style="{ color: '#DC2626', fontSize: '28px' }">
             <template #prefix>
-              <WarningOutlined style="color: #CB2634" />
+              <WarningOutlined style="color: #DC2626" />
             </template>
           </a-statistic>
         </a-card>
       </a-col>
       <a-col :span="4">
         <a-card>
-          <a-statistic title="新增文件" :value="stats.added" :value-style="{ color: '#00B42A', fontSize: '28px' }">
+          <a-statistic title="新增文件" :value="stats.added" :value-style="{ color: '#22C55E', fontSize: '28px' }">
             <template #prefix>
-              <PlusCircleOutlined style="color: #00B42A" />
+              <PlusCircleOutlined style="color: #22C55E" />
             </template>
           </a-statistic>
         </a-card>
       </a-col>
       <a-col :span="4">
         <a-card>
-          <a-statistic title="删除文件" :value="stats.removed" :value-style="{ color: '#F53F3F', fontSize: '28px' }">
+          <a-statistic title="删除文件" :value="stats.removed" :value-style="{ color: '#EF4444', fontSize: '28px' }">
             <template #prefix>
-              <MinusCircleOutlined style="color: #F53F3F" />
+              <MinusCircleOutlined style="color: #EF4444" />
             </template>
           </a-statistic>
         </a-card>
@@ -181,7 +181,7 @@ const trendChartOption = computed(() => ({
       smooth: true,
       areaStyle: { opacity: 0.15 },
       lineStyle: { width: 2 },
-      itemStyle: { color: '#165DFF' },
+      itemStyle: { color: '#3B82F6' },
     },
   ],
 }))
@@ -196,10 +196,10 @@ const severityPieOption = computed(() => ({
       center: ['50%', '45%'],
       label: { show: false },
       data: [
-        { value: stats.critical, name: '严重', itemStyle: { color: '#CB2634' } },
+        { value: stats.critical, name: '严重', itemStyle: { color: '#DC2626' } },
         { value: stats.high, name: '高危', itemStyle: { color: '#fa541c' } },
-        { value: stats.medium, name: '中危', itemStyle: { color: '#FF7D00' } },
-        { value: stats.low, name: '低危', itemStyle: { color: '#165DFF' } },
+        { value: stats.medium, name: '中危', itemStyle: { color: '#F59E0B' } },
+        { value: stats.low, name: '低危', itemStyle: { color: '#3B82F6' } },
       ].filter((d) => d.value > 0),
     },
   ],

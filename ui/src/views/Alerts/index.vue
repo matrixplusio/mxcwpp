@@ -353,13 +353,13 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 600;
   margin: 0;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .config-tip {
   margin-top: 8px;
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .stats {
@@ -370,7 +370,7 @@ onMounted(() => {
 
 .stat-card {
   flex: 1;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border: none;
   border-radius: 8px;
   padding: 20px;
@@ -398,15 +398,15 @@ onMounted(() => {
   justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--mxsec-card-bg);
 }
 
 .stat-active .stat-icon-bg {
-  background: linear-gradient(135deg, #165DFF, #0E42D2);
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
 }
 
 .stat-critical .stat-icon-bg {
-  background: linear-gradient(135deg, #F53F3F, #CB2634);
+  background: linear-gradient(135deg, #EF4444, #DC2626);
 }
 
 .stat-high .stat-icon-bg {
@@ -414,11 +414,11 @@ onMounted(() => {
 }
 
 .stat-medium .stat-icon-bg {
-  background: linear-gradient(135deg, #FF7D00, #d48806);
+  background: linear-gradient(135deg, #F59E0B, #d48806);
 }
 
 .stat-low .stat-icon-bg {
-  background: linear-gradient(135deg, #165DFF, #0E42D2);
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
 }
 
 .stat-info {
@@ -428,12 +428,12 @@ onMounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin-bottom: 4px;
   line-height: 1;
 
   &.critical {
-    color: #F53F3F;
+    color: #EF4444;
   }
 
   &.high {
@@ -441,17 +441,17 @@ onMounted(() => {
   }
 
   &.medium {
-    color: #FF7D00;
+    color: #F59E0B;
   }
 
   &.low {
-    color: #165DFF;
+    color: var(--mxsec-primary);
   }
 }
 
 .stat-label {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-weight: 400;
 }
 
@@ -459,7 +459,7 @@ onMounted(() => {
   display: flex;
   gap: 0;
   margin-bottom: 24px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border: none;
   border-radius: 8px;
   padding: 4px;
@@ -479,19 +479,19 @@ onMounted(() => {
   font-weight: 400;
 
   &:hover {
-    color: #165DFF;
+    color: var(--mxsec-primary);
     background: #f5f7fa;
   }
 
   &.active {
-    background: linear-gradient(135deg, #165DFF 0%, #0E42D2 100%);
-    color: #fff;
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    color: var(--mxsec-card-bg);
     font-weight: 500;
     box-shadow: 0 2px 8px rgba(22, 93, 255, 0.3);
 
     &:hover {
-      background: linear-gradient(135deg, #4080FF 0%, #165DFF 100%);
-      color: #fff;
+      background: linear-gradient(135deg, #4080FF 0%, #3B82F6 100%);
+      color: var(--mxsec-card-bg);
     }
   }
 }

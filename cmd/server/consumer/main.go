@@ -21,6 +21,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/anomaly"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/baseline"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
+	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/rulesync"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/siem"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/storyline"
@@ -234,6 +235,22 @@ func main() {
 	anomalyDet.StartRetrain(ctx.Done())
 	router.SetAnomalyDetector(anomalyDet)
 	logger.Info("ML 异常检测引擎已启动")
+
+	// 7.5 启动 Prometheus /metrics HTTP server（与消费循环并行）
+	//
+	// Consumer 进程独立，需要单独 HTTP 端口暴露指标供 Prometheus 抓取。
+	// 默认 :9100；可通过 metrics.consumer_addr 配置项覆盖。
+	metricsAddr := ":9100"
+	if cfg.Metrics.ConsumerAddr != "" {
+		metricsAddr = cfg.Metrics.ConsumerAddr
+	}
+	// 自暴露 build 元信息（version + PID），monitor.go 通过 PromQL 拉取
+	consumermetrics.SetBuildInfo(buildVersion, "")
+	go func() {
+		if err := consumermetrics.StartHTTPServer(ctx, metricsAddr, logger); err != nil {
+			logger.Error("Consumer metrics server 异常退出", zap.Error(err))
+		}
+	}()
 
 	// 8. 启动消费
 	// 启动进程树清理协程

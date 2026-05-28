@@ -15,19 +15,19 @@
       </a-col>
       <a-col :span="6">
         <div class="scan-stat-card">
-          <div class="scan-stat-value" style="color: #F53F3F">{{ stats.threatsFound }}</div>
+          <div class="scan-stat-value" style="color: #EF4444">{{ stats.threatsFound }}</div>
           <div class="scan-stat-label">发现威胁</div>
         </div>
       </a-col>
       <a-col :span="6">
         <div class="scan-stat-card">
-          <div class="scan-stat-value" style="color: #00B42A">{{ stats.cleaned }}</div>
+          <div class="scan-stat-value" style="color: #22C55E">{{ stats.cleaned }}</div>
           <div class="scan-stat-label">已清理</div>
         </div>
       </a-col>
       <a-col :span="6">
         <div class="scan-stat-card">
-          <div class="scan-stat-value" style="color: #FF7D00">{{ stats.quarantined }}</div>
+          <div class="scan-stat-value" style="color: #F59E0B">{{ stats.quarantined }}</div>
           <div class="scan-stat-label">已隔离</div>
         </div>
       </a-col>
@@ -294,18 +294,18 @@ onMounted(() => { loadTasks(); loadResults() })
 .section-row { margin-bottom: 16px; }
 
 .scan-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
 }
-.scan-stat-value { font-size: 28px; font-weight: 700; color: #1D2129; line-height: 1.2; }
-.scan-stat-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.scan-stat-value { font-size: 28px; font-weight: 700; color: var(--mxsec-text-1); line-height: 1.2; }
+.scan-stat-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-header {
@@ -313,9 +313,9 @@ onMounted(() => { loadTasks(); loadResults() })
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
-.card-title { font-size: 14px; font-weight: 600; color: #1D2129; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 .card-body { padding: 20px; }
 
 .filter-bar {
@@ -324,8 +324,8 @@ onMounted(() => { loadTasks(); loadResults() })
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
 }
 </style>

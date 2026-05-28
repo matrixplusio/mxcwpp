@@ -101,11 +101,11 @@
               <p class="summary-paragraph">{{ report.summary.vulnOverview }}</p>
               <div class="summary-stats">
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #F53F3F">{{ report.statistics.totalVulns }}</div>
+                  <div class="stat-value" style="color: #EF4444">{{ report.statistics.totalVulns }}</div>
                   <div class="stat-label">总漏洞数</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #FF7D00">{{ report.statistics.unpatchedVulns }}</div>
+                  <div class="stat-value" style="color: #F59E0B">{{ report.statistics.unpatchedVulns }}</div>
                   <div class="stat-label">未修复</div>
                 </div>
                 <div class="stat-item">
@@ -144,15 +144,15 @@
             <div class="section-subtitle">Vulnerability Statistics</div>
           </div>
           <div class="stats-grid">
-            <div class="stats-card" style="border-left: 4px solid #F53F3F">
+            <div class="stats-card" style="border-left: 4px solid #EF4444">
               <div class="stats-info">
-                <div class="stats-value" style="color: #F53F3F">{{ report.statistics.unpatchedVulns }}</div>
+                <div class="stats-value" style="color: #EF4444">{{ report.statistics.unpatchedVulns }}</div>
                 <div class="stats-label">未修复</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #00B42A">
+            <div class="stats-card" style="border-left: 4px solid #22C55E">
               <div class="stats-info">
-                <div class="stats-value" style="color: #00B42A">{{ report.statistics.fixedVulns }}</div>
+                <div class="stats-value" style="color: #22C55E">{{ report.statistics.fixedVulns }}</div>
                 <div class="stats-label">已修复</div>
               </div>
             </div>
@@ -162,9 +162,9 @@
                 <div class="stats-label">已忽略</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #165DFF">
+            <div class="stats-card" style="border-left: 4px solid #3B82F6">
               <div class="stats-info">
-                <div class="stats-value" style="color: #165DFF">{{ report.statistics.affectedHosts }}</div>
+                <div class="stats-value" style="color: #3B82F6">{{ report.statistics.affectedHosts }}</div>
                 <div class="stats-label">影响主机</div>
               </div>
             </div>
@@ -228,9 +228,9 @@
               <tr v-for="host in report.hostDetails" :key="host.hostId">
                 <td>{{ host.hostname || host.hostId }}</td>
                 <td>{{ host.ip || '-' }}</td>
-                <td><span style="color: #F53F3F">{{ host.vulnCount }}</span></td>
-                <td><span v-if="host.criticalCount > 0" style="color: #F53F3F; font-weight: 600">{{ host.criticalCount }}</span><span v-else>0</span></td>
-                <td><span v-if="host.highCount > 0" style="color: #FF7D00; font-weight: 600">{{ host.highCount }}</span><span v-else>0</span></td>
+                <td><span style="color: #EF4444">{{ host.vulnCount }}</span></td>
+                <td><span v-if="host.criticalCount > 0" style="color: #EF4444; font-weight: 600">{{ host.criticalCount }}</span><span v-else>0</span></td>
+                <td><span v-if="host.highCount > 0" style="color: #F59E0B; font-weight: 600">{{ host.highCount }}</span><span v-else>0</span></td>
               </tr>
             </tbody>
           </table>
@@ -449,7 +449,7 @@ onMounted(() => { loadSavedReports() })
 <style lang="less" scoped>
 .time-range-selector {
   padding: 24px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }

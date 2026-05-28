@@ -559,14 +559,14 @@ const handleIgnoreConfirm = () => {
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
   border: 1px solid #91d5ff;
   border-radius: 4px;
   margin-bottom: 16px;
 }
 
 .selection-info {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   font-size: 14px;
   
   strong {

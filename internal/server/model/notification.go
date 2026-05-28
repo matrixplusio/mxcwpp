@@ -32,6 +32,7 @@ const (
 	NotifyCategoryDetection     NotifyCategory = "detection"      // CEL 规则检测告警通知
 	NotifyCategoryKubeAlert     NotifyCategory = "kube_alert"     // K8s 安全告警通知
 	NotifyCategoryVulnBulletin  NotifyCategory = "vuln_bulletin"  // 漏洞通报通知
+	NotifyCategoryInfraAlert    NotifyCategory = "infra_alert"    // 基础设施告警（Prometheus webhook 入）
 )
 
 // NotificationSeverity 通知等级

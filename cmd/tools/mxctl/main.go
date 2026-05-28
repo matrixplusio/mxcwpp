@@ -45,10 +45,27 @@ func main() {
 	}
 }
 
+// validateConfigPath 强制 -f 必填，且拒绝 example 路径误执行。
+// 误执行 example.yaml 会用 fake host/SAN 触发 deploy 或污染 deploy/certs/。
+// 如有意用 example（CI/本地试跑）需显式 -allow-example。
+func validateConfigPath(path string, allowExample bool) error {
+	if path == "" {
+		return fmt.Errorf("必须指定 -f cluster.yaml 路径（参考 deploy/prod/cluster.example.yaml）")
+	}
+	if strings.Contains(strings.ToLower(filepath.Base(path)), "example") && !allowExample {
+		return fmt.Errorf("配置路径含 'example'（%s），疑似 fake 配置；如确认使用请加 -allow-example", path)
+	}
+	return nil
+}
+
 func runCheck(args []string) error {
 	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	configPath := fs.String("f", "deploy/prod/cluster.example.yaml", "cluster.yaml 路径")
+	configPath := fs.String("f", "", "cluster.yaml 路径（必填）")
+	allowExample := fs.Bool("allow-example", false, "允许使用 example.yaml 路径")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateConfigPath(*configPath, *allowExample); err != nil {
 		return err
 	}
 	cfg, err := cluster.LoadConfig(*configPath)
@@ -62,8 +79,12 @@ func runCheck(args []string) error {
 
 func runPreflight(args []string) error {
 	fs := flag.NewFlagSet("preflight", flag.ExitOnError)
-	configPath := fs.String("f", "deploy/prod/cluster.example.yaml", "cluster.yaml 路径")
+	configPath := fs.String("f", "", "cluster.yaml 路径（必填）")
+	allowExample := fs.Bool("allow-example", false, "允许使用 example.yaml 路径")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateConfigPath(*configPath, *allowExample); err != nil {
 		return err
 	}
 	cfg, _, _, err := loadContext(*configPath, "")
@@ -83,9 +104,13 @@ func runPreflight(args []string) error {
 
 func runRender(args []string) error {
 	fs := flag.NewFlagSet("render", flag.ExitOnError)
-	configPath := fs.String("f", "deploy/prod/cluster.example.yaml", "cluster.yaml 路径")
+	configPath := fs.String("f", "", "cluster.yaml 路径（必填）")
+	allowExample := fs.Bool("allow-example", false, "允许使用 example.yaml 路径")
 	outputDir := fs.String("o", "", "渲染输出根目录，默认 deploy/prod/out")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateConfigPath(*configPath, *allowExample); err != nil {
 		return err
 	}
 	cfg, repoRoot, outRoot, err := loadContext(*configPath, *outputDir)
@@ -111,11 +136,15 @@ func runRender(args []string) error {
 
 func runDeploy(args []string) error {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
-	configPath := fs.String("f", "deploy/prod/cluster.example.yaml", "cluster.yaml 路径")
+	configPath := fs.String("f", "", "cluster.yaml 路径（必填）")
+	allowExample := fs.Bool("allow-example", false, "允许使用 example.yaml 路径")
 	outputDir := fs.String("o", "", "渲染输出根目录，默认 deploy/prod/out")
 	skipInstall := fs.Bool("skip-install", false, "跳过远端依赖安装")
 	skipHealthCheck := fs.Bool("skip-healthcheck", false, "跳过部署后的健康检查")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateConfigPath(*configPath, *allowExample); err != nil {
 		return err
 	}
 	cfg, repoRoot, outRoot, err := loadContext(*configPath, *outputDir)

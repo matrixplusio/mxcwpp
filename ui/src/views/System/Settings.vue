@@ -307,7 +307,7 @@ onMounted(() => {
 
 .page-description {
   margin: 0;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 14px;
 }
 
@@ -317,7 +317,7 @@ onMounted(() => {
 
 .form-item-hint {
   margin-top: 4px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
 }
 
@@ -333,13 +333,13 @@ onMounted(() => {
   border: 1px solid #e8e8e8;
   border-radius: 8px;
   padding: 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   margin-bottom: 8px;
   transition: all 0.2s ease;
 }
 
 .logo-preview:hover {
-  border-color: #165DFF;
+  border-color: var(--mxsec-primary);
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
 }
 
@@ -357,7 +357,7 @@ onMounted(() => {
 
 .upload-hint {
   margin-top: 8px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
 }
 </style>

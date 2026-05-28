@@ -211,6 +211,74 @@ func (e *RemediationExecutor) dispatchTask(task *model.RemediationTask, transfer
 	return nil
 }
 
+// HandleProgress 处理 Agent 上报的修复阶段进度事件（DataType 9201）。
+//
+// fields 来自 plugin sendProgress：
+//
+//	task_id / token / stage (detect_os|check_installed|...) / message / detail
+//
+// 写入 remediation_task_events，UI 通过 SSE 订阅实时显示。
+// 同时同步 RemediationTask.Status 反映当前 stage（用于列表页快速渲染）。
+func (e *RemediationExecutor) HandleProgress(agentID string, data map[string]string) error {
+	taskIDStr, ok := data["task_id"]
+	if !ok || taskIDStr == "" {
+		return fmt.Errorf("missing task_id in remediation progress")
+	}
+	var taskID uint
+	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
+		return fmt.Errorf("invalid task_id: %s", taskIDStr)
+	}
+
+	var task model.RemediationTask
+	if err := e.db.First(&task, taskID).Error; err != nil {
+		return fmt.Errorf("task not found: %d", taskID)
+	}
+	if task.HostID != agentID {
+		return fmt.Errorf("agent %s 无权上报任务 %d 进度", agentID, taskID)
+	}
+
+	stage := data["stage"]
+	message := data["message"]
+	detail := data["detail"]
+
+	// 写 events 表（sequence = 当前 task 已有 event 数 + 1）
+	var seq int64
+	e.db.Model(&model.RemediationTaskEvent{}).Where("task_id = ?", taskID).Count(&seq)
+	event := &model.RemediationTaskEvent{
+		TaskID:   taskID,
+		Sequence: uint(seq + 1),
+		Stage:    stage,
+		Message:  message,
+		Detail:   detail,
+		Source:   "plugin",
+	}
+	if err := e.db.Create(event).Error; err != nil {
+		e.logger.Warn("写 remediation_task_event 失败",
+			zap.Uint("task_id", taskID), zap.String("stage", stage), zap.Error(err))
+	}
+
+	// 同步 task 状态（仅当 stage 在已知 lifecycle 列表内）
+	if isValidLifecycleStage(stage) {
+		if err := e.db.Model(&task).Update("status", stage).Error; err != nil {
+			e.logger.Warn("同步 task status 失败",
+				zap.Uint("task_id", taskID), zap.String("stage", stage), zap.Error(err))
+		}
+	}
+	return nil
+}
+
+func isValidLifecycleStage(s string) bool {
+	switch s {
+	case model.RemTaskStatusPreCheck,
+		model.RemTaskStatusDownload,
+		model.RemTaskStatusInstall,
+		model.RemTaskStatusVerifying,
+		"detect_os", "check_installed", "check_available":
+		return true
+	}
+	return false
+}
+
 // HandleResult 处理 Agent 上报的修复执行结果
 // DataType = 9001
 func (e *RemediationExecutor) HandleResult(agentID string, data map[string]string) error {
@@ -308,6 +376,22 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 					zap.Uint("task_id", task.ID),
 					zap.Error(err))
 			}
+		}
+	}
+
+	// P4: 修复成功后清 precheck cache，下轮 6h cron 会重检确认 already_latest，
+	// UI 显示"未 pre-check"提示用户主动触发，或等 cron 自动覆盖
+	if status == "success" {
+		if err := e.db.Model(&model.HostVulnerability{}).
+			Where("vuln_id = ? AND host_id = ?", task.VulnID, task.HostID).
+			Updates(map[string]any{
+				"precheck_status":     model.PreCheckStatusUnchecked,
+				"precheck_message":    "修复任务执行后已重置，等待复扫验证",
+				"precheck_packages":   "",
+				"precheck_checked_at": nil,
+			}).Error; err != nil {
+			e.logger.Warn("清 precheck cache 失败",
+				zap.Uint("task_id", taskID), zap.Error(err))
 		}
 	}
 

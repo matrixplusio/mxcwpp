@@ -20,6 +20,8 @@
             <a-select-option value="baseline">Baseline 插件</a-select-option>
             <a-select-option value="collector">Collector 插件</a-select-option>
             <a-select-option value="fim">FIM 插件</a-select-option>
+            <a-select-option value="scanner">Scanner 插件</a-select-option>
+            <a-select-option value="remediation">Remediation 插件</a-select-option>
           </a-select>
           <a-select v-model:value="filterStatus" style="width: 120px" placeholder="状态" allow-clear @change="loadPolicies">
             <a-select-option value="enabled">启用</a-select-option>
@@ -86,6 +88,8 @@
             <a-select-option value="baseline">Baseline 插件</a-select-option>
             <a-select-option value="collector">Collector 插件</a-select-option>
             <a-select-option value="fim">FIM 插件</a-select-option>
+            <a-select-option value="scanner">Scanner 插件</a-select-option>
+            <a-select-option value="remediation">Remediation 插件</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="目标版本" name="targetVersion">
@@ -228,8 +232,8 @@ onMounted(() => { loadPolicies() })
 .comp-policy-page { width: 100%; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-body { padding: 20px; }
@@ -240,8 +244,8 @@ onMounted(() => { loadPolicies() })
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
 }
 </style>

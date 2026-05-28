@@ -62,6 +62,10 @@ export const remediationTasksApi = {
     return apiClient.post<{ created: number; vulnCount: number; hostCount: number; skipped: number }>('/remediation-tasks/batch', { vulnIds })
   },
 
+  createForHost: (payload: { hostId: string; vulnIds?: number[]; allUnpatched?: boolean }) => {
+    return apiClient.post<{ created: number; skipped: number; hostId: string; hostname: string }>('/remediation-tasks/host-batch', payload)
+  },
+
   batchConfirm: (taskIds: number[]) => {
     return apiClient.post<{ confirmed: number }>('/remediation-tasks/batch-confirm', { taskIds })
   },

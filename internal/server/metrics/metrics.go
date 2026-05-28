@@ -3,6 +3,8 @@ package metrics
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -99,6 +101,16 @@ var (
 		},
 		[]string{"operation", "table"},
 	)
+
+	// buildInfo 进程 build 元信息：value=1，version + pid 入 labels
+	// monitor.go 通过 PromQL `mxsec_build_info{job="mxsec-manager"}` 拉取 labels.version + labels.pid
+	buildInfo = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "mxsec_build_info",
+			Help: "进程 build 元信息（value=1，labels 含 version/pid/commit）",
+		},
+		[]string{"version", "pid", "commit"},
+	)
 )
 
 // Init 初始化 Prometheus 指标
@@ -121,6 +133,7 @@ func Init(logger *zap.Logger) *prometheus.Registry {
 			httpRequestsTotal,
 			httpRequestDuration,
 			dbQueryDuration,
+			buildInfo,
 		)
 
 		if logger != nil {
@@ -184,4 +197,16 @@ func RecordHTTPRequestDuration(method, endpoint string, duration float64) {
 // RecordDBQueryDuration 记录数据库查询延迟
 func RecordDBQueryDuration(operation, table string, duration float64) {
 	dbQueryDuration.WithLabelValues(operation, table).Observe(duration)
+}
+
+// SetBuildInfo 设置进程 build 元信息（Manager 启动时调一次）。
+// monitor.go 通过 PromQL `mxsec_build_info{job="mxsec-manager"}` 读 version + pid。
+func SetBuildInfo(version, commit string) {
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+	buildInfo.WithLabelValues(version, strconv.Itoa(os.Getpid()), commit).Set(1)
 }

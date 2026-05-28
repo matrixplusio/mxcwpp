@@ -79,10 +79,12 @@ type nvdNode struct {
 }
 
 type nvdCPEMatch struct {
-	Vulnerable          bool   `json:"vulnerable"`
-	Criteria            string `json:"criteria"`
-	VersionEndExcluding string `json:"versionEndExcluding,omitempty"`
-	VersionEndIncluding string `json:"versionEndIncluding,omitempty"`
+	Vulnerable            bool   `json:"vulnerable"`
+	Criteria              string `json:"criteria"`
+	VersionStartIncluding string `json:"versionStartIncluding,omitempty"`
+	VersionStartExcluding string `json:"versionStartExcluding,omitempty"`
+	VersionEndIncluding   string `json:"versionEndIncluding,omitempty"`
+	VersionEndExcluding   string `json:"versionEndExcluding,omitempty"`
 }
 
 // ========== 已安装软件信息 ==========
@@ -154,13 +156,12 @@ func (v *VulnScanner) SyncNVDWithSoftware(softwareByName map[string][]installedS
 			continue
 		}
 
-		// CPE 匹配已安装软件
+		// CPE 严格匹配已安装软件 — 唯一精确手段
+		// 历史 fallback：matchByDescription 用 substring keyword 匹配（如描述含 "openssl" 即
+		// 关联所有装 openssl 的 host），导致大量 fake vuln（如 Rapid7 Insight Agent Windows
+		// 提权 CVE 错关联到 Linux openssl）。该 fallback 已废弃，永远不再使用。
+		// 无 CPE 配置（Awaiting Analysis）的 CVE 直接跳过，保证 99.99% 数据真实性。
 		matches := v.matchCPEToSoftware(item.CVE.Configurations, softwareByName)
-
-		// 对于无 CPE 配置（Awaiting Analysis）的 CVE，使用描述关键词匹配
-		if len(matches) == 0 {
-			matches = v.matchByDescription(item.CVE, softwareByName)
-		}
 		if len(matches) == 0 {
 			continue
 		}
@@ -197,6 +198,7 @@ func (v *VulnScanner) SyncNVDWithSoftware(softwareByName map[string][]installedS
 			CurrentVersion:   firstMatch.Version,
 			FixedVersion:     fixedVersion,
 			ReferenceUrl:     referenceURL,
+			Confidence:       model.VulnConfidenceLow, // NVD CPE 匹配 → low（OS Advisory 优先级更高）
 		}
 
 		if err := v.db.Clauses(clause.OnConflict{
@@ -386,24 +388,34 @@ func (v *VulnScanner) matchCPENode(node nvdNode, softwareByName map[string][]ins
 		if !cpe.Vulnerable {
 			continue
 		}
-		// CPE 2.3 格式: cpe:2.3:part:vendor:product:version:...
-		parts := strings.Split(cpe.Criteria, ":")
-		if len(parts) < 5 {
+		parsed := parseCPE23(cpe.Criteria)
+		if parsed == nil {
 			continue
 		}
-		product := strings.ToLower(parts[4])
-		if product == "*" || product == "" {
+		// 严格过滤：仅接受 Linux 应用 (part='a' application)，跳过 Windows/macOS/Android-specific CVE。
+		// CPE 2.3 target_sw 字段（idx 10）记录目标软件平台。
+		// 历史 bug：CVE-2026-6482 是 Rapid7 Insight Agent Windows-only，曾被 substring fallback
+		// 错关联 Linux openssl。严格 CPE 过滤后再加上 advisory.validateAdvisory 拒绝 Windows 描述，
+		// 实现双重防线。
+		if !cpeTargetSWLinuxCompatible(parsed.targetSW) {
+			continue
+		}
+		// CPE 2.3 version 字段为 "*" 表示所有版本受影响 — 配合 versionStartIncluding/EndExcluding
+		// 严格 range 才能下结论。无 range 时拒绝（避免无版本约束的过宽匹配）。
+		if parsed.version == "*" && cpe.VersionEndExcluding == "" && cpe.VersionEndIncluding == "" &&
+			cpe.VersionStartIncluding == "" && cpe.VersionStartExcluding == "" {
 			continue
 		}
 
-		// 匹配策略：
-		// 1. 精确匹配软件名
-		// 2. 软件名包含 CPE product（如 openssl-libs 匹配 openssl）
 		for swName, swList := range softwareByName {
-			if !cpeProductMatch(product, swName) {
+			if !cpeProductMatch(parsed.product, swName) {
 				continue
 			}
 			for _, sw := range swList {
+				// 主机已装版本须落在 CPE 受影响 range 内
+				if !cpeVersionInRange(sw.Version, parsed.version, cpe) {
+					continue
+				}
 				key := sw.HostID + ":" + sw.Name
 				if _, ok := seen[key]; ok {
 					continue
@@ -418,6 +430,163 @@ func (v *VulnScanner) matchCPENode(node nvdNode, softwareByName map[string][]ins
 	for _, child := range node.Children {
 		v.matchCPENode(child, softwareByName, matched, seen)
 	}
+}
+
+// cpeParsed CPE 2.3 解析结果。
+type cpeParsed struct {
+	part     string // a (application) / o (os) / h (hardware)
+	vendor   string
+	product  string
+	version  string
+	targetSW string // 目标软件平台（windows/linux/*）
+	targetHW string // 目标硬件平台
+}
+
+// parseCPE23 解析 CPE 2.3 字符串。
+// 格式: cpe:2.3:{part}:{vendor}:{product}:{version}:{update}:{edition}:{lang}:{sw_edition}:{target_sw}:{target_hw}:{other}
+func parseCPE23(cpe string) *cpeParsed {
+	if !strings.HasPrefix(cpe, "cpe:2.3:") {
+		return nil
+	}
+	parts := strings.Split(cpe, ":")
+	if len(parts) < 6 {
+		return nil
+	}
+	out := &cpeParsed{
+		part:    strings.ToLower(parts[2]),
+		vendor:  strings.ToLower(parts[3]),
+		product: strings.ToLower(parts[4]),
+		version: parts[5],
+	}
+	if len(parts) > 10 {
+		out.targetSW = strings.ToLower(parts[10])
+	}
+	if len(parts) > 11 {
+		out.targetHW = strings.ToLower(parts[11])
+	}
+	return out
+}
+
+// cpeTargetSWLinuxCompatible 判断 CPE target_sw 是否兼容 Linux 主机。
+// "*" / "" / "linux*" / 含 "linux" → 兼容；
+// "windows*" / "macos*" / "android*" / "ios*" → 拒绝。
+func cpeTargetSWLinuxCompatible(targetSW string) bool {
+	if targetSW == "" || targetSW == "*" {
+		return true
+	}
+	nonLinux := []string{"windows", "macos", "mac_os", "android", "ios", "ipados", "tvos", "watchos"}
+	for _, ns := range nonLinux {
+		if strings.Contains(targetSW, ns) {
+			return false
+		}
+	}
+	return true
+}
+
+// cpeVersionInRange 判断已装版本是否落在 CPE 漏洞范围内。
+// CPE 提供 versionStartIncluding/EndExcluding 等 range 字段精确表达。
+// installedVer 须满足:
+//   - version=="*": 进 range check
+//   - version!="*": 完全相等
+func cpeVersionInRange(installedVer, cpeVersion string, cpe nvdCPEMatch) bool {
+	if cpeVersion != "" && cpeVersion != "*" {
+		return strings.HasPrefix(installedVer, cpeVersion)
+	}
+	// "*" 时用 range
+	if cpe.VersionStartIncluding != "" {
+		c, err := compareVerRange(installedVer, cpe.VersionStartIncluding)
+		if err == nil && c < 0 {
+			return false
+		}
+	}
+	if cpe.VersionStartExcluding != "" {
+		c, err := compareVerRange(installedVer, cpe.VersionStartExcluding)
+		if err == nil && c <= 0 {
+			return false
+		}
+	}
+	if cpe.VersionEndIncluding != "" {
+		c, err := compareVerRange(installedVer, cpe.VersionEndIncluding)
+		if err == nil && c > 0 {
+			return false
+		}
+	}
+	if cpe.VersionEndExcluding != "" {
+		c, err := compareVerRange(installedVer, cpe.VersionEndExcluding)
+		if err == nil && c >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// compareVerRange 简化版版本比较（数字段按数值比，非数字段按字符串）。
+// 与 advisory.CompareRPMVersion 类似但不依赖 RPM epoch 语义，适用于 NVD 通用版本号。
+func compareVerRange(a, b string) (int, error) {
+	aSegs := splitVersionSegments(a)
+	bSegs := splitVersionSegments(b)
+	n := len(aSegs)
+	if len(bSegs) > n {
+		n = len(bSegs)
+	}
+	for i := 0; i < n; i++ {
+		var as, bs string
+		if i < len(aSegs) {
+			as = aSegs[i]
+		}
+		if i < len(bSegs) {
+			bs = bSegs[i]
+		}
+		if as == bs {
+			continue
+		}
+		aNum, aOk := parseUint(as)
+		bNum, bOk := parseUint(bs)
+		if aOk && bOk {
+			if aNum < bNum {
+				return -1, nil
+			}
+			return 1, nil
+		}
+		if as < bs {
+			return -1, nil
+		}
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func splitVersionSegments(s string) []string {
+	var segs []string
+	var cur strings.Builder
+	for _, r := range s {
+		if r == '.' || r == '-' || r == '_' || r == '+' {
+			if cur.Len() > 0 {
+				segs = append(segs, cur.String())
+				cur.Reset()
+			}
+			continue
+		}
+		cur.WriteRune(r)
+	}
+	if cur.Len() > 0 {
+		segs = append(segs, cur.String())
+	}
+	return segs
+}
+
+func parseUint(s string) (uint64, bool) {
+	if s == "" {
+		return 0, false
+	}
+	var n uint64
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + uint64(c-'0')
+	}
+	return n, true
 }
 
 // cpeProductMatch 检查 CPE product 是否匹配已安装软件名
@@ -451,57 +620,12 @@ func cpeProductMatch(cpeProduct, softwareName string) bool {
 	return false
 }
 
-// descKeywordMap 描述关键词 → 软件包名匹配规则
-// 用于处理 NVD 中尚未完成 CPE 分析（Awaiting Analysis）的 CVE
-var descKeywordMap = []struct {
-	keyword  string   // 描述中的关键词（小写匹配）
-	packages []string // 对应的软件包名（与 software 表中的 name 匹配）
-}{
-	{"linux kernel", []string{"kernel", "kernel-core", "kernel-modules", "kernel-tools"}},
-	{"openssl", []string{"openssl", "openssl-libs"}},
-	{"glibc", []string{"glibc", "glibc-common", "glibc-minimal-langpack"}},
-	{"systemd", []string{"systemd", "systemd-libs"}},
-	{"openssh", []string{"openssh", "openssh-server", "openssh-clients"}},
-	{"curl", []string{"curl", "libcurl"}},
-	{"sudo", []string{"sudo"}},
-	{"bind", []string{"bind", "bind-libs", "bind-utils"}},
-	{"nginx", []string{"nginx"}},
-	{"apache", []string{"httpd"}},
-}
-
-// matchByDescription 通过描述关键词匹配已安装软件（处理无 CPE 的 CVE）
-func (v *VulnScanner) matchByDescription(cve nvdCVE, softwareByName map[string][]installedSoftware) []installedSoftware {
-	desc := strings.ToLower(v.extractNVDDescription(cve))
-	if desc == "" {
-		return nil
-	}
-
-	var matched []installedSoftware
-	seen := make(map[string]struct{})
-
-	for _, rule := range descKeywordMap {
-		if !strings.Contains(desc, rule.keyword) {
-			continue
-		}
-		for _, pkgName := range rule.packages {
-			swList, ok := softwareByName[pkgName]
-			if !ok {
-				continue
-			}
-			for _, sw := range swList {
-				key := sw.HostID + ":" + sw.Name
-				if _, ok := seen[key]; ok {
-					continue
-				}
-				seen[key] = struct{}{}
-				matched = append(matched, sw)
-			}
-		}
-	}
-	return matched
-}
-
 // ========== NVD 数据提取辅助方法 ==========
+// 注：matchByDescription + descKeywordMap 已永久删除。
+// 该机制用 substring keyword 关联 CVE 与已装软件，准确性极差：
+// 如 CVE-2026-6482 描述讲 "Rapid7 Insight Agent on Windows 通过 openssl.cnf 提权"，
+// keyword 匹配会错关联到 Linux openssl pkg，导致全集群 fake vuln。
+// 商业级 CWPP 仅用 CPE 严格匹配 + OSV PURL match + OS Advisory，禁止任何 substring fallback。
 
 func (v *VulnScanner) extractNVDDescription(cve nvdCVE) string {
 	for _, d := range cve.Descriptions {

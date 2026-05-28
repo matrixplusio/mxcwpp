@@ -31,6 +31,9 @@ const (
 	sdSyncInterval = 30 * time.Second
 	// sdSubscribeRetry Pub/Sub 断线后重连等待时间
 	sdSubscribeRetry = 3 * time.Second
+	// sdStaleTimeout AC 实例超过此时长未上报心跳则视为过期，redisSyncLoop 自动 prune
+	// 避免历史容器 / 已下线节点长期占据 registry 让 monitor warning
+	sdStaleTimeout = 10 * time.Minute
 )
 
 // ACInstance 表示一个 AgentCenter 实例
@@ -224,7 +227,8 @@ func (r *Registry) handleSDMessage(payload string) {
 	}
 }
 
-// redisSyncLoop 每 sdSyncInterval 全量同步一次，兜底 Pub/Sub 断线期间的遗漏
+// redisSyncLoop 每 sdSyncInterval 全量同步一次，兜底 Pub/Sub 断线期间的遗漏。
+// 同时 prune 超过 sdStaleTimeout 未心跳的 stale instances（避免历史容器残留）。
 func (r *Registry) redisSyncLoop(ctx context.Context) {
 	ticker := time.NewTicker(sdSyncInterval)
 	defer ticker.Stop()
@@ -234,7 +238,34 @@ func (r *Registry) redisSyncLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			r.LoadFromRedis()
+			r.pruneStale()
 		}
+	}
+}
+
+// pruneStale 删除超过 sdStaleTimeout 未上报心跳的 AC 实例（同步到 Redis）。
+//
+// 触发场景：AC 容器被销毁但未优雅 Deregister（崩溃 / kill -9 / docker rm），
+// 或 dev 环境频繁重启留下的 stale 注册项。
+func (r *Registry) pruneStale() {
+	cutoff := time.Now().Add(-sdStaleTimeout)
+	r.mu.Lock()
+	staleIDs := make([]string, 0)
+	for id, inst := range r.instances {
+		if !inst.Healthy && inst.LastSeen.Before(cutoff) {
+			staleIDs = append(staleIDs, id)
+		}
+	}
+	for _, id := range staleIDs {
+		delete(r.instances, id)
+	}
+	r.mu.Unlock()
+
+	for _, id := range staleIDs {
+		r.logger.Info("AC 实例自动 prune（超过 sdStaleTimeout 未心跳）",
+			zap.String("id", id),
+			zap.Duration("timeout", sdStaleTimeout))
+		r.removeFromRedis(id)
 	}
 }
 

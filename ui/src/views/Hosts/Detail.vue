@@ -229,19 +229,19 @@ onMounted(() => {
     border-radius: 6px 6px 0 0;
 
     &:hover {
-      color: #165DFF;
+      color: var(--mxsec-primary);
     }
 
     &.ant-tabs-tab-active {
       .ant-tabs-tab-btn {
-        color: #165DFF;
+        color: var(--mxsec-primary);
         font-weight: 500;
       }
     }
   }
 
   .ant-tabs-ink-bar {
-    background: linear-gradient(90deg, #165DFF, #0E42D2);
+    background: linear-gradient(90deg, #3B82F6, #2563EB);
     height: 3px;
     border-radius: 3px 3px 0 0;
   }

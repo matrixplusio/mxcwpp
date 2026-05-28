@@ -93,12 +93,89 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("edr 插件清理处理", zap.Error(err))
 	}
 
+	// 回滚之前过激 soft delete 误删的真 CVE
+	if err := migrateRestoreErroneouslyDeletedVulns(db, logger); err != nil {
+		logger.Warn("回滚误删 vuln 失败", zap.Error(err))
+	}
+	// 标记历史 nvd/osv/redhat 数据为 confidence=low（不删除，仅 UI 过滤）
+	if err := migrateMarkFakeVulns(db, logger); err != nil {
+		logger.Warn("历史 vuln confidence 标记", zap.Error(err))
+	}
+
 	// 添加性能优化索引（幂等）
 	if err := AddPerformanceIndexes(db, logger); err != nil {
 		logger.Warn("添加性能索引失败", zap.Error(err))
 	}
 
+	// 回填历史 vuln 的 vuln_category / restart_action（P5）
+	if err := migrateCategorizeExistingVulns(db, logger); err != nil {
+		logger.Warn("漏洞分类回填失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
+	return nil
+}
+
+// migrateCategorizeExistingVulns 给历史 vulnerabilities 回填 vuln_category + restart_action
+// 分批 1000 行 UPDATE，每批 sleep 50ms 避免长事务锁表。
+// 幂等：只处理 vuln_category='other' AND restart_action='unknown' 的（默认值）
+func migrateCategorizeExistingVulns(db *gorm.DB, logger *zap.Logger) error {
+	const batchSize = 1000
+	var total int64
+	db.Model(&model.Vulnerability{}).
+		Where("(vuln_category = ? OR vuln_category = '' OR vuln_category IS NULL)", model.VulnCategoryOther).
+		Count(&total)
+	if total == 0 {
+		return nil
+	}
+	logger.Info("开始回填 vuln 分类", zap.Int64("total", total))
+
+	processed := 0
+	categoryStats := map[string]int{}
+	// 按 id 分页避免死循环：cat 仍返回 'other' 时行不会从过滤集移出，
+	// 不加 id > lastID 会被反复 fetch 同一批
+	var lastID uint = 0
+	for {
+		var batch []model.Vulnerability
+		if err := db.Select("id, component, purl").
+			Where("(vuln_category = ? OR vuln_category = '' OR vuln_category IS NULL) AND id > ?",
+				model.VulnCategoryOther, lastID).
+			Order("id ASC").
+			Limit(batchSize).
+			Find(&batch).Error; err != nil {
+			return fmt.Errorf("拉批次失败: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, v := range batch {
+			cat, act := model.CategorizeVuln(v.Component, v.PURL)
+			// 用 Model+Updates 跳过 BeforeSave hook 避免再算一次
+			if err := db.Model(&model.Vulnerability{}).
+				Where("id = ?", v.ID).
+				UpdateColumns(map[string]any{
+					"vuln_category":  cat,
+					"restart_action": act,
+				}).Error; err != nil {
+				logger.Warn("vuln 分类回填失败",
+					zap.Uint("id", v.ID), zap.Error(err))
+				continue
+			}
+			categoryStats[cat]++
+			processed++
+			lastID = v.ID
+		}
+		logger.Info("vuln 分类回填进度",
+			zap.Int("processed", processed), zap.Int64("total", total))
+		time.Sleep(50 * time.Millisecond)
+		if len(batch) < batchSize {
+			break
+		}
+	}
+
+	logger.Info("vuln 分类回填完成",
+		zap.Int("processed", processed),
+		zap.Any("by_category", categoryStats))
 	return nil
 }
 
@@ -161,6 +238,72 @@ func migrateSensorToEDR(db *gorm.DB, logger *zap.Logger) error {
 		logger.Info("generated_reports: runtime → edr", zap.Int64("count", r.RowsAffected))
 	}
 
+	return nil
+}
+
+// migrateMarkFakeVulns 标记历史 description-keyword-match 误产物为 confidence='low'，
+// 不再 soft delete（之前过激删除真 Linux kernel CVE，因 NVD awaiting analysis 也无 CPE）。
+//
+// 真假区分需重新 import：advisory package coordinator 走 CPE/PURL/Advisory 严格匹配，
+// 历史 source=nvd 数据视为 low confidence，UI 按 confidence 过滤显示，不破坏数据。
+// 幂等：已标记 confidence 的不重复。
+func migrateMarkFakeVulns(db *gorm.DB, logger *zap.Logger) error {
+	r := db.Table("vulnerabilities").
+		Where("source = ? AND (confidence IS NULL OR confidence = '')", "nvd").
+		Update("confidence", model.VulnConfidenceLow)
+	if r.Error != nil {
+		return fmt.Errorf("标记历史 nvd vuln confidence 失败: %w", r.Error)
+	}
+	if r.RowsAffected > 0 {
+		logger.Info("历史 nvd vuln 标记为 confidence=low（仅标记，不删除）",
+			zap.Int64("count", r.RowsAffected))
+	}
+	// 历史 source=osv 也标 low（实际看到是 RHEL erratum 混入，confidence 不准）
+	r2 := db.Table("vulnerabilities").
+		Where("source = ? AND (confidence IS NULL OR confidence = '')", "osv").
+		Update("confidence", model.VulnConfidenceLow)
+	if r2.RowsAffected > 0 {
+		logger.Info("历史 osv vuln 标记为 confidence=low",
+			zap.Int64("count", r2.RowsAffected))
+	}
+	// redhat 同理（OS major filter 缺失）
+	r3 := db.Table("vulnerabilities").
+		Where("source = ? AND (confidence IS NULL OR confidence = '')", "redhat").
+		Update("confidence", model.VulnConfidenceLow)
+	if r3.RowsAffected > 0 {
+		logger.Info("历史 redhat vuln 标记为 confidence=low",
+			zap.Int64("count", r3.RowsAffected))
+	}
+	return nil
+}
+
+// migrateRestoreErroneouslyDeletedVulns 回滚之前 migrateMarkFakeVulns 误 soft delete
+// 真 Linux kernel CVE 的副作用。
+// 仅在 dev/prod 已经执行过老 migrateMarkFakeVulns 时需要。幂等。
+func migrateRestoreErroneouslyDeletedVulns(db *gorm.DB, logger *zap.Logger) error {
+	r := db.Table("vulnerabilities").
+		Where("confidence = ? AND deleted_at IS NOT NULL", model.VulnConfidenceFake).
+		Updates(map[string]any{
+			"confidence": model.VulnConfidenceLow,
+			"deleted_at": nil,
+		})
+	if r.Error != nil {
+		return fmt.Errorf("回滚误删 vuln 失败: %w", r.Error)
+	}
+	if r.RowsAffected > 0 {
+		// 同步回滚关联 host_vulnerabilities（按 vuln_id 反查）
+		var vulnIDs []uint
+		db.Table("vulnerabilities").
+			Where("confidence = ?", model.VulnConfidenceLow).
+			Pluck("id", &vulnIDs)
+		if len(vulnIDs) > 0 {
+			db.Table("host_vulnerabilities").
+				Where("vuln_id IN ? AND deleted_at IS NOT NULL", vulnIDs).
+				Update("deleted_at", nil)
+		}
+		logger.Info("回滚之前误 soft delete 的 vuln（标 confidence=low）",
+			zap.Int64("restored", r.RowsAffected))
+	}
 	return nil
 }
 
@@ -452,8 +595,11 @@ func migrateAlertResultIDColumn(db *gorm.DB, logger *zap.Logger) error {
 	return nil
 }
 
-// migrateScanResultsCompositeKey 将 scan_results 和 fix_results 表从单列主键(result_id)迁移为复合主键(task_id, host_id, rule_id)
-// 此函数幂等：如果 result_id 列已不存在则跳过
+// migrateScanResultsCompositeKey 将 scan_results 和 fix_results 表从单列主键(result_id)
+// 迁移为复合主键(task_id, host_id, rule_id)。
+//
+// 每一步独立 idempotent 检查（DROP PRIMARY / ADD PRIMARY / DROP COLUMN 任意一步
+// 之前部分成功也能安全续跑），避免历史"半完成"状态报 1091 / 1068 错误。
 func migrateScanResultsCompositeKey(db *gorm.DB, logger *zap.Logger) error {
 	for _, table := range []string{"scan_results", "fix_results"} {
 		var hasResultID bool
@@ -463,24 +609,72 @@ func migrateScanResultsCompositeKey(db *gorm.DB, logger *zap.Logger) error {
 		).Scan(&hasResultID).Error; err != nil {
 			return err
 		}
-
 		if !hasResultID {
-			continue // 已迁移，跳过
+			continue // 完全已迁移，跳过
 		}
 
 		logger.Info("开始迁移主键：result_id → (task_id, host_id, rule_id)", zap.String("table", table))
 
-		stmts := []string{
-			fmt.Sprintf("ALTER TABLE `%s` DROP PRIMARY KEY", table),
-			fmt.Sprintf("ALTER TABLE `%s` ADD PRIMARY KEY (`task_id`, `host_id`, `rule_id`)", table),
-			fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN `result_id`", table),
+		// Step 1: 当前 PRIMARY 是单列 result_id 时才 DROP
+		// （之前部分完成的迁移可能已 DROP，再 DROP 会报 1091）
+		var pkColumns int
+		if err := db.Raw(
+			"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = 'PRIMARY'",
+			table,
+		).Scan(&pkColumns).Error; err != nil {
+			return err
 		}
-		for _, sql := range stmts {
-			if err := db.Exec(sql).Error; err != nil {
-				logger.Error("主键迁移失败", zap.String("table", table), zap.String("sql", sql), zap.Error(err))
+		if pkColumns > 0 {
+			if err := db.Exec(fmt.Sprintf("ALTER TABLE `%s` DROP PRIMARY KEY", table)).Error; err != nil {
+				logger.Error("DROP PRIMARY KEY 失败", zap.String("table", table), zap.Error(err))
 				return err
 			}
+		} else {
+			logger.Info("PRIMARY KEY 已不存在，跳过 DROP", zap.String("table", table))
 		}
+
+		// Step 1.5: 去重 — 历史数据可能存在 (task_id, host_id, rule_id) 重复行
+		// （fix_results 业务侧 INSERT 而非 UPSERT，任务重试时会插入重复）。
+		// 保留每组 result_id 字典序最大的一行（视为最新），删其他。
+		dedupSQL := fmt.Sprintf(
+			"DELETE t1 FROM `%s` t1 INNER JOIN `%s` t2 "+
+				"ON t1.task_id = t2.task_id AND t1.host_id = t2.host_id "+
+				"AND t1.rule_id = t2.rule_id AND t1.result_id < t2.result_id",
+			table, table)
+		dedupResult := db.Exec(dedupSQL)
+		if dedupResult.Error != nil {
+			logger.Error("去重失败", zap.String("table", table), zap.Error(dedupResult.Error))
+			return dedupResult.Error
+		}
+		if dedupResult.RowsAffected > 0 {
+			logger.Info("迁移前去重完成", zap.String("table", table), zap.Int64("deleted", dedupResult.RowsAffected))
+		}
+
+		// Step 2: 新复合主键 (task_id, host_id, rule_id) 不存在时才 ADD
+		var newPKColumns int
+		if err := db.Raw(`
+			SELECT COUNT(*) FROM information_schema.statistics
+			WHERE table_schema = DATABASE() AND table_name = ?
+			  AND index_name = 'PRIMARY'
+			  AND column_name IN ('task_id', 'host_id', 'rule_id')
+		`, table).Scan(&newPKColumns).Error; err != nil {
+			return err
+		}
+		if newPKColumns < 3 {
+			if err := db.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD PRIMARY KEY (`task_id`, `host_id`, `rule_id`)", table)).Error; err != nil {
+				logger.Error("ADD PRIMARY KEY 失败", zap.String("table", table), zap.Error(err))
+				return err
+			}
+		} else {
+			logger.Info("复合主键已存在，跳过 ADD", zap.String("table", table))
+		}
+
+		// Step 3: 删除旧 result_id 列
+		if err := db.Exec(fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN `result_id`", table)).Error; err != nil {
+			logger.Error("DROP COLUMN result_id 失败", zap.String("table", table), zap.Error(err))
+			return err
+		}
+
 		logger.Info("主键迁移完成", zap.String("table", table))
 	}
 

@@ -92,7 +92,7 @@
             <template v-if="column.key === 'usage'">
               <a-progress
                 :percent="parseFloat(record.usagePercent.toFixed(1))"
-                :stroke-color="record.usagePercent > 90 ? '#F53F3F' : record.usagePercent > 70 ? '#FF7D00' : '#165DFF'"
+                :stroke-color="record.usagePercent > 90 ? '#EF4444' : record.usagePercent > 70 ? '#F59E0B' : '#3B82F6'"
                 :size="6"
               />
             </template>
@@ -146,8 +146,8 @@ const makeLineOption = (_title: string, data: any[], seriesConfig: any[]) => ({
   tooltip: {
     trigger: 'axis',
     backgroundColor: '#fff',
-    borderColor: '#E5E8EF',
-    textStyle: { color: '#1D2129', fontSize: 12 },
+    borderColor: 'rgba(30, 58, 95, 0.4)',
+    textStyle: { color: '#E5E5E5', fontSize: 12 },
   },
   legend: {
     bottom: 0,
@@ -183,13 +183,13 @@ const makeLineOption = (_title: string, data: any[], seriesConfig: any[]) => ({
 
 const cpuChartOption = computed(() =>
   makeLineOption('CPU', cpuData.value, [
-    { name: 'CPU 使用率', field: 'usage', color: '#165DFF' },
+    { name: 'CPU 使用率', field: 'usage', color: '#3B82F6' },
   ])
 )
 
 const memoryChartOption = computed(() =>
   makeLineOption('Memory', memoryData.value, [
-    { name: '内存使用率', field: 'usage', color: '#00B42A' },
+    { name: '内存使用率', field: 'usage', color: '#22C55E' },
   ])
 )
 
@@ -197,8 +197,8 @@ const diskChartOption = computed(() => ({
   tooltip: {
     trigger: 'axis',
     backgroundColor: '#fff',
-    borderColor: '#E5E8EF',
-    textStyle: { color: '#1D2129', fontSize: 12 },
+    borderColor: 'rgba(30, 58, 95, 0.4)',
+    textStyle: { color: '#E5E5E5', fontSize: 12 },
   },
   legend: {
     bottom: 0,
@@ -220,8 +220,8 @@ const diskChartOption = computed(() => ({
     splitLine: { lineStyle: { color: '#F2F3F5' } },
   },
   series: [
-    { name: '读取 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, itemStyle: { color: '#165DFF' }, data: diskData.value.map(d => d.read ?? 0) },
-    { name: '写入 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, itemStyle: { color: '#FF7D00' }, data: diskData.value.map(d => d.write ?? 0) },
+    { name: '读取 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, itemStyle: { color: '#3B82F6' }, data: diskData.value.map(d => d.read ?? 0) },
+    { name: '写入 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, itemStyle: { color: '#F59E0B' }, data: diskData.value.map(d => d.write ?? 0) },
   ],
 }))
 
@@ -229,8 +229,8 @@ const networkChartOption = computed(() => ({
   tooltip: {
     trigger: 'axis',
     backgroundColor: '#fff',
-    borderColor: '#E5E8EF',
-    textStyle: { color: '#1D2129', fontSize: 12 },
+    borderColor: 'rgba(30, 58, 95, 0.4)',
+    textStyle: { color: '#E5E5E5', fontSize: 12 },
   },
   legend: {
     bottom: 0,
@@ -252,8 +252,8 @@ const networkChartOption = computed(() => ({
     splitLine: { lineStyle: { color: '#F2F3F5' } },
   },
   series: [
-    { name: '入站 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, areaStyle: { opacity: 0.05 }, itemStyle: { color: '#165DFF' }, data: networkData.value.map(d => d.inbound ?? 0) },
-    { name: '出站 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, areaStyle: { opacity: 0.05 }, itemStyle: { color: '#00B42A' }, data: networkData.value.map(d => d.outbound ?? 0) },
+    { name: '入站 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, areaStyle: { opacity: 0.05 }, itemStyle: { color: '#3B82F6' }, data: networkData.value.map(d => d.inbound ?? 0) },
+    { name: '出站 (KB/s)', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, areaStyle: { opacity: 0.05 }, itemStyle: { color: '#22C55E' }, data: networkData.value.map(d => d.outbound ?? 0) },
   ],
 }))
 
@@ -295,8 +295,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .section-row { margin-bottom: 16px; }
 
 .monitor-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
 }
@@ -306,16 +306,16 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   align-items: center;
   margin-bottom: 12px;
 }
-.stat-label { font-size: 13px; color: #86909C; }
-.stat-value { font-size: 28px; font-weight: 700; color: #1D2129; line-height: 1.2; }
+.stat-label { font-size: 13px; color: var(--mxsec-text-3); }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--mxsec-text-1); line-height: 1.2; }
 .stat-trend { margin-top: 8px; font-size: 12px; }
-.trend-label { color: #86909C; margin-right: 4px; }
-.trend-up { color: #F53F3F; }
-.trend-down { color: #00B42A; }
+.trend-label { color: var(--mxsec-text-3); margin-right: 4px; }
+.trend-up { color: #EF4444; }
+.trend-down { color: #22C55E; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   height: 100%;
 }
@@ -324,9 +324,9 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
-.card-title { font-size: 14px; font-weight: 600; color: #1D2129; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 .card-body { padding: 16px 20px; }
 .chart-container {
   display: flex;

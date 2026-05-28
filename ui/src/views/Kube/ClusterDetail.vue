@@ -40,7 +40,7 @@
           </a-descriptions>
 
           <!-- 审计日志接入说明 -->
-          <div class="webhook-hint" style="margin-top: 20px; padding: 10px 14px; background: #F7F8FA; border: 1px solid #E5E8EF; border-radius: 6px; line-height: 1.8">
+          <div class="webhook-hint" style="margin-top: 20px; padding: 10px 14px; background: var(--mxsec-fill-1); border: 1px solid var(--mxsec-border); border-radius: 6px; line-height: 1.8">
             审计日志接入支持两种方式，根据集群类型选择：<br>
             <b>自建集群</b>（kubeadm / k3s / RKE）→ 使用下方「Audit Webhook 配置」，在 apiserver 中配置 Webhook 直接推送<br>
             <b>GKE 集群</b>（托管 apiserver）→ 使用下方「GCP Pub/Sub 配置」，通过 Cloud Logging → Pub/Sub 间接接入
@@ -165,10 +165,10 @@
                 <a-tag :color="record.status === 'Ready' ? 'green' : 'red'" :bordered="false">{{ record.status }}</a-tag>
               </template>
               <template v-if="column.key === 'cpu'">
-                <a-progress :percent="record.cpuPercent" :size="6" :stroke-color="record.cpuPercent > 80 ? '#F53F3F' : '#165DFF'" />
+                <a-progress :percent="record.cpuPercent" :size="6" :stroke-color="record.cpuPercent > 80 ? '#EF4444' : '#3B82F6'" />
               </template>
               <template v-if="column.key === 'memory'">
-                <a-progress :percent="record.memoryPercent" :size="6" :stroke-color="record.memoryPercent > 80 ? '#F53F3F' : '#00B42A'" />
+                <a-progress :percent="record.memoryPercent" :size="6" :stroke-color="record.memoryPercent > 80 ? '#EF4444' : '#22C55E'" />
               </template>
             </template>
           </a-table>
@@ -197,7 +197,7 @@
                 <span>{{ record.readyContainers }}/{{ record.totalContainers }}</span>
               </template>
               <template v-if="column.key === 'restarts'">
-                <span :style="{ color: record.restarts > 5 ? '#F53F3F' : '#1D2129' }">{{ record.restarts }}</span>
+                <span :style="{ color: record.restarts > 5 ? '#EF4444' : 'var(--mxsec-text-1)' }">{{ record.restarts }}</span>
               </template>
             </template>
           </a-table>
@@ -211,7 +211,7 @@
                 <a-tag :bordered="false">{{ record.type }}</a-tag>
               </template>
               <template v-if="column.key === 'replicas'">
-                <span :style="{ color: record.readyReplicas < record.desiredReplicas ? '#FF7D00' : '#00B42A' }">
+                <span :style="{ color: record.readyReplicas < record.desiredReplicas ? '#F59E0B' : '#22C55E' }">
                   {{ record.readyReplicas }}/{{ record.desiredReplicas }}
                 </span>
               </template>
@@ -224,19 +224,19 @@
           <a-row :gutter="[16, 16]" style="margin-bottom: 16px">
             <a-col :span="8">
               <div class="risk-card">
-                <div class="risk-value" style="color: #F53F3F">{{ riskStats.alarms }}</div>
+                <div class="risk-value" style="color: #EF4444">{{ riskStats.alarms }}</div>
                 <div class="risk-label">安全告警</div>
               </div>
             </a-col>
             <a-col :span="8">
               <div class="risk-card">
-                <div class="risk-value" style="color: #FF7D00">{{ riskStats.events }}</div>
+                <div class="risk-value" style="color: #F59E0B">{{ riskStats.events }}</div>
                 <div class="risk-label">安全事件</div>
               </div>
             </a-col>
             <a-col :span="8">
               <div class="risk-card">
-                <div class="risk-value" style="color: #165DFF">{{ riskStats.baseline }}</div>
+                <div class="risk-value" style="color: #3B82F6">{{ riskStats.baseline }}</div>
                 <div class="risk-label">基线问题</div>
               </div>
             </a-col>
@@ -288,12 +288,12 @@ const podStatus = ref<string>()
 const podPagination = ref({ current: 1, pageSize: 20, total: 0, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条` })
 
 const summaryStats = ref([
-  { key: 'nodes', label: 'Node', value: 0, color: '#165DFF' },
-  { key: 'pods', label: 'Pod', value: 0, color: '#00B42A' },
+  { key: 'nodes', label: 'Node', value: 0, color: '#3B82F6' },
+  { key: 'pods', label: 'Pod', value: 0, color: '#22C55E' },
   { key: 'namespaces', label: 'Namespace', value: 0, color: '#722ED1' },
-  { key: 'deployments', label: 'Deployment', value: 0, color: '#FF7D00' },
-  { key: 'services', label: 'Service', value: 0, color: '#165DFF' },
-  { key: 'alarms', label: '安全告警', value: 0, color: '#F53F3F' },
+  { key: 'deployments', label: 'Deployment', value: 0, color: '#F59E0B' },
+  { key: 'services', label: 'Service', value: 0, color: '#3B82F6' },
+  { key: 'alarms', label: '安全告警', value: 0, color: '#EF4444' },
 ])
 
 const riskStats = ref({ alarms: 0, events: 0, baseline: 0 })
@@ -350,12 +350,12 @@ const loadCluster = async () => {
     cluster.value = res
     if (res.summary) {
       summaryStats.value = [
-        { key: 'nodes', label: 'Node', value: res.summary.nodes ?? 0, color: '#165DFF' },
-        { key: 'pods', label: 'Pod', value: res.summary.pods ?? 0, color: '#00B42A' },
+        { key: 'nodes', label: 'Node', value: res.summary.nodes ?? 0, color: '#3B82F6' },
+        { key: 'pods', label: 'Pod', value: res.summary.pods ?? 0, color: '#22C55E' },
         { key: 'namespaces', label: 'Namespace', value: res.summary.namespaces ?? 0, color: '#722ED1' },
-        { key: 'deployments', label: 'Deployment', value: res.summary.deployments ?? 0, color: '#FF7D00' },
-        { key: 'services', label: 'Service', value: res.summary.services ?? 0, color: '#165DFF' },
-        { key: 'alarms', label: '安全告警', value: res.summary.alarms ?? 0, color: '#F53F3F' },
+        { key: 'deployments', label: 'Deployment', value: res.summary.deployments ?? 0, color: '#F59E0B' },
+        { key: 'services', label: 'Service', value: res.summary.services ?? 0, color: '#3B82F6' },
+        { key: 'alarms', label: '安全告警', value: res.summary.alarms ?? 0, color: '#EF4444' },
       ]
     }
     if (res.namespaces) namespaces.value = res.namespaces
@@ -494,31 +494,31 @@ onMounted(() => { loadCluster(); loadNodes(); loadPods(); loadWorkloads() })
 .kube-detail-page { width: 100%; }
 .section-row { margin-bottom: 16px; }
 
-.summary-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; padding: 16px; text-align: center; }
+.summary-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; padding: 16px; text-align: center; }
 .summary-value { font-size: 24px; font-weight: 700; line-height: 1.2; }
-.summary-label { font-size: 12px; color: #86909C; margin-top: 4px; }
+.summary-label { font-size: 12px; color: var(--mxsec-text-3); margin-top: 4px; }
 
-.risk-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; padding: 20px; text-align: center; }
+.risk-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; padding: 20px; text-align: center; }
 .risk-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
-.risk-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.risk-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; padding: 0 20px 20px; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; padding: 0 20px 20px; }
 
-.filter-bar { display: flex; gap: 8px; align-items: center; padding: 12px 16px; background: #F7F8FA; border-radius: 4px; border: 1px solid #E5E8EF; }
+.filter-bar { display: flex; gap: 8px; align-items: center; padding: 12px 16px; background: var(--mxsec-fill-1); border-radius: 4px; border: 1px solid var(--mxsec-border); }
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-.dot-running { background: #00B42A; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
-.dot-warning { background: #FF7D00; box-shadow: 0 0 0 3px rgba(255,125,0,0.15); }
-.dot-offline { background: #F53F3F; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
+.dot-running { background: #22C55E; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
+.dot-warning { background: #F59E0B; box-shadow: 0 0 0 3px rgba(255,125,0,0.15); }
+.dot-offline { background: #EF4444; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
 
-.webhook-section { margin-top: 20px; padding: 16px; background: #F7F8FA; border: 1px solid #E5E8EF; border-radius: 8px; }
-.webhook-section-title { font-size: 14px; font-weight: 600; color: #1D2129; margin-bottom: 4px; }
-.webhook-hint { font-size: 12px; color: #86909C; margin-bottom: 12px; line-height: 1.6; }
+.webhook-section { margin-top: 20px; padding: 16px; background: var(--mxsec-fill-1); border: 1px solid var(--mxsec-border); border-radius: 8px; }
+.webhook-section-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); margin-bottom: 4px; }
+.webhook-hint { font-size: 12px; color: var(--mxsec-text-3); margin-bottom: 12px; line-height: 1.6; }
 .webhook-field { margin-bottom: 10px; }
-.webhook-field-label { display: block; font-size: 12px; color: #86909C; margin-bottom: 4px; }
+.webhook-field-label { display: block; font-size: 12px; color: var(--mxsec-text-3); margin-bottom: 4px; }
 .webhook-field-value { display: flex; align-items: center; gap: 4px; }
-.webhook-code { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 4px; padding: 4px 8px; font-size: 12px; color: #1D2129; word-break: break-all; flex: 1; }
-.webhook-code-block { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 4px; overflow: hidden; }
-.webhook-code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: #F2F3F5; border-bottom: 1px solid #E5E8EF; font-size: 12px; color: #86909C; }
-.webhook-pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #1D2129; }
+.webhook-code { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--mxsec-text-1); word-break: break-all; flex: 1; }
+.webhook-code-block { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 4px; overflow: hidden; }
+.webhook-code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: var(--mxsec-fill-2); border-bottom: 1px solid var(--mxsec-border); font-size: 12px; color: var(--mxsec-text-3); }
+.webhook-pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--mxsec-text-1); }
 </style>

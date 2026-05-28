@@ -34,15 +34,35 @@ const precheckTimeout = 60 * time.Second
 // 注意：不能使用 9001，因为 9001 是心跳 Pong（被 Agent receiveData 拦截），会导致结果丢失
 const dataTypeRemediationResult int32 = 9200
 
-// taskPayload 从 Server 下发的修复任务数据
+// taskPayload 从 Server 下发的修复任务数据。
+//
+// 商业级修复任务必须经过 3 阶段精确预检：
+//  1. detect_os    — 确认 OS 类型，选对 pkg manager
+//  2. check_installed — 包必须已装，否则 dnf upgrade 会报 "no installed package"
+//  3. check_available — 包仓库实际可用版本（取代 vuln DB 的 fixed_version，
+//     因 NVD 字段经常与 OS erratum 不匹配，如 openssl 4.1.0.2 假数据）
 type taskPayload struct {
 	TaskID       uint   `json:"task_id"`
 	CveID        string `json:"cve_id"`
 	Component    string `json:"component"`
-	FixedVersion string `json:"fixed_version"`
-	Command      string `json:"command"`
+	FixedVersion string `json:"fixed_version"` // 仅作 verify 期望，不直接拼命令
+	Command      string `json:"command"`       // dnf upgrade {comp} -y（不带 version，让 pkg manager 自选 latest）
 	DryRun       bool   `json:"dry_run"`
 }
+
+// dataTypeRemediationProgress 修复任务阶段进度事件。
+// Agent 收到后转发 manager 更新 remediation_task_events，UI 实时显示 11 state 转换。
+const dataTypeRemediationProgress int32 = 9201
+
+// stageDetectOS 等是 lifecycle stage 标识，对应 manager 端 11 state 中的 6 个 plugin-side state。
+const (
+	stageDetectOS       = "detect_os"
+	stageCheckInstalled = "check_installed"
+	stageCheckAvailable = "check_available"
+	stageDownloading    = "downloading"
+	stageInstalling     = "installing"
+	stageVerifying      = "verifying"
+)
 
 func main() {
 	client, err := plugins.NewClient()
@@ -88,8 +108,16 @@ func main() {
 			if !ok {
 				return
 			}
-			if err := handleTask(ctx, task, client, logger); err != nil {
-				logger.Error("handle task failed", zap.Error(err))
+			// 按 DataType 分发：9100 = 修复执行；9101 = 单独 pre-check（只查不动）
+			switch task.DataType {
+			case dataTypePreCheckPush:
+				if err := handlePreCheck(ctx, task, client, logger); err != nil {
+					logger.Error("handle precheck failed", zap.Error(err))
+				}
+			default:
+				if err := handleTask(ctx, task, client, logger); err != nil {
+					logger.Error("handle task failed", zap.Error(err))
+				}
 			}
 		}
 	}
@@ -134,28 +162,53 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 		zap.String("command", payload.Command),
 		zap.Bool("dry_run", payload.DryRun))
 
-	// DryRun 模式：不实际执行
-	if payload.DryRun {
-		logger.Info("dry run mode, skipping execution")
-		return sendResult(client, payload.TaskID, 0, "[DRY RUN] 命令未实际执行: "+payload.Command, "", logger)
+	// 3 阶段精确预检
+	// stage 1: detect_os —— 选 pkg manager
+	sendProgress(client, payload.TaskID, task.Token, stageDetectOS, "检测包管理器", "", logger)
+	pkgMgr, ok := detectPkgManager(payload.Component)
+	if !ok {
+		return sendResult(client, payload.TaskID, 2, "",
+			"无法检测到 yum/dnf/apt 包管理器", logger)
+	}
+	logger.Info("stage detect_os passed",
+		zap.Uint("task_id", payload.TaskID), zap.String("pkg_mgr", pkgMgr))
+
+	// stage 2: check_installed —— 包必须已装
+	sendProgress(client, payload.TaskID, task.Token, stageCheckInstalled,
+		"检查包是否已安装", payload.Component, logger)
+	installedVer, err := checkPkgInstalled(ctx, pkgMgr, payload.Component)
+	if err != nil {
+		return sendResult(client, payload.TaskID, 2, "",
+			fmt.Sprintf("预检失败：包 %s 未安装 (%v)", payload.Component, err), logger)
+	}
+	logger.Info("stage check_installed passed",
+		zap.String("installed_version", installedVer))
+
+	// stage 3: check_available —— 取仓库实际可用版本
+	sendProgress(client, payload.TaskID, task.Token, stageCheckAvailable,
+		"查询仓库可用版本", payload.Component, logger)
+	availVer, err := checkPkgAvailable(ctx, pkgMgr, payload.Component)
+	if err != nil {
+		return sendResult(client, payload.TaskID, 2, "",
+			fmt.Sprintf("预检失败：仓库无可升级版本 (%v)", err), logger)
+	}
+	logger.Info("stage check_available passed",
+		zap.String("installed_version", installedVer),
+		zap.String("available_version", availVer))
+
+	// 已是最新（installed == available）→ 视为成功，无需执行
+	if installedVer == availVer {
+		msg := fmt.Sprintf("包 %s 已是最新版本 %s，无需修复", payload.Component, installedVer)
+		logger.Info(msg, zap.Uint("task_id", payload.TaskID))
+		return sendResult(client, payload.TaskID, 0, msg, "", logger)
 	}
 
-	// 预检：检查包管理器和目标包是否可用
-	if checkCmd := buildPrecheck(payload.Command); checkCmd != "" {
-		logger.Info("running precheck", zap.String("check_cmd", checkCmd))
-		precheckCtx, precheckCancel := context.WithTimeout(ctx, precheckTimeout)
-		precheckOut, precheckErr := exec.CommandContext(precheckCtx, "/bin/sh", "-c", checkCmd).CombinedOutput()
-		precheckCancel()
-		if precheckErr != nil {
-			msg := fmt.Sprintf("预检失败：目标包可能不可用。\n预检命令: %s\n预检输出: %s", checkCmd, strings.TrimSpace(string(precheckOut)))
-			logger.Warn("precheck failed",
-				zap.Uint("task_id", payload.TaskID),
-				zap.String("check_cmd", checkCmd),
-				zap.String("output", string(precheckOut)),
-				zap.Error(precheckErr))
-			return sendResult(client, payload.TaskID, 2, "", msg, logger)
-		}
-		logger.Info("precheck passed", zap.Uint("task_id", payload.TaskID))
+	// DryRun 模式：不实际执行，输出 3 阶段预检结果给 UI 审阅
+	if payload.DryRun {
+		report := fmt.Sprintf("[DRY RUN] 3 阶段预检通过\nOS pkg_mgr: %s\n包: %s\n已装版本: %s → 可用版本: %s\n待执行: %s",
+			pkgMgr, payload.Component, installedVer, availVer, payload.Command)
+		logger.Info("dry run mode, skipping execution")
+		return sendResult(client, payload.TaskID, 0, report, "", logger)
 	}
 
 	// 执行修复命令
@@ -187,7 +240,110 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 		zap.Int("exit_code", exitCode),
 		zap.Int("output_len", len(stdout)))
 
+	// stage verifying：执行后核验包升级到预期版本
+	sendProgress(client, payload.TaskID, task.Token, stageVerifying,
+		"验证升级后版本", payload.Component, logger)
+	if exitCode == 0 {
+		newVer, vErr := checkPkgInstalled(ctx, pkgMgr, payload.Component)
+		if vErr == nil && newVer != installedVer {
+			stdout += fmt.Sprintf("\n[verify] %s: %s → %s", payload.Component, installedVer, newVer)
+		}
+	}
+
 	return sendResult(client, payload.TaskID, exitCode, stdout, stderr, logger)
+}
+
+// sendProgress 上报修复任务阶段进度事件（DataType 9201）。
+// agent 收到后转发 manager 写 remediation_task_events 表，UI 实时显示 stage 转换。
+func sendProgress(client *plugins.Client, taskID uint, token, stage, message, detail string, logger *zap.Logger) {
+	record := &bridge.Record{
+		DataType:  dataTypeRemediationProgress,
+		Timestamp: time.Now().UnixNano(),
+		Data: &bridge.Payload{
+			Fields: map[string]string{
+				"task_id": fmt.Sprintf("%d", taskID),
+				"token":   token,
+				"stage":   stage,
+				"message": message,
+				"detail":  detail,
+			},
+		},
+	}
+	if err := client.SendRecord(record); err != nil {
+		logger.Warn("send progress failed",
+			zap.Uint("task_id", taskID),
+			zap.String("stage", stage),
+			zap.Error(err))
+	}
+}
+
+// detectPkgManager 探测可用包管理器。
+// 返回首个找到的：dnf > yum > apt-get。
+func detectPkgManager(_ string) (string, bool) {
+	for _, mgr := range []string{"dnf", "yum", "apt-get"} {
+		if _, err := exec.LookPath(mgr); err == nil {
+			return mgr, true
+		}
+	}
+	return "", false
+}
+
+// checkPkgInstalled 查询包当前已装版本。
+// dnf/yum: rpm -q --qf "%{EVR}" <pkg>
+// apt-get: dpkg-query -W -f='${Version}' <pkg>
+func checkPkgInstalled(ctx context.Context, pkgMgr, pkg string) (string, error) {
+	var args []string
+	var bin string
+	switch pkgMgr {
+	case "dnf", "yum":
+		bin = "rpm"
+		args = []string{"-q", "--qf", "%{EVR}", pkg}
+	case "apt-get":
+		bin = "dpkg-query"
+		args = []string{"-W", "-f=${Version}", pkg}
+	default:
+		return "", fmt.Errorf("unsupported pkg manager: %s", pkgMgr)
+	}
+	cctx, cancel := context.WithTimeout(ctx, precheckTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(cctx, bin, args...).Output()
+	if err != nil {
+		return "", fmt.Errorf("%s %s: %w", bin, strings.Join(args, " "), err)
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "" || strings.Contains(v, "not installed") {
+		return "", fmt.Errorf("package %s not installed", pkg)
+	}
+	return v, nil
+}
+
+// checkPkgAvailable 查询包仓库可升级到的最新版本。
+// dnf: dnf repoquery <pkg> --latest-limit=1 --qf "%{EVR}"
+// yum: repoquery --pkgnarrow=available <pkg> --qf "%{evr}"
+// apt-get: apt-cache madison <pkg> | head -1 | awk '{print $3}'
+func checkPkgAvailable(ctx context.Context, pkgMgr, pkg string) (string, error) {
+	var cmd string
+	switch pkgMgr {
+	case "dnf":
+		cmd = fmt.Sprintf("dnf repoquery %s --latest-limit=1 --qf '%%{EVR}' 2>/dev/null | tail -1", pkg)
+	case "yum":
+		cmd = fmt.Sprintf("repoquery --pkgnarrow=available %s --qf '%%{evr}' 2>/dev/null | head -1", pkg)
+	case "apt-get":
+		cmd = fmt.Sprintf("apt-cache madison %s 2>/dev/null | head -1 | awk '{print $3}'", pkg)
+	default:
+		return "", fmt.Errorf("unsupported pkg manager: %s", pkgMgr)
+	}
+	cctx, cancel := context.WithTimeout(ctx, precheckTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(cctx, "/bin/sh", "-c", cmd).Output()
+	if err != nil {
+		return "", fmt.Errorf("repoquery %s: %w", pkg, err)
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "" {
+		return "", fmt.Errorf("repoquery 返回空，包 %s 仓库无可用版本", pkg)
+	}
+	return v, nil
 }
 
 func sendResult(client *plugins.Client, taskID uint, exitCode int, stdout, stderr string, logger *zap.Logger) error {
@@ -373,72 +529,6 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// buildPrecheck 根据修复命令构造对应的预检命令
-// 返回空字符串表示无法构造预检（跳过预检直接执行）
-func buildPrecheck(command string) string {
-	cmd := strings.TrimSpace(command)
-	cmdLower := strings.ToLower(cmd)
-
-	// 提取包名（命令的最后一个非 flag 参数）
-	// 例如 "yum update openssl-1.1.1k -y" → "openssl-1.1.1k"
-	// 例如 "apt-get install --only-upgrade nginx=1.25.1 -y" → "nginx=1.25.1"
-
-	switch {
-	case strings.HasPrefix(cmdLower, "yum "):
-		pkg := extractPackageArg(cmd)
-		if pkg == "" {
-			return ""
-		}
-		// yum info 检查包是否在源中存在
-		return fmt.Sprintf("yum info %s -q 2>&1 | head -5", pkg)
-
-	case strings.HasPrefix(cmdLower, "dnf "):
-		pkg := extractPackageArg(cmd)
-		if pkg == "" {
-			return ""
-		}
-		return fmt.Sprintf("dnf info %s -q 2>&1 | head -5", pkg)
-
-	case strings.HasPrefix(cmdLower, "apt-get install"):
-		pkg := extractPackageArg(cmd)
-		if pkg == "" {
-			return ""
-		}
-		// apt-cache policy 检查包是否可用
-		// 去掉版本约束（=version）以便查询
-		pkgName := pkg
-		if idx := strings.Index(pkgName, "="); idx != -1 {
-			pkgName = pkgName[:idx]
-		}
-		return fmt.Sprintf("apt-cache policy %s 2>&1 | head -5", pkgName)
-
-	default:
-		return ""
-	}
-}
-
-// extractPackageArg 从包管理器命令中提取包名参数
-// 跳过子命令（update/install/upgrade）和 flag（-y, --only-upgrade 等）
-func extractPackageArg(command string) string {
-	parts := strings.Fields(command)
-	if len(parts) < 3 {
-		return ""
-	}
-
-	// 从第 2 个参数开始（跳过 yum/dnf/apt-get 和子命令 update/install/upgrade）
-	startIdx := 2
-	for i := startIdx; i < len(parts); i++ {
-		arg := parts[i]
-		// 跳过 flag
-		if strings.HasPrefix(arg, "-") {
-			continue
-		}
-		// 跳过 apt-get 的子命令
-		argLower := strings.ToLower(arg)
-		if argLower == "install" || argLower == "update" || argLower == "upgrade" || argLower == "dist-upgrade" {
-			continue
-		}
-		return arg
-	}
-	return ""
-}
+// 历史 buildPrecheck/extractPackageArg 已被 3 阶段精确预检（detectPkgManager +
+// checkPkgInstalled + checkPkgAvailable）取代，提供数据驱动的真实版本反查，
+// 不再依赖命令字符串解析。

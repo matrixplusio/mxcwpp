@@ -64,7 +64,7 @@
               <a-progress
                 :percent="record.healthScore"
                 :size="6"
-                :stroke-color="record.healthScore >= 90 ? '#00B42A' : record.healthScore >= 70 ? '#FF7D00' : '#F53F3F'"
+                :stroke-color="record.healthScore >= 90 ? '#22C55E' : record.healthScore >= 70 ? '#F59E0B' : '#EF4444'"
               />
             </template>
             <template v-if="column.key === 'action'">
@@ -170,9 +170,9 @@ const statusTextMap: Record<string, string> = {
 
 const overviewStats = computed(() => [
   { key: 'clusters', label: '集群总数', value: stats.value.total, icon: CloudServerOutlined, gradient: 'linear-gradient(135deg, #722ED1, #531DAB)' },
-  { key: 'running', label: '运行中', value: stats.value.running, icon: CheckCircleOutlined, gradient: 'linear-gradient(135deg, #00B42A, #009A29)' },
-  { key: 'nodes', label: 'Node 节点', value: stats.value.nodes, icon: ClusterOutlined, gradient: 'linear-gradient(135deg, #165DFF, #0E42D2)' },
-  { key: 'pods', label: 'Pod 总数', value: stats.value.pods, icon: WarningOutlined, gradient: 'linear-gradient(135deg, #FF7D00, #D25F00)' },
+  { key: 'running', label: '运行中', value: stats.value.running, icon: CheckCircleOutlined, gradient: 'linear-gradient(135deg, #22C55E, #009A29)' },
+  { key: 'nodes', label: 'Node 节点', value: stats.value.nodes, icon: ClusterOutlined, gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' },
+  { key: 'pods', label: 'Pod 总数', value: stats.value.pods, icon: WarningOutlined, gradient: 'linear-gradient(135deg, #F59E0B, #D25F00)' },
 ])
 
 const columns = [
@@ -286,37 +286,37 @@ onMounted(() => { loadClusters() })
 .section-row { margin-bottom: 16px; }
 
 .stat-card-item {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s;
 }
-.stat-card-item:hover { border-color: #165DFF; }
+.stat-card-item:hover { border-color: var(--mxsec-primary); }
 .stat-card-icon {
   width: 40px; height: 40px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  color: #FFFFFF; font-size: 18px; margin: 0 auto 12px;
+  color: var(--mxsec-card-bg); font-size: 18px; margin: 0 auto 12px;
 }
-.stat-card-value { font-size: 28px; font-weight: 700; color: #1D2129; line-height: 1.2; }
-.stat-card-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.stat-card-value { font-size: 28px; font-weight: 700; color: var(--mxsec-text-1); line-height: 1.2; }
+.stat-card-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #F2F3F5; }
-.card-title { font-size: 14px; font-weight: 600; color: #1D2129; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--mxsec-border-light); }
+.card-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 .card-body { padding: 20px; }
 
-.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #F7F8FA; border-radius: 4px; border: 1px solid #E5E8EF; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: var(--mxsec-fill-1); border-radius: 4px; border: 1px solid var(--mxsec-border); }
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.dot-running { background: #00B42A; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
-.dot-warning { background: #FF7D00; box-shadow: 0 0 0 3px rgba(255,125,0,0.15); }
-.dot-offline { background: #F53F3F; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
+.dot-running { background: #22C55E; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
+.dot-warning { background: #F59E0B; box-shadow: 0 0 0 3px rgba(255,125,0,0.15); }
+.dot-offline { background: #EF4444; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
 
 .webhook-info-field { margin-bottom: 12px; }
-.webhook-info-label { display: block; font-size: 12px; color: #86909C; margin-bottom: 4px; }
+.webhook-info-label { display: block; font-size: 12px; color: var(--mxsec-text-3); margin-bottom: 4px; }
 .webhook-info-value { display: flex; align-items: center; gap: 4px; }
-.webhook-info-code { background: #F7F8FA; border: 1px solid #E5E8EF; border-radius: 4px; padding: 6px 10px; font-size: 12px; color: #1D2129; word-break: break-all; flex: 1; }
+.webhook-info-code { background: var(--mxsec-fill-1); border: 1px solid var(--mxsec-border); border-radius: 4px; padding: 6px 10px; font-size: 12px; color: var(--mxsec-text-1); word-break: break-all; flex: 1; }
 </style>

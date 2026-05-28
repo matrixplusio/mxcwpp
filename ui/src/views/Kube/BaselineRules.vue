@@ -15,7 +15,7 @@
       </a-col>
       <a-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #00B42A">{{ stats.enabled }}</div>
+          <div class="stat-value" style="color: #22C55E">{{ stats.enabled }}</div>
           <div class="stat-label">已启用</div>
         </div>
       </a-col>
@@ -27,7 +27,7 @@
       </a-col>
       <a-col :span="6">
         <div class="stat-card">
-          <div class="stat-value" style="color: #165DFF">{{ stats.builtin }}</div>
+          <div class="stat-value" style="color: #3B82F6">{{ stats.builtin }}</div>
           <div class="stat-label">内置规则</div>
         </div>
       </a-col>
@@ -265,13 +265,13 @@ onMounted(() => { loadRules() })
 .kube-baseline-rules-page { width: 100%; }
 .section-row { margin-bottom: 16px; }
 
-.stat-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; padding: 20px; text-align: center; }
-.stat-value { font-size: 28px; font-weight: 700; color: #1D2129; line-height: 1.2; }
-.stat-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.stat-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; padding: 20px; text-align: center; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--mxsec-text-1); line-height: 1.2; }
+.stat-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #F2F3F5; }
-.card-title { font-size: 14px; font-weight: 600; color: #1D2129; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--mxsec-border-light); }
+.card-title { font-size: 14px; font-weight: 600; color: var(--mxsec-text-1); }
 .card-body { padding: 20px; }
-.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #F7F8FA; border-radius: 4px; border: 1px solid #E5E8EF; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: var(--mxsec-fill-1); border-radius: 4px; border: 1px solid var(--mxsec-border); }
 </style>

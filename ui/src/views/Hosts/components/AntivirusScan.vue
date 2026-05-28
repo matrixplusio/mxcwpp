@@ -285,8 +285,8 @@ watch(
 
 .stat-card {
   padding: 18px;
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   text-align: center;
 }
@@ -294,17 +294,17 @@ watch(
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
-.stat-value.critical { color: #F53F3F; }
-.stat-value.high { color: #FF7D00; }
-.stat-value.quarantined { color: #FF7D00; }
+.stat-value.critical { color: #EF4444; }
+.stat-value.high { color: #F59E0B; }
+.stat-value.quarantined { color: #F59E0B; }
 
 .stat-label {
   margin-top: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .filter-bar {

@@ -28,6 +28,11 @@ func StartTaskTimeoutScheduler(db *gorm.DB, logger *zap.Logger) {
 	}
 }
 
+// pendingTaskMaxAge pending 任务的最大留存时长。
+// 超过此时长仍 pending（通常因无在线主机匹配）会被统一标 timeout，
+// 避免僵尸 task 永驻 + scheduler 反复扫描日志噪声。
+const pendingTaskMaxAge = 24 * time.Hour
+
 // checkTimeoutTasks 检查超时任务
 func checkTimeoutTasks(db *gorm.DB, logger *zap.Logger) {
 	// 检查 pending 状态的检查任务超时
@@ -38,6 +43,66 @@ func checkTimeoutTasks(db *gorm.DB, logger *zap.Logger) {
 
 	// 检查修复任务超时
 	checkFixTasksTimeout(db, logger)
+
+	// 检查 FIM / 病毒扫描 / 漏洞修复任务的 pending 超时
+	checkFIMTasksPendingTimeout(db, logger)
+	checkAntivirusTasksPendingTimeout(db, logger)
+	checkRemediationTasksPendingTimeout(db, logger)
+}
+
+// checkFIMTasksPendingTimeout 标记超过 pendingTaskMaxAge 仍 pending 的 FIM 任务为 timeout。
+func checkFIMTasksPendingTimeout(db *gorm.DB, logger *zap.Logger) {
+	deadline := time.Now().Add(-pendingTaskMaxAge)
+	result := db.Model(&model.FIMTask{}).
+		Where("status = ? AND created_at < ?", "pending", deadline).
+		Update("status", "timeout")
+	if result.Error != nil {
+		logger.Error("FIM pending 任务超时标记失败", zap.Error(result.Error))
+		return
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("FIM pending 任务超时标记完成",
+			zap.Int64("affected", result.RowsAffected),
+			zap.Duration("max_age", pendingTaskMaxAge),
+		)
+	}
+}
+
+// checkAntivirusTasksPendingTimeout 标记超过 pendingTaskMaxAge 仍 pending 的病毒扫描任务为 failed。
+// AntivirusScanTask status enum 无 timeout，复用 failed。
+func checkAntivirusTasksPendingTimeout(db *gorm.DB, logger *zap.Logger) {
+	deadline := time.Now().Add(-pendingTaskMaxAge)
+	result := db.Model(&model.AntivirusScanTask{}).
+		Where("status = ? AND created_at < ?", "pending", deadline).
+		Update("status", "failed")
+	if result.Error != nil {
+		logger.Error("病毒扫描 pending 任务超时标记失败", zap.Error(result.Error))
+		return
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("病毒扫描 pending 任务超时标记完成",
+			zap.Int64("affected", result.RowsAffected),
+			zap.Duration("max_age", pendingTaskMaxAge),
+		)
+	}
+}
+
+// checkRemediationTasksPendingTimeout 标记超过 pendingTaskMaxAge 仍 pending 的漏洞修复任务为 failed。
+func checkRemediationTasksPendingTimeout(db *gorm.DB, logger *zap.Logger) {
+	deadline := time.Now().Add(-pendingTaskMaxAge)
+	result := db.Model(&model.RemediationTask{}).
+		Where("status = ? AND created_at < ?", "pending", deadline).
+		Update("status", "failed")
+	if result.Error != nil {
+		logger.Error("漏洞修复 pending 任务超时标记失败", zap.Error(result.Error))
+		return
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("漏洞修复 pending 任务超时标记完成",
+			zap.Int64("affected", result.RowsAffected),
+			zap.Duration("max_age", pendingTaskMaxAge),
+		)
+	}
 }
 
 // checkPendingTasksTimeout 检查 pending 状态的任务是否超时

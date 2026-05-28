@@ -175,7 +175,7 @@
                 <a-checkbox :value="group.id">
                   <span
                     class="group-icon-small"
-                    :style="{ backgroundColor: group.color || '#165DFF' }"
+                    :style="{ backgroundColor: group.color || '#3B82F6' }"
                   >
                     {{ group.icon || group.name.charAt(0) }}
                   </span>
@@ -185,7 +185,7 @@
               </a-col>
             </a-row>
           </a-checkbox-group>
-          <div v-if="filteredPolicyGroupsForCheckNow.length === 0" style="color: #FF7D00; padding: 8px 0;">
+          <div v-if="filteredPolicyGroupsForCheckNow.length === 0" style="color: #F59E0B; padding: 8px 0;">
             <WarningOutlined /> 没有找到适用于当前运行环境的策略组
           </div>
           <div v-else style="margin-top: 8px">
@@ -205,7 +205,7 @@
               <div style="font-weight: 500; margin-bottom: 8px; display: flex; align-items: center;">
                 <span
                   class="group-icon-small"
-                  :style="{ backgroundColor: group.color || '#165DFF' }"
+                  :style="{ backgroundColor: group.color || '#3B82F6' }"
                 >
                   {{ group.icon || group.name.charAt(0) }}
                 </span>
@@ -319,7 +319,7 @@
             :filter-option="filterHostOption"
           />
           <div class="form-tip" v-if="filteredHostsByRuntime.length === 0">
-            <WarningOutlined style="color: #FF7D00;" /> 没有符合当前检查类型的主机
+            <WarningOutlined style="color: #F59E0B;" /> 没有符合当前检查类型的主机
           </div>
         </a-form-item>
 
@@ -1873,7 +1873,7 @@ watch(
 .overview-divider {
   width: 1px;
   height: 40px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
   margin: 0 24px;
   flex-shrink: 0;
 }
@@ -1891,12 +1891,12 @@ watch(
 }
 
 .overview-label {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 14px;
 }
 
 .overview-value {
-  color: #262626;
+  color: var(--mxsec-text-1);
   font-size: 14px;
   font-weight: 500;
 }
@@ -1920,27 +1920,27 @@ watch(
 }
 
 .stat-card:hover {
-  background: #f0f5ff;
+  background: var(--mxsec-primary-bg);
 }
 
 .stat-divider {
   width: 1px;
   height: 40px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
   margin: 0 24px;
 }
 
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #165DFF;
+  color: var(--mxsec-primary);
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .overview-right {
@@ -1955,7 +1955,7 @@ watch(
 }
 
 .auto-config-btn:hover {
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 /* 基线内容卡片 */
@@ -1965,9 +1965,9 @@ watch(
   gap: 8px;
   align-items: center;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 /* 响应式 */
@@ -2028,7 +2028,7 @@ watch(
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  color: #fff;
+  color: var(--mxsec-card-bg);
   font-size: 12px;
   font-weight: bold;
   margin-right: 4px;
@@ -2037,7 +2037,7 @@ watch(
 /* 表单提示 */
 .form-tip {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-top: 4px;
 }
 </style>

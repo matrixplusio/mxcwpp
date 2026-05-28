@@ -391,7 +391,7 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
 .card-body { padding: 20px; }
 .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; }
 .filter-actions { margin-left: auto; }
@@ -399,11 +399,11 @@ onMounted(() => {
 .form-hint {
   margin-top: 4px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .exec-error-text {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   cursor: pointer;
   overflow: hidden;

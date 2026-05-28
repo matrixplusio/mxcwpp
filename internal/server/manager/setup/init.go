@@ -15,6 +15,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/database"
 	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
 	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
@@ -38,6 +39,7 @@ type ManagerServices struct {
 	ACDispatcher     *sd.ACDispatcher    // AC 命令分发器
 	TaskScheduler    *biz.TaskScheduler  // Manager 侧任务调度器（多实例安全）
 	VirusDBUpdater   *biz.VirusDBUpdater // 病毒库自动更新器
+	PreCheckCron     *biz.PreCheckCron   // 主机漏洞 pre-check 周期巡检（6h）
 }
 
 // Initialize 初始化 Manager 服务的所有组件
@@ -62,8 +64,9 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	cfg.LogInfo(logger)
 	logger.Info("Manager HTTP API Server 启动中...")
 
-	// 4. 初始化 Prometheus 指标
+	// 4. 初始化 Prometheus 指标 + 自暴露 mxsec_build_info（含 version + PID）
 	metrics.Init(logger)
+	metrics.SetBuildInfo(api.BuildVersion, "")
 
 	// 5. 初始化数据库
 	db, err := database.Init(cfg.Database, logger, cfg.Log)
@@ -136,6 +139,9 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	// 5.9 初始化病毒库更新器
 	virusDBUpdater := biz.NewVirusDBUpdater(db, redisClient, logger, "./data", "./uploads", cfg.Plugins.BaseURL)
 
+	// 5.10 初始化 pre-check 周期巡检（6h 自动 pre-check unpatched + 过期/未检的 host_vuln）
+	preCheckCron := biz.NewPreCheckCron(db, logger, acDispatcher)
+
 	return &ManagerServices{
 		Config:           cfg,
 		Logger:           logger,
@@ -150,6 +156,7 @@ func Initialize(configPath string) (*ManagerServices, error) {
 		ACDispatcher:     acDispatcher,
 		TaskScheduler:    taskScheduler,
 		VirusDBUpdater:   virusDBUpdater,
+		PreCheckCron:     preCheckCron,
 	}, nil
 }
 

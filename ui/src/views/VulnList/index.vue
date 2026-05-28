@@ -237,6 +237,21 @@
               </a-tag>
             </template>
 
+            <template v-else-if="column.key === 'category'">
+              <a-tag :color="vulnCategoryConfig[effectiveCategory(record)].color" :bordered="false">
+                {{ vulnCategoryConfig[effectiveCategory(record)].text }}
+              </a-tag>
+              <span v-if="record.vulnCategoryOverride" style="margin-left:4px;font-size:11px;color:#86909C">(manual)</span>
+            </template>
+
+            <template v-else-if="column.key === 'restart'">
+              <a-tooltip :title="`修复影响：${restartActionConfig[effectiveRestartAction(record)].text}`">
+                <a-tag :color="restartActionConfig[effectiveRestartAction(record)].color" :bordered="false">
+                  {{ restartActionConfig[effectiveRestartAction(record)].text }}
+                </a-tag>
+              </a-tooltip>
+            </template>
+
             <template v-else-if="column.key === 'hosts'">
               <span>{{ hostSummary(record) }}</span>
             </template>
@@ -306,7 +321,7 @@
               </a-tag>
             </template>
             <a-tooltip v-else-if="record.errorMsg" :title="record.errorMsg">
-              <span style="color: #F53F3F; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
+              <span style="color: #EF4444; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
             </a-tooltip>
             <span v-else>-</span>
           </template>
@@ -396,11 +411,40 @@ const columns = [
   { title: '优先级', key: 'priority', width: 130 },
   { title: '利用状态', key: 'exploit', width: 100 },
   { title: '影响组件', dataIndex: 'component', key: 'component', width: 160 },
+  { title: '类别', key: 'category', width: 110 },
+  { title: '重启影响', key: 'restart', width: 130 },
   { title: '受影响主机', key: 'hosts', width: 140 },
   { title: '状态', key: 'status', width: 90 },
   { title: '发现时间', dataIndex: 'discoveredAt', key: 'discoveredAt', width: 160 },
   { title: '操作', key: 'action', width: 120, fixed: 'right' },
 ]
+
+// 9 类 vuln_category 显示
+const vulnCategoryConfig: Record<string, { color: string; text: string }> = {
+  kernel:              { color: 'red',     text: '内核' },
+  critical_shared_lib: { color: 'volcano', text: '关键共享库' },
+  shared_lib:          { color: 'orange',  text: '共享库' },
+  system_daemon:       { color: 'gold',    text: '系统服务' },
+  cli_tool:            { color: 'green',   text: 'CLI 工具' },
+  web_service:         { color: 'cyan',    text: 'Web 服务' },
+  db_service:          { color: 'geekblue',text: '数据库' },
+  container_runtime:   { color: 'purple',  text: '容器运行时' },
+  language_dep:        { color: 'blue',    text: '语言依赖' },
+  other:               { color: 'default', text: '其他' },
+}
+
+// 5 动作 restart_action 显示
+const restartActionConfig: Record<string, { color: string; text: string }> = {
+  reboot_host:                { color: 'red',     text: '🔴 需重启主机' },
+  restart_dependent_services: { color: 'orange',  text: '🟠 需重启依赖' },
+  restart_specific_service:   { color: 'gold',    text: '🟡 需重启服务' },
+  no_action:                  { color: 'green',   text: '🟢 无需重启' },
+  rebuild_app:                { color: 'blue',    text: '🔵 需重 build' },
+  unknown:                    { color: 'default', text: '⚪ 影响未知' },
+}
+
+const effectiveCategory = (v: Vulnerability) => v.vulnCategoryOverride || v.vulnCategory || 'other'
+const effectiveRestartAction = (v: Vulnerability) => v.restartActionOverride || v.restartAction || 'unknown'
 
 // === 扫描状态 ===
 const scanStatus = ref<SecurityDBSyncRecord | null>(null)
@@ -739,8 +783,8 @@ onMounted(() => {
 .section-row { margin-bottom: 16px; }
 
 .vuln-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -749,22 +793,22 @@ onMounted(() => {
 .vuln-stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
-.vuln-stat-value.critical { color: #F53F3F; }
-.vuln-stat-value.high { color: #FF7D00; }
-.vuln-stat-value.primary { color: #165DFF; }
+.vuln-stat-value.critical { color: #EF4444; }
+.vuln-stat-value.high { color: #F59E0B; }
+.vuln-stat-value.primary { color: var(--mxsec-primary); }
 
 .vuln-stat-label {
   margin-top: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 
@@ -786,17 +830,17 @@ onMounted(() => {
 }
 
 .score-critical {
-  color: #F53F3F;
+  color: #EF4444;
   font-weight: 700;
 }
 
 .score-high {
-  color: #FF7D00;
+  color: #F59E0B;
   font-weight: 700;
 }
 
 .score-normal {
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   font-weight: 600;
 }
 
@@ -806,7 +850,7 @@ onMounted(() => {
   gap: 12px;
   padding: 12px 16px;
   margin-bottom: 12px;
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
   border: 1px solid #BEDAFF;
   border-radius: 6px;
   font-size: 13px;
@@ -816,8 +860,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 12px 20px;
 }
@@ -831,16 +875,16 @@ onMounted(() => {
 
 .scan-status-label {
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .scan-status-info {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
 }
 
 .scan-status-error {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 13px;
   max-width: 300px;
   overflow: hidden;

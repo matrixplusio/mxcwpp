@@ -221,6 +221,11 @@ export interface Vulnerability {
   exploitRef?: string
   priorityScore?: number
   exposureScore?: number
+  // P5 分类 + 重启影响
+  vulnCategory?: string         // kernel/critical_shared_lib/shared_lib/system_daemon/cli_tool/web_service/db_service/container_runtime/language_dep/other
+  restartAction?: string        // reboot_host/restart_dependent_services/restart_specific_service/no_action/rebuild_app/unknown
+  vulnCategoryOverride?: string // admin 手动覆盖
+  restartActionOverride?: string
   createdAt?: string
   updatedAt?: string
   hosts?: VulnerabilityHost[]

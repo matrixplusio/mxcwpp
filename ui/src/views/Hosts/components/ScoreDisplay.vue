@@ -44,9 +44,9 @@ const loadScore = async () => {
 }
 
 const getScoreColor = (score: number) => {
-  if (score >= 80) return '#00B42A'
-  if (score >= 60) return '#FF7D00'
-  return '#F53F3F'
+  if (score >= 80) return '#22C55E'
+  if (score >= 60) return '#F59E0B'
+  return '#EF4444'
 }
 
 onMounted(() => {

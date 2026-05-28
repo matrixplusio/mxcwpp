@@ -109,6 +109,14 @@ func captureRequestBody(c *gin.Context) string {
 		return ""
 	}
 
+	// 跳过 multipart/form-data（文件上传）：
+	// audit 用 LimitReader(1MB) 截断 body 后 restore，对大 multipart 会破坏 body 结构
+	// → handler ParseMultipartForm 失败 → form 字段空。
+	// audit 不记录 binary 上传内容（detail 列也存不下 binary），直接放行。
+	if ct := c.Request.Header.Get("Content-Type"); strings.HasPrefix(ct, "multipart/") {
+		return "[multipart upload skipped]"
+	}
+
 	// 读取完整请求体并恢复，审计日志仅截断记录内容
 	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBodyReadSize))
 	if err != nil {

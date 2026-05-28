@@ -567,7 +567,7 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .relation-list {
@@ -582,9 +582,9 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 10px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFD 100%);
+  background: var(--mxsec-card-bg);
 }
 
 .summary-main {
@@ -620,12 +620,12 @@ onMounted(() => {
 .host-name {
   font-size: 13px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .host-meta {
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .process-title {
@@ -635,13 +635,13 @@ onMounted(() => {
   gap: 8px;
   font-size: 16px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .process-pid {
   font-size: 12px;
   font-weight: 600;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .process-meta {
@@ -650,17 +650,17 @@ onMounted(() => {
   gap: 10px;
   margin-top: 6px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .process-cmdline {
   margin-top: 10px;
   padding: 8px 10px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.5;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
   word-break: break-all;
 }
 
@@ -679,15 +679,15 @@ onMounted(() => {
 
 .summary-counter {
   padding: 8px 10px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
-  background: #FFFFFF;
+  background: var(--mxsec-card-bg);
 }
 
 .counter-label {
   display: block;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .counter-value {
@@ -695,7 +695,7 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 18px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .counter-value.danger {
@@ -724,13 +724,13 @@ onMounted(() => {
   padding: 10px 12px;
   border-radius: 8px;
   background: #F7FAFF;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
 }
 
 .chip-label {
   display: block;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .chip-value {
@@ -738,7 +738,7 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 20px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .chip-value.danger {
@@ -761,7 +761,7 @@ onMounted(() => {
   margin-bottom: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .section-header {
@@ -801,20 +801,20 @@ onMounted(() => {
 .detail-item {
   padding: 12px;
   border-radius: 8px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
 }
 
 .detail-label {
   display: block;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .detail-value {
   display: block;
   margin-top: 6px;
   font-size: 13px;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .break-all {
@@ -837,7 +837,7 @@ onMounted(() => {
 .change-path {
   font-size: 12px;
   line-height: 1.5;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   word-break: break-all;
 }
 
@@ -858,13 +858,13 @@ onMounted(() => {
   padding: 12px;
   border-radius: 8px;
   background: #F5F9FF;
-  border: 1px solid #DCE8FF;
+  border: 1px solid var(--mxsec-border);
 }
 
 .container-name {
   font-size: 13px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .container-meta {
@@ -873,21 +873,21 @@ onMounted(() => {
   gap: 10px;
   margin-top: 6px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .drawer-summary {
   margin-bottom: 16px;
   padding: 14px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #FBFCFF 0%, #F5F9FF 100%);
-  border: 1px solid #DCE8FF;
+  background: var(--mxsec-fill-1);
+  border: 1px solid var(--mxsec-border);
 }
 
 .drawer-summary-title {
   font-size: 13px;
   line-height: 1.6;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   word-break: break-all;
 }
 
@@ -897,7 +897,7 @@ onMounted(() => {
   gap: 10px;
   margin: 10px 0 12px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 @media (max-width: 1280px) {

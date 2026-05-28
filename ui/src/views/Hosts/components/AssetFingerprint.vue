@@ -220,7 +220,7 @@ watch(
 }
 
 .fingerprint-card.active {
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
 }
 
 .fingerprint-value {
@@ -230,17 +230,17 @@ watch(
 }
 
 .fingerprint-label {
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .insight-card-hint {
   margin-bottom: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .insight-collapse :deep(.ant-collapse-header) {
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 </style>

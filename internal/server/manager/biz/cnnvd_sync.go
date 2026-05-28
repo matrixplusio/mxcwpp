@@ -87,7 +87,8 @@ func (v *VulnScanner) SyncCNNVD() error {
 		pendingCVEs[id] = struct{}{}
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	// CNNVD 348K vuln 分页，单页 ~50ms-3s，120s 超时容忍慢响应
+	client := &http.Client{Timeout: 120 * time.Second}
 	totalUpdated := 0
 	consecutiveErrors := 0
 

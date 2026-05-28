@@ -8,7 +8,7 @@
             <a-statistic
               title="扫描任务"
               :value="report.summary.totalTasks"
-              :value-style="{ color: '#165DFF' }"
+              :value-style="{ color: '#3B82F6' }"
             />
           </a-card>
         </a-col>
@@ -26,7 +26,7 @@
             <a-statistic
               title="待处理"
               :value="report.summary.detectedThreats"
-              :value-style="{ color: '#F53F3F' }"
+              :value-style="{ color: '#EF4444' }"
             />
           </a-card>
         </a-col>
@@ -35,7 +35,7 @@
             <a-statistic
               title="已隔离"
               :value="report.summary.quarantinedThreats"
-              :value-style="{ color: '#FF7D00' }"
+              :value-style="{ color: '#F59E0B' }"
             />
           </a-card>
         </a-col>
@@ -44,7 +44,7 @@
             <a-statistic
               title="影响主机"
               :value="report.summary.affectedHosts"
-              :value-style="{ color: '#00B42A' }"
+              :value-style="{ color: '#22C55E' }"
             />
           </a-card>
         </a-col>
@@ -132,7 +132,7 @@
                   </span>
                 </template>
                 <template v-else-if="column.key === 'threatCount'">
-                  <span style="color: #F53F3F; font-weight: 500;">{{ record.threatCount }}</span>
+                  <span style="color: #EF4444; font-weight: 500;">{{ record.threatCount }}</span>
                 </template>
               </template>
             </a-table>
@@ -192,7 +192,7 @@ const actionMap: Record<string, string> = {
 }
 
 const severityColors: Record<string, string> = {
-  critical: '#F53F3F',
+  critical: '#EF4444',
   high: '#ff7875',
   medium: '#ffa940',
   low: '#ffc53d',
@@ -272,7 +272,7 @@ const actionChartOption = computed<EChartsOption>(() => {
   const keys = ['detected', 'quarantined', 'deleted', 'ignored']
   const labels = keys.map(k => actionMap[k])
   const values = keys.map(k => report.value.actionDistribution[k] || 0)
-  const colors = ['#F53F3F', '#FF7D00', '#165DFF', '#86909C']
+  const colors = ['#EF4444', '#F59E0B', '#3B82F6', '#86909C']
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },

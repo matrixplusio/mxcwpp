@@ -16,17 +16,17 @@
       </a-col>
       <a-col :span="6">
         <a-card size="small">
-          <a-statistic title="学习中" :value="stats.learning_hosts" :value-style="{ color: '#165DFF' }" />
+          <a-statistic title="学习中" :value="stats.learning_hosts" :value-style="{ color: '#3B82F6' }" />
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card size="small">
-          <a-statistic title="检测中" :value="stats.active_hosts" :value-style="{ color: '#00B42A' }" />
+          <a-statistic title="检测中" :value="stats.active_hosts" :value-style="{ color: '#22C55E' }" />
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card size="small">
-          <a-statistic title="待处理告警" :value="stats.open_alerts" :value-style="{ color: '#F53F3F' }" />
+          <a-statistic title="待处理告警" :value="stats.open_alerts" :value-style="{ color: '#EF4444' }" />
         </a-card>
       </a-col>
     </a-row>
@@ -128,7 +128,7 @@
             <template v-if="column.key === 'risk_score'">
               <a-progress
                 :percent="record.risk_score"
-                :stroke-color="record.risk_score >= 80 ? '#F53F3F' : record.risk_score >= 60 ? '#FF7D00' : '#F7BA1E'"
+                :stroke-color="record.risk_score >= 80 ? '#EF4444' : record.risk_score >= 60 ? '#F59E0B' : '#F7BA1E'"
                 :size="[80, 6]"
                 :show-info="true"
               />
@@ -312,5 +312,5 @@ onMounted(() => {
 }
 .mono-text { font-family: monospace; font-size: 13px; }
 .detail-secondary { color: #999; }
-.z-score { color: #F53F3F; font-size: 12px; }
+.z-score { color: #EF4444; font-size: 12px; }
 </style>

@@ -67,8 +67,8 @@
         </template>
         <template v-else-if="column.key === 'result'">
           <a-space>
-            <span style="color: #00B42A">成功: {{ record.success_count }}</span>
-            <span style="color: #F53F3F">失败: {{ record.failed_count }}</span>
+            <span style="color: #22C55E">成功: {{ record.success_count }}</span>
+            <span style="color: #EF4444">失败: {{ record.failed_count }}</span>
           </a-space>
         </template>
         <template v-else-if="column.key === 'action'">
@@ -115,10 +115,10 @@
           {{ selectedTask.total_count }}
         </a-descriptions-item>
         <a-descriptions-item label="成功">
-          <span style="color: #00B42A">{{ selectedTask.success_count }}</span>
+          <span style="color: #22C55E">{{ selectedTask.success_count }}</span>
         </a-descriptions-item>
         <a-descriptions-item label="失败">
-          <span style="color: #F53F3F">{{ selectedTask.failed_count }}</span>
+          <span style="color: #EF4444">{{ selectedTask.failed_count }}</span>
         </a-descriptions-item>
         <a-descriptions-item label="创建时间">
           {{ formatTime(selectedTask.created_at) }}
@@ -646,8 +646,8 @@ onUnmounted(() => {
 .error-text {
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
-  color: #F53F3F;
-  background: #fff2f0;
+  color: #EF4444;
+  background: var(--mxsec-card-bg)2f0;
   padding: 8px 12px;
   border-radius: 4px;
   display: block;

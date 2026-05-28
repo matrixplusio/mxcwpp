@@ -378,7 +378,7 @@ onMounted(() => {
 
 .fix-suggestion {
   pre {
-    background: #F2F3F5;
+    background: var(--mxsec-fill-2);
     padding: 16px;
     border-radius: 6px;
     margin: 0;
@@ -390,7 +390,7 @@ onMounted(() => {
 
 .action-bar {
   padding: 16px 0;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--mxsec-border);
   margin-top: 16px;
 }
 

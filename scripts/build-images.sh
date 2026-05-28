@@ -109,6 +109,13 @@ docker build \
     .
 
 echo ""
+echo "[5/5] 编译 mxctl 部署工具（host 二进制）..."
+# mxctl 是部署工具 binary，不在容器内跑；改 internal/deploy/cluster/render.go 等
+# 时若不重 build，prometheus.yml 等模板配置不会更新。
+export PATH=/usr/local/go/bin:$PATH
+go build -o ./bin/mxctl ./cmd/tools/mxctl && ls -la ./bin/mxctl
+
+echo ""
 echo "构建完成!"
 docker images | grep mxsec
 

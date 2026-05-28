@@ -140,7 +140,7 @@
                   <span v-else>-</span>
                 </template>
                 <template v-else-if="column.key === 'threatCount'">
-                  <span :style="{ color: record.threatCount > 0 ? '#F53F3F' : '#00B42A', fontWeight: 600 }">
+                  <span :style="{ color: record.threatCount > 0 ? '#EF4444' : '#22C55E', fontWeight: 600 }">
                     {{ record.threatCount }}
                   </span>
                 </template>
@@ -149,7 +149,7 @@
                     <a @click="showTaskDetail(record)">详情</a>
                     <a
                       v-if="record.status === 'pending' || record.status === 'running'"
-                      style="color: #FF7D00"
+                      style="color: #F59E0B"
                       @click="handleCancelTask(record)"
                     >
                       取消
@@ -260,10 +260,10 @@
                     <a @click="showResultDetail(record)">详情</a>
                     <template v-if="record.action === 'detected'">
                       <a-popconfirm title="确认隔离该威胁文件？" @confirm="handleQuarantine(record.id)">
-                        <a style="color: #FF7D00">隔离</a>
+                        <a style="color: #F59E0B">隔离</a>
                       </a-popconfirm>
                       <a-popconfirm title="确认删除该威胁文件？" @confirm="handleDeleteFile(record.id)">
-                        <a style="color: #F53F3F">删除</a>
+                        <a style="color: #EF4444">删除</a>
                       </a-popconfirm>
                       <a @click="handleIgnore(record.id)">忽略</a>
                     </template>
@@ -344,7 +344,7 @@
           <a-descriptions-item label="目标主机数">{{ taskDetail.totalHosts }}</a-descriptions-item>
           <a-descriptions-item label="已完成">{{ taskDetail.scannedHosts }}</a-descriptions-item>
           <a-descriptions-item label="发现威胁数">
-            <span :style="{ color: taskDetail.threatCount > 0 ? '#F53F3F' : '#00B42A', fontWeight: 600 }">
+            <span :style="{ color: taskDetail.threatCount > 0 ? '#EF4444' : '#22C55E', fontWeight: 600 }">
               {{ taskDetail.threatCount }}
             </span>
           </a-descriptions-item>
@@ -442,7 +442,7 @@
           </template>
           <template v-else-if="column.key === 'errorMsg'">
             <a-tooltip v-if="record.errorMsg" :title="record.errorMsg">
-              <span style="color: #F53F3F; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
+              <span style="color: #EF4444; font-size: 12px; cursor: pointer">{{ record.errorMsg }}</span>
             </a-tooltip>
             <span v-else>-</span>
           </template>
@@ -915,8 +915,8 @@ onMounted(() => {
 .section-row { margin-bottom: 16px; }
 
 .stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -925,21 +925,21 @@ onMounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
-.stat-value.critical { color: #F53F3F; }
-.stat-value.high { color: #FF7D00; }
-.stat-value.primary { color: #165DFF; }
+.stat-value.critical { color: #EF4444; }
+.stat-value.high { color: #F59E0B; }
+.stat-value.primary { color: var(--mxsec-primary); }
 
 .stat-label {
   margin-top: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 
@@ -962,8 +962,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 12px 20px;
 }
@@ -977,16 +977,16 @@ onMounted(() => {
 
 .db-status-label {
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .db-status-info {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
 }
 
 .db-status-error {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 13px;
   max-width: 300px;
   overflow: hidden;

@@ -863,13 +863,13 @@ onMounted(() => {
     margin: 0 0 8px 0;
     font-size: 20px;
     font-weight: 600;
-    color: #262626;
+    color: var(--mxsec-text-1);
   }
 
   .page-description {
     margin: 0;
     font-size: 14px;
-    color: #86909C;
+    color: var(--mxsec-text-3);
   }
 }
 
@@ -879,9 +879,9 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 
   .search-input {
     width: 280px;
@@ -894,7 +894,7 @@ onMounted(() => {
 
 .config-url {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   word-break: break-all;
 }
 
@@ -929,7 +929,7 @@ onMounted(() => {
 .form-tip {
   margin-top: 8px;
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   line-height: 1.5;
 }
 

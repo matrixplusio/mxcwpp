@@ -2,6 +2,7 @@ package biz
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/advisory"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -134,39 +136,48 @@ func (v *VulnScanner) SyncOnly() error {
 	var results []sourceResult
 	var coreErr error // 核心数据源失败
 
-	// 核心数据源
-	for _, src := range []struct {
-		name string
-		fn   func() error
-	}{
-		{"NVD", v.SyncNVD},
-		{"RedHat", v.SyncRedHat},
-	} {
-		if err := src.fn(); err != nil {
-			v.logger.Warn(src.name+" 同步失败", zap.Error(err))
-			results = append(results, sourceResult{Name: src.name, Status: "failed", Error: err.Error()})
-			if coreErr == nil {
-				coreErr = err
-			}
-		} else {
-			results = append(results, sourceResult{Name: src.name, Status: "success"})
+	// 核心数据源：用 advisory.Coordinator 统一调度 RHSA/Rocky/USN/Debian/OSV
+	// 取代已 404 的 hydra REST NVD/RedHat sync，confidence=high 优先入库
+	if err := v.syncCoreAdvisories(); err != nil {
+		v.logger.Warn("advisory coordinator 同步失败", zap.Error(err))
+		results = append(results, sourceResult{Name: "advisory-coordinator", Status: "failed", Error: err.Error()})
+		if coreErr == nil {
+			coreErr = err
 		}
+	} else {
+		results = append(results, sourceResult{Name: "advisory-coordinator", Status: "success"})
 	}
 
-	// 增强数据源（失败不影响整体状态）
+	// 增强数据源（失败不影响整体状态，按 cve_id 补全主表字段，不入独立 vuln）
+	// 走 vuln_data_sources 表的 enabled 配置：disabled 跳过
+	sourceSvc := NewVulnDataSourceService(v.db, v.logger)
 	for _, src := range []struct {
-		name string
-		fn   func() error
+		sourceName string // vuln_data_sources.name slug
+		name       string
+		fn         func() (int64, error)
 	}{
-		{"CNVD", v.SyncCNVD},
-		{"CNNVD", v.SyncCNNVD},
-		{"Exploit", v.SyncExploit},
+		{"mitre-cve", "MITRECVE", v.SyncMITRECVECounted},    // MITRE 官方 CVE 元数据（推荐主源）
+		{"nvd", "NVDMetadata", v.SyncNVDMetadataCounted},    // NVD API（备用，需 NVD_API_KEY 提速）
+		{"cisa-kev", "CISAKev", v.SyncCISAKevCounted},       // CISA KEV 标记 in_kev
+		{"exploit-db", "ExploitDB", v.SyncExploitDBCounted}, // exploit-db CSV 标记 has_exploit
+		{"cnnvd", "CNNVD", wrapErr(v.SyncCNNVD)},            // 国家信息安全漏洞库（cnnvd.org.cn 官方 API，补 cnnvd_id）
+		{"cnvd", "CNVD", wrapErr(v.SyncCNVDStub)},           // 国家信息安全漏洞共享平台（无公开 API / Cloudflare 521）
 	} {
-		if err := src.fn(); err != nil {
+		if !sourceSvc.IsEnabled(src.sourceName) {
+			v.logger.Debug("source disabled，跳过", zap.String("source", src.sourceName))
+			results = append(results, sourceResult{Name: src.name, Status: "skipped"})
+			continue
+		}
+		srcStart := time.Now()
+		sourceSvc.MarkRunning(src.sourceName)
+		count, err := src.fn()
+		if err != nil {
 			v.logger.Warn(src.name+" 同步失败，跳过", zap.Error(err))
 			results = append(results, sourceResult{Name: src.name, Status: "failed", Error: err.Error()})
+			sourceSvc.MarkFailed(src.sourceName, err)
 		} else {
 			results = append(results, sourceResult{Name: src.name, Status: "success"})
+			sourceSvc.MarkSuccess(src.sourceName, count, time.Since(srcStart))
 		}
 	}
 
@@ -1172,8 +1183,69 @@ func (v *VulnScanner) extractReferenceURL(vuln osvVuln) string {
 			return ref.URL
 		}
 	}
-	if len(vuln.References) > 0 {
-		return vuln.References[0].URL
-	}
 	return ""
+}
+
+// syncCoreAdvisories 调用 advisory.Coordinator 拉取所有 OS Advisory + OSV 源。
+// 替代已废弃的 hydra REST NVD/RedHat 实现，confidence=high/medium 严格匹配入库。
+//
+// hosts 取自 hosts 表（host_packages 软件清单后续 collector 上报后再 join 入参，
+// 当前仅按 OS family + major 兼容性 match）。
+func (v *VulnScanner) syncCoreAdvisories() error {
+	type hostRow struct {
+		HostID    string
+		Hostname  string
+		OSFamily  string
+		OSVersion string
+		Arch      string
+	}
+	var rows []hostRow
+	if err := v.db.Table("hosts").
+		Select("host_id, hostname, os_family, os_version, arch").
+		Where("status = ?", "online").
+		Find(&rows).Error; err != nil {
+		return fmt.Errorf("加载 host 清单失败: %w", err)
+	}
+	hostsAdv := make([]advisory.HostSoftware, 0, len(rows))
+	for _, r := range rows {
+		hostsAdv = append(hostsAdv, advisory.HostSoftware{
+			HostID:   r.HostID,
+			Hostname: r.Hostname,
+			OSFamily: r.OSFamily,
+			OSVer:    r.OSVersion,
+			OSMajor:  extractOSMajor(r.OSVersion),
+			Arch:     r.Arch,
+		})
+	}
+
+	coord := advisory.NewCoordinator(v.db, v.logger).
+		WithEnabledChecker(NewVulnDataSourceService(v.db, v.logger))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	vulnCount, hostVulnCount, err := coord.Sync(ctx, time.Time{}, hostsAdv)
+	if err != nil {
+		return fmt.Errorf("coordinator sync: %w", err)
+	}
+	v.logger.Info("advisory coordinator 同步完成",
+		zap.Int("vuln_count", vulnCount),
+		zap.Int("host_vuln_count", hostVulnCount),
+		zap.Int("host_count", len(hostsAdv)),
+	)
+	return nil
+}
+
+// wrapErr 把 func() error 适配成 func() (int64, error)（stub 没有 count）。
+func wrapErr(fn func() error) func() (int64, error) {
+	return func() (int64, error) {
+		return 0, fn()
+	}
+}
+
+func extractOSMajor(ver string) string {
+	for i, c := range ver {
+		if c == '.' {
+			return ver[:i]
+		}
+	}
+	return ver
 }

@@ -134,8 +134,9 @@ func main() {
 	pluginMgr := plugin.NewManager(cfg, log, transportMgr)
 
 	// 7.5 创建 EDR 引擎（内置模块，与 Agent 同进程）
-	edrEngine, err := edr.NewEngine(log, transportMgr, "", serverHost)
-	if err != nil {
+	// 非 linux 平台的 stub 永不返 err，staticcheck SA4023 误报，linux 平台 engine.go 会返真实 err
+	edrEngine, err := edr.NewEngine(log, transportMgr, "", serverHost) //nolint:staticcheck
+	if err != nil {                                                    //nolint:staticcheck
 		log.Warn("EDR engine initialization failed, continuing without EDR",
 			zap.Error(err))
 	}

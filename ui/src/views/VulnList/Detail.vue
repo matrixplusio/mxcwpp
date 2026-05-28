@@ -290,8 +290,8 @@ onMounted(() => {
 }
 
 .detail-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
 }
@@ -299,7 +299,7 @@ onMounted(() => {
 .detail-card h4 {
   margin-bottom: 12px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .reference-section {
@@ -314,16 +314,16 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 
-.score-critical { color: #F53F3F; font-weight: 700; }
-.score-high { color: #FF7D00; font-weight: 700; }
-.score-normal { color: #1D2129; font-weight: 600; }
+.score-critical { color: #EF4444; font-weight: 700; }
+.score-high { color: #F59E0B; font-weight: 700; }
+.score-normal { color: var(--mxsec-text-1); font-weight: 600; }
 
 .advice-section { margin-bottom: 20px; }
-.advice-section h4 { margin-bottom: 12px; font-weight: 600; color: #1D2129; }
+.advice-section h4 { margin-bottom: 12px; font-weight: 600; color: var(--mxsec-text-1); }
 
 .advice-command {
   margin-bottom: 12px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   border-radius: 6px;
   padding: 12px;
 }
@@ -335,13 +335,13 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-.advice-command-desc { font-size: 13px; color: #4E5969; }
+.advice-command-desc { font-size: 13px; color: var(--mxsec-text-2); }
 
 .advice-command-code {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
   padding: 8px 12px;
 }
@@ -349,7 +349,7 @@ onMounted(() => {
 .advice-command-code code {
   font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   word-break: break-all;
 }
 </style>

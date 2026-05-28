@@ -22,7 +22,7 @@
                 {{ record.totalHosts || 0 }} 台
               </template>
               <template v-else-if="column.key === 'threatCount'">
-                <span :style="{ color: record.threatCount > 0 ? '#F53F3F' : '#00B42A' }">{{ record.threatCount || 0 }}</span>
+                <span :style="{ color: record.threatCount > 0 ? '#EF4444' : '#22C55E' }">{{ record.threatCount || 0 }}</span>
               </template>
               <template v-else-if="column.key === 'finishedAt'">
                 {{ formatDateTime(record.finishedAt) }}
@@ -138,11 +138,11 @@
                   <div class="stat-label">扫描主机</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #F53F3F">{{ report.statistics.totalThreats }}</div>
+                  <div class="stat-value" style="color: #EF4444">{{ report.statistics.totalThreats }}</div>
                   <div class="stat-label">发现威胁</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #FF7D00">{{ report.statistics.quarantinedThreats + report.statistics.deletedThreats }}</div>
+                  <div class="stat-value" style="color: #F59E0B">{{ report.statistics.quarantinedThreats + report.statistics.deletedThreats }}</div>
                   <div class="stat-label">已处置</div>
                 </div>
               </div>
@@ -189,21 +189,21 @@
             <div class="section-subtitle">Threat Statistics</div>
           </div>
           <div class="stats-grid">
-            <div class="stats-card" style="border-left: 4px solid #F53F3F">
+            <div class="stats-card" style="border-left: 4px solid #EF4444">
               <div class="stats-info">
-                <div class="stats-value" style="color: #F53F3F">{{ report.statistics.detectedThreats }}</div>
+                <div class="stats-value" style="color: #EF4444">{{ report.statistics.detectedThreats }}</div>
                 <div class="stats-label">已检测</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #FF7D00">
+            <div class="stats-card" style="border-left: 4px solid #F59E0B">
               <div class="stats-info">
-                <div class="stats-value" style="color: #FF7D00">{{ report.statistics.quarantinedThreats }}</div>
+                <div class="stats-value" style="color: #F59E0B">{{ report.statistics.quarantinedThreats }}</div>
                 <div class="stats-label">已隔离</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #165DFF">
+            <div class="stats-card" style="border-left: 4px solid #3B82F6">
               <div class="stats-info">
-                <div class="stats-value" style="color: #165DFF">{{ report.statistics.deletedThreats }}</div>
+                <div class="stats-value" style="color: #3B82F6">{{ report.statistics.deletedThreats }}</div>
                 <div class="stats-label">已删除</div>
               </div>
             </div>
@@ -275,9 +275,9 @@
               <tr v-for="host in report.hostDetails" :key="host.hostId">
                 <td>{{ host.hostname || host.hostId }}</td>
                 <td>{{ host.ip || '-' }}</td>
-                <td><span style="color: #F53F3F">{{ host.threatCount }}</span></td>
-                <td><span v-if="host.criticalCount > 0" style="color: #F53F3F; font-weight: 600">{{ host.criticalCount }}</span><span v-else>0</span></td>
-                <td><span v-if="host.highCount > 0" style="color: #FF7D00; font-weight: 600">{{ host.highCount }}</span><span v-else>0</span></td>
+                <td><span style="color: #EF4444">{{ host.threatCount }}</span></td>
+                <td><span v-if="host.criticalCount > 0" style="color: #EF4444; font-weight: 600">{{ host.criticalCount }}</span><span v-else>0</span></td>
+                <td><span v-if="host.highCount > 0" style="color: #F59E0B; font-weight: 600">{{ host.highCount }}</span><span v-else>0</span></td>
               </tr>
             </tbody>
           </table>

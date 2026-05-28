@@ -9,25 +9,25 @@
     <a-row :gutter="[16, 16]" class="section-row">
       <a-col :span="6">
         <div class="alert-stat-card">
-          <div class="alert-stat-value" style="color: #F53F3F">{{ stats.critical }}</div>
+          <div class="alert-stat-value" style="color: #EF4444">{{ stats.critical }}</div>
           <div class="alert-stat-label">紧急告警</div>
         </div>
       </a-col>
       <a-col :span="6">
         <div class="alert-stat-card">
-          <div class="alert-stat-value" style="color: #FF7D00">{{ stats.warning }}</div>
+          <div class="alert-stat-value" style="color: #F59E0B">{{ stats.warning }}</div>
           <div class="alert-stat-label">警告</div>
         </div>
       </a-col>
       <a-col :span="6">
         <div class="alert-stat-card">
-          <div class="alert-stat-value" style="color: #165DFF">{{ stats.info }}</div>
+          <div class="alert-stat-value" style="color: #3B82F6">{{ stats.info }}</div>
           <div class="alert-stat-label">通知</div>
         </div>
       </a-col>
       <a-col :span="6">
         <div class="alert-stat-card">
-          <div class="alert-stat-value" style="color: #00B42A">{{ stats.resolved }}</div>
+          <div class="alert-stat-value" style="color: #22C55E">{{ stats.resolved }}</div>
           <div class="alert-stat-label">已恢复</div>
         </div>
       </a-col>
@@ -179,18 +179,18 @@ onMounted(() => { loadAlerts() })
 .section-row { margin-bottom: 16px; }
 
 .alert-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
 }
 .alert-stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
-.alert-stat-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.alert-stat-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-body { padding: 20px; }
@@ -201,9 +201,9 @@ onMounted(() => { loadAlerts() })
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
 }
 
 .status-dot {
@@ -213,6 +213,6 @@ onMounted(() => { loadAlerts() })
   border-radius: 50%;
   margin-right: 6px;
 }
-.dot-firing { background: #F53F3F; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
-.dot-resolved { background: #00B42A; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
+.dot-firing { background: #EF4444; box-shadow: 0 0 0 3px rgba(245,63,63,0.15); }
+.dot-resolved { background: #22C55E; box-shadow: 0 0 0 3px rgba(0,180,42,0.15); }
 </style>

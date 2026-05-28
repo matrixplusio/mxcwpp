@@ -331,14 +331,14 @@ onMounted(() => {
   gap: 12px;
   padding: 12px 16px;
   margin-bottom: 12px;
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
   border: 1px solid #BEDAFF;
   border-radius: 6px;
   font-size: 13px;
 }
 
 .file-path { font-family: monospace; font-size: 13px; }
-.hash-preview { font-family: monospace; font-size: 12px; color: #4E5969; }
-.text-muted { color: #86909C; font-size: 12px; }
-.danger-link { color: #F53F3F; }
+.hash-preview { font-family: monospace; font-size: 12px; color: var(--mxsec-text-2); }
+.text-muted { color: var(--mxsec-text-3); font-size: 12px; }
+.danger-link { color: #EF4444; }
 </style>

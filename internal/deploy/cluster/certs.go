@@ -175,3 +175,119 @@ func GenerateCertificates(cfg *Config) (*CertificateBundle, error) {
 	bundle.ClientKey = bundle.AgentKey
 	return bundle, nil
 }
+
+// parseRSAPrivateKey 解析 PEM 编码的 RSA 私钥，兼容 PKCS#1 与 PKCS#8 格式。
+func parseRSAPrivateKey(pemData []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(pemData)
+	if block == nil {
+		return nil, fmt.Errorf("私钥不是有效 PEM")
+	}
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("PKCS1 与 PKCS8 解析均失败: %w", err)
+	}
+	rsaKey, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("私钥不是 RSA 类型: %T", parsed)
+	}
+	return rsaKey, nil
+}
+
+// ServerCertNeedsReissue 校验 bundle 中 server.crt 的 SAN 是否覆盖 cfg.SANValues()。
+// 缺失任一 IP/DNS 返回 true，调用方需触发 ReissueServerCert。
+// bundle 或 server.crt 解析失败也返回 true（保守重签）。
+func ServerCertNeedsReissue(bundle *CertificateBundle, cfg *Config) (bool, error) {
+	if bundle == nil || len(bundle.ServerCert) == 0 {
+		return true, nil
+	}
+	block, _ := pem.Decode(bundle.ServerCert)
+	if block == nil {
+		return true, fmt.Errorf("server.crt 不是有效 PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return true, fmt.Errorf("解析 server.crt 失败: %w", err)
+	}
+
+	expectedIPs, expectedDNS := cfg.SANValues()
+	haveDNS := map[string]struct{}{}
+	for _, name := range cert.DNSNames {
+		haveDNS[name] = struct{}{}
+	}
+	haveIP := map[string]struct{}{}
+	for _, ip := range cert.IPAddresses {
+		haveIP[ip.String()] = struct{}{}
+	}
+	for _, name := range expectedDNS {
+		if _, ok := haveDNS[name]; !ok {
+			return true, nil
+		}
+	}
+	for _, value := range expectedIPs {
+		parsed := net.ParseIP(value)
+		if parsed == nil {
+			continue
+		}
+		if _, ok := haveIP[parsed.String()]; !ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ReissueServerCert 用 bundle 中现有的 CA 与 ServerKey 重签 server.crt，注入 cfg.SANValues()。
+// 保留 CA 与 ServerKey 不变，避免影响已部署 agent 的 ca.crt 信任链。
+// 重签成功后 bundle.ServerCert 被覆盖。
+func ReissueServerCert(bundle *CertificateBundle, cfg *Config) error {
+	if bundle == nil {
+		return fmt.Errorf("bundle 为空")
+	}
+	caBlock, _ := pem.Decode(bundle.CACert)
+	if caBlock == nil {
+		return fmt.Errorf("CA 证书不是有效 PEM")
+	}
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("解析 CA 证书失败: %w", err)
+	}
+	caKey, err := parseRSAPrivateKey(bundle.CAKey)
+	if err != nil {
+		return fmt.Errorf("解析 CA 私钥失败: %w", err)
+	}
+	serverKey, err := parseRSAPrivateKey(bundle.ServerKey)
+	if err != nil {
+		return fmt.Errorf("解析 Server 私钥失败: %w", err)
+	}
+
+	now := time.Now().UTC()
+	serverTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(now.UnixNano() + 1),
+		Subject: pkix.Name{
+			Country:            []string{"CN"},
+			Organization:       []string{"Matrix Cloud Security Platform"},
+			OrganizationalUnit: []string{"Server"},
+			CommonName:         "mxsec-server",
+		},
+		NotBefore:   now.Add(-time.Hour),
+		NotAfter:    now.AddDate(5, 0, 0),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	ips, dns := cfg.SANValues()
+	for _, value := range ips {
+		if parsed := net.ParseIP(value); parsed != nil {
+			serverTemplate.IPAddresses = append(serverTemplate.IPAddresses, parsed)
+		}
+	}
+	serverTemplate.DNSNames = append(serverTemplate.DNSNames, dns...)
+
+	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	if err != nil {
+		return fmt.Errorf("重签 Server 证书失败: %w", err)
+	}
+	bundle.ServerCert = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER})
+	return nil
+}

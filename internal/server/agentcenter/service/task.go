@@ -912,6 +912,7 @@ func (s *TaskService) dispatchFIMTask(task *model.FIMTask, transferService inter
 	}
 
 	if len(hosts) == 0 {
+		// 无在线主机匹配 → 保持 pending；超时由 task_timeout_scheduler 统一处理（24h）
 		s.logger.Debug("没有匹配的在线主机，FIM 任务保持 pending",
 			zap.String("task_id", task.TaskID),
 		)

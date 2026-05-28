@@ -76,7 +76,8 @@ axiosInstance.interceptors.response.use(
 
       return Promise.reject(new Error(errorMessage))
     }
-    return res.data
+    // 后端 SuccessMessage 仅返回 {code, message} 无 data；返回 {message} 兜底，避免调用方 NPE
+    return res.data ?? { message: res.message }
   },
   (error) => {
     // 处理 HTTP 错误

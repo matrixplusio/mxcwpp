@@ -158,8 +158,8 @@ onMounted(() => { loadLogs() })
 .log-query-page { width: 100%; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-body { padding: 20px; }
@@ -170,9 +170,9 @@ onMounted(() => { loadLogs() })
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
-  border: 1px solid #E5E8EF;
+  border: 1px solid var(--mxsec-border);
   flex-wrap: wrap;
 }
 
@@ -180,21 +180,21 @@ onMounted(() => { loadLogs() })
   cursor: pointer;
   font-family: 'SF Mono', 'Consolas', monospace;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.log-message:hover { color: #165DFF; }
+.log-message:hover { color: var(--mxsec-primary); }
 
 .log-json {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   padding: 16px;
   border-radius: 4px;
   font-size: 12px;
   font-family: 'SF Mono', 'Consolas', monospace;
   overflow-x: auto;
   max-height: 400px;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 </style>

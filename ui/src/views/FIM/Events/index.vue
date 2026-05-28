@@ -16,12 +16,12 @@
       </a-col>
       <a-col :span="4">
         <a-card size="small">
-          <a-statistic title="待确认" :value="stats.pending" :value-style="{ color: '#FF7D00' }" />
+          <a-statistic title="待确认" :value="stats.pending" :value-style="{ color: '#F59E0B' }" />
         </a-card>
       </a-col>
       <a-col :span="3">
         <a-card size="small">
-          <a-statistic title="严重" :value="stats.critical" :value-style="{ color: '#CB2634' }" />
+          <a-statistic title="严重" :value="stats.critical" :value-style="{ color: '#DC2626' }" />
         </a-card>
       </a-col>
       <a-col :span="3">
@@ -31,12 +31,12 @@
       </a-col>
       <a-col :span="3">
         <a-card size="small">
-          <a-statistic title="中危" :value="stats.medium" :value-style="{ color: '#FF7D00' }" />
+          <a-statistic title="中危" :value="stats.medium" :value-style="{ color: '#F59E0B' }" />
         </a-card>
       </a-col>
       <a-col :span="3">
         <a-card size="small">
-          <a-statistic title="低危" :value="stats.low" :value-style="{ color: '#165DFF' }" />
+          <a-statistic title="低危" :value="stats.low" :value-style="{ color: '#3B82F6' }" />
         </a-card>
       </a-col>
       <a-col :span="4">
@@ -518,7 +518,7 @@ onMounted(() => {
   gap: 12px;
   padding: 12px 16px;
   margin-bottom: 12px;
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
   border: 1px solid #BEDAFF;
   border-radius: 6px;
   font-size: 13px;

@@ -323,7 +323,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mxsec-border);
 }
 
 .header-left {
@@ -335,7 +335,7 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 600;
   margin: 0 0 0 8px;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .header-right {
@@ -345,12 +345,12 @@ onMounted(() => {
 }
 
 .policy-info-card {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   padding: 20px 24px;
   margin-bottom: 20px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .policy-info-grid {
@@ -371,19 +371,19 @@ onMounted(() => {
 }
 
 .info-label {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 14px;
   white-space: nowrap;
 }
 
 .info-value {
-  color: #262626;
+  color: var(--mxsec-text-1);
   font-size: 14px;
   font-weight: 500;
 }
 
 .info-value.highlight {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   font-weight: 600;
 }
 
@@ -400,7 +400,7 @@ onMounted(() => {
 .policy-description {
   margin: 16px 0 0 0;
   padding-top: 16px;
-  border-top: 1px solid #F2F3F5;
+  border-top: 1px solid var(--mxsec-fill-2);
   color: #666;
   font-size: 14px;
   line-height: 1.6;

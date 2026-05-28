@@ -151,8 +151,8 @@
             </div>
           </a-col>
           <a-col :span="8">
-            <div class="alarm-stat" style="border-color: #00B42A">
-              <div class="alarm-stat-value" style="color: #00B42A">{{ baselineStats.resolved }}</div>
+            <div class="alarm-stat" style="border-color: #22C55E">
+              <div class="alarm-stat-value" style="color: #22C55E">{{ baselineStats.resolved }}</div>
               <div class="alarm-stat-label">已恢复</div>
             </div>
           </a-col>
@@ -273,7 +273,7 @@ import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import apiClient from '@/api/client'
 
-const activeTab = ref('runtime')
+const activeTab = ref('detection')
 const searchText = ref('')
 const filterCluster = ref<string>()
 const filterSeverity = ref<string>()
@@ -403,28 +403,28 @@ onMounted(() => { loadClusters(); loadAlarms() })
 .kube-alarms-page { width: 100%; }
 .section-row { margin-bottom: 16px; }
 
-.alarm-stat { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
-.alarm-stat:hover { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.alarm-stat.critical .alarm-stat-value { color: #F53F3F; }
-.alarm-stat.high .alarm-stat-value { color: #FF7D00; }
-.alarm-stat.medium .alarm-stat-value { color: #F7BA1E; }
-.alarm-stat.low .alarm-stat-value { color: #165DFF; }
+.alarm-stat { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.alarm-stat:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.4); }
+.alarm-stat.critical .alarm-stat-value { color: #EF4444; }
+.alarm-stat.high .alarm-stat-value { color: #F59E0B; }
+.alarm-stat.medium .alarm-stat-value { color: #FADC19; }
+.alarm-stat.low .alarm-stat-value { color: #3B82F6; }
 .alarm-stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
-.alarm-stat-label { font-size: 13px; color: #86909C; margin-top: 4px; }
+.alarm-stat-label { font-size: 13px; color: var(--mxsec-text-3); margin-top: 4px; }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 10px; }
 .card-body { padding: 20px; }
-.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #F7F8FA; border-radius: 4px; border: 1px solid #E5E8EF; flex-wrap: wrap; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: var(--mxsec-fill-1); border-radius: 6px; border: 1px solid var(--mxsec-border); flex-wrap: wrap; }
 
-.raw-json { background: #F7F8FA; padding: 16px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace; overflow-x: auto; max-height: 300px; color: #1D2129; }
+.raw-json { background: var(--mxsec-body-bg); padding: 16px; border-radius: 6px; font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace; overflow-x: auto; max-height: 300px; color: var(--mxsec-text-1); }
 
 .alarm-detail-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.alarm-detail-title { font-size: 16px; font-weight: 600; color: #1D2129; }
+.alarm-detail-title { font-size: 16px; font-weight: 600; color: var(--mxsec-text-1); }
 .severity-tag { font-size: 13px; }
-.alarm-detail-message { font-size: 14px; color: #4E5969; line-height: 1.6; margin-bottom: 16px; padding: 12px 16px; background: #F7F8FA; border-radius: 6px; border-left: 3px solid #165DFF; }
+.alarm-detail-message { font-size: 14px; color: var(--mxsec-text-2); line-height: 1.6; margin-bottom: 16px; padding: 12px 16px; background: var(--mxsec-body-bg); border-radius: 6px; border-left: 3px solid #3B82F6; }
 
 .alarm-detail-section { margin-bottom: 12px; }
-.section-label { font-size: 13px; font-weight: 600; color: #1D2129; margin-bottom: 6px; }
-.section-content { font-size: 13px; color: #4E5969; line-height: 1.8; padding: 10px 14px; background: #F7F8FA; border-radius: 6px; }
-.alarm-detail-section.remediation .section-content { background: #FFF7E6; border-left: 3px solid #FF7D00; white-space: pre-line; }
+.section-label { font-size: 13px; font-weight: 600; color: var(--mxsec-text-1); margin-bottom: 6px; }
+.section-content { font-size: 13px; color: var(--mxsec-text-2); line-height: 1.8; padding: 10px 14px; background: var(--mxsec-body-bg); border-radius: 6px; }
+.alarm-detail-section.remediation .section-content { background: rgba(245, 158, 11, 0.08); border-left: 3px solid #F59E0B; white-space: pre-line; }
 </style>

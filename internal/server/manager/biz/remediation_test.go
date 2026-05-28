@@ -46,13 +46,14 @@ func TestGenerateCommands_RPM(t *testing.T) {
 	if commands[0].PackageType != "rpm-yum" {
 		t.Errorf("expected package type 'rpm-yum', got %q", commands[0].PackageType)
 	}
-	if commands[0].Command != "yum update openssl-1.1.1k -y" {
+	// OS pkg 不带 version：vuln DB 的 fixed_version 经常与 OS 实际 erratum 不匹配
+	if commands[0].Command != "yum update openssl -y" {
 		t.Errorf("unexpected command: %q", commands[0].Command)
 	}
 	if commands[1].PackageType != "rpm-dnf" {
 		t.Errorf("expected package type 'rpm-dnf', got %q", commands[1].PackageType)
 	}
-	if commands[1].Command != "dnf upgrade openssl-1.1.1k -y" {
+	if commands[1].Command != "dnf upgrade openssl -y" {
 		t.Errorf("unexpected command: %q", commands[1].Command)
 	}
 }
@@ -74,7 +75,7 @@ func TestGenerateCommands_DEB(t *testing.T) {
 	if commands[0].PackageType != "deb" {
 		t.Errorf("expected package type 'deb', got %q", commands[0].PackageType)
 	}
-	if commands[0].Command != "apt-get install --only-upgrade nginx=1.25.1 -y" {
+	if commands[0].Command != "apt-get install --only-upgrade nginx -y" {
 		t.Errorf("unexpected command: %q", commands[0].Command)
 	}
 }

@@ -73,6 +73,23 @@ To build a more comprehensive security operations system, we recommend extending
 | Alert Center | Alert aggregation, whitelisting, auto-response (kill/quarantine), tracing timeline |
 | Threat Intelligence | MISP IOC import + Redis cache + CEL real-time matching |
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/dashboard.png" alt="Security Overview" width="100%"><br><b>Security Overview</b> — Real-time security posture scoring, alert trends, risk radar</td>
+    <td><img src="docs/screenshots/vulnerability-list.png" alt="Vulnerability List" width="100%"><br><b>Vulnerability Management</b> — CVE scanning, CVSS scoring, patch prioritization</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/baseline-remediation.png" alt="Baseline Remediation" width="100%"><br><b>Baseline Remediation</b> — CIS Benchmark auto-fix with one-click remediation</td>
+    <td><img src="docs/screenshots/vulnerability-bulletin.png" alt="Vulnerability Bulletin" width="100%"><br><b>Vulnerability Bulletin</b> — CVE intelligence tracking, SLA management</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/ml-anomaly-detection.png" alt="ML Anomaly Detection" width="100%"><br><b>ML Anomaly Detection</b> — Isolation Forest behavioral anomaly scoring</td>
+    <td><img src="docs/screenshots/component-management.png" alt="Component Management" width="100%"><br><b>Component Management</b> — Plugin distribution, version control, remote push</td>
+  </tr>
+</table>
+
 ## Architecture
 
 ```
@@ -140,7 +157,7 @@ mxsec-platform/
 ├── internal/
 │   ├── server/             # Server (manager / agentcenter / consumer / common)
 │   └── agent/              # Agent (connection / transport / plugin / heartbeat)
-├── plugins/                # Plugins (baseline / collector / fim / scanner / sensor / remediation)
+├── plugins/                # Plugins (baseline / collector / fim / scanner / remediation)
 ├── api/proto/              # Protobuf definitions
 ├── ui/                     # Frontend (Vue 3 + TypeScript)
 ├── configs/                # Config files (server.yaml / agent.yaml / rule files)

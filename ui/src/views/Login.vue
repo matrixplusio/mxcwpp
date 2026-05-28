@@ -100,7 +100,7 @@
           :maskClosable="false"
           :footer="null"
         >
-          <p style="color: #86909C; margin-bottom: 16px;">为确保账户安全，请设置新密码（至少 8 位）</p>
+          <p style="color: var(--mxsec-text-3); margin-bottom: 16px;">为确保账户安全，请设置新密码（至少 8 位）</p>
           <a-form layout="vertical" @finish="handleChangePassword">
             <a-form-item label="新密码" required>
               <a-input-password
@@ -359,11 +359,12 @@ const handleChangePassword = async () => {
 
 .login-card {
   width: 440px;
-  background: rgba(255, 255, 255, 0.97);
+  background: rgba(22, 27, 34, 0.92);
   backdrop-filter: blur(20px);
+  border: 1px solid rgba(30, 58, 95, 0.4);
   border-radius: 16px;
   padding: 44px 40px 36px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 }
 
 .card-header {
@@ -371,16 +372,17 @@ const handleChangePassword = async () => {
   margin-bottom: 32px;
 }
 
+/* 登录页强制暗色背景，文字 hard-code 浅色以避免被亮色主题 var 覆盖 */
 .card-header h1 {
   margin: 0 0 4px 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1D2129;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .card-header p {
   font-size: 13px;
-  color: #86909C;
+  color: rgba(255, 255, 255, 0.55);
   margin: 0;
 }
 
@@ -399,8 +401,60 @@ const handleChangePassword = async () => {
 }
 
 .login-input :deep(.anticon) {
-  color: #86909C;
+  color: rgba(255, 255, 255, 0.55);
   font-size: 16px;
+}
+
+/* ===== 输入框暗色主题覆盖（适配登录页暗色背景） ===== */
+.login-card :deep(.ant-input-affix-wrapper),
+.login-card :deep(.ant-input) {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.login-card :deep(.ant-input-affix-wrapper:hover),
+.login-card :deep(.ant-input:hover) {
+  border-color: rgba(59, 130, 246, 0.6);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.login-card :deep(.ant-input-affix-wrapper-focused),
+.login-card :deep(.ant-input-affix-wrapper:focus-within),
+.login-card :deep(.ant-input:focus) {
+  border-color: #3B82F6;
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+/* 内层 input（被 affix-wrapper 包裹时）需要透明背景，避免出现双层颜色 */
+.login-card :deep(.ant-input-affix-wrapper > input.ant-input) {
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.login-card :deep(.ant-input::placeholder),
+.login-card :deep(.ant-input-affix-wrapper input::placeholder) {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* 密码框右侧"显示/隐藏密码"图标 */
+.login-card :deep(.ant-input-password-icon) {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.login-card :deep(.ant-input-password-icon:hover) {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 自动填充时浏览器默认亮色背景覆盖（Chrome/Safari/Edge）*/
+.login-card :deep(input:-webkit-autofill),
+.login-card :deep(input:-webkit-autofill:hover),
+.login-card :deep(input:-webkit-autofill:focus) {
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92);
+  -webkit-box-shadow: 0 0 0 1000px rgba(22, 27, 34, 0.95) inset;
+  caret-color: rgba(255, 255, 255, 0.92);
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .login-button {
@@ -409,7 +463,7 @@ const handleChangePassword = async () => {
   font-size: 16px;
   font-weight: 500;
   margin-top: 4px;
-  background: linear-gradient(135deg, #165DFF 0%, #0E42D2 100%);
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
   border: none;
   box-shadow: 0 4px 12px rgba(22, 93, 255, 0.35);
   transition: all 0.3s ease;
@@ -437,7 +491,7 @@ const handleChangePassword = async () => {
 }
 
 .captcha-input :deep(.anticon) {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 16px;
 }
 
@@ -445,9 +499,11 @@ const handleChangePassword = async () => {
   height: 46px;
   border-radius: 8px;
   cursor: pointer;
-  border: 1px solid #e5e6eb;
+  border: 1px solid var(--mxsec-border);
   flex-shrink: 0;
   transition: opacity 0.2s;
+  /* 服务端 captcha 是深色文字在透明背景上；暗黑模式必须有亮底，否则不可见 */
+  background: #ffffff;
 }
 
 .captcha-image:hover {
@@ -458,11 +514,11 @@ const handleChangePassword = async () => {
   height: 46px;
   width: 150px;
   border-radius: 8px;
-  border: 1px solid #e5e6eb;
+  border: 1px solid var(--mxsec-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 13px;
   cursor: pointer;
   flex-shrink: 0;

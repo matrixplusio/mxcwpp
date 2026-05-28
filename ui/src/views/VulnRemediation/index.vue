@@ -9,7 +9,7 @@
     <a-row :gutter="[16, 16]" class="section-row">
       <a-col :xs="12" :md="6">
         <div class="stat-card-item">
-          <div class="stat-card-icon" style="background: linear-gradient(135deg, #165DFF, #0E42D2)">
+          <div class="stat-card-icon" style="background: linear-gradient(135deg, #3B82F6, #2563EB)">
             <BugOutlined />
           </div>
           <div class="stat-card-value">{{ stats.totalVulns }}</div>
@@ -18,7 +18,7 @@
       </a-col>
       <a-col :xs="12" :md="6">
         <div class="stat-card-item">
-          <div class="stat-card-icon" style="background: linear-gradient(135deg, #00B42A, #009A29)">
+          <div class="stat-card-icon" style="background: linear-gradient(135deg, #22C55E, #009A29)">
             <CheckCircleOutlined />
           </div>
           <div class="stat-card-value">{{ stats.patchedVulns }}</div>
@@ -27,7 +27,7 @@
       </a-col>
       <a-col :xs="12" :md="6">
         <div class="stat-card-item">
-          <div class="stat-card-icon" style="background: linear-gradient(135deg, #F53F3F, #CB2634)">
+          <div class="stat-card-icon" style="background: linear-gradient(135deg, #EF4444, #DC2626)">
             <WarningOutlined />
           </div>
           <div class="stat-card-value">{{ stats.unpatchedVulns }}</div>
@@ -90,7 +90,7 @@
               <div class="severity-bar">
                 <a-progress
                   :percent="item.total > 0 ? (item.patched / item.total) * 100 : 0"
-                  :stroke-color="severityProgressColor[item.severity] || '#165DFF'"
+                  :stroke-color="severityProgressColor[item.severity] || '#3B82F6'"
                   size="small"
                   :format="() => `${item.patched}/${item.total}`"
                 />
@@ -216,10 +216,10 @@ const severityTextMap: Record<string, string> = {
 }
 
 const severityProgressColor: Record<string, string> = {
-  critical: '#F53F3F',
-  high: '#FF7D00',
+  critical: '#EF4444',
+  high: '#F59E0B',
   medium: '#FAAD14',
-  low: '#165DFF',
+  low: '#3B82F6',
 }
 
 const hostColumns = [
@@ -235,7 +235,7 @@ const hostColumns = [
 const getProgressColor = (percent: number) => {
   if (percent >= 80) return '#52C41A'
   if (percent >= 50) return '#FAAD14'
-  return '#F53F3F'
+  return '#EF4444'
 }
 
 const remediationRateText = computed(() => `${stats.value.remediationRate.toFixed(1)}%`)
@@ -244,7 +244,7 @@ const progressColor = computed(() => {
   const rate = stats.value.remediationRate
   if (rate >= 80) return '#52C41A'
   if (rate >= 50) return '#FAAD14'
-  return '#F53F3F'
+  return '#EF4444'
 })
 
 const mttrText = computed(() => {
@@ -296,8 +296,8 @@ onMounted(() => {
 
 /* ========== 统计卡片（与 Dashboard 一致） ========== */
 .stat-card-item {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -306,7 +306,7 @@ onMounted(() => {
 }
 
 .stat-card-item:hover {
-  border-color: #165DFF;
+  border-color: var(--mxsec-primary);
   box-shadow: 0 2px 8px rgba(22, 93, 255, 0.1);
 }
 
@@ -317,7 +317,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #FFFFFF;
+  color: var(--mxsec-card-bg);
   font-size: 18px;
   margin: 0 auto 12px;
 }
@@ -325,20 +325,20 @@ onMounted(() => {
 .stat-card-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   line-height: 1.2;
 }
 
 .stat-card-label {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-top: 4px;
 }
 
 /* ========== Dashboard Card ========== */
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   height: 100%;
 }
@@ -348,13 +348,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
 
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .card-body {
@@ -368,7 +368,7 @@ onMounted(() => {
 }
 
 .progress-detail {
-  border-top: 1px solid #F2F3F5;
+  border-top: 1px solid var(--mxsec-fill-2);
   padding-top: 12px;
 }
 
@@ -377,7 +377,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #F7F8FA;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
 
 .detail-row:last-child {
@@ -386,13 +386,13 @@ onMounted(() => {
 
 .detail-label {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .detail-value {
   font-size: 14px;
   font-weight: 500;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 /* ========== 严重级别分布 ========== */
@@ -421,7 +421,7 @@ onMounted(() => {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
   flex-shrink: 0;
 }
 
@@ -436,7 +436,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
 }
 
 .legend-dot {
@@ -445,7 +445,7 @@ onMounted(() => {
   border-radius: 50%;
 }
 
-.legend-dot.discovered { background: #F53F3F; }
+.legend-dot.discovered { background: #EF4444; }
 .legend-dot.patched { background: #52C41A; }
 
 .trend-chart {
@@ -458,7 +458,7 @@ onMounted(() => {
   gap: 3px;
   height: 160px;
   padding: 10px 0 0;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
 
 .trend-bar-group {
@@ -491,12 +491,12 @@ onMounted(() => {
   transition: height 0.3s, opacity 0.2s;
 }
 
-.trend-bar.discovered { background: #F53F3F; }
+.trend-bar.discovered { background: #EF4444; }
 .trend-bar.patched { background: #52C41A; }
 
 .trend-date {
   font-size: 10px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-top: 6px;
   white-space: nowrap;
   height: 14px;
@@ -520,25 +520,25 @@ onMounted(() => {
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #86909C;
-  background: #F2F3F5;
+  color: var(--mxsec-text-3);
+  background: var(--mxsec-fill-2);
 }
 
 .rank-badge.rank-top {
-  color: #FFFFFF;
-  background: linear-gradient(135deg, #165DFF, #0E42D2);
+  color: var(--mxsec-card-bg);
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
 }
 
 .host-link {
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 .host-link:hover {
-  color: #0E42D2;
+  color: #2563EB;
   text-decoration: underline;
 }
 
 /* ========== 通用 ========== */
-.text-danger { color: #F53F3F; font-weight: 600; }
-.text-success { color: #00B42A; font-weight: 600; }
+.text-danger { color: #EF4444; font-weight: 600; }
+.text-success { color: #22C55E; font-weight: 600; }
 </style>

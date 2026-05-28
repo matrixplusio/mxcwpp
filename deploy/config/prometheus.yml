@@ -1,9 +1,66 @@
+# MxSec Platform — Prometheus 抓取配置
+#
+# 设计原则：
+#   - 只 scrape mxsec 自研服务（Go 进程，自动暴露 process_* + Go runtime metric）
+#   - 不部署 mysql/redis/kafka/clickhouse exporter（这些指标已由 driver/admin 在
+#     Manager monitor handler 中真实查询，不重复造轮子）
+#   - 告警直 webhook 到 mxsec /api/v1/internal/alerts/prometheus，
+#     入 alerts 表 (source=prometheus_infra)，复用现有 notification 系统
+#     （不部署 Alertmanager — 告警路由/去重/通知 mxsec 已全套覆盖）
+
 global:
-  scrape_interval: 60s       # 与 Agent 心跳周期一致
-  evaluation_interval: 60s
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: mxsec-platform
+    env: dev
+
+# 告警规则文件
+rule_files:
+  - /etc/prometheus/rules.yml
+
+# 告警直推 mxsec manager webhook（不经 Alertmanager）
+alerting:
+  alertmanagers:
+    - scheme: http
+      path_prefix: /api/v1/internal/alerts/prometheus
+      static_configs:
+        - targets:
+            - manager:8080
+      # 注意：mxsec 通过 X-Internal-Secret header 鉴权
+      # Prometheus webhook 不支持自定义 header，需用 basic_auth 或通过 nginx 转换
+      # 部署时可在 manager 端临时放行此路径 + Prom IP 白名单
 
 scrape_configs:
-  - job_name: mxsec-agentcenter
+  # ============ Mxsec 自研服务（Go process metrics + 业务 RED 指标） ============
+  - job_name: mxsec-manager
+    scrape_interval: 15s
     static_configs:
       - targets:
-          - agentcenter:8080   # AgentCenter HTTP 管理端口（/metrics 端点）
+          - manager:8080
+        labels:
+          service: manager
+
+  - job_name: mxsec-agentcenter
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - agentcenter:8080
+        labels:
+          service: agentcenter
+
+  - job_name: mxsec-consumer
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - consumer:9100
+        labels:
+          service: consumer
+
+  - job_name: prometheus
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: prometheus

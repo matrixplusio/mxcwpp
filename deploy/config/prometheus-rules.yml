@@ -1,0 +1,193 @@
+# MxSec Platform — Prometheus 告警规则（精简，仅自研服务）
+#
+# 设计原则：
+#   - 只关心 mxsec 自研服务（manager / agentcenter / consumer）
+#   - 不规则 mysql / redis / clickhouse / kafka — 这些由 mxsec monitor handler
+#     的 driver-level 检查覆盖，且 mxsec 内置告警系统会用其他路径上报
+#
+# 命名规范：MxSec<Component><Issue>
+# severity: critical (P0) / warning (P1) / info (P2)
+#
+# 告警流向：
+#   Prometheus 触发 → webhook /api/v1/internal/alerts/prometheus
+#                  → mxsec alerts 表 (source=prometheus_infra)
+#                  → notification 系统 (Lark/Webhook)
+
+groups:
+  # ============ 服务存活 ============
+  - name: mxsec_service_availability
+    interval: 30s
+    rules:
+      - alert: MxSecServiceDown
+        expr: up{job=~"mxsec-.+"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务不可达 (job={{ $labels.job }})"
+          description: |
+            mxsec 服务 {{ $labels.service }} ({{ $labels.instance }}) 已 1 分钟无法 scrape。
+            可能原因：进程崩溃、网络中断、配置错误。
+            排查：docker ps / docker logs {{ $labels.instance }} / curl http://{{ $labels.instance }}/metrics
+
+      - alert: MxSecServiceFlapping
+        expr: changes(up{job=~"mxsec-.+"}[10m]) > 4
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务状态频繁变化（10 分钟内 > 4 次）"
+          description: "服务在 10 分钟内状态翻转 {{ $value }} 次，可能崩溃重启循环。"
+
+  # ============ Manager HTTP RED 指标 ============
+  - name: mxsec_manager_http
+    interval: 30s
+    rules:
+      - alert: MxSecManagerHighErrorRate
+        expr: |
+          sum(rate(mxsec_http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(mxsec_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "Manager 5xx 错误率 > 5% 持续 5 分钟"
+          description: "当前: {{ $value | humanizePercentage }}。查 manager 日志。"
+
+      - alert: MxSecManagerHighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager p99 延迟 > 1s 持续 5 分钟"
+          description: "当前 p99: {{ $value }}s。可能 DB 慢查询或下游卡顿。"
+
+  # ============ AgentCenter gRPC RED 指标 ============
+  - name: mxsec_ac_grpc
+    interval: 30s
+    rules:
+      - alert: MxSecACHighErrorRate
+        expr: |
+          sum(rate(mxsec_ac_grpc_handled_total{grpc_code!="OK"}[5m]))
+          / sum(rate(mxsec_ac_grpc_handled_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter gRPC 错误率 > 5%"
+          description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
+
+      - alert: MxSecACNoTraffic
+        expr: sum(rate(mxsec_ac_grpc_handled_total[5m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter 10 分钟无任何 RPC 流量"
+          description: "可能所有 Agent 离线，或 AC 实例不健康。"
+
+  # ============ Consumer 处理能力 ============
+  - name: mxsec_consumer_kafka
+    interval: 30s
+    rules:
+      - alert: MxSecConsumerHighLag
+        expr: mxsec_consumer_lag > 50000
+        for: 5m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "Consumer 队列积压超过 50K"
+          description: "topic={{ $labels.topic }} partition={{ $labels.partition }} lag={{ $value }}"
+
+      - alert: MxSecConsumerHighErrorRate
+        expr: |
+          sum(rate(mxsec_consumer_records_consumed_total{status=~"error|dlq"}[5m]))
+          / sum(rate(mxsec_consumer_records_consumed_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer 错误率 > 5%"
+          description: "{{ $value | humanizePercentage }} 消息处理失败或进入 DLQ。"
+
+      - alert: MxSecConsumerNoMembers
+        expr: mxsec_consumer_group_members == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer Group 无活跃成员"
+          description: "所有 consumer 实例已断开，Kafka 消息将停滞。"
+
+  # ============ Go 运行时饱和度（自动覆盖所有 mxsec-* 服务）============
+  - name: mxsec_saturation
+    interval: 60s
+    rules:
+      - alert: MxSecHighCPU
+        expr: 100 * rate(process_cpu_seconds_total{job=~"mxsec-.+"}[5m]) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} CPU 持续 > 80% (10min)"
+          description: "当前: {{ $value | humanize }}%"
+
+      - alert: MxSecHighMemory
+        expr: process_resident_memory_bytes{job=~"mxsec-.+"} > 2147483648  # 2GB
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} RSS > 2GB (10min)"
+          description: "当前: {{ $value | humanize1024 }}B"
+
+      - alert: MxSecGoroutineLeak
+        expr: go_goroutines{job=~"mxsec-.+"} > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} goroutine 数 > 10000，疑似泄漏"
+          description: "当前: {{ $value }}"
+
+      - alert: MxSecGCPauseLong
+        expr: |
+          histogram_quantile(0.99, sum by (job, le)
+            (rate(go_gc_duration_seconds_bucket{job=~"mxsec-.+"}[5m]))) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} GC p99 暂停 > 500ms"
+          description: "当前: {{ $value }}s"
+
+  # ============ Manager → MySQL 视角（gorm callback 埋点）============
+  # 注：mxsec_db_query_duration_seconds 由 Manager 端 gorm callback 提供（Tier 1-2 新增）
+  - name: mxsec_db
+    interval: 60s
+    rules:
+      - alert: MxSecDBSlowQuery
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxsec_db_query_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager DB 查询 p99 > 1s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前: {{ $value }}s"

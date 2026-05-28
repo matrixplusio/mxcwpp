@@ -196,9 +196,9 @@ onMounted(() => {
 
 .perm-module {
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--mxsec-fill-1);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .module-title {

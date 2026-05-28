@@ -476,15 +476,15 @@ onUnmounted(() => {
   margin: 0 0 4px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1d2129;
+  color: var(--mxsec-text-1);
 }
 .page-header-hint {
   font-size: 13px;
-  color: #86909c;
+  color: var(--mxsec-text-3);
 }
 .dashboard-card {
-  background: #ffffff;
-  border: 1px solid #e5e8ef;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-header {
@@ -492,12 +492,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1d2129;
+  color: var(--mxsec-text-1);
 }
 .card-body {
   padding: 20px;
@@ -511,7 +511,7 @@ onUnmounted(() => {
   max-height: 200px;
   overflow-y: auto;
   font-size: 12px;
-  color: #4e5969;
+  color: var(--mxsec-text-2);
 }
 .reason-list li {
   margin-bottom: 4px;

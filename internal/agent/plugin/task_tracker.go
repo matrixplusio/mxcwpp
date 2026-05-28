@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,32 +129,54 @@ func (t *TaskTracker) MarkDispatched(token string) error {
 	return nil
 }
 
-// MarkCompleted marks a task as completed and removes it from tracking
-func (t *TaskTracker) MarkCompleted(token string) error {
+// MarkCompleted marks a task as completed and removes it from tracking.
+// 接收两种形式的标识：
+//  1. 完整 token（如 FIM plugin 用 task.Token 上报）
+//  2. 任意子串（如 remediation plugin 上报数字 task_id "1"，
+//     而 tracker 持有的 token 是 "rem-1"）
+//
+// 优先 exact match；找不到时 fuzzy match：token 以 "-<key>" 结尾或等于 <key> 的视为匹配。
+// 多个 prefix 模式：rem-{id} / q-{id} / {fixTaskID}-{hostID}，均能被 suffix 匹配命中。
+func (t *TaskTracker) MarkCompleted(key string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	tracked, ok := t.tasks[token]
-	if !ok {
-		return fmt.Errorf("task not found: %s", token)
+	matchedToken, tracked := t.findTaskLocked(key)
+	if tracked == nil {
+		return fmt.Errorf("task not found: %s", key)
 	}
 
 	tracked.Status = TaskStatusCompleted
 	tracked.CompletedAt = time.Now()
 
-	// Remove from memory
-	delete(t.tasks, token)
+	delete(t.tasks, matchedToken)
 
-	// Remove from disk
-	if err := t.removeTask(token); err != nil {
-		t.logger.Warn("failed to remove completed task file", zap.String("token", token), zap.Error(err))
+	if err := t.removeTask(matchedToken); err != nil {
+		t.logger.Warn("failed to remove completed task file",
+			zap.String("token", matchedToken), zap.Error(err))
 	}
 
 	t.logger.Info("task marked as completed",
-		zap.String("token", token),
+		zap.String("token", matchedToken),
+		zap.String("lookup_key", key),
 		zap.Duration("duration", tracked.CompletedAt.Sub(tracked.ReceivedAt)))
 
 	return nil
+}
+
+// findTaskLocked 按 key 查找 tracked task。
+// 调用方须持有 t.mu 锁。
+func (t *TaskTracker) findTaskLocked(key string) (string, *TrackedTask) {
+	if tracked, ok := t.tasks[key]; ok {
+		return key, tracked
+	}
+	suffix := "-" + key
+	for token, tracked := range t.tasks {
+		if strings.HasSuffix(token, suffix) {
+			return token, tracked
+		}
+	}
+	return "", nil
 }
 
 // MarkFailed marks a task as failed and removes it from tracking

@@ -245,17 +245,17 @@ const resetRefresh = () => {
 // ---- 工具函数 ----
 
 const getUsageColor = (usage?: number): string => {
-  if (!usage) return '#165DFF'
-  if (usage >= 90) return '#F53F3F'
-  if (usage >= 70) return '#FF7D00'
-  return '#00B42A'
+  if (!usage) return '#3B82F6'
+  if (usage >= 90) return '#EF4444'
+  if (usage >= 70) return '#F59E0B'
+  return '#22C55E'
 }
 
 const getAgentCpuColor = (usage?: number): string => {
-  if (!usage) return '#165DFF'
-  if (usage >= 50) return '#F53F3F'
-  if (usage >= 20) return '#FF7D00'
-  return '#00B42A'
+  if (!usage) return '#3B82F6'
+  if (usage >= 50) return '#EF4444'
+  if (usage >= 20) return '#F59E0B'
+  return '#22C55E'
 }
 
 const formatBytes = (bytes: number): string => {
@@ -346,7 +346,7 @@ const cpuOption = computed(() => {
   const ts = metrics.value?.time_series
   if (!ts?.cpu_usage?.length) return null
   const { x, y } = tsToXY(ts.cpu_usage)
-  return makeLineOption(x, [{ name: 'CPU', data: y, color: '#165DFF' }], '%', 100)
+  return makeLineOption(x, [{ name: 'CPU', data: y, color: '#3B82F6' }], '%', 100)
 })
 
 const memOption = computed(() => {
@@ -364,7 +364,7 @@ const netOption = computed(() => {
   const x = xi.length >= xo.length ? xi : xo
   return makeLineOption(x, [
     { name: '接收', data: yi, color: '#14C9C9' },
-    { name: '发送', data: yo, color: '#00B42A' },
+    { name: '发送', data: yo, color: '#22C55E' },
   ], ' KB/s')
 })
 
@@ -375,8 +375,8 @@ const diskIOOption = computed(() => {
   const { x: xw, y: yw } = tsToXY(ts.disk_write)
   const x = xr.length >= xw.length ? xr : xw
   return makeLineOption(x, [
-    { name: '读取', data: yr, color: '#FF7D00' },
-    { name: '写入', data: yw, color: '#F53F3F' },
+    { name: '读取', data: yr, color: '#F59E0B' },
+    { name: '写入', data: yw, color: '#EF4444' },
   ], ' KB/s')
 })
 
@@ -427,8 +427,8 @@ onUnmounted(() => {
 }
 
 .source-tag {
-  background: #E8F3FF;
-  color: #165DFF;
+  background: var(--mxsec-primary-bg);
+  color: var(--mxsec-primary);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -436,7 +436,7 @@ onUnmounted(() => {
 }
 
 .source-time {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   display: flex;
   align-items: center;
 }
@@ -459,7 +459,7 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 14px;
   padding: 16px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 2px 4px rgba(0,0,0,0.04);
   transition: all 0.3s ease;
@@ -479,14 +479,14 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--mxsec-card-bg);
 }
 
-.cpu-bg  { background: linear-gradient(135deg, #165DFF, #0E42D2); }
+.cpu-bg  { background: linear-gradient(135deg, #3B82F6, #2563EB); }
 .mem-bg  { background: linear-gradient(135deg, #722ED1, #531DAB); }
 .disk-bg { background: linear-gradient(135deg, #D25F00, #d46b08); }
-.net-send-bg { background: linear-gradient(135deg, #00B42A, #009A29); }
-.io-bg   { background: linear-gradient(135deg, #FF7D00, #E06400); }
+.net-send-bg { background: linear-gradient(135deg, #22C55E, #009A29); }
+.io-bg   { background: linear-gradient(135deg, #F59E0B, #E06400); }
 .agent-cpu-bg { background: linear-gradient(135deg, #EB2F96, #C41D7F); }
 .agent-mem-bg { background: linear-gradient(135deg, #13C2C2, #08979C); }
 
@@ -494,7 +494,7 @@ onUnmounted(() => {
 
 .metric-label {
   font-size: 12px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-bottom: 4px;
   white-space: nowrap;
 }
@@ -507,7 +507,7 @@ onUnmounted(() => {
 
   &.net {
     font-size: 14px;
-    color: #262626;
+    color: var(--mxsec-text-1);
     font-weight: 600;
     margin-bottom: 0;
     white-space: nowrap;
@@ -521,7 +521,7 @@ onUnmounted(() => {
 }
 
 .metric-sep {
-  color: #C9CDD4;
+  color: var(--mxsec-text-4);
   margin: 0 4px;
 }
 
@@ -533,7 +533,7 @@ onUnmounted(() => {
 }
 
 .chart-card {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   padding: 16px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 2px 4px rgba(0,0,0,0.04);
@@ -542,7 +542,7 @@ onUnmounted(() => {
 .chart-title {
   font-size: 14px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin-bottom: 12px;
 }
 

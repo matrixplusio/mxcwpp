@@ -12,13 +12,14 @@ const (
 
 // AlertSource 告警来源常量
 const (
-	AlertSourceBaseline      = "baseline"      // 基线安全
-	AlertSourceDetection     = "detection"     // CEL 规则检测
-	AlertSourceAgent         = "agent"         // Agent 状态
-	AlertSourceVulnerability = "vulnerability" // 漏洞管理
-	AlertSourceFIM           = "fim"           // 文件完整性
-	AlertSourceVirus         = "virus"         // 病毒查杀
-	AlertSourceKube          = "kube"          // 容器安全
+	AlertSourceBaseline        = "baseline"         // 基线安全
+	AlertSourceDetection       = "detection"        // CEL 规则检测
+	AlertSourceAgent           = "agent"            // Agent 状态
+	AlertSourceVulnerability   = "vulnerability"    // 漏洞管理
+	AlertSourceFIM             = "fim"              // 文件完整性
+	AlertSourceVirus           = "virus"            // 病毒查杀
+	AlertSourceKube            = "kube"             // 容器安全
+	AlertSourcePrometheusInfra = "prometheus_infra" // Prometheus 基础设施告警（webhook 入）
 )
 
 // Alert 告警模型

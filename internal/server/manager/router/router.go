@@ -2,6 +2,8 @@
 package router
 
 import (
+	"strings"
+
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -32,6 +34,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 中间件
 	router.Use(middleware.Logger(logger))
 	router.Use(gin.Recovery())
+	router.Use(middleware.Prometheus()) // 记录 HTTP QPS + 延迟到 mxsec_http_requests_total/duration
 	router.Use(middleware.CORS(cfg.Server.CORSOrigins))
 
 	// 健康检查（支持 GET 和 HEAD 方法，Docker healthcheck 可能使用 HEAD）
@@ -40,8 +43,13 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	router.HEAD("/health", healthHandler.Health)
 
 	// Prometheus metrics 端点（可选 BasicAuth 保护）
+	// 跳过未替换的模板占位符（如 __METRICS_BASIC_AUTH_USER__），防 Prom self-scrape 401
 	metricsHandler := gin.WrapH(metrics.Handler())
-	if cfg.Metrics.BasicAuthUser != "" && cfg.Metrics.BasicAuthPassword != "" {
+	basicAuthEnabled := cfg.Metrics.BasicAuthUser != "" &&
+		cfg.Metrics.BasicAuthPassword != "" &&
+		!strings.HasPrefix(cfg.Metrics.BasicAuthUser, "__") &&
+		!strings.HasPrefix(cfg.Metrics.BasicAuthPassword, "__")
+	if basicAuthEnabled {
 		metricsAuth := gin.BasicAuth(gin.Accounts{
 			cfg.Metrics.BasicAuthUser: cfg.Metrics.BasicAuthPassword,
 		})
@@ -88,6 +96,15 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	internalAC.POST("/register", discoveryHandler.Register)
 	internalAC.POST("/heartbeat", discoveryHandler.Heartbeat)
 	internalAC.DELETE("/deregister", discoveryHandler.Deregister)
+
+	// Prometheus 告警 webhook（不走 JWT，仅可选 X-Internal-Secret 鉴权 + Prom IP 白名单）
+	// 接收 Prometheus alerting 配置中 webhook 推送的告警，入 mxsec alerts 表
+	promAlertsHandler := api.NewPrometheusAlertsHandler(db, logger)
+	internalAlerts := router.Group("/api/v1/internal/alerts")
+	if secret := cfg.Server.InternalSecret; secret != "" {
+		internalAlerts.Use(middleware.InternalAuth(secret))
+	}
+	internalAlerts.POST("/prometheus", promAlertsHandler.Ingest)
 
 	// API 路由
 	apiV1 := router.Group("/api/v1")
@@ -139,7 +156,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupTasksAPI(router, db, logger, acDispatcher)
 	setupResultsAPI(router, db, logger)
 	setupFixAPI(router, db, logger, acDispatcher)
-	setupDashboardAPI(router, db, logger, chConn, redisClient)
+	setupDashboardAPI(router, db, logger, chConn, redisClient, acRegistry, promClient)
 	setupAssetsAPI(router, db, logger)
 	setupReportsAPI(router, db, logger)
 	setupBusinessLinesAPI(router, db, logger)
@@ -150,7 +167,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupFIMAPI(router, db, logger, chConn)
 	setupKubeAPI(router, db, logger, alarmService, cfg, consumerManager)
 	setupMonitorAPI(router, db, logger, cfg, acRegistry, chConn, redisClient, promClient)
-	setupVulnerabilitiesAPI(router, db, logger)
+	setupVulnerabilitiesAPI(router, db, logger, acDispatcher)
 	setupVulnBulletinsAPI(router, db, logger)
 	setupAntivirusAPI(router, db, logger, virusDBUpdater, acDispatcher)
 	setupQuarantineAPI(router, db, logger)
@@ -360,8 +377,8 @@ func setupFixAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, acDis
 }
 
 // setupDashboardAPI 设置 Dashboard API 路由
-func setupDashboardAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client) {
-	handler := api.NewDashboardHandler(db, logger, chConn, redisClient)
+func setupDashboardAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client, acRegistry *sd.Registry, promClient *prometheus.Client) {
+	handler := api.NewDashboardHandler(db, logger, chConn, redisClient, acRegistry, promClient)
 	router.GET("/dashboard/stats", handler.GetDashboardStats)
 }
 
@@ -660,6 +677,8 @@ func setupMonitorAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, c
 	handler := api.NewMonitorHandler(cfg, db, chConn, promClient, acRegistry, logger, redisClient)
 	router.GET("/monitor/host", handler.GetHostMonitor)
 	router.GET("/monitor/services", handler.GetServicesMonitor)
+	router.GET("/monitor/services/:name/history", handler.GetServiceHistory) // Tier 1-2 历史趋势
+	router.GET("/monitor/slo", handler.GetSLO)                               // Tier 2-2 SLO 可用性
 	router.GET("/monitor/service-alerts", handler.GetServiceAlerts)
 	router.POST("/monitor/service-alerts/:id/ack", handler.AckServiceAlert)
 }
@@ -715,10 +734,11 @@ func setupQuarantineAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger
 }
 
 // setupVulnerabilitiesAPI 设置漏洞管理 API 路由
-func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, acDispatcher *sd.ACDispatcher) {
 	handler := api.NewVulnerabilitiesHandler(db, logger)
 	router.GET("/vulnerabilities", handler.ListVulnerabilities)
 	router.POST("/vulnerabilities/:id/ignore", handler.IgnoreVulnerability)
+	router.PUT("/vulnerabilities/:id/category", handler.UpdateCategoryOverride) // admin override 分类/重启动作
 	router.POST("/vulnerabilities/:id/unignore", handler.UnignoreVulnerability)
 	router.POST("/vulnerabilities/sync", handler.TriggerSync)
 	router.POST("/vulnerabilities/scan", handler.TriggerScan)
@@ -746,11 +766,30 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/remediation-tasks/:id/confirm", taskHandler.ConfirmTask)
 	router.POST("/remediation-tasks/:id/cancel", taskHandler.CancelTask)
 	router.POST("/remediation-tasks/:id/retry", taskHandler.RetryTask)
+	router.GET("/remediation-tasks/:id/events", taskHandler.ListEvents)          // 全量 events 列表
+	router.GET("/remediation-tasks/:id/events/stream", taskHandler.StreamEvents) // SSE 实时流
+
+	// 漏洞 advisory 同步（admin 手动触发）
+	vulnSyncHandler := api.NewVulnSyncHandler(db, logger)
+	router.POST("/vulnerabilities/advisory-sync", vulnSyncHandler.SyncAdvisories)
+
+	// 漏洞数据源管理（UI「漏洞源管理」页面）
+	vdsHandler := api.NewVulnDataSourcesHandler(db, logger)
+	router.GET("/vuln-data-sources", vdsHandler.List)
+	router.PUT("/vuln-data-sources/:id", vdsHandler.Update)
+	router.POST("/vuln-data-sources/:id/test", vdsHandler.TestConnection)
+	router.POST("/vuln-data-sources/:id/sync", vdsHandler.TriggerSync)
 	router.POST("/remediation-tasks/:id/verify", remHandler.VerifyTask)
 	router.POST("/remediation-tasks/batch", taskHandler.BatchCreate)
 	router.POST("/remediation-tasks/batch-confirm", taskHandler.BatchConfirm)
 	router.POST("/remediation-tasks/batch-retry", taskHandler.BatchRetry)
 	router.POST("/remediation-tasks/batch-cancel", taskHandler.BatchCancel)
+	router.POST("/remediation-tasks/host-batch", taskHandler.CreateForHost) // 单 host 批量创建（A: vulnIds 子集 / B: allUnpatched 全量）
+
+	// 主机漏洞预检（agent 在本机查仓库 + 已装包，避免 server vuln DB 错命令）
+	preCheckHandler := api.NewHostVulnPreCheckHandler(db, logger, acDispatcher)
+	router.POST("/host-vulnerabilities/:id/precheck", preCheckHandler.CreateForHostVuln)
+	router.POST("/hosts/:host_id/precheck-all", preCheckHandler.CreateForHostAll)
 
 	// 扫描计划管理
 	vulnScanner := biz.NewVulnScanner(db, logger)

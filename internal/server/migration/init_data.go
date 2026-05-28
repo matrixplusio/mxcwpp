@@ -98,6 +98,11 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 		logger.Info("初始化默认扫描计划")
 	}
 
+	// 初始化漏洞数据源 seed（13 个 source，UI 可启用/禁用）
+	if err := initVulnDataSources(db, logger); err != nil {
+		logger.Warn("初始化漏洞数据源失败", zap.Error(err))
+	}
+
 	// 检查是否已完成首次数据初始化
 	if isDataInitialized(db) {
 		logger.Info("默认数据已初始化过，跳过策略组和策略重建")
@@ -776,6 +781,7 @@ func initDefaultComponents(db *gorm.DB, logger *zap.Logger) error {
 		{Name: "collector", Category: model.ComponentCategoryPlugin, Description: "资产采集插件，采集主机进程、端口、用户等信息"},
 		{Name: "fim", Category: model.ComponentCategoryPlugin, Description: "文件完整性监控插件，基于 AIDE 检测文件变更"},
 		{Name: "scanner", Category: model.ComponentCategoryPlugin, Description: "病毒查杀插件，基于 ClamAV + YARA-X 双引擎检测恶意文件"},
+		{Name: "remediation", Category: model.ComponentCategoryPlugin, Description: "漏洞修复插件，执行 yum/apt 包升级与系统补丁应用"},
 		{Name: "virus-database", Category: model.ComponentCategoryPlugin, Description: "ClamAV 病毒特征库，由 freshclam 自动更新"},
 	}
 

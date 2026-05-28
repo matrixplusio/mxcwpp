@@ -1,55 +1,61 @@
 /* =====================================================
    Matrix Cloud Security Platform - Global Styles
-   对齐 Elkeid / Arco Design 配色方案
+   支持浅色/暗色主题切换
    ===================================================== */
 
-/* CSS Variables — Arco Design 色系 */
+/* ── Light Theme (默认) ────────────────────────────── */
 :root {
   /* Primary */
-  --mxsec-primary: #165DFF;
-  --mxsec-primary-hover: #4080FF;
-  --mxsec-primary-active: #0E42D2;
-  --mxsec-primary-bg: #E8F3FF;
+  --mxsec-primary: #3B82F6;
+  --mxsec-primary-hover: #2563EB;
+  --mxsec-primary-active: #1D4ED8;
+  --mxsec-primary-dark: #1E3A5F;
+  --mxsec-primary-bg: rgba(59, 130, 246, 0.08);
+
+  /* Secondary */
+  --mxsec-secondary: #06B6D4;
+  --mxsec-secondary-bg: rgba(6, 182, 212, 0.08);
 
   /* Semantic */
-  --mxsec-success: #00B42A;
-  --mxsec-success-bg: #E8FFEA;
-  --mxsec-warning: #FF7D00;
-  --mxsec-warning-bg: #FFF7E8;
-  --mxsec-danger: #F53F3F;
-  --mxsec-danger-bg: #FFECE8;
-  --mxsec-critical: #CB2634;
-  --mxsec-info: #165DFF;
+  --mxsec-success: #22C55E;
+  --mxsec-success-bg: rgba(34, 197, 94, 0.08);
+  --mxsec-warning: #F59E0B;
+  --mxsec-warning-bg: rgba(245, 158, 11, 0.08);
+  --mxsec-danger: #EF4444;
+  --mxsec-danger-bg: rgba(239, 68, 68, 0.08);
+  --mxsec-critical: #DC2626;
+  --mxsec-info: #3B82F6;
 
   /* Alert Severity */
-  --mxsec-severity-critical: #F53F3F;
-  --mxsec-severity-high: #FF7D00;
+  --mxsec-severity-critical: #EF4444;
+  --mxsec-severity-high: #F59E0B;
   --mxsec-severity-medium: #FADC19;
-  --mxsec-severity-low: #165DFF;
+  --mxsec-severity-low: #3B82F6;
 
-  /* Layout */
+  /* Layout — Light */
   --mxsec-navbar-height: 60px;
   --mxsec-sider-width: 200px;
   --mxsec-sider-collapsed-width: 48px;
-  --mxsec-body-bg: #F2F3F5;
+  --mxsec-body-bg: #F0F2F5;
   --mxsec-card-bg: #FFFFFF;
+  --mxsec-card-bg-hover: #FAFAFA;
   --mxsec-navbar-bg: #FFFFFF;
   --mxsec-sider-bg: #FFFFFF;
 
-  /* Text */
+  /* Text — Light */
   --mxsec-text-1: #1D2129;
   --mxsec-text-2: #4E5969;
   --mxsec-text-3: #86909C;
   --mxsec-text-4: #C9CDD4;
 
-  /* Border */
+  /* Border — Light */
   --mxsec-border: #E5E8EF;
   --mxsec-border-light: #F2F3F5;
 
-  /* Fill */
+  /* Fill — Light */
   --mxsec-fill-1: #F7F8FA;
   --mxsec-fill-2: #F2F3F5;
-  --mxsec-fill-3: #E5E6EB;
+  --mxsec-fill-3: #E5E8EF;
 
   /* Spacing */
   --mxsec-spacing-xs: 4px;
@@ -59,9 +65,59 @@
   --mxsec-spacing-xl: 32px;
 
   /* Radius */
-  --mxsec-radius-sm: 2px;
-  --mxsec-radius-md: 4px;
-  --mxsec-radius-lg: 8px;
+  --mxsec-radius-sm: 4px;
+  --mxsec-radius-md: 6px;
+  --mxsec-radius-lg: 10px;
+
+  /* Scrollbar */
+  --mxsec-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --mxsec-scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+  /* Shadow */
+  --mxsec-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --mxsec-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Dark Theme (深空蓝) ───────────────────────────── */
+html.dark {
+  --mxsec-primary-hover: #60A5FA;
+  --mxsec-primary-active: #2563EB;
+  --mxsec-primary-bg: rgba(59, 130, 246, 0.1);
+  --mxsec-secondary-bg: rgba(6, 182, 212, 0.1);
+
+  --mxsec-success-bg: rgba(34, 197, 94, 0.12);
+  --mxsec-warning-bg: rgba(245, 158, 11, 0.12);
+  --mxsec-danger-bg: rgba(239, 68, 68, 0.12);
+
+  /* Layout — Dark */
+  --mxsec-body-bg: #0D1117;
+  --mxsec-card-bg: #161B22;
+  --mxsec-card-bg-hover: #1C2333;
+  --mxsec-navbar-bg: #0D1117;
+  --mxsec-sider-bg: #0D1117;
+
+  /* Text — Dark */
+  --mxsec-text-1: #E5E5E5;
+  --mxsec-text-2: #AAAAAA;
+  --mxsec-text-3: #888888;
+  --mxsec-text-4: #555555;
+
+  /* Border — Dark */
+  --mxsec-border: rgba(30, 58, 95, 0.4);
+  --mxsec-border-light: rgba(30, 58, 95, 0.2);
+
+  /* Fill — Dark */
+  --mxsec-fill-1: #1C2333;
+  --mxsec-fill-2: #161B22;
+  --mxsec-fill-3: rgba(30, 58, 95, 0.3);
+
+  /* Scrollbar — Dark */
+  --mxsec-scrollbar-thumb: rgba(30, 58, 95, 0.5);
+  --mxsec-scrollbar-thumb-hover: rgba(59, 130, 246, 0.4);
+
+  /* Shadow — Dark */
+  --mxsec-shadow: none;
+  --mxsec-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* =====================================================
@@ -101,12 +157,13 @@
 }
 
 /* =====================================================
-   Card 样式 — Elkeid 风格: border, 不用 shadow
+   Card 样式
    ===================================================== */
 .ant-card {
   border-radius: var(--mxsec-radius-lg);
   border: 1px solid var(--mxsec-border);
-  box-shadow: none;
+  background: var(--mxsec-card-bg);
+  box-shadow: var(--mxsec-shadow);
 
   .ant-card-head {
     border-bottom: 1px solid var(--mxsec-border);
@@ -127,7 +184,7 @@
 }
 
 /* =====================================================
-   Table 样式 — 干净无斑马纹
+   Table 样式
    ===================================================== */
 .ant-table-wrapper {
   .ant-table {
@@ -145,10 +202,11 @@
         padding: 12px 16px;
         border-bottom: 1px solid var(--mxsec-border-light);
         color: var(--mxsec-text-2);
+        transition: background 0.15s ease;
       }
 
       &:hover > td {
-        background: var(--mxsec-fill-1);
+        background: rgba(59, 130, 246, 0.06);
       }
     }
   }
@@ -169,7 +227,7 @@
 }
 
 /* =====================================================
-   Stat Card — 统计卡片
+   Stat Card — 旧统计卡片（兼容，新页面用 StatCard 组件）
    ===================================================== */
 .stat-card {
   background: var(--mxsec-card-bg);
@@ -177,10 +235,11 @@
   border: 1px solid var(--mxsec-border);
   padding: 20px;
   text-align: center;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, transform 0.2s;
 
   &:hover {
     border-color: var(--mxsec-primary);
+    transform: translateY(-2px);
   }
 }
 
@@ -193,44 +252,44 @@
 
 /* Severity Tags */
 .severity-critical {
-  color: #F53F3F;
-  background: #FFECE8;
-  border-color: #FDCDC5;
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .severity-high {
-  color: #FF7D00;
-  background: #FFF7E8;
-  border-color: #FFE4BA;
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .severity-medium {
-  color: #F7BA1E;
-  background: #FFFCE8;
-  border-color: #FDEEBA;
+  color: #FADC19;
+  background: rgba(250, 220, 25, 0.12);
+  border-color: rgba(250, 220, 25, 0.3);
 }
 
 .severity-low {
-  color: #165DFF;
-  background: #E8F3FF;
-  border-color: #BEDAFF;
+  color: #3B82F6;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 /* Status Tags */
 .status-online {
-  color: #00B42A;
-  background: #E8FFEA;
-  border-color: #AFF0B5;
+  color: #22C55E;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .status-offline {
-  color: #F53F3F;
-  background: #FFECE8;
-  border-color: #FDCDC5;
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* =====================================================
-   Scrollbar — 精简风格
+   Scrollbar
    ===================================================== */
 ::-webkit-scrollbar {
   width: 6px;
@@ -242,17 +301,17 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #C9CDD4;
+  background: var(--mxsec-scrollbar-thumb);
   border-radius: 3px;
 
   &:hover {
-    background: #86909C;
+    background: var(--mxsec-scrollbar-thumb-hover);
   }
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #C9CDD4 transparent;
+  scrollbar-color: var(--mxsec-scrollbar-thumb) transparent;
 }
 
 /* =====================================================
@@ -281,7 +340,7 @@
 .ant-dropdown {
   .ant-dropdown-menu {
     border-radius: var(--mxsec-radius-md);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--mxsec-shadow-lg);
   }
 }
 
@@ -289,6 +348,23 @@
   .ant-tabs-tab {
     border-radius: var(--mxsec-radius-md) var(--mxsec-radius-md) 0 0;
   }
+}
+
+/* =====================================================
+   路由过渡动画
+   ===================================================== */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
 }
 
 /* =====================================================

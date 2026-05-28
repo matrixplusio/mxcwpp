@@ -89,7 +89,7 @@
                 title="确认删除此查询？"
                 @confirm="deleteQuery(record.id)"
               >
-                <a style="color: #F53F3F">删除</a>
+                <a style="color: #EF4444">删除</a>
               </a-popconfirm>
               <a-tag v-if="record.is_builtin" size="small">内置</a-tag>
             </a-space>
@@ -291,7 +291,7 @@ onMounted(() => {
   margin-top: 8px;
 }
 .hint-text { color: #999; font-size: 12px; }
-.result-meta { color: #165DFF; font-size: 12px; }
+.result-meta { color: var(--mxsec-primary); font-size: 12px; }
 .result-card { margin-bottom: 16px; }
 .saved-card { margin-top: 16px; }
 .mql-preview {

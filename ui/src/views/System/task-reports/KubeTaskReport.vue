@@ -102,11 +102,11 @@
               <p class="summary-paragraph">{{ report.summary.baselineOverview }}</p>
               <div class="summary-stats">
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #F53F3F">{{ report.alarmStatistics.totalAlarms }}</div>
+                  <div class="stat-value" style="color: #EF4444">{{ report.alarmStatistics.totalAlarms }}</div>
                   <div class="stat-label">容器告警</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value" style="color: #FF7D00">{{ report.alarmStatistics.pendingAlarms }}</div>
+                  <div class="stat-value" style="color: #F59E0B">{{ report.alarmStatistics.pendingAlarms }}</div>
                   <div class="stat-label">待处理</div>
                 </div>
                 <div class="stat-item">
@@ -145,21 +145,21 @@
             <div class="section-subtitle">Alarm Statistics</div>
           </div>
           <div class="stats-grid">
-            <div class="stats-card" style="border-left: 4px solid #F53F3F">
+            <div class="stats-card" style="border-left: 4px solid #EF4444">
               <div class="stats-info">
-                <div class="stats-value" style="color: #F53F3F">{{ report.alarmStatistics.totalAlarms }}</div>
+                <div class="stats-value" style="color: #EF4444">{{ report.alarmStatistics.totalAlarms }}</div>
                 <div class="stats-label">总告警</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #FF7D00">
+            <div class="stats-card" style="border-left: 4px solid #F59E0B">
               <div class="stats-info">
-                <div class="stats-value" style="color: #FF7D00">{{ report.alarmStatistics.pendingAlarms }}</div>
+                <div class="stats-value" style="color: #F59E0B">{{ report.alarmStatistics.pendingAlarms }}</div>
                 <div class="stats-label">待处理</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #00B42A">
+            <div class="stats-card" style="border-left: 4px solid #22C55E">
               <div class="stats-info">
-                <div class="stats-value" style="color: #00B42A">{{ report.alarmStatistics.processedAlarms }}</div>
+                <div class="stats-value" style="color: #22C55E">{{ report.alarmStatistics.processedAlarms }}</div>
                 <div class="stats-label">已处理</div>
               </div>
             </div>
@@ -208,21 +208,21 @@
             <div class="section-subtitle">CIS Baseline Results</div>
           </div>
           <div class="stats-grid">
-            <div class="stats-card" style="border-left: 4px solid #00B42A">
+            <div class="stats-card" style="border-left: 4px solid #22C55E">
               <div class="stats-info">
-                <div class="stats-value" style="color: #00B42A">{{ report.baselineStatistics.passed }}</div>
+                <div class="stats-value" style="color: #22C55E">{{ report.baselineStatistics.passed }}</div>
                 <div class="stats-label">通过</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #F53F3F">
+            <div class="stats-card" style="border-left: 4px solid #EF4444">
               <div class="stats-info">
-                <div class="stats-value" style="color: #F53F3F">{{ report.baselineStatistics.failed }}</div>
+                <div class="stats-value" style="color: #EF4444">{{ report.baselineStatistics.failed }}</div>
                 <div class="stats-label">失败</div>
               </div>
             </div>
-            <div class="stats-card" style="border-left: 4px solid #FF7D00">
+            <div class="stats-card" style="border-left: 4px solid #F59E0B">
               <div class="stats-info">
-                <div class="stats-value" style="color: #FF7D00">{{ report.baselineStatistics.warning }}</div>
+                <div class="stats-value" style="color: #F59E0B">{{ report.baselineStatistics.warning }}</div>
                 <div class="stats-label">警告</div>
               </div>
             </div>
@@ -230,7 +230,7 @@
 
           <!-- 高危风险项 -->
           <div v-if="report.baselineRiskItems && report.baselineRiskItems.length > 0" class="risk-items-section" style="margin-top: 24px">
-            <h4 style="margin-bottom: 12px; color: #1D2129; font-size: 15px">高风险基线违规项</h4>
+            <h4 style="margin-bottom: 12px; color: var(--mxsec-text-1); font-size: 15px">高风险基线违规项</h4>
             <div class="risk-item" v-for="(item, i) in report.baselineRiskItems" :key="i">
               <div class="risk-item-header">
                 <span class="severity-tag" :class="item.severity">{{ item.severityLabel }}</span>
@@ -249,7 +249,7 @@
 
           <!-- 失败检查项明细表 -->
           <div v-if="report.failedCheckDetails && report.failedCheckDetails.length > 0" style="margin-top: 24px">
-            <h4 style="margin-bottom: 12px; color: #1D2129; font-size: 15px">不合规检查项明细</h4>
+            <h4 style="margin-bottom: 12px; color: var(--mxsec-text-1); font-size: 15px">不合规检查项明细</h4>
             <table class="data-table">
               <thead>
                 <tr>
@@ -291,8 +291,8 @@
             <tbody>
               <tr v-for="cluster in report.clusterDetails" :key="cluster.clusterName">
                 <td>{{ cluster.clusterName }}</td>
-                <td><span style="color: #F53F3F">{{ cluster.alarmCount }}</span></td>
-                <td><span :style="{ color: cluster.baselinePassRate >= 80 ? '#00B42A' : cluster.baselinePassRate >= 60 ? '#FF7D00' : '#F53F3F' }">{{ cluster.baselinePassRate.toFixed(1) }}%</span></td>
+                <td><span style="color: #EF4444">{{ cluster.alarmCount }}</span></td>
+                <td><span :style="{ color: cluster.baselinePassRate >= 80 ? '#22C55E' : cluster.baselinePassRate >= 60 ? '#F59E0B' : '#EF4444' }">{{ cluster.baselinePassRate.toFixed(1) }}%</span></td>
               </tr>
             </tbody>
           </table>
@@ -526,7 +526,7 @@ onMounted(() => { loadSavedReports() })
 <style lang="less" scoped>
 .time-range-selector {
   padding: 24px;
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
@@ -535,7 +535,7 @@ onMounted(() => { loadSavedReports() })
   padding: 14px 16px;
   margin-bottom: 10px;
   background: #FFF7F0;
-  border-left: 3px solid #FF7D00;
+  border-left: 3px solid #F59E0B;
   border-radius: 4px;
 
   .risk-item-header {
@@ -546,24 +546,24 @@ onMounted(() => { loadSavedReports() })
   }
   .risk-item-id {
     font-size: 12px;
-    color: #86909C;
+    color: var(--mxsec-text-3);
     font-family: 'SF Mono', 'Consolas', monospace;
   }
   .risk-item-title {
     font-size: 14px;
     font-weight: 500;
-    color: #1D2129;
+    color: var(--mxsec-text-1);
   }
   .risk-item-meta {
     display: flex;
     gap: 16px;
     font-size: 12px;
-    color: #86909C;
+    color: var(--mxsec-text-3);
     margin-bottom: 6px;
   }
   .risk-item-remediation {
     font-size: 13px;
-    color: #4E5969;
+    color: var(--mxsec-text-2);
     line-height: 1.6;
     white-space: pre-line;
   }
@@ -575,9 +575,9 @@ onMounted(() => { loadSavedReports() })
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  &.critical { background: #FFECE8; color: #F53F3F; }
-  &.high { background: #FFF3E8; color: #FF7D00; }
+  &.critical { background: #FFECE8; color: #EF4444; }
+  &.high { background: #FFF3E8; color: #F59E0B; }
   &.medium { background: #FFF7E6; color: #F7BA1E; }
-  &.low { background: #E8F3FF; color: #165DFF; }
+  &.low { background: var(--mxsec-primary-bg); color: var(--mxsec-primary); }
 }
 </style>

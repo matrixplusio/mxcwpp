@@ -9,11 +9,12 @@ import (
 type PluginType string
 
 const (
-	PluginTypeBaseline  PluginType = "baseline"       // 基线检查插件
-	PluginTypeCollector PluginType = "collector"      // 资产采集插件
-	PluginTypeFIM       PluginType = "fim"            // 文件完整性监控插件
-	PluginTypeScanner   PluginType = "scanner"        // 病毒查杀插件 (ClamAV + YARA-X)
-	PluginTypeVirusDB   PluginType = "virus-database" // ClamAV 病毒库（自动更新）
+	PluginTypeBaseline    PluginType = "baseline"       // 基线检查插件
+	PluginTypeCollector   PluginType = "collector"      // 资产采集插件
+	PluginTypeFIM         PluginType = "fim"            // 文件完整性监控插件
+	PluginTypeScanner     PluginType = "scanner"        // 病毒查杀插件 (ClamAV + YARA-X)
+	PluginTypeRemediation PluginType = "remediation"    // 漏洞修复插件
+	PluginTypeVirusDB     PluginType = "virus-database" // ClamAV 病毒库（自动更新）
 )
 
 // PluginConfig 插件配置表

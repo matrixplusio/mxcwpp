@@ -41,7 +41,7 @@
                 label="扫描摘要"
                 :span="3"
               >
-                <span :style="{ color: detail.record.status === 'failed' ? '#F53F3F' : '#1D2129' }">
+                <span :style="{ color: detail.record.status === 'failed' ? '#EF4444' : 'var(--mxsec-text-1)' }">
                   {{ detail.record.errorMsg }}
                 </span>
               </a-descriptions-item>
@@ -270,8 +270,8 @@ onMounted(() => loadDetail())
 .section-row { margin-bottom: 16px; }
 
 .dashboard-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
 }
 .card-header {
@@ -285,8 +285,8 @@ onMounted(() => loadDetail())
 .card-body { padding: 16px 20px 20px; }
 
 .stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E8EF;
+  background: var(--mxsec-card-bg);
+  border: 1px solid var(--mxsec-border);
   border-radius: 8px;
   padding: 16px 20px;
   text-align: center;
@@ -294,15 +294,15 @@ onMounted(() => loadDetail())
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 .stat-label {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   margin-top: 4px;
 }
 
-.score-critical { color: #CB2634; font-weight: 700; }
+.score-critical { color: #DC2626; font-weight: 700; }
 .score-high { color: #D46B08; font-weight: 600; }
-.score-normal { color: #1D2129; }
+.score-normal { color: var(--mxsec-text-1); }
 </style>

@@ -17,22 +17,22 @@
             <div class="legend-container">
               <div class="status-legend">
                 <div class="legend-item">
-                  <span class="legend-color" style="background: #00B42A"></span>
+                  <span class="legend-color" style="background: #22C55E"></span>
                   <span>运行中</span>
                   <span class="legend-value">{{ statusDistribution.running }}</span>
                 </div>
                 <div class="legend-item">
-                  <span class="legend-color" style="background: #FF7D00"></span>
+                  <span class="legend-color" style="background: #F59E0B"></span>
                   <span>运行异常</span>
                   <span class="legend-value">{{ statusDistribution.abnormal }}</span>
                 </div>
                 <div class="legend-item">
-                  <span class="legend-color" style="background: #F53F3F"></span>
+                  <span class="legend-color" style="background: #EF4444"></span>
                   <span>离线</span>
                   <span class="legend-value">{{ statusDistribution.offline }}</span>
                 </div>
                 <div class="legend-item">
-                  <span class="legend-color" style="background: #165DFF"></span>
+                  <span class="legend-color" style="background: #3B82F6"></span>
                   <span>未安装</span>
                   <span class="legend-value">{{ statusDistribution.not_installed }}</span>
                 </div>
@@ -52,39 +52,39 @@
         <a-card title="主机基线风险分布" :bordered="false" class="distribution-card">
           <div class="risk-distribution-container">
             <div class="risk-card">
-              <div class="risk-icon" style="border-color: #CB2634">
-                <ExclamationCircleOutlined style="color: #CB2634" />
+              <div class="risk-icon" style="border-color: #DC2626">
+                <ExclamationCircleOutlined style="color: #DC2626" />
               </div>
               <div class="risk-content">
                 <div class="risk-label">严重</div>
-                <div class="risk-value" style="color: #CB2634">{{ riskDistribution.critical }}</div>
+                <div class="risk-value" style="color: #DC2626">{{ riskDistribution.critical }}</div>
               </div>
             </div>
             <div class="risk-card">
-              <div class="risk-icon" style="border-color: #F53F3F">
-                <ExclamationCircleOutlined style="color: #F53F3F" />
+              <div class="risk-icon" style="border-color: #EF4444">
+                <ExclamationCircleOutlined style="color: #EF4444" />
               </div>
               <div class="risk-content">
                 <div class="risk-label">高危</div>
-                <div class="risk-value" style="color: #F53F3F">{{ riskDistribution.high }}</div>
+                <div class="risk-value" style="color: #EF4444">{{ riskDistribution.high }}</div>
               </div>
             </div>
             <div class="risk-card">
-              <div class="risk-icon" style="border-color: #FF7D00">
-                <ExclamationCircleOutlined style="color: #FF7D00" />
+              <div class="risk-icon" style="border-color: #F59E0B">
+                <ExclamationCircleOutlined style="color: #F59E0B" />
               </div>
               <div class="risk-content">
                 <div class="risk-label">中危</div>
-                <div class="risk-value" style="color: #FF7D00">{{ riskDistribution.medium }}</div>
+                <div class="risk-value" style="color: #F59E0B">{{ riskDistribution.medium }}</div>
               </div>
             </div>
             <div class="risk-card">
-              <div class="risk-icon" style="border-color: #165DFF">
-                <ExclamationCircleOutlined style="color: #165DFF" />
+              <div class="risk-icon" style="border-color: #3B82F6">
+                <ExclamationCircleOutlined style="color: #3B82F6" />
               </div>
               <div class="risk-content">
                 <div class="risk-label">低危</div>
-                <div class="risk-value" style="color: #165DFF">{{ riskDistribution.low }}</div>
+                <div class="risk-value" style="color: #3B82F6">{{ riskDistribution.low }}</div>
               </div>
             </div>
           </div>
@@ -128,7 +128,7 @@
         </div>
         <div class="action-right">
           <a-space>
-            <span style="color: #4E5969">主机范围:</span>
+            <span style="color: var(--mxsec-text-2)">主机范围:</span>
             <a-select
               v-model:value="filters.hostRange"
               placeholder="全部"
@@ -307,7 +307,7 @@
       @cancel="handleCancelBatchBindBusinessLine"
     >
       <div style="margin-bottom: 16px;">
-        <div style="margin-bottom: 8px; color: #4E5969;">
+        <div style="margin-bottom: 8px; color: var(--mxsec-text-2);">
           已选择 <strong>{{ batchBindHostIds.length }}</strong> 台主机
         </div>
       </div>
@@ -340,7 +340,7 @@
       @cancel="batchTagsModalVisible = false"
     >
       <div style="margin-bottom: 16px;">
-        <div style="margin-bottom: 8px; color: #4E5969;">
+        <div style="margin-bottom: 8px; color: var(--mxsec-text-2);">
           已选择 <strong>{{ selectedRowKeys.length }}</strong> 台主机
         </div>
       </div>
@@ -445,22 +445,22 @@ const statusChartOption = computed(() => {
     {
       value: statusDistribution.value.running,
       name: '运行中',
-      itemStyle: { color: '#00B42A' },
+      itemStyle: { color: '#22C55E' },
     },
     {
       value: statusDistribution.value.abnormal,
       name: '运行异常',
-      itemStyle: { color: '#FF7D00' },
+      itemStyle: { color: '#F59E0B' },
     },
     {
       value: statusDistribution.value.offline,
       name: '离线',
-      itemStyle: { color: '#F53F3F' },
+      itemStyle: { color: '#EF4444' },
     },
     {
       value: statusDistribution.value.not_installed,
       name: '未安装',
-      itemStyle: { color: '#165DFF' },
+      itemStyle: { color: '#3B82F6' },
     },
     {
       value: statusDistribution.value.uninstalled,
@@ -1015,7 +1015,7 @@ onMounted(() => {
 .chart-hint {
   text-align: center;
   margin-top: 8px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
 }
 
@@ -1053,7 +1053,7 @@ onMounted(() => {
 .legend-value {
   margin-left: auto;
   font-weight: 600;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .risk-distribution-container {
@@ -1071,13 +1071,13 @@ onMounted(() => {
   padding: 16px;
   border: none;
   border-radius: 8px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   min-height: 70px;
   transition: all 0.3s ease;
 }
 
 .risk-card:hover {
-  background: #f0f5ff;
+  background: var(--mxsec-primary-bg);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
@@ -1101,7 +1101,7 @@ onMounted(() => {
 
 .risk-label {
   font-size: 12px;
-  color: #4E5969;
+  color: var(--mxsec-text-2);
   margin-bottom: 4px;
   line-height: 1.4;
   word-break: break-word;
@@ -1110,7 +1110,7 @@ onMounted(() => {
 .risk-value {
   font-size: 22px;
   font-weight: 700;
-  color: #1D2129;
+  color: var(--mxsec-text-1);
 }
 
 .action-bar {
@@ -1119,7 +1119,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mxsec-border);
 }
 
 .action-left {
@@ -1137,13 +1137,13 @@ onMounted(() => {
   gap: 8px;
   align-items: center;
   padding: 12px 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--mxsec-border);
 }
 
 .host-link {
-  color: #165DFF;
+  color: var(--mxsec-primary);
   text-decoration: none;
 }
 
@@ -1165,7 +1165,7 @@ onMounted(() => {
 }
 
 .action-link-danger {
-  color: #F53F3F;
+  color: #EF4444;
 }
 
 .action-link-danger:hover {

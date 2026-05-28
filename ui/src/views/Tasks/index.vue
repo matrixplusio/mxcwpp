@@ -137,7 +137,7 @@
               </template>
               <span>
                 <a-tag>{{ getTaskPolicyIds(record)[0] }}</a-tag>
-                <span style="color: #165DFF; cursor: pointer;">+{{ getTaskPolicyIds(record).length - 1 }}</span>
+                <span style="color: #3B82F6; cursor: pointer;">+{{ getTaskPolicyIds(record).length - 1 }}</span>
               </span>
             </a-tooltip>
             <a-tag v-else>{{ getTaskPolicyIds(record)[0] }}</a-tag>
@@ -400,7 +400,7 @@
             <a-statistic
               title="失败"
               :value="taskResultStats.fail"
-              :value-style="{ color: '#CB2634' }"
+              :value-style="{ color: '#DC2626' }"
             >
               <template #prefix>
                 <CloseCircleOutlined />
@@ -411,7 +411,7 @@
             <a-statistic
               title="错误"
               :value="taskResultStats.error"
-              :value-style="{ color: '#FF7D00' }"
+              :value-style="{ color: '#F59E0B' }"
             >
               <template #prefix>
                 <ExclamationCircleOutlined />
@@ -1451,7 +1451,7 @@ onUnmounted(() => {
 
 .progress-tip {
   text-align: center;
-  color: #165DFF;
+  color: var(--mxsec-primary);
   margin-top: 8px;
 }
 
@@ -1507,7 +1507,7 @@ onUnmounted(() => {
 }
 
 .log-info .log-level {
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 .log-info .log-message {
@@ -1515,32 +1515,32 @@ onUnmounted(() => {
 }
 
 .log-success .log-level {
-  color: #00B42A;
+  color: #22C55E;
 }
 
 .log-success .log-message {
-  color: #00B42A;
+  color: #22C55E;
 }
 
 .log-warning .log-level {
-  color: #FF7D00;
+  color: #F59E0B;
 }
 
 .log-warning .log-message {
-  color: #FF7D00;
+  color: #F59E0B;
 }
 
 .log-error .log-level {
-  color: #F53F3F;
+  color: #EF4444;
 }
 
 .log-error .log-message {
-  color: #F53F3F;
+  color: #EF4444;
 }
 
 /* 失败原因样式 */
 .failure-reason {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   cursor: help;
 }
@@ -1598,14 +1598,14 @@ onUnmounted(() => {
   cursor: pointer;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12px;
-  color: #165DFF;
+  color: var(--mxsec-primary);
   padding: 2px 6px;
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .host-id-cell:hover {
-  background-color: #E8F3FF;
+  background-color: var(--mxsec-primary-bg);
 }
 
 .host-id-cell .copy-icon {
@@ -1619,7 +1619,7 @@ onUnmounted(() => {
 }
 
 .error-message-text {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   cursor: help;
 }

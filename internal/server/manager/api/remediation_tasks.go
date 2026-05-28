@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -100,6 +101,61 @@ func selectCommandForHost(commands []biz.RemediationCommand, osFamily, osVersion
 	return commands[0].Command
 }
 
+// precheckPackage agent 上报的 precheck_packages JSON 元素
+type precheckPackage struct {
+	Name             string `json:"name"`
+	InstalledVersion string `json:"installed_version"`
+	AvailableVersion string `json:"available_version"`
+	Repo             string `json:"repo"`
+	Action           string `json:"action"`
+}
+
+// buildCommandFromPreCheck 优先用 agent pre-check 已确认的真实包名生成命令。
+// 返回 "" 表示 precheck 不可用 / 无 upgradable 包，应 fallback 老逻辑。
+//
+// 例：vuln.component="openssl"，主机实际装了 openssl + openssl-libs，
+// pre-check 命中 → cmd = "dnf upgrade openssl openssl-libs -y"
+// 而非以前的 "dnf upgrade openssl-1.1.1g-15 -y"（fixed_version 拼错）。
+func buildCommandFromPreCheck(hv *model.HostVulnerability, osFamily, osVersion string) string {
+	if hv.PreCheckStatus != model.PreCheckStatusAvailable &&
+		hv.PreCheckStatus != model.PreCheckStatusAvailableEPEL {
+		return ""
+	}
+	if hv.PreCheckPackages == "" {
+		return ""
+	}
+	var pkgs []precheckPackage
+	if err := json.Unmarshal([]byte(hv.PreCheckPackages), &pkgs); err != nil {
+		return ""
+	}
+	var names []string
+	for _, p := range pkgs {
+		if p.Action == "upgrade" && p.Name != "" {
+			names = append(names, p.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	pkgMgr := detectPackageManager(osFamily, osVersion)
+	pkgList := strings.Join(names, " ")
+	switch pkgMgr {
+	case "rpm-dnf":
+		if hv.PreCheckStatus == model.PreCheckStatusAvailableEPEL {
+			return fmt.Sprintf("dnf upgrade --enablerepo=epel %s -y", pkgList)
+		}
+		return fmt.Sprintf("dnf upgrade %s -y", pkgList)
+	case "rpm-yum":
+		if hv.PreCheckStatus == model.PreCheckStatusAvailableEPEL {
+			return fmt.Sprintf("yum update --enablerepo=epel %s -y", pkgList)
+		}
+		return fmt.Sprintf("yum update %s -y", pkgList)
+	case "deb":
+		return fmt.Sprintf("apt-get install --only-upgrade %s -y", pkgList)
+	}
+	return ""
+}
+
 // RemediationTasksHandler 修复任务 API 处理器
 type RemediationTasksHandler struct {
 	db     *gorm.DB
@@ -163,7 +219,15 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 	createdBy, _ := username.(string)
 
 	var tasks []model.RemediationTask
+	skippedNotApplicable := 0
+	skippedNoCommand := 0
 	for _, hv := range hostVulns {
+		os := osMap[hv.HostID]
+		// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
+		if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+			skippedNotApplicable++
+			continue
+		}
 		// 检查是否已有进行中的任务
 		var existing int64
 		h.db.Model(&model.RemediationTask{}).
@@ -173,9 +237,15 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 			continue
 		}
 
-		// 根据主机 OS 选择正确的命令
-		os := osMap[hv.HostID]
-		cmd := selectCommandForHost(advice.Commands, os.Family, os.Version)
+		// P1.4: 优先用 agent pre-check 已确认的真实包名生成命令（精确）；否则 fallback
+		cmd := buildCommandFromPreCheck(&hv, os.Family, os.Version)
+		if cmd == "" {
+			cmd = selectCommandForHost(advice.Commands, os.Family, os.Version)
+		}
+		if cmd == "" {
+			skippedNoCommand++
+			continue
+		}
 
 		task := model.RemediationTask{
 			VulnID:       vuln.ID,
@@ -193,7 +263,7 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 	}
 
 	if len(tasks) == 0 {
-		BadRequest(c, "所有指定主机已有进行中的修复任务")
+		BadRequest(c, fmt.Sprintf("无可创建：OS 不适用 %d，无命令 %d，其余已有进行中", skippedNotApplicable, skippedNoCommand))
 		return
 	}
 
@@ -439,7 +509,21 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 			}
 
 			os := osMap[hv.HostID]
-			cmd := selectCommandForHost(advice.Commands, os.Family, os.Version)
+			// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
+			if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+				skipped++
+				continue
+			}
+
+			// P1.4: 优先用 agent pre-check 已确认的真实包名
+			cmd := buildCommandFromPreCheck(&hv, os.Family, os.Version)
+			if cmd == "" {
+				cmd = selectCommandForHost(advice.Commands, os.Family, os.Version)
+			}
+			if cmd == "" {
+				skipped++
+				continue
+			}
 			allTasks = append(allTasks, model.RemediationTask{
 				VulnID:       vuln.ID,
 				CveID:        vuln.CveID,
@@ -472,6 +556,147 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 		"vulnCount": len(vulnSet),
 		"hostCount": len(hostSet),
 		"skipped":   skipped,
+	})
+}
+
+// CreateForHost 单 host 批量创建修复任务
+// POST /api/v1/remediation-tasks/host-batch
+// body: {hostId, vulnIds?: [], allUnpatched?: bool}
+//   - vulnIds 模式：为指定 host 的子集 vuln 创建任务
+//   - allUnpatched 模式：为指定 host 的全部 unpatched vuln 创建任务（忽略 vulnIds）
+func (h *RemediationTasksHandler) CreateForHost(c *gin.Context) {
+	var req struct {
+		HostID       string `json:"hostId" binding:"required"`
+		VulnIDs      []uint `json:"vulnIds"`
+		AllUnpatched bool   `json:"allUnpatched"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数无效：需要 hostId")
+		return
+	}
+	if !req.AllUnpatched && len(req.VulnIDs) == 0 {
+		BadRequest(c, "需指定 vulnIds 或 allUnpatched=true")
+		return
+	}
+
+	// 校验 host 存在，并拿 OS 信息选包管理器命令
+	var host model.Host
+	if err := h.db.Select("host_id, os_family, os_version, hostname").
+		Where("host_id = ?", req.HostID).First(&host).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			NotFound(c, "host 不存在")
+			return
+		}
+		h.logger.Error("查询 host 失败", zap.Error(err))
+		InternalError(c, "查询 host 失败")
+		return
+	}
+
+	// 拉该 host unpatched host_vulnerabilities，按需 vulnIds 子集过滤
+	query := h.db.Where("host_id = ? AND status = ?", req.HostID, "unpatched")
+	if !req.AllUnpatched {
+		query = query.Where("vuln_id IN ?", req.VulnIDs)
+	}
+	var hostVulns []model.HostVulnerability
+	if err := query.Find(&hostVulns).Error; err != nil {
+		h.logger.Error("查询主机漏洞失败", zap.Error(err))
+		InternalError(c, "查询主机漏洞失败")
+		return
+	}
+	if len(hostVulns) == 0 {
+		BadRequest(c, "该主机无匹配的未修复漏洞")
+		return
+	}
+
+	vulnIDs := make([]uint, 0, len(hostVulns))
+	for _, hv := range hostVulns {
+		vulnIDs = append(vulnIDs, hv.VulnID)
+	}
+	var vulns []model.Vulnerability
+	h.db.Where("id IN ?", vulnIDs).Find(&vulns)
+	vulnMap := make(map[uint]model.Vulnerability, len(vulns))
+	for _, v := range vulns {
+		vulnMap[v.ID] = v
+	}
+
+	// 跳过已有进行中（pending/confirmed/running）的任务，避免重复
+	var existing []model.RemediationTask
+	h.db.Select("vuln_id").
+		Where("host_id = ? AND vuln_id IN ? AND status IN ?",
+			req.HostID, vulnIDs, []string{"pending", "confirmed", "running"}).
+		Find(&existing)
+	existingSet := make(map[uint]struct{}, len(existing))
+	for _, t := range existing {
+		existingSet[t.VulnID] = struct{}{}
+	}
+
+	username, _ := c.Get("username")
+	createdBy, _ := username.(string)
+
+	remSvc := biz.NewRemediationService(h.db, h.logger)
+	var tasks []model.RemediationTask
+	skipped := 0
+	skippedNotApplicable := 0 // vuln source 与 host OS family 不匹配（Debian 包给 CentOS）
+	skippedNoCommand := 0     // 无可执行命令（包管理器未识别且 fixed_version 无效）
+	for _, hv := range hostVulns {
+		if _, exists := existingSet[hv.VulnID]; exists {
+			skipped++
+			continue
+		}
+		v, ok := vulnMap[hv.VulnID]
+		if !ok {
+			skipped++
+			continue
+		}
+		// P0 fix: vuln source 必须适用于 host OS family，否则跳过（防 Debian 包给 CentOS）
+		if !biz.VulnApplicableToHost(v.Source, host.OSFamily) {
+			skippedNotApplicable++
+			continue
+		}
+		// P1.4: 优先用 agent pre-check 真实包名
+		cmd := buildCommandFromPreCheck(&hv, host.OSFamily, host.OSVersion)
+		if cmd == "" {
+			advice := remSvc.GetAdvice(&v)
+			cmd = selectCommandForHost(advice.Commands, host.OSFamily, host.OSVersion)
+		}
+		if cmd == "" {
+			skippedNoCommand++
+			continue
+		}
+		tasks = append(tasks, model.RemediationTask{
+			VulnID:       v.ID,
+			CveID:        v.CveID,
+			HostID:       hv.HostID,
+			Hostname:     hv.Hostname,
+			IP:           hv.IP,
+			Component:    v.Component,
+			FixedVersion: v.FixedVersion,
+			Command:      cmd,
+			Status:       "pending",
+			CreatedBy:    createdBy,
+		})
+	}
+
+	if len(tasks) == 0 {
+		BadRequest(c, fmt.Sprintf(
+			"无可创建的任务：已存在 %d，OS 不适用 %d，无命令 %d",
+			skipped, skippedNotApplicable, skippedNoCommand))
+		return
+	}
+
+	if err := h.db.Create(&tasks).Error; err != nil {
+		h.logger.Error("批量创建主机修复任务失败", zap.Error(err))
+		InternalError(c, "创建失败")
+		return
+	}
+
+	Success(c, gin.H{
+		"created":              len(tasks),
+		"skipped":              skipped,
+		"skippedNotApplicable": skippedNotApplicable,
+		"skippedNoCommand":     skippedNoCommand,
+		"hostId":               req.HostID,
+		"hostname":             host.Hostname,
 	})
 }
 

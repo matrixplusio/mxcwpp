@@ -490,10 +490,10 @@ onMounted(() => {
 
 .page-header-hint {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
-.dashboard-card { background: #FFFFFF; border: 1px solid #E5E8EF; border-radius: 8px; }
+.dashboard-card { background: var(--mxsec-card-bg); border: 1px solid var(--mxsec-border); border-radius: 8px; }
 .card-body { padding: 20px; }
 
 .scan-input-bar {
@@ -508,7 +508,7 @@ onMounted(() => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .image-name {
@@ -521,16 +521,16 @@ onMounted(() => {
 }
 
 .clickable-table :deep(tbody tr:hover) {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
 }
 
 .count-critical {
-  color: #F53F3F;
+  color: #EF4444;
   font-weight: 700;
 }
 
 .count-high {
-  color: #FF7D00;
+  color: #F59E0B;
   font-weight: 700;
 }
 </style>

@@ -17,6 +17,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/anomaly"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/baseline"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
+	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/storyline"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
@@ -168,15 +169,25 @@ func (r *Router) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.
 
 // handleMessage 解码 MQMessage 并路由到对应写入器
 func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.ConsumerMessage) {
+	// Prometheus: 测量端到端处理延迟与结果（success/error/dlq）
+	start := time.Now()
+	procStatus := "success" // 默认成功；解码失败或写入失败时改写
+	var dataTypeLabel = "unknown"
+	defer func() {
+		consumermetrics.RecordProcessing(raw.Topic, dataTypeLabel, procStatus, time.Since(start))
+	}()
+
 	var msg kafka.MQMessage
 	if err := json.Unmarshal(raw.Value, &msg); err != nil {
 		r.logger.Error("反序列化 MQMessage 失败",
 			zap.String("topic", raw.Topic),
 			zap.Error(err),
 		)
+		procStatus = "error"
 		session.MarkMessage(raw, "")
 		return
 	}
+	dataTypeLabel = strconv.Itoa(int(msg.DataType))
 
 	var writeErr error
 	switch {
@@ -251,6 +262,10 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 	case msg.DataType == 9200:
 		writeErr = r.mysql.WriteRemediationResult(&msg)
 
+	// 漏洞修复阶段进度（11 state lifecycle 实时事件）
+	case msg.DataType == 9201:
+		writeErr = r.mysql.WriteRemediationProgress(&msg)
+
 	// 命令执行回包
 	case msg.DataType == 9999:
 		writeErr = r.mysql.WriteCommandAck(&msg)
@@ -270,6 +285,7 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 			zap.Error(writeErr),
 		)
 		r.dlq.Send(raw.Topic, &msg, writeErr, 1)
+		procStatus = "dlq"
 	}
 
 	// 不论成功失败，均标记 offset（失败消息已进 DLQ，不阻塞消费进度）

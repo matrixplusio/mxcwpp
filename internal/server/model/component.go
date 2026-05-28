@@ -9,9 +9,13 @@ import (
 type ComponentType string
 
 const (
-	ComponentTypeAgent     ComponentType = "agent"     // Agent 主程序
-	ComponentTypeBaseline  ComponentType = "baseline"  // 基线检查插件
-	ComponentTypeCollector ComponentType = "collector" // 资产采集插件
+	ComponentTypeAgent       ComponentType = "agent"          // Agent 主程序
+	ComponentTypeBaseline    ComponentType = "baseline"       // 基线检查插件
+	ComponentTypeCollector   ComponentType = "collector"      // 资产采集插件
+	ComponentTypeFIM         ComponentType = "fim"            // 文件完整性监控插件
+	ComponentTypeScanner     ComponentType = "scanner"        // 病毒查杀插件
+	ComponentTypeRemediation ComponentType = "remediation"    // 漏洞修复插件
+	ComponentTypeVirusDB     ComponentType = "virus-database" // ClamAV 病毒库
 )
 
 // ComponentCategory 组件分类

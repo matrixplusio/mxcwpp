@@ -420,7 +420,7 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 16px;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .os-list {
@@ -439,7 +439,7 @@ onMounted(() => {
 .os-badge {
   display: inline-block;
   padding: 4px 12px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -470,14 +470,14 @@ onMounted(() => {
 
 .form-hint {
   margin-left: 8px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
 }
 
 .generated-content {
   margin-top: 24px;
   padding: 16px;
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   border-radius: 4px;
 }
 
@@ -489,11 +489,11 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 16px;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .code-block {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border: 1px solid #e8e8e8;
   border-radius: 4px;
   overflow: hidden;
@@ -505,7 +505,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
   border-bottom: 1px solid #e8e8e8;
   font-size: 13px;
   font-weight: 500;
@@ -525,7 +525,7 @@ onMounted(() => {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .command-box {
@@ -533,7 +533,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: #F2F3F5;
+  background: var(--mxsec-fill-2);
   border-radius: 4px;
   margin: 12px 0;
 }
@@ -542,7 +542,7 @@ onMounted(() => {
   flex: 1;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 13px;
-  color: #262626;
+  color: var(--mxsec-text-1);
   word-break: break-all;
   white-space: pre-wrap;
 }
@@ -554,8 +554,8 @@ onMounted(() => {
 .tip {
   margin: 8px 0;
   padding: 8px 12px;
-  background: #E8F3FF;
-  border-left: 3px solid #165DFF;
+  background: var(--mxsec-primary-bg);
+  border-left: 3px solid #3B82F6;
   border-radius: 2px;
   color: #595959;
   font-size: 13px;

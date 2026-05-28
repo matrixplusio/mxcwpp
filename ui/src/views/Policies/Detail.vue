@@ -607,10 +607,10 @@ const getRulePassRate = (ruleId: string): number => {
 }
 
 const getPassRateColor = (rate: number): string => {
-  if (rate >= 90) return '#00B42A'
-  if (rate >= 70) return '#FF7D00'
+  if (rate >= 90) return '#22C55E'
+  if (rate >= 70) return '#F59E0B'
   if (rate >= 50) return '#D25F00'
-  return '#F53F3F'
+  return '#EF4444'
 }
 
 const getRowClassName = (record: Rule) => {
@@ -931,7 +931,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mxsec-border);
 }
 
 .header-left {
@@ -948,14 +948,14 @@ onMounted(() => {
 }
 
 .back-btn:hover {
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 .page-title {
   font-size: 20px;
   font-weight: 600;
   margin: 0;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .header-right {
@@ -966,7 +966,7 @@ onMounted(() => {
 
 /* 基线概述区域 */
 .overview-section {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   padding: 20px 24px;
   margin-bottom: 20px;
@@ -983,12 +983,12 @@ onMounted(() => {
 .overview-title {
   font-size: 16px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .last-check-time {
   font-size: 13px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .overview-stats-row {
@@ -1005,46 +1005,46 @@ onMounted(() => {
 .stat-value {
   font-size: 32px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   line-height: 1.2;
   margin-bottom: 8px;
 }
 
 .stat-value.danger {
-  color: #F53F3F;
+  color: #EF4444;
 }
 
 .stat-value.success {
-  color: #00B42A;
+  color: #22C55E;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #86909C;
+  color: var(--mxsec-text-3);
 }
 
 .stat-divider {
   width: 1px;
   height: 50px;
-  background: #f0f0f0;
+  background: var(--mxsec-fill-3);
 }
 
 /* 检查详情区域 */
 .detail-section-wrapper {
-  background: #fff;
+  background: var(--mxsec-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .detail-section-header {
   padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mxsec-border);
 }
 
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .detail-content {
@@ -1055,21 +1055,21 @@ onMounted(() => {
 /* 左侧面板 - 50% */
 .left-panel {
   flex: 0 0 50%;
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--mxsec-border);
   padding: 16px 20px;
   min-width: 0;
 }
 
 /* 表格样式 */
 .rule-table :deep(.ant-table) {
-  background: #fff;
+  background: var(--mxsec-card-bg);
 }
 
 .rule-table :deep(.ant-table-thead > tr > th) {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   font-weight: 600;
-  color: #262626;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--mxsec-text-1);
+  border-bottom: 1px solid var(--mxsec-border);
   padding: 12px 16px;
   font-size: 13px;
 }
@@ -1082,7 +1082,7 @@ onMounted(() => {
 .rule-table :deep(.ant-table-tbody > tr > td) {
   padding: 12px 16px;
   font-size: 13px;
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
 }
 
 .rule-table :deep(.ant-table-tbody > tr:hover) {
@@ -1090,7 +1090,7 @@ onMounted(() => {
 }
 
 .rule-table :deep(.ant-table-tbody > tr.table-row-selected) {
-  background: #E8F3FF;
+  background: var(--mxsec-primary-bg);
 }
 
 .rule-table :deep(.ant-table-tbody > tr.table-row-selected:hover) {
@@ -1141,14 +1141,14 @@ onMounted(() => {
 .detail-info-section {
   flex-shrink: 0;
   padding-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mxsec-border);
   margin-bottom: 20px;
 }
 
 .rule-detail-title {
   font-size: 16px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin: 0 0 16px 0;
   line-height: 1.5;
 }
@@ -1164,7 +1164,7 @@ onMounted(() => {
 .detail-block-label {
   font-size: 14px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   margin-bottom: 8px;
 }
 
@@ -1204,11 +1204,11 @@ onMounted(() => {
 
 .solution-title {
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
   font-size: 13px;
   margin-bottom: 8px;
   padding-left: 8px;
-  border-left: 3px solid #165DFF;
+  border-left: 3px solid #3B82F6;
 }
 
 .solution-steps {
@@ -1253,7 +1253,7 @@ onMounted(() => {
 .hosts-title {
   font-size: 14px;
   font-weight: 600;
-  color: #262626;
+  color: var(--mxsec-text-1);
 }
 
 .hosts-actions {
@@ -1275,7 +1275,7 @@ onMounted(() => {
 }
 
 .host-tags {
-  color: #86909C;
+  color: var(--mxsec-text-3);
   font-size: 12px;
 }
 
@@ -1294,16 +1294,16 @@ onMounted(() => {
 }
 
 .host-table :deep(.ant-table-thead > tr > th) {
-  background: #F7F8FA;
+  background: var(--mxsec-fill-1);
   font-weight: 600;
-  color: #262626;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--mxsec-text-1);
+  border-bottom: 1px solid var(--mxsec-border);
   padding: 10px 12px;
   font-size: 12px;
 }
 
 .host-table :deep(.ant-table-tbody > tr > td) {
-  border-bottom: 1px solid #F2F3F5;
+  border-bottom: 1px solid var(--mxsec-border-light);
   padding: 10px 12px;
   font-size: 12px;
 }
@@ -1343,12 +1343,12 @@ onMounted(() => {
 }
 
 .copy-icon:hover {
-  color: #165DFF;
+  color: var(--mxsec-primary);
 }
 
 /* 失败原因样式 */
 .failure-reason {
-  color: #F53F3F;
+  color: #EF4444;
   font-size: 12px;
   cursor: help;
 }
@@ -1366,7 +1366,7 @@ onMounted(() => {
   .left-panel {
     flex: none;
     border-right: none;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--mxsec-border);
     padding-bottom: 20px;
   }
 
