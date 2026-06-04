@@ -15,16 +15,17 @@ package model
 
 import "strings"
 
-// VulnCategory 9 类枚举（写入 vulnerabilities.vuln_category）
+// VulnCategory 10 类枚举（写入 vulnerabilities.vuln_category）
 const (
 	VulnCategoryKernel            = "kernel"
 	VulnCategoryCriticalSharedLib = "critical_shared_lib" // glibc/libc6/musl — 实际等同 reboot
 	VulnCategorySharedLib         = "shared_lib"          // openssl/zlib/libxml2 — 升级后需 restart 依赖服务
-	VulnCategorySystemDaemon      = "system_daemon"       // systemd/sshd/cron/NetworkManager
-	VulnCategoryCliTool           = "cli_tool"            // sudo/tar/rpm/curl — 无需重启
-	VulnCategoryWebService        = "web_service"         // nginx/apache/php-fpm/python/java
+	VulnCategorySystemDaemon      = "system_daemon"       // systemd/sshd/cron/NetworkManager/asterisk
+	VulnCategoryCliTool           = "cli_tool"            // sudo/tar/rpm/curl/ffmpeg/imagemagick/wireshark — 无需重启
+	VulnCategoryWebService        = "web_service"         // nginx/apache/php-fpm/chromium/firefox/wordpress/mediawiki
 	VulnCategoryDBService         = "db_service"          // mysql/postgres/redis/mongodb — 重启 = DB 中断
 	VulnCategoryContainerRuntime  = "container_runtime"   // docker/containerd/runc/kubelet
+	VulnCategoryVirtualization    = "virtualization"      // xen/qemu/kvm/libvirt — 升级 hypervisor 影响所有 VM
 	VulnCategoryLanguageDep       = "language_dep"        // pkg:golang/npm/pypi/maven — 平台范围外
 	VulnCategoryOther             = "other"
 )
@@ -70,6 +71,11 @@ func CategorizeVuln(component, purl string) (category, action string) {
 	// 4. Container runtime
 	if isContainerRuntime(comp) {
 		return VulnCategoryContainerRuntime, RestartActionRestartSpecificService
+	}
+
+	// 4.5 Virtualization (xen/qemu/kvm/libvirt)
+	if isVirtualization(comp) {
+		return VulnCategoryVirtualization, RestartActionRestartSpecificService
 	}
 
 	// 5. System daemon（先于 cli_tool，避免 openssh-server 被 openssh 前缀误归 cli）
@@ -176,6 +182,35 @@ func isContainerRuntime(c string) bool {
 	return false
 }
 
+// isVirtualization Hypervisor / VM 管理软件（升级影响所有 guest VM）
+func isVirtualization(c string) bool {
+	exact := map[string]bool{
+		"xen": true, "xen-hypervisor": true, "xen-utils-common": true,
+		"qemu": true, "qemu-kvm": true, "qemu-system": true, "qemu-system-x86": true,
+		"qemu-system-arm": true, "qemu-system-common": true, "qemu-utils": true,
+		"qemu-guest-agent": true, "qemu-img": true,
+		"libvirt": true, "libvirt-clients": true, "libvirt-daemon": true,
+		"libvirt-daemon-system": true, "libvirt-bin": true,
+		"virt-manager": true, "virt-install": true, "virt-viewer": true,
+		"kvm": true, "kvmtool": true,
+		"open-vm-tools": true, "vmware-tools": true,
+		"virtualbox": true, "virtualbox-guest-utils": true,
+		"vagrant": true,
+	}
+	if exact[c] {
+		return true
+	}
+	prefixes := []string{
+		"xen-", "qemu-", "libvirt-", "virt-",
+	}
+	for _, p := range prefixes {
+		if strings.HasPrefix(c, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func isSystemDaemon(c string) bool {
 	if c == "systemd" || c == "openssh-server" || c == "openssh-clients" ||
 		c == "openssh-sftp-server" || c == "cron" || c == "cronie" || c == "anacron" ||
@@ -185,7 +220,8 @@ func isSystemDaemon(c string) bool {
 		c == "networkmanager" || c == "network-manager" ||
 		c == "firewalld" || c == "iptables" || c == "nftables" ||
 		c == "chrony" || c == "chronyd" || c == "ntp" || c == "ntpsec" ||
-		c == "atd" || c == "at" {
+		c == "atd" || c == "at" ||
+		c == "asterisk" || c == "freeswitch" || c == "kamailio" {
 		return true
 	}
 	prefixes := []string{
@@ -221,13 +257,30 @@ func isCliTool(c string) bool {
 		"net-tools": true, "bind-utils": true, "telnet": true, "nc": true,
 		"ncurses": true, "ncurses-base": true, "ncurses-bin": true,
 		"bash": true, "zsh": true, "fish": true, "dash": true,
+		// 多媒体 / 图形 / 抓包 工具（CLI 使用，无 daemon）
+		"ffmpeg": true, "imagemagick": true, "graphicsmagick": true,
+		"wireshark": true, "wireshark-cli": true, "tshark": true,
+		"tiff": true, "libtiff": true, "tiff-tools": true,
+		"gpac": true, "mediainfo": true,
+		"binutils": true, "gcc": true, "g++": true, "make": true, "cmake": true,
+		"glibc-langpack-en": true, "glibc-langpack": true,
+		"poppler-utils": true, "ghostscript": true, "pdftk": true,
 	}
 	if tools[c] {
 		return true
 	}
-	// vim-7.x.x 这类带子版本前缀
-	if strings.HasPrefix(c, "vim-") {
-		return true
+	prefixes := []string{
+		"vim-",            // vim-7.x.x
+		"binutils-",       // binutils-aarch64 等交叉编译
+		"gcc-",            // gcc-9 / gcc-aarch64
+		"glibc-langpack-", // glibc-langpack-zh
+		"poppler-",        // poppler-utils 等
+		"ghostscript-",
+	}
+	for _, p := range prefixes {
+		if strings.HasPrefix(c, p) {
+			return true
+		}
 	}
 	return false
 }
@@ -265,6 +318,15 @@ func isWebService(c string) bool {
 		"postfix": true, "sendmail": true, "exim4": true, "exim": true,
 		"dovecot": true, "samba": true, "vsftpd": true, "proftpd": true,
 		"openjdk": true,
+		// 浏览器（HTTP client/JS engine — 仍归 web_service，restart 影响浏览进程）
+		"chromium": true, "chromium-browser": true, "chromium-bsu": true,
+		"firefox": true, "firefox-esr": true, "thunderbird": true,
+		"webkit2gtk": true, "webkitgtk": true,
+		// CMS / web 应用
+		"wordpress": true, "mediawiki": true, "drupal": true, "drupal7": true,
+		"joomla": true, "phpmyadmin": true, "phpbb": true,
+		// 邮件 web 工具
+		"roundcube": true, "squirrelmail": true,
 	}
 	if exact[c] {
 		return true

@@ -16,12 +16,21 @@ import (
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+	// SQLite ":memory:" 每个 conn 独立 DB,gorm 默认多 conn 池会让其他 goroutine 看到空 schema。
+	// 用 file::memory:?cache=shared 让多 conn 共享同一内存 DB,支持并发 query(asset history 等
+	// handler 已并发化)。test prod 都安全。
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
+	// 每次 setupTestDB 开新内存 DB,t.Cleanup 关闭释放 cache
+	t.Cleanup(func() {
+		if sqlDB, _ := db.DB(); sqlDB != nil {
+			_ = sqlDB.Close()
+		}
+	})
 	if err := db.Exec(`CREATE TABLE hosts (
 		host_id TEXT PRIMARY KEY,
 		hostname TEXT,

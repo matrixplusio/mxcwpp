@@ -6,14 +6,17 @@ import (
 	"unicode"
 )
 
-// DefaultMatcher 实现严格 OS + pkg + arch + version 比对。
+// DefaultMatcher 实现严格 OS / ecosystem + pkg + arch + version 比对。
 //
 // 比对规则（必须全部满足）：
-//  1. advisory.OSFamily 与 host.OSFamily 兼容（rhel ↔ rocky/centos/almalinux 视为兼容）
-//  2. advisory.OSMajorVer == host.OSMajor
-//  3. advisory pkg 名 == host pkg 名
-//  4. arch 匹配（advisory 为 "noarch" 或 "src" 时跳过 arch 匹配）
-//  5. host 版本 < advisory.FixedVersion → 受影响
+//  1. advisory.Ecosystem 非空 → 走 ecosystem gate：host.PkgEcosystem 必须严格相等
+//     advisory.Ecosystem 空 → 走 OS gate：advisory.OSFamily 与 host.OSFamily 兼容（rhel ↔ rocky/centos/almalinux 视为兼容）且 OSMajor 相等
+//  2. advisory pkg 名 == host pkg 名
+//  3. arch 匹配（advisory 为 "noarch" 或 "src" 时跳过 arch 匹配）
+//  4. host 版本 < advisory.FixedVersion → 受影响
+//
+// 双 gate 互斥确保：OS pkg advisory 不会误匹配语言包，语言包 advisory 不会误匹配 OS pkg，
+// 跨 OS / 跨生态串台风险归零。
 type DefaultMatcher struct{}
 
 // Match 实现 Matcher。
@@ -23,7 +26,7 @@ func (m *DefaultMatcher) Match(adv *Advisory, hosts []HostSoftware) []AffectedHo
 	}
 	var out []AffectedHost
 	for _, host := range hosts {
-		if !osCompatible(adv.OSFamily, adv.OSMajorVer, host.OSFamily, host.OSMajor) {
+		if !gatePassed(adv, host) {
 			continue
 		}
 		for _, fix := range adv.AffectedPkgs {
@@ -33,21 +36,89 @@ func (m *DefaultMatcher) Match(adv *Advisory, hosts []HostSoftware) []AffectedHo
 			if !archMatch(fix.Arch, host.PkgArch) {
 				continue
 			}
-			cmp, err := CompareRPMVersion(host.PkgVer, fix.FixedVersion)
+			cmp, err := compareNEVRAOrFallback(host, fix.FixedVersion)
 			if err != nil {
 				continue
 			}
 			needs := cmp < 0
+			installedDisplay := host.PkgVer
+			if installedDisplay == "" {
+				installedDisplay = composeNEVRAString(host.PkgEpoch, host.PkgVerRaw, host.PkgRelease)
+			}
 			out = append(out, AffectedHost{
 				HostID:       host.HostID,
 				PkgName:      fix.Name,
-				InstalledVer: host.PkgVer,
+				InstalledVer: installedDisplay,
 				FixedVersion: fix.FixedVersion,
 				NeedsUpdate:  needs,
 			})
 		}
 	}
 	return out
+}
+
+// compareNEVRAOrFallback 优先用 NEVRA 三元组比较，缺字段时退回 PkgVer 字符串比较。
+// 按 host.PkgManager 选择 RPM 或 dpkg 比较算法。
+//
+// 返回 cmp 语义：-1 host < fix(需修)，0 相等(已修)，1 host > fix(已超新)。
+func compareNEVRAOrFallback(host HostSoftware, fixedVersion string) (int, error) {
+	cmp := selectVersionComparator(host.PkgManager)
+	if host.PkgVerRaw != "" {
+		installed := composeNEVRAString(host.PkgEpoch, host.PkgVerRaw, host.PkgRelease)
+		return cmp(installed, fixedVersion)
+	}
+	if host.PkgVer != "" {
+		return cmp(host.PkgVer, fixedVersion)
+	}
+	return 0, fmt.Errorf("no version info")
+}
+
+// selectVersionComparator 按 pkg manager 选版本比较算法。
+func selectVersionComparator(pkgManager string) func(a, b string) (int, error) {
+	switch pkgManager {
+	case "dpkg":
+		return CompareDpkgVersion
+	default:
+		return CompareRPMVersion
+	}
+}
+
+// composeNEVRAString 把 epoch/version/release 拼成标准 NEVRA 字符串(无 name 无 arch)。
+//
+//	epoch="" version="3.5.1" release="3.el9" → "3.5.1-3.el9"
+//	epoch="0" version="3.5.1" release="3.el9" → "0:3.5.1-3.el9"
+//	epoch="2" version="1.14.0" release="1.el9" → "2:1.14.0-1.el9"
+func composeNEVRAString(epoch, version, release string) string {
+	out := version
+	if release != "" {
+		out = out + "-" + release
+	}
+	if epoch != "" {
+		out = epoch + ":" + out
+	}
+	return out
+}
+
+// gatePassed 双 gate 互斥校验：advisory 须经 ecosystem 或 OS 路径其一精确匹配 host。
+//
+// 拒绝匹配的情况：
+//   - advisory 同时声明 Ecosystem 与 OSFamily（数据异常）
+//   - advisory 双空（无可识别归属）
+//   - Ecosystem 路径下 ecosystem 不严格相等
+//   - OS 路径下 OS family/major 不兼容
+func gatePassed(adv *Advisory, host HostSoftware) bool {
+	switch {
+	case adv.Ecosystem != "" && adv.OSFamily != "":
+		// 异常 advisory：两个 gate 同时声明，拒绝匹配避免误判
+		return false
+	case adv.Ecosystem != "":
+		return adv.Ecosystem == host.PkgEcosystem
+	case adv.OSFamily != "":
+		return osCompatible(adv.OSFamily, adv.OSMajorVer, host.OSFamily, host.OSMajor)
+	default:
+		// 双空 advisory 无法 gate，拒绝匹配
+		return false
+	}
 }
 
 // osCompatible 判断 host OS 是否在 advisory OS 覆盖范围。
@@ -71,6 +142,11 @@ func osCompatible(advFamily, advMajor, hostFamily, hostMajor string) bool {
 	}
 	if advFamily == "rhel" || advFamily == "rocky" {
 		return rhelCompat[hostFamily]
+	}
+	// 信创 OS：openEuler 衍生兼容(龙蜥 Anolis 基于 openEuler)，
+	// 麒麟 V10 / 统信 UOS 视为独立家族（基于不同上游）。
+	if advFamily == "openeuler" {
+		return hostFamily == "openeuler" || hostFamily == "anolis" || hostFamily == "openanolis"
 	}
 	return advFamily == hostFamily
 }

@@ -134,9 +134,11 @@
             <span>{{ detail.storyline.first_seen_at }} — {{ detail.storyline.last_seen_at }}</span>
           </div>
 
-          <!-- 事件时间线 -->
+          <!-- 事件时间线（分页：单 storyline 可达数万事件，避免一次性渲染卡死） -->
           <div class="timeline-section">
-            <div class="section-label">事件时间线 ({{ detail.events.length }})</div>
+            <div class="section-label">
+              事件时间线（显示 {{ detail.events.length }} / 共 {{ detail.events_total }} 条）
+            </div>
             <a-timeline mode="left" class="story-timeline">
               <a-timeline-item
                 v-for="event in detail.events"
@@ -156,6 +158,11 @@
                 </div>
               </a-timeline-item>
             </a-timeline>
+            <div v-if="detail.events.length < detail.events_total" style="text-align: center; margin-top: 12px">
+              <a-button :loading="loadMoreLoading" @click="loadMoreEvents">
+                加载更多（剩余 {{ detail.events_total - detail.events.length }} 条）
+              </a-button>
+            </div>
           </div>
         </template>
       </a-spin>
@@ -179,10 +186,12 @@ import { getSeverityConfig } from '@/constants/severity'
 
 const loading = ref(false)
 const detailLoading = ref(false)
+const loadMoreLoading = ref(false)
 const detailVisible = ref(false)
 const storylines = ref<Storyline[]>([])
 const detail = ref<StorylineDetail | null>(null)
 const stats = reactive<StorylineStats>({ total: 0, active: 0, critical_active: 0 })
+const EVENTS_PAGE_SIZE = 100
 
 const filters = reactive({
   host_id: '',
@@ -238,7 +247,30 @@ const riskScoreColor = (score: number): string => {
 const showDetail = async (record: Storyline) => {
   detailVisible.value = true
   detailLoading.value = true
-  try { detail.value = await storylineApi.get(record.story_id) } catch { /* handled */ } finally { detailLoading.value = false }
+  detail.value = null
+  try {
+    detail.value = await storylineApi.get(record.story_id, { page: 1, page_size: EVENTS_PAGE_SIZE })
+  } catch { /* handled */ } finally {
+    detailLoading.value = false
+  }
+}
+
+const loadMoreEvents = async () => {
+  if (!detail.value) return
+  const nextPage = detail.value.events_page + 1
+  loadMoreLoading.value = true
+  try {
+    const next = await storylineApi.get(detail.value.storyline.story_id, {
+      page: nextPage,
+      page_size: EVENTS_PAGE_SIZE,
+    })
+    detail.value = {
+      ...next,
+      events: [...detail.value.events, ...next.events],
+    }
+  } catch { /* handled */ } finally {
+    loadMoreLoading.value = false
+  }
 }
 
 const fetchStorylines = async () => {

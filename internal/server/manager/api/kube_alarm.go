@@ -1,7 +1,6 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
@@ -70,17 +69,14 @@ func (h *KubeAlarmHandler) ListAlarms(c *gin.Context) {
 	h.db.Model(&model.KubeAlarm{}).Where("status = ? AND severity = ?", "pending", "medium").Count(&medium)
 	h.db.Model(&model.KubeAlarm{}).Where("status = ? AND severity = ?", "pending", "low").Count(&low)
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": gin.H{
-			"items": alarms,
-			"total": total,
-			"stats": gin.H{
-				"critical": critical,
-				"high":     high,
-				"medium":   medium,
-				"low":      low,
-			},
+	Success(c, gin.H{
+		"items": alarms,
+		"total": total,
+		"stats": gin.H{
+			"critical": critical,
+			"high":     high,
+			"medium":   medium,
+			"low":      low,
 		},
 	})
 }

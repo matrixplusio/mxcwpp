@@ -40,6 +40,14 @@ export interface StorylineEvent {
 export interface StorylineDetail {
   storyline: Storyline
   events: StorylineEvent[]
+  events_total: number
+  events_page: number
+  events_page_size: number
+}
+
+export interface GetStorylineParams {
+  page?: number
+  page_size?: number
 }
 
 export interface StorylineStats {
@@ -61,8 +69,8 @@ export const storylineApi = {
     return apiClient.get<PaginatedResponse<Storyline>>('/storylines', { params })
   },
 
-  get: (storyId: string) => {
-    return apiClient.get<StorylineDetail>(`/storylines/${storyId}`)
+  get: (storyId: string, params?: GetStorylineParams) => {
+    return apiClient.get<StorylineDetail>(`/storylines/${storyId}`, { params })
   },
 
   resolve: (storyId: string) => {

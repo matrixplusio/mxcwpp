@@ -996,10 +996,7 @@ func (h *ComponentsHandler) DownloadPluginPackage(c *gin.Context) {
 	case h.downloadSem <- struct{}{}:
 		defer func() { <-h.downloadSem }()
 	default:
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"code":    429,
-			"message": "下载并发数已达上限，请稍后重试",
-		})
+		TooManyRequests(c, "下载并发数已达上限，请稍后重试")
 		return
 	}
 

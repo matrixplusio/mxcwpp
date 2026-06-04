@@ -121,6 +121,95 @@
           </a-card>
         </template>
 
+        <!-- FIM 文件完整性变更详情卡片（source=fim 时） -->
+        <template v-if="isFIMAlert && fimEventDetail">
+          <a-card title="文件完整性变更详情" :bordered="false" class="info-card">
+            <a-descriptions bordered :column="2">
+              <a-descriptions-item label="文件路径" :span="2">
+                <code>{{ fimEventDetail.file_path }}</code>
+              </a-descriptions-item>
+              <a-descriptions-item label="变更类型">
+                <a-tag :color="fimChangeColor(fimEventDetail.change_type)">
+                  {{ fimChangeText(fimEventDetail.change_type) }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="严重级别">
+                <a-tag>{{ fimEventDetail.severity }}</a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="变更检测时间">
+                {{ formatDateTime(fimEventDetail.detected_at) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="事件 ID">
+                <code>{{ fimEventDetail.event_id }}</code>
+              </a-descriptions-item>
+              <a-descriptions-item label="任务 ID" :span="2">
+                <code class="text-muted">{{ fimEventDetail.task_id }}</code>
+              </a-descriptions-item>
+              <a-descriptions-item label="主机名" :span="2">
+                {{ fimEventDetail.hostname }}
+              </a-descriptions-item>
+            </a-descriptions>
+
+            <!-- change_detail JSON 解析对比 -->
+            <a-card
+              v-if="fimEventDetail.change_detail && Object.keys(fimEventDetail.change_detail).length"
+              title="变更明细"
+              size="small"
+              style="margin-top: 12px"
+            >
+              <a-descriptions bordered :column="1" size="small">
+                <a-descriptions-item label="Hash 变更">
+                  <a-tag :color="fimEventDetail.change_detail.hash_changed ? 'red' : 'default'">
+                    {{ fimEventDetail.change_detail.hash_changed ? '是' : '否' }}
+                  </a-tag>
+                </a-descriptions-item>
+                <a-descriptions-item label="权限变更">
+                  <a-tag :color="fimEventDetail.change_detail.permission_changed ? 'orange' : 'default'">
+                    {{ fimEventDetail.change_detail.permission_changed ? '是' : '否' }}
+                  </a-tag>
+                </a-descriptions-item>
+                <a-descriptions-item label="属主变更">
+                  <a-tag :color="fimEventDetail.change_detail.owner_changed ? 'orange' : 'default'">
+                    {{ fimEventDetail.change_detail.owner_changed ? '是' : '否' }}
+                  </a-tag>
+                </a-descriptions-item>
+                <a-descriptions-item
+                  v-if="fimEventDetail.change_detail.old_hash || fimEventDetail.change_detail.new_hash"
+                  label="Hash 对比"
+                >
+                  <div>旧: <code>{{ fimEventDetail.change_detail.old_hash || '-' }}</code></div>
+                  <div>新: <code>{{ fimEventDetail.change_detail.new_hash || '-' }}</code></div>
+                </a-descriptions-item>
+              </a-descriptions>
+            </a-card>
+
+            <!-- 事件状态 -->
+            <a-alert
+              v-if="fimEventDetail.status === 'escalated'"
+              type="warning"
+              show-icon
+              :message="`事件超时未确认，已自动升级为告警（${fimEventDetail.status}）`"
+              :description="alert?.description"
+              style="margin-top: 12px"
+            />
+            <a-alert
+              v-else-if="fimEventDetail.status === 'confirmed'"
+              type="success"
+              show-icon
+              :message="`已确认：${fimEventDetail.confirmed_by}`"
+              :description="`原因：${fimEventDetail.confirm_reason || '无'} (${formatDateTime(fimEventDetail.confirmed_at)})`"
+              style="margin-top: 12px"
+            />
+          </a-card>
+        </template>
+        <a-alert
+          v-else-if="isFIMAlert && fimDetailError"
+          type="error"
+          show-icon
+          :message="`无法加载 FIM 事件详情：${fimDetailError}`"
+          style="margin-bottom: 16px"
+        />
+
         <!-- 修复建议卡片 -->
         <a-card title="修复建议" :bordered="false" class="info-card" v-if="alert.fix_suggestion">
           <div class="fix-suggestion">
@@ -208,6 +297,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons-vue'
 import { alertsApi, type Alert } from '@/api/alerts'
+import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
@@ -230,6 +320,39 @@ const eventDetail = computed(() => {
   }
 })
 
+// FIM 告警识别 + 详情加载（result_id 形如 fim-escalation-evt-000004 → event_id evt-000004）
+const isFIMAlert = computed(() => alert.value?.source === 'fim')
+const fimEventDetail = ref<any>(null)
+const fimDetailError = ref<string>('')
+
+const loadFIMEventDetail = async () => {
+  fimEventDetail.value = null
+  fimDetailError.value = ''
+  if (!alert.value || alert.value.source !== 'fim') return
+  // result_id 格式：fim-escalation-<event_id> 或直接 event_id
+  const rid = alert.value.result_id || ''
+  let eventId = rid
+  const m = rid.match(/^fim-(?:escalation-)?(.+)$/)
+  if (m) eventId = m[1]
+  if (!eventId) return
+  try {
+    const res = await apiClient.get<any>(`/fim/events/${eventId}`)
+    fimEventDetail.value = res
+  } catch (e: any) {
+    fimDetailError.value = e?.message || 'FIM 事件详情查询失败'
+  }
+}
+
+const fimChangeColor = (t: string) => ({
+  added: 'green', removed: 'red', changed: 'orange',
+  permission_changed: 'gold', ownership_changed: 'gold',
+} as Record<string, string>)[t] || 'default'
+
+const fimChangeText = (t: string) => ({
+  added: '新增', removed: '删除', changed: '内容变更',
+  permission_changed: '权限变更', ownership_changed: '属主变更',
+} as Record<string, string>)[t] || t
+
 const loadAlert = async () => {
   const alertId = Number(route.params.alertId)
   if (!alertId || isNaN(alertId)) {
@@ -240,6 +363,10 @@ const loadAlert = async () => {
   loading.value = true
   try {
     alert.value = await alertsApi.get(alertId)
+    // FIM 告警额外加载关联的 fim_event 详情
+    if (isFIMAlert.value) {
+      loadFIMEventDetail()
+    }
   } catch (error: any) {
     console.error('加载告警详情失败:', error)
     message.error(error?.message || '加载告警详情失败')

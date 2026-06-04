@@ -154,6 +154,8 @@ export const menuConfig: MenuItem[] = [
       { key: 'users', title: '用户管理', route: '/users', adminOnly: true },
       { key: 'system-notification', title: '通知管理', route: '/system/notification', adminOnly: true },
       { key: 'system-settings', title: '基本设置', route: '/system/settings', adminOnly: true },
+      { key: 'system-data-retention', title: '数据保留策略', route: '/system/data-retention', adminOnly: true },
+      { key: 'system-feature-flags', title: '功能开关', route: '/system/feature-flags', adminOnly: true },
       { key: 'system-collection', title: '平台授权', route: '/system/collection' },
     ],
   },

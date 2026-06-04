@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
+	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/httptrans"
 	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
@@ -77,6 +78,16 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 		return nil, err
 	}
 
+	// 4.1 初始化 ClickHouse（可选；host_metrics 等表已迁 CH 时使用）
+	var chConn chdriver.Conn
+	if cfg.ClickHouse.Enabled {
+		if conn, err := database.InitClickHouse(cfg.ClickHouse, logger); err != nil {
+			logger.Warn("ClickHouse 初始化失败，host_metrics 等表将降级 MySQL 写入", zap.Error(err))
+		} else {
+			chConn = conn
+		}
+	}
+
 	// 5. 创建 gRPC Server
 	grpcServer, err := server.CreateGRPCServer(cfg, logger)
 	if err != nil {
@@ -86,21 +97,42 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 
 	// 6. 注册 Transfer 服务
 	transferService := transfer.NewService(db, logger, cfg)
+	transferService.SetClickHouse(chConn)
 	grpcProto.RegisterTransferServer(grpcServer, transferService)
 
 	// 6.1 初始化 Kafka 生产者（可选）
+	// Kafka 启动顺序可能晚于 AgentCenter，首次连接失败时启动后台 goroutine 持续重试，
+	// 避免 AgentCenter 永久降级为 MySQL 直写导致 EDR/FIM 事件无法进入下游消费链路。
 	var kafkaProducer kafka.Producer
 	if cfg.Kafka.Enabled {
 		kp, err := kafka.NewAsyncProducer(cfg.Kafka, logger)
-		if err != nil {
-			logger.Warn("Kafka 生产者初始化失败，降级为直写 MySQL", zap.Error(err))
-		} else {
+		if err == nil {
 			kafkaProducer = kp
 			transferService.SetKafkaProducer(kp)
 			logger.Info("Kafka 生产者已启用",
 				zap.Strings("brokers", cfg.Kafka.Brokers),
 				zap.String("topic_prefix", cfg.Kafka.TopicPrefix),
 			)
+		} else {
+			logger.Warn("Kafka 生产者初始化失败，启动后台重试", zap.Error(err))
+			go func() {
+				const retryInterval = 5 * time.Second
+				attempt := 1
+				for {
+					time.Sleep(retryInterval)
+					kp, err := kafka.NewAsyncProducer(cfg.Kafka, logger)
+					if err == nil {
+						transferService.SetKafkaProducer(kp)
+						logger.Info("Kafka 生产者后台重试成功",
+							zap.Int("attempt", attempt),
+							zap.Strings("brokers", cfg.Kafka.Brokers),
+						)
+						return
+					}
+					logger.Warn("Kafka 生产者重试失败", zap.Int("attempt", attempt), zap.Error(err))
+					attempt++
+				}
+			}()
 		}
 	}
 

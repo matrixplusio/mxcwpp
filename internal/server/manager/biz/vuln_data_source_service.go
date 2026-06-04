@@ -73,6 +73,38 @@ func (s *VulnDataSourceService) MarkSuccess(name string, count int64, duration t
 		})
 }
 
+// GetWatermark 取该 source 的 advisory_watermark（增量 sync 用，上次拉到的最新 IssuedAt）。
+//
+// 返回零值表示首次 sync，调用方应传 since=zero 走全量。
+func (s *VulnDataSourceService) GetWatermark(name string) time.Time {
+	var src model.VulnDataSource
+	if err := s.db.Select("advisory_watermark").Where("name = ?", name).First(&src).Error; err != nil {
+		return time.Time{}
+	}
+	if src.AdvisoryWatermark == nil {
+		return time.Time{}
+	}
+	return time.Time(*src.AdvisoryWatermark)
+}
+
+// SetWatermark 推进 source 的 advisory_watermark（仅当新值 > 旧值，避免回退）。
+//
+// 时机：sync 成功后用本批 advisory 的最大 IssuedAt 推进。
+// 失败的 sync 不动 watermark，确保下次重拉 delta 范围一致。
+func (s *VulnDataSourceService) SetWatermark(name string, t time.Time) {
+	if t.IsZero() {
+		return
+	}
+	old := s.GetWatermark(name)
+	if !old.IsZero() && !t.After(old) {
+		return // 不回退
+	}
+	tt := model.LocalTime(t)
+	s.db.Model(&model.VulnDataSource{}).
+		Where("name = ?", name).
+		Update("advisory_watermark", &tt)
+}
+
 // MarkFailed 同步失败时调用，记录 error。
 func (s *VulnDataSourceService) MarkFailed(name string, err error) {
 	if err == nil {

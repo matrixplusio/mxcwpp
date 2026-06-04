@@ -82,6 +82,10 @@ func Initialize(configPath string) (*ManagerServices, error) {
 		// 不中断启动，允许后续手动初始化
 	}
 
+	// 5.1.0 seed feature flags + retention policies（幂等，已存在不覆盖）
+	migration.SeedFeatureFlags(db, logger)
+	migration.SeedRetentionPolicies(db, logger)
+
 	// 5.1.1 清理上次崩溃残留的同步/扫描锁
 	// Manager 重启后，所有 running 状态的同步记录均为孤儿进程，直接标记为失败
 	if result := db.Model(&model.SecurityDBSyncRecord{}).
@@ -120,6 +124,10 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	if err != nil {
 		logger.Warn("Manager ClickHouse 初始化失败，Dashboard 指标降级为 0", zap.Error(err))
 	}
+
+	// 5.5.1 注入 ChConn 到 model 层（启用 Alert/Vulnerability/HostVulnerability
+	// GORM AfterCreate/Update/Save hook 自动双写 CH）；chConn 为 nil 时同步自动 no-op。
+	model.SetClickHouse(chConn, logger)
 
 	// 5.6 初始化监控数据查询服务（主机性能监控仅使用 Prometheus）
 	metricsService := biz.NewMetricsService(db, prometheusClient, chConn, logger)

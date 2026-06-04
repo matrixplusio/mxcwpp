@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/advisory"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -112,7 +113,79 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("漏洞分类回填失败", zap.Error(err))
 	}
 
+	// 修历史 vuln source 字段被 OS source 错误覆盖（OSV 写入后 debian-tracker 覆盖）
+	// 需放在 CleanupHostVulnFP 之前，否则 cleanup 会把 OSV 命中的 host_vuln 误删
+	if err := migrateFixOverwrittenEcosystemSource(db, logger); err != nil {
+		logger.Warn("vuln source 字段修复失败", zap.Error(err))
+	}
+
+	// 清理 v2.5.0 之前 ScanAll 留下的跨 OS host_vuln 误报 + OSS-Fuzz 噪音
+	if err := migrateCleanupLegacyHostVuln(db, logger); err != nil {
+		logger.Warn("legacy host_vuln 清理失败", zap.Error(err))
+	}
+
+	// 扩 advisory_packages.source_advisory_id varchar(64)→255（Alpine 拼接 ID 易超 64）
+	if err := migrateAdvisoryPackagesSourceAdvisoryID(db, logger); err != nil {
+		logger.Warn("advisory_packages source_advisory_id 扩列失败", zap.Error(err))
+	}
+
+	// 创建 advisory_packages 唯一组合索引（GORM AutoMigrate 不创建多列 UNIQUE）
+	if err := ensureAdvisoryPackagesIndex(db, logger); err != nil {
+		logger.Warn("advisory_packages 唯一索引创建失败", zap.Error(err))
+	}
+
+	// 从 vulnerabilities.fixed_version 回填 advisory_packages（仅首次空表时跑）
+	if err := backfillAdvisoryPackages(db, logger); err != nil {
+		logger.Warn("advisory_packages 回填失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
+	return nil
+}
+
+// migrateCleanupLegacyHostVuln 启动时清 OSS-Fuzz 垃圾 + 通用 host_vuln FP。
+//
+// 主要 host_vuln FP 清理逻辑下沉到 advisory.CleanupHostVulnFP（同时被 Coordinator.Sync 末尾调用），
+// 这里仅处理 OSS-Fuzz vulnerabilities 表层垃圾（同样导致 host_vuln 误报），
+// 然后委托 advisory 包做 host_vuln 清理。
+//
+// 幂等：基于 SQL 条件删除，多次运行无副作用。
+func migrateCleanupLegacyHostVuln(db *gorm.DB, logger *zap.Logger) error {
+	// OSS-Fuzz crash ID（OSV-YYYY-NNN）当 CVE 入库的 vulnerabilities + 级联 host_vulnerabilities
+	// 上游 osv.dev 把 OSS-Fuzz crash 记录与 CVE 同 namespace，旧 extractCVEs fallback 误把
+	// OSV-YYYY-NNN 写到 cve_id 字段，实测 G02-UAT 主机占 49% FP。
+	var ossFuzzIDs []uint
+	if err := db.Table("vulnerabilities").
+		Where("cve_id REGEXP '^OSV-[0-9]{4}-[0-9]+$'").
+		Pluck("id", &ossFuzzIDs).Error; err != nil {
+		return fmt.Errorf("查询 OSS-Fuzz vuln id 失败: %w", err)
+	}
+	if len(ossFuzzIDs) > 0 {
+		r1 := db.Exec("DELETE FROM host_vulnerabilities WHERE vuln_id IN ?", ossFuzzIDs)
+		r2 := db.Exec("DELETE FROM vulnerabilities WHERE id IN ?", ossFuzzIDs)
+		logger.Info("清理 OSS-Fuzz 垃圾",
+			zap.Int64("host_vuln_deleted", r1.RowsAffected),
+			zap.Int64("vuln_deleted", r2.RowsAffected))
+	}
+
+	// NVD description 含 OS/arch qualifier 限定的 host_vuln（仅 migration 跑，
+	// 因 description 字段不在 sync 路径上动）
+	nvdQualifierRegex := `(on 32-bit|32-bit builds?|microsoft windows|windows-only|freebsd only|macos only|macos x|iphone|ios only|android only)`
+	r7 := db.Exec(`
+DELETE hv FROM host_vulnerabilities hv
+JOIN vulnerabilities v ON hv.vuln_id = v.id
+JOIN hosts h ON h.host_id = hv.host_id
+WHERE v.source = 'nvd'
+  AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux','ubuntu','debian','alpine','sles','opensuse')
+  AND LOWER(v.description) REGEXP ?`, nvdQualifierRegex)
+	if r7.Error == nil && r7.RowsAffected > 0 {
+		logger.Info("NVD OS/arch qualifier host_vuln 已清理",
+			zap.Int64("deleted", r7.RowsAffected))
+	}
+
+	// 委托 advisory 包做通用 host_vuln FP 清理(同一份逻辑被 Coordinator.Sync 复用)
+	advisory.CleanupHostVulnFP(db, logger)
+	advisory.CleanupAlreadyPatched(db, logger)
 	return nil
 }
 
@@ -130,8 +203,9 @@ func migrateCategorizeExistingVulns(db *gorm.DB, logger *zap.Logger) error {
 	}
 	logger.Info("开始回填 vuln 分类", zap.Int64("total", total))
 
-	processed := 0
-	categoryStats := map[string]int{}
+	scanned := 0
+	changed := 0
+	changedStats := map[string]int{}
 	// 按 id 分页避免死循环：cat 仍返回 'other' 时行不会从过滤集移出，
 	// 不加 id > lastID 会被反复 fetch 同一批
 	var lastID uint = 0
@@ -149,8 +223,13 @@ func migrateCategorizeExistingVulns(db *gorm.DB, logger *zap.Logger) error {
 			break
 		}
 		for _, v := range batch {
+			scanned++
+			lastID = v.ID
 			cat, act := model.CategorizeVuln(v.Component, v.PURL)
-			// 用 Model+Updates 跳过 BeforeSave hook 避免再算一次
+			// 规则未命中（仍 other）→ 不写 DB，下次 migration 同样跳过避免无效 IO
+			if cat == model.VulnCategoryOther {
+				continue
+			}
 			if err := db.Model(&model.Vulnerability{}).
 				Where("id = ?", v.ID).
 				UpdateColumns(map[string]any{
@@ -161,21 +240,37 @@ func migrateCategorizeExistingVulns(db *gorm.DB, logger *zap.Logger) error {
 					zap.Uint("id", v.ID), zap.Error(err))
 				continue
 			}
-			categoryStats[cat]++
-			processed++
-			lastID = v.ID
+			changedStats[cat]++
+			changed++
 		}
 		logger.Info("vuln 分类回填进度",
-			zap.Int("processed", processed), zap.Int64("total", total))
+			zap.Int("scanned", scanned), zap.Int("changed", changed), zap.Int64("total", total))
 		time.Sleep(50 * time.Millisecond)
 		if len(batch) < batchSize {
 			break
 		}
 	}
 
+	// 完成后查整库分布给运维一个全局视角（不只是本次 changed 的那部分）
+	type catRow struct {
+		Category string `gorm:"column:vuln_category"`
+		N        int64  `gorm:"column:n"`
+	}
+	var overall []catRow
+	db.Model(&model.Vulnerability{}).
+		Select("vuln_category, COUNT(*) as n").
+		Group("vuln_category").
+		Scan(&overall)
+	overallStats := map[string]int64{}
+	for _, r := range overall {
+		overallStats[r.Category] = r.N
+	}
+
 	logger.Info("vuln 分类回填完成",
-		zap.Int("processed", processed),
-		zap.Any("by_category", categoryStats))
+		zap.Int("scanned", scanned),
+		zap.Int("changed", changed),
+		zap.Any("changed_by_category", changedStats),
+		zap.Any("overall_distribution", overallStats))
 	return nil
 }
 

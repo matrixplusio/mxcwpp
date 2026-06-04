@@ -79,6 +79,37 @@ func TestCategorizeVuln(t *testing.T) {
 		// Edge: component=openssl 但 purl=npm → 应优先归 language_dep
 		{"openssl-wrapper npm 优先", "openssl-wrapper", "pkg:npm/openssl-wrapper", VulnCategoryLanguageDep, RestartActionRebuildApp},
 
+		// Virtualization (P5.1.1)
+		{"xen", "xen", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"qemu", "qemu", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"qemu-kvm", "qemu-kvm", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"qemu-system-x86", "qemu-system-x86", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"libvirt", "libvirt", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"libvirt-daemon", "libvirt-daemon", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+		{"open-vm-tools", "open-vm-tools", "", VulnCategoryVirtualization, RestartActionRestartSpecificService},
+
+		// Browser / CMS 扩展 web_service
+		{"chromium", "chromium", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"firefox-esr", "firefox-esr", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"webkit2gtk", "webkit2gtk", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"wordpress", "wordpress", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"mediawiki", "mediawiki", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"phpmyadmin", "phpmyadmin", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+		{"drupal", "drupal", "", VulnCategoryWebService, RestartActionRestartSpecificService},
+
+		// Multimedia / dev tools 扩展 cli_tool
+		{"ffmpeg", "ffmpeg", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"imagemagick", "imagemagick", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"wireshark", "wireshark", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"tiff", "tiff", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"gpac", "gpac", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"binutils", "binutils", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"glibc-langpack-en", "glibc-langpack-en", "", VulnCategoryCliTool, RestartActionNoAction},
+		{"ghostscript", "ghostscript", "", VulnCategoryCliTool, RestartActionNoAction},
+
+		// Telephony / VoIP (system_daemon)
+		{"asterisk", "asterisk", "", VulnCategorySystemDaemon, RestartActionRestartSpecificService},
+
 		// Other / 兜底
 		{"未知包", "weird-pkg-xyz", "", VulnCategoryOther, RestartActionUnknown},
 		{"空 component", "", "", VulnCategoryOther, RestartActionUnknown},

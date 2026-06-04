@@ -23,6 +23,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 	"go.uber.org/zap"
@@ -45,10 +46,11 @@ func NewHostVulnPreCheckHandler(db *gorm.DB, logger *zap.Logger, dispatcher *sd.
 
 // preCheckTaskPayload 下发给 agent 的 pre-check 任务
 type preCheckTaskPayload struct {
-	RequestID    string `json:"request_id"`
-	HostVulnID   uint   `json:"host_vuln_id"`
-	Component    string `json:"component"`
-	FixedVersion string `json:"fixed_version"`
+	RequestID              string `json:"request_id"`
+	HostVulnID             uint   `json:"host_vuln_id"`
+	Component              string `json:"component"`
+	FixedVersion           string `json:"fixed_version"`
+	CheckAffectedProcesses bool   `json:"check_affected_processes,omitempty"` // P5.2: shared_lib 才打开
 }
 
 // CreateForHostVuln 单条 host_vulnerability pre-check
@@ -139,11 +141,92 @@ func (h *HostVulnPreCheckHandler) CreateForHostAll(c *gin.Context) {
 	})
 }
 
+// CreateForAllOnline 全集群所有 online 主机的 unpatched 漏洞批量 pre-check
+// POST /api/v1/host-vulnerabilities/precheck-all-online
+//
+// 与 CreateForHostAll 同样的过滤条件（unchecked / failed / >24h stale），
+// 区别是遍历所有 online host。Admin 权限保护以避免普通用户打满集群。
+//
+// 单 host 单次 dispatch ≤ maxBatchPerHost；超出部分留给下轮 cron（每 6h）。
+func (h *HostVulnPreCheckHandler) CreateForAllOnline(c *gin.Context) {
+	const maxBatchPerHost = 200
+
+	// 1. 查所有 online host_id
+	var hostIDs []string
+	if err := h.db.Model(&model.Host{}).
+		Where("status = ?", model.HostStatusOnline).
+		Pluck("host_id", &hostIDs).Error; err != nil {
+		InternalError(c, "查询 online hosts 失败")
+		return
+	}
+	if len(hostIDs) == 0 {
+		Success(c, gin.H{
+			"hosts_total":      0,
+			"hosts_dispatched": 0,
+			"scheduled":        0,
+			"failed":           0,
+			"message":          "无 online 主机",
+		})
+		return
+	}
+
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	var (
+		hostsDispatched int
+		scheduled       int
+		failed          int
+	)
+
+	for _, hid := range hostIDs {
+		var hvs []model.HostVulnerability
+		if err := h.db.Where(
+			"host_id = ? AND status = ? AND (precheck_status = ? OR precheck_status = ? OR precheck_checked_at IS NULL OR precheck_checked_at < ?)",
+			hid, "unpatched",
+			model.PreCheckStatusUnchecked, model.PreCheckStatusFailed,
+			cutoff,
+		).Limit(maxBatchPerHost).Find(&hvs).Error; err != nil {
+			h.logger.Warn("query host_vulnerabilities for precheck-all-online failed",
+				zap.String("host_id", hid), zap.Error(err))
+			continue
+		}
+		if len(hvs) == 0 {
+			continue
+		}
+		hostsDispatched++
+		for i := range hvs {
+			if err := h.dispatchPreCheck(&hvs[i]); err != nil {
+				h.logger.Warn("dispatch precheck failed",
+					zap.String("host_id", hid),
+					zap.Uint("id", hvs[i].ID),
+					zap.Error(err))
+				failed++
+				continue
+			}
+			scheduled++
+		}
+	}
+
+	h.logger.Info("precheck-all-online 完成",
+		zap.Int("hosts_total", len(hostIDs)),
+		zap.Int("hosts_dispatched", hostsDispatched),
+		zap.Int("scheduled", scheduled),
+		zap.Int("failed", failed))
+
+	Success(c, gin.H{
+		"hosts_total":      len(hostIDs),
+		"hosts_dispatched": hostsDispatched,
+		"scheduled":        scheduled,
+		"failed":           failed,
+	})
+}
+
 // dispatchPreCheck 向 agent 推一条 pre-check 任务
 func (h *HostVulnPreCheckHandler) dispatchPreCheck(hv *model.HostVulnerability) error {
-	// 查 vuln.component / vuln.fixed_version
+	// 查 vuln.component / vuln.fixed_version / vuln.vuln_category（决定是否跑 lsof）
 	var vuln model.Vulnerability
-	if err := h.db.Select("id, component, fixed_version").First(&vuln, hv.VulnID).Error; err != nil {
+	if err := h.db.Select("id, cve_id, component, fixed_version, vuln_category, vuln_category_override").
+		First(&vuln, hv.VulnID).Error; err != nil {
 		return fmt.Errorf("查询 vuln 失败: %w", err)
 	}
 	if vuln.Component == "" {
@@ -156,12 +239,20 @@ func (h *HostVulnPreCheckHandler) dispatchPreCheck(hv *model.HostVulnerability) 
 		return fmt.Errorf("vuln.component 为空")
 	}
 
+	// 优先 advisory_packages 按 host OS 取 fixed_version，兜底退回 vulnerabilities.fixed_version
+	fixedVer := biz.ResolveFixedVersionForHost(h.db, vuln.CveID, vuln.Component, hv.HostID)
+	if fixedVer == "" {
+		fixedVer = vuln.FixedVersion
+	}
+
 	requestID := fmt.Sprintf("pc-%d-%d", hv.ID, time.Now().Unix())
+	// P5.2: shared_lib 类漏洞要求 agent 跑 lsof 找受影响进程
 	payload := preCheckTaskPayload{
-		RequestID:    requestID,
-		HostVulnID:   hv.ID,
-		Component:    vuln.Component,
-		FixedVersion: vuln.FixedVersion,
+		RequestID:              requestID,
+		HostVulnID:             hv.ID,
+		Component:              vuln.Component,
+		FixedVersion:           fixedVer,
+		CheckAffectedProcesses: vuln.EffectiveCategory() == model.VulnCategorySharedLib,
 	}
 	body, _ := json.Marshal(payload)
 

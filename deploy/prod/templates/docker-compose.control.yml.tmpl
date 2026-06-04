@@ -78,3 +78,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # ===== PDF 服务端渲染（可选）=====
+  # Gotenberg 8 sidecar，提供 Chromium → PDF 转换。
+  # 替代前端 jsPDF（万行级数据集会让浏览器崩）。
+  # 配套 server.yaml 的 pdf.gotenberg_url 与 pdf.internal_url 字段。
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: always
+    network_mode: host
+    command:
+      - "gotenberg"
+      - "--api-port=3000"
+      - "--chromium-disable-web-security"
+      - "--chromium-allow-list=.*"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

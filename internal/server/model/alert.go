@@ -1,6 +1,12 @@
 // Package model 提供数据库模型定义
 package model
 
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
 // AlertStatus 告警状态
 type AlertStatus string
 
@@ -57,4 +63,51 @@ type Alert struct {
 // TableName 指定表名
 func (Alert) TableName() string {
 	return "alerts"
+}
+
+// AfterCreate / AfterUpdate GORM hook 自动同步到 ClickHouse
+// 仅当 ChConn 已注入（manager 启动后）才同步；失败 log 不抛错。
+func (a *Alert) AfterCreate(tx *gorm.DB) error {
+	syncAlertToCH(a)
+	return nil
+}
+
+func (a *Alert) AfterUpdate(tx *gorm.DB) error {
+	syncAlertToCH(a)
+	return nil
+}
+
+func (a *Alert) AfterSave(tx *gorm.DB) error {
+	syncAlertToCH(a)
+	return nil
+}
+
+// syncAlertToCH 把 Alert INSERT 到 CH alerts 表（ReplacingMergeTree by result_id）。
+// 每次状态变更增 version（unix nano），CH 合并保留最新。
+func syncAlertToCH(a *Alert) {
+	if !chSyncOpen || a == nil {
+		return
+	}
+	ctx, cancel := chCtx()
+	defer cancel()
+	err := chConn.Exec(ctx, `
+		INSERT INTO alerts (
+			id, result_id, host_id, rule_id, policy_id, source, severity, category,
+			title, description, actual, expected, fix_suggestion, status,
+			first_seen_at, last_seen_at, hit_count, last_notified_at, notify_count,
+			resolved_at, resolved_by, resolve_reason, created_at, updated_at, version
+		) VALUES (
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)
+	`,
+		uint64(a.ID), a.ResultID, a.HostID, a.RuleID, a.PolicyID, a.Source, a.Severity, a.Category,
+		a.Title, a.Description, a.Actual, a.Expected, a.FixSuggestion, string(a.Status),
+		time.Time(a.FirstSeenAt), time.Time(a.LastSeenAt), uint32(a.HitCount),
+		asTime(a.LastNotifiedAt), uint32(a.NotifyCount),
+		asTime(a.ResolvedAt), a.ResolvedBy, a.ResolveReason,
+		time.Time(a.CreatedAt), time.Time(a.UpdatedAt), nowVersion(),
+	)
+	if err != nil {
+		chLogError("alerts", err)
+	}
 }

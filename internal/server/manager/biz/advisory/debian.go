@@ -78,7 +78,7 @@ func (d *DebianSource) Fetch(ctx context.Context, _ time.Time) ([]*Advisory, err
 	if err != nil {
 		return nil, err
 	}
-	resp, err := d.client.Do(req)
+	resp, err := DoWithBackoff(ctx, d.client, req, 3)
 	if err != nil {
 		return nil, fmt.Errorf("Debian tracker HTTP: %w", err)
 	}

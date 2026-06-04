@@ -56,11 +56,26 @@ type SoftwareAsset struct {
 	Asset
 	Name         string `json:"name"`                   // 软件包名称
 	Version      string `json:"version"`                // 版本号
+	Epoch        string `json:"epoch,omitempty"`        // RPM EPOCH 字段（不存在则空）。NEVRA 精确比较核心
+	Release      string `json:"release,omitempty"`      // RPM RELEASE 字段（如 "284.11.1.el9_2"）。NEVRA 精确比较核心
 	Architecture string `json:"architecture"`           // 架构（x86_64、aarch64 等）
-	PackageType  string `json:"package_type"`           // 包类型（rpm、deb、pip、npm、jar 等）
+	PackageType  string `json:"package_type"`           // 包类型（rpm、deb、pip、npm、jar、go-binary、go-module 等）
 	Vendor       string `json:"vendor,omitempty"`       // 供应商
 	InstallTime  string `json:"install_time,omitempty"` // 安装时间
 	PURL         string `json:"purl,omitempty"`         // Package URL (用于漏洞匹配)
+	// Scope 控制漏洞匹配维度，CWPP 防误报核心字段：
+	//   system   = 主机/容器上独立运行的服务/二进制本体（参与 CPE daemon + PURL 匹配）
+	//   embedded = 静态链接进宿主 binary 的依赖库（仅参与 PURL 匹配，不参与 CPE）
+	//   container = 容器内的包（独立命名空间，由 container_sbom 出）
+	// 缺省按 system 处理（向后兼容旧版 collector）。
+	Scope string `json:"scope,omitempty"`
+	// SourceHandler 标识哪个 handler 采集的（rpm/dpkg/binary_probe/jar/go_buildinfo/python/node/container_sbom）。
+	// 用于追溯、误报排查与数据修订。
+	SourceHandler string `json:"source_handler,omitempty"`
+	// HostBinaryPath 仅对 scope=embedded 有效：宿主 binary 路径
+	// 例：mxsec-agent 内嵌 github.com/docker/docker → HostBinaryPath = /usr/local/bin/mxsec-agent
+	// 用于排查"为什么这个 module 出现在该主机上"。
+	HostBinaryPath string `json:"host_binary_path,omitempty"`
 }
 
 // ContainerAsset 是容器资产数据
@@ -157,7 +172,9 @@ func GetDataType(collectType string) int32 {
 		return 5051
 	case "user":
 		return 5052
-	case "software":
+	case "software", "binary_probe", "python_packages", "node_packages", "jar_scanner", "go_buildinfo", "container_sbom":
+		// 全部 SBOM 类 handler 复用 5053 (软件资产)。
+		// server 端按 source_file / package_type / purl 区分来源，避免 DataType 爆炸。
 		return 5053
 	case "container":
 		return 5054

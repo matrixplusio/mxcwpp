@@ -111,6 +111,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 
 	// API 健康检查（用于前端获取版本信息）
 	apiV1.GET("/health", healthHandler.Health)
+	apiV1.GET("/system/version", healthHandler.Version)
 
 	// 认证相关路由（不需要认证）
 	jwtSecret := cfg.Server.JWTSecret
@@ -131,7 +132,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 需要认证的路由
 	apiV1Auth := apiV1.Group("")
 	apiV1Auth.Use(authHandler.AuthMiddleware())
-	apiV1Auth.Use(middleware.AuditLog(db, logger))
+	apiV1Auth.Use(middleware.AuditLogWithCH(db, chConn, logger))
 
 	// 服务发现查询（需要认证，运维 / 前端监控页面调用）
 	apiV1Auth.GET("/discovery/agentcenter", discoveryHandler.ListACInstances)
@@ -142,7 +143,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 
 	// 注册 API 路由
 	setupAPIRoutes(apiV1Auth, db, logger, cfg, scoreCache, metricsService, alarmService, acRegistry, acDispatcher, chConn, redisClient, promClient, virusDBUpdater, consumerManager)
-	setupAdminAPIRoutes(apiV1Admin, db, logger, cfg)
+	setupAdminAPIRoutes(apiV1Admin, db, logger, cfg, chConn)
 
 	return router
 }
@@ -158,7 +159,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupFixAPI(router, db, logger, acDispatcher)
 	setupDashboardAPI(router, db, logger, chConn, redisClient, acRegistry, promClient)
 	setupAssetsAPI(router, db, logger)
-	setupReportsAPI(router, db, logger)
+	setupReportsAPI(router, db, logger, chConn, cfg)
 	setupBusinessLinesAPI(router, db, logger)
 	setupAlertsAPI(router, db, logger)
 	setupAlertWhitelistAPI(router, db, logger)
@@ -178,7 +179,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupDependencyAPI(router, db, logger, acDispatcher)
 	setupEDREventsAPI(router, logger, chConn)
 	setupBDEBaselineAPI(router, db, logger)
-	setupStorylineAPI(router, db, logger)
+	setupStorylineAPI(router, db, logger, chConn)
 	setupMemoryThreatAPI(router, db, logger)
 	setupHuntingAPI(router, db, logger, chConn)
 	setupHostIsolationAPI(router, db, logger, acDispatcher)
@@ -186,7 +187,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 }
 
 // setupAdminAPIRoutes 注册需要管理员权限的 API 路由
-func setupAdminAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cfg *config.Config) {
+func setupAdminAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cfg *config.Config, chConn chdriver.Conn) {
 	setupUsersAPI(router, db, logger)
 	setupSystemConfigAPI(router, db, logger)
 	setupNotificationsAPI(router, db, logger)
@@ -195,6 +196,16 @@ func setupAdminAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	setupMigrationAPI(router, db, logger)
 	setupAuditLogAPI(router, db, logger)
 	setupRBACAPI(router, db, logger)
+	setupDataConfigAPI(router, db, logger, chConn)
+}
+
+// setupDataConfigAPI 注册数据存储配置（feature flag + retention policy）。
+func setupDataConfigAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn) {
+	handler := api.NewAdminDataConfigHandler(db, chConn, logger)
+	router.GET("/feature-flags", handler.ListFeatureFlags)
+	router.PUT("/feature-flags/:key", handler.UpdateFeatureFlag)
+	router.GET("/retention-policies", handler.ListRetentionPolicies)
+	router.PUT("/retention-policies/:ch_table", handler.UpdateRetentionPolicy)
 }
 
 // setupRBACAPI 设置 RBAC 权限管理 API 路由
@@ -226,8 +237,9 @@ func setupNetworkBlockAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logg
 }
 
 // setupStorylineAPI 设置攻击故事线 API 路由
-func setupStorylineAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+func setupStorylineAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn) {
 	handler := api.NewStorylineHandler(db, logger)
+	handler.SetClickHouse(chConn)
 	router.GET("/storylines", handler.ListStorylines)
 	router.GET("/storylines/stats", handler.GetStorylineStats)
 	router.GET("/storylines/:story_id", handler.GetStoryline)
@@ -417,8 +429,28 @@ func setupAssetsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 }
 
 // setupReportsAPI 设置报表 API 路由
-func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, cfg *config.Config) {
 	handler := api.NewReportsHandler(db, logger)
+	handler.SetClickHouse(chConn)
+
+	// PDF 导出（Gotenberg sidecar，HTML→PDF 模式）
+	httpPrefix := ""
+	if cfg.PDF.InternalURL != "" {
+		httpPrefix = cfg.PDF.InternalURL
+	}
+	pdfHandler := api.NewReportPDFHandler(
+		cfg.PDF.GotenbergURL,
+		handler,
+		"/uploads",
+		"./uploads",
+		httpPrefix,
+		logger,
+	)
+	router.GET("/reports/edr/pdf", pdfHandler.ExportEDRReportPDF)
+	router.GET("/reports/antivirus/pdf", pdfHandler.ExportAntivirusReportPDF)
+	router.GET("/reports/vulnerability/pdf", pdfHandler.ExportVulnReportPDF)
+	router.GET("/reports/kube/pdf", pdfHandler.ExportKubeReportPDF)
+	router.GET("/reports/task/:task_id/pdf", pdfHandler.ExportTaskReportPDF)
 	router.GET("/reports/stats", handler.GetStats)
 	router.GET("/reports/baseline-score-trend", handler.GetBaselineScoreTrend)
 	router.GET("/reports/check-result-trend", handler.GetCheckResultTrend)
@@ -433,11 +465,13 @@ func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	router.GET("/reports/antivirus", handler.GetAntivirusReport)
 	router.GET("/reports/vulnerability", handler.GetVulnerabilityReport)
 	router.GET("/reports/kube", handler.GetKubeReport)
+	router.GET("/reports/edr", handler.GetEDRReport)
 	// Executive 报告（可导出 PDF）
 	router.GET("/reports/antivirus/:task_id/executive", handler.GetAntivirusExecutiveReport)
 	router.GET("/reports/vulnerability/executive", handler.GetVulnerabilityExecutiveReport)
 	router.GET("/reports/remediation/executive", handler.GetRemediationExecutiveReport)
 	router.GET("/reports/kube/executive", handler.GetKubeExecutiveReport)
+	router.GET("/reports/edr/executive", handler.GetEDRExecutiveReport)
 	// 已保存的报告
 	router.GET("/reports/generated", handler.ListGeneratedReports)
 	router.GET("/reports/generated/:id", handler.GetGeneratedReport)
@@ -764,6 +798,9 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.GET("/remediation-tasks/stats", taskHandler.GetTaskStats)
 	router.GET("/remediation-tasks/:id", taskHandler.GetTask)
 	router.POST("/remediation-tasks/:id/confirm", taskHandler.ConfirmTask)
+	// P5.6: 修复任务执行后 user 手动确认 + 触发 pre-check 复测
+	verifyHandler := api.NewRemediationTaskVerifyHandler(db, logger, acDispatcher)
+	router.POST("/remediation-tasks/:id/confirm-executed", verifyHandler.ConfirmExecuted)
 	router.POST("/remediation-tasks/:id/cancel", taskHandler.CancelTask)
 	router.POST("/remediation-tasks/:id/retry", taskHandler.RetryTask)
 	router.GET("/remediation-tasks/:id/events", taskHandler.ListEvents)          // 全量 events 列表
@@ -790,6 +827,10 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	preCheckHandler := api.NewHostVulnPreCheckHandler(db, logger, acDispatcher)
 	router.POST("/host-vulnerabilities/:id/precheck", preCheckHandler.CreateForHostVuln)
 	router.POST("/hosts/:host_id/precheck-all", preCheckHandler.CreateForHostAll)
+	// 全集群 pre-check 需 admin 权限，避免普通用户一键打爆集群 dnf
+	router.POST("/host-vulnerabilities/precheck-all-online",
+		api.RoleMiddleware("admin"),
+		preCheckHandler.CreateForAllOnline)
 
 	// 扫描计划管理
 	vulnScanner := biz.NewVulnScanner(db, logger)

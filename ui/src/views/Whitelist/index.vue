@@ -100,6 +100,17 @@
 
         <a-divider />
 
+        <a-form-item label="源 IP CIDR" name="source_ip_cidr">
+          <a-input
+            v-model:value="form.source_ip_cidr"
+            placeholder="如 10.170.2.0/24（用于端口扫描检测豁免，留空不启用）"
+            allow-clear
+          />
+          <div style="color: rgba(0,0,0,0.45); font-size: 12px; margin-top: 4px">
+            供端口扫描检测器豁免合法扫描源（如 k8s/GKE node pool、内部健康探测）使用。其它告警类型不读取此字段。
+          </div>
+        </a-form-item>
+
         <a-form-item label="原因" name="reason">
           <a-textarea v-model:value="form.reason" placeholder="加入白名单的原因（可选）" :rows="3" />
         </a-form-item>
@@ -158,6 +169,7 @@ const form = ref({
   host_id: '',
   category: undefined as string | undefined,
   severity: undefined as string | undefined,
+  source_ip_cidr: '',
   reason: '',
 })
 const formRules = {
@@ -189,7 +201,7 @@ const handleTableChange = (pag: any) => {
 
 const openCreate = () => {
   editingId.value = undefined
-  form.value = { name: '', rule_id: '', host_id: '', category: undefined, severity: undefined, reason: '' }
+  form.value = { name: '', rule_id: '', host_id: '', category: undefined, severity: undefined, source_ip_cidr: '', reason: '' }
   modalVisible.value = true
 }
 
@@ -201,6 +213,7 @@ const openEdit = (record: AlertWhitelist) => {
     host_id: record.host_id || '',
     category: record.category || undefined,
     severity: record.severity || undefined,
+    source_ip_cidr: record.source_ip_cidr || '',
     reason: record.reason || '',
   }
   modalVisible.value = true
@@ -221,6 +234,7 @@ const handleSubmit = async () => {
       host_id: form.value.host_id || undefined,
       category: form.value.category || undefined,
       severity: form.value.severity || undefined,
+      source_ip_cidr: form.value.source_ip_cidr || undefined,
       reason: form.value.reason || undefined,
     }
     if (editingId.value) {

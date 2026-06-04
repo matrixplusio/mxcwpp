@@ -11,6 +11,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录', public: true },
   },
   {
+    // 服务端 PDF 打印专用路由 (无 layout / 无 sidebar / 用 print token 免登录)
+    // 供 Gotenberg 拉取渲染，配合 PDF 导出场景
+    path: '/print/report/:type',
+    name: 'PrintReport',
+    component: () => import('@/views/PrintReport.vue'),
+    meta: { title: '报告打印', public: true },
+  },
+  {
     path: '/',
     component: Layout,
     redirect: '/dashboard',
@@ -117,6 +125,18 @@ const routes: RouteRecordRaw[] = [
         name: 'SystemNotification',
         component: () => import('@/views/System/Notification.vue'),
         meta: { title: '通知管理', adminOnly: true },
+      },
+      {
+        path: 'system/data-retention',
+        name: 'SystemDataRetention',
+        component: () => import('@/views/System/DataRetention.vue'),
+        meta: { title: '数据保留策略', adminOnly: true },
+      },
+      {
+        path: 'system/feature-flags',
+        name: 'SystemFeatureFlags',
+        component: () => import('@/views/System/FeatureFlags.vue'),
+        meta: { title: '功能开关', adminOnly: true },
       },
       {
         path: 'system/reports',
@@ -492,6 +512,12 @@ const router = createRouter({
 let authInitialized = false
 
 router.beforeEach(async (to, _from, next) => {
+  // 打印路由 (Gotenberg 拉取): 把 query token 提前写 localStorage 让 axios
+  // interceptor 立即拾取，避免 site-config / reports API 因无 token 401 跳登录
+  if (to.path.startsWith('/print/') && to.query.token) {
+    localStorage.setItem('mxcsec_token', String(to.query.token))
+  }
+
   const authStore = useAuthStore()
   const { useSiteConfigStore } = await import('@/stores/site-config')
   const siteConfigStore = useSiteConfigStore()

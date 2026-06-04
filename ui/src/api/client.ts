@@ -82,6 +82,10 @@ axiosInstance.interceptors.response.use(
   (error) => {
     // 处理 HTTP 错误
     if (error.response?.status === 401) {
+      // 打印路由 (Gotenberg 拉取) 不要跳登录页，否则 PDF 渲染出登录页
+      if (window.location.pathname.startsWith('/print/')) {
+        return Promise.reject(error)
+      }
       // 未授权，清除认证信息并跳转到登录页
       localStorage.removeItem('mxcsec_token')
       localStorage.removeItem('mxcsec_user')

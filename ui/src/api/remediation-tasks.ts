@@ -18,6 +18,12 @@ export interface RemediationTaskItem {
   confirmedAt: string | null
   startedAt: string | null
   finishedAt: string | null
+  // P5.6 复测字段
+  execConfirmedBy?: string
+  execConfirmedAt?: string | null
+  verifyStatus?: string  // ''(legacy) / pending_user / verifying / verified / verify_failed / verify_blocked
+  verifyMessage?: string
+  verifiedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -48,6 +54,13 @@ export const remediationTasksApi = {
 
   confirm: (id: number, command?: string) => {
     return apiClient.post(`/remediation-tasks/${id}/confirm`, command ? { command } : {})
+  },
+
+  // P5.6: 修复任务执行后 user 手动确认 + 触发 pre-check 复测
+  confirmExecuted: (id: number) => {
+    return apiClient.post<{ taskId: number; requestId: string; verifyStatus: string; message: string }>(
+      `/remediation-tasks/${id}/confirm-executed`,
+    )
   },
 
   cancel: (id: number) => {

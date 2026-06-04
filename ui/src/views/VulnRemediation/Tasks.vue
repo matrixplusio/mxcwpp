@@ -139,12 +139,21 @@
                   确认执行
                 </a-button>
                 <a-button
-                  v-if="record.status === 'failed'"
+                  v-if="record.status === 'failed' || record.status === 'verify_failed'"
                   type="link"
                   size="small"
                   @click="handleRetry(record)"
                 >
-                  重试
+                  {{ record.status === 'verify_failed' ? '复跑' : '重试' }}
+                </a-button>
+                <a-button
+                  v-if="record.status === 'success_pending_verify'"
+                  type="link"
+                  size="small"
+                  :loading="confirmExecutedId === record.id"
+                  @click="handleConfirmExecuted(record)"
+                >
+                  ✅ 确认已执行
                 </a-button>
                 <a-button
                   v-if="record.status === 'pending' || record.status === 'confirmed'"
@@ -287,7 +296,12 @@ const taskStatusColor = (status: string) => {
     pending: 'warning',
     confirmed: 'blue',
     running: 'processing',
-    success: 'success',
+    success: 'success', // legacy
+    success_pending_verify: 'gold',   // P5.6 待 user 确认
+    main_verifying: 'processing',     // P5.6 复测中
+    verified: 'success',              // P5.6 复测通过
+    verify_failed: 'error',           // P5.6 复测失败
+    verify_blocked: 'warning',        // P5.6 复测受阻
     failed: 'error',
     cancelled: 'default',
   }
@@ -300,6 +314,11 @@ const taskStatusText = (status: string) => {
     confirmed: '已确认',
     running: '执行中',
     success: '已完成',
+    success_pending_verify: '⏳ 等待确认',
+    main_verifying: '🔄 复测中',
+    verified: '✅ 已验证',
+    verify_failed: '❌ 复测失败',
+    verify_blocked: '⚠️ 复测受阻',
     failed: '失败',
     cancelled: '已取消',
   }
@@ -361,6 +380,20 @@ const doConfirm = async () => {
     message.error('确认失败')
   } finally {
     confirmLoading.value = false
+  }
+}
+
+const confirmExecutedId = ref<number | null>(null)
+const handleConfirmExecuted = async (record: RemediationTaskItem) => {
+  confirmExecutedId.value = record.id
+  try {
+    const r = await remediationTasksApi.confirmExecuted(record.id)
+    message.success(`已确认执行，复测中（pre-check request: ${r.requestId}）`)
+    setTimeout(() => { loadTasks(); loadStats() }, 5000)
+  } catch (err: any) {
+    message.error('确认失败: ' + (err?.message || err))
+  } finally {
+    confirmExecutedId.value = null
   }
 }
 

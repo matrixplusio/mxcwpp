@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -102,6 +103,33 @@ type Service struct {
 // SetKafkaProducer 注入 Kafka 生产者（在 AgentCenter 启动后调用）
 func (s *Service) SetKafkaProducer(p kafka.Producer) {
 	s.kafkaProducer = p
+}
+
+// SetClickHouse 注入 ClickHouse 连接，并启用 host_metrics CH 写入路径。
+// 路径选择由 feature_flag.data_source.host_metrics 控制：
+//   - "mysql"（默认）→ metrics_buffer 继续写 MySQL
+//   - "ch"            → metrics_buffer 改写 CH
+func (s *Service) SetClickHouse(conn chdriver.Conn) {
+	if conn == nil || s.metricsBuffer == nil {
+		return
+	}
+	target := readHostMetricsTarget(s.db, s.logger)
+	s.metricsBuffer.SetClickHouse(conn, target)
+	s.logger.Info("host_metrics CH 通道已配置", zap.String("target", target))
+}
+
+// readHostMetricsTarget 查 feature_flag.data_source.host_metrics → "mysql"/"ch"。
+// 查询失败回落 "mysql"。
+func readHostMetricsTarget(db *gorm.DB, logger *zap.Logger) string {
+	var f model.FeatureFlag
+	if err := db.Where("flag_key = ?", model.FlagDataSourceHostMetrics).First(&f).Error; err != nil {
+		logger.Warn("host_metrics feature flag 读取失败，使用 mysql 默认", zap.Error(err))
+		return "mysql"
+	}
+	if f.Value != "ch" {
+		return "mysql"
+	}
+	return "ch"
 }
 
 // NewService 创建 Transfer 服务实例
@@ -326,12 +354,15 @@ func (s *Service) handleHeartbeat(ctx context.Context, data *grpcProto.PackagedD
 				if err := proto.Unmarshal(record.Data, &bridgeRecord); err == nil {
 					if bridgeRecord.Data != nil && bridgeRecord.Data.Fields != nil {
 						fields := bridgeRecord.Data.Fields
-						// OS信息
+						// OS信息（含 P5.3 livepatch 能力）
 						osInfo = map[string]string{
-							"os_family":      fields["os_family"],
-							"os_version":     fields["os_version"],
-							"kernel_version": fields["kernel"],
-							"arch":           fields["arch"],
+							"os_family":          fields["os_family"],
+							"os_version":         fields["os_version"],
+							"kernel_version":     fields["kernel"],
+							"arch":               fields["arch"],
+							"livepatch_enabled":  fields["livepatch_enabled"],
+							"livepatch_provider": fields["livepatch_provider"],
+							"active_livepatches": fields["active_livepatches"],
 						}
 						// 硬件信息
 						hardwareInfo = map[string]string{
@@ -549,6 +580,10 @@ func (s *Service) handleHeartbeat(ctx context.Context, data *grpcProto.PackagedD
 		OSVersion:     osInfo["os_version"],
 		KernelVersion: osInfo["kernel_version"],
 		Arch:          osInfo["arch"],
+		// P5.3 kernel livepatch
+		KernelLivepatchEnabled:  osInfo["livepatch_enabled"] == "true",
+		KernelLivepatchProvider: osInfo["livepatch_provider"],
+		ActiveLivepatches:       osInfo["active_livepatches"],
 		// 硬件信息
 		DeviceModel:  hardwareInfo["device_model"],
 		Manufacturer: hardwareInfo["manufacturer"],
@@ -612,6 +647,10 @@ func (s *Service) handleHeartbeat(ctx context.Context, data *grpcProto.PackagedD
 			updates["os_version"] = osInfo["os_version"]
 			updates["kernel_version"] = osInfo["kernel_version"]
 			updates["arch"] = osInfo["arch"]
+			// P5.3 kernel livepatch
+			updates["kernel_livepatch_enabled"] = osInfo["livepatch_enabled"] == "true"
+			updates["kernel_livepatch_provider"] = osInfo["livepatch_provider"]
+			updates["active_livepatches"] = osInfo["active_livepatches"]
 			updates["device_model"] = hardwareInfo["device_model"]
 			updates["manufacturer"] = hardwareInfo["manufacturer"]
 			updates["device_serial"] = hardwareInfo["device_serial"]

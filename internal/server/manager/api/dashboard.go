@@ -296,38 +296,59 @@ func (h *DashboardHandler) countVulnsBySeverity() (critical, high int64) {
 
 // computeSecurityScore 计算安全态势综合评分（0-100）
 //
-// 维度（基础 100 分，按权重扣分；最后用合规率修正 ±）：
+// 旧公式问题：
+//  1. 绝对数封顶过低（15 个 critical 就触顶 -30），同 host 数下 dev 20642
+//     告警 vs prod 278 评分一样，无法区分严重程度。
+//  2. 不按集群规模归一化：单 host 与 226 hosts 用同一阈值。
+//  3. 基线权重过小（±2），prod baseline 65% 反而被扣分。
+//  4. 任一维度爆表整体易归零，丧失"局部好 + 整体差"的辨识度。
 //
-//	告警：critical × 2（封顶 -30），high × 0.5（封顶 -20）
-//	漏洞：critical × 0.05（封顶 -20），high × 0.01（封顶 -10）
-//	影响范围：受漏洞影响主机比例 × 20（最多 -20）
-//	合规率：(baseline_hardening_percent - 80) × 0.1（范围 ±2）
+// 新公式：4 维度各占 25 分，加分制（每维度 0~25），最后求和。
 //
-// 设计目标：避免 UI 端硬编码"健康"误导；与漏洞/告警数量同向变化。
+//   - 告警维度（25 分）：按 per-100-host 密度算扣分，log10 缓增长
+//     0 个 → 25 分；100 个/100host → 12.5 分；10000 个/100host → 0 分
+//   - 漏洞维度（25 分）：同上，critical 权重 5×、high 权重 1×
+//   - 基线维度（25 分）：合规率 ÷ 100 × 25（直接折算）
+//   - 暴露维度（25 分）：(1 - vulnHosts/totalHosts) × 25
+//
+// totalHosts=0 时回退到绝对数（避免除零）。
 func (h *DashboardHandler) computeSecurityScore(
 	criticalAlerts, highAlerts int64,
 	criticalVulns, highVulns int64,
 	vulnHosts, totalHosts int64,
 	baselineCompliance float64,
 ) float64 {
-	score := 100.0
+	const dimMax = 25.0
 
-	score -= math.Min(float64(criticalAlerts)*2.0, 30.0)
-	score -= math.Min(float64(highAlerts)*0.5, 20.0)
+	// 1. 告警维度：critical 权重 4× high
+	alertWeighted := float64(criticalAlerts)*4 + float64(highAlerts)
+	alertScore := dimScoreFromDensity(alertWeighted, totalHosts, dimMax)
 
-	score -= math.Min(float64(criticalVulns)*0.05, 20.0)
-	score -= math.Min(float64(highVulns)*0.01, 10.0)
+	// 2. 漏洞维度：critical 权重 5× high
+	vulnWeighted := float64(criticalVulns)*5 + float64(highVulns)
+	vulnScore := dimScoreFromDensity(vulnWeighted, totalHosts, dimMax)
 
+	// 3. 基线维度：合规率直接折算
+	baseline := baselineCompliance
+	if baseline < 0 {
+		baseline = 0
+	}
+	if baseline > 100 {
+		baseline = 100
+	}
+	baselineScore := baseline / 100.0 * dimMax
+
+	// 4. 暴露维度：1 - 受影响主机比例
+	exposureScore := dimMax
 	if totalHosts > 0 {
-		affectedRatio := float64(vulnHosts) / float64(totalHosts)
-		if affectedRatio > 1.0 {
-			affectedRatio = 1.0
+		ratio := float64(vulnHosts) / float64(totalHosts)
+		if ratio > 1.0 {
+			ratio = 1.0
 		}
-		score -= affectedRatio * 20.0
+		exposureScore = (1.0 - ratio) * dimMax
 	}
 
-	score += (baselineCompliance - 80.0) * 0.1
-
+	score := alertScore + vulnScore + baselineScore + exposureScore
 	if score < 0 {
 		score = 0
 	}
@@ -335,6 +356,42 @@ func (h *DashboardHandler) computeSecurityScore(
 		score = 100
 	}
 	return math.Round(score*10) / 10
+}
+
+// dimScoreFromDensity 把"加权告警/漏洞数"按 per-100-host 密度换算成 0~max 分。
+//
+// 模型：
+//
+//	density = weightedCount * 100 / max(totalHosts, 1)
+//	score = max * (1 - log10(1+density) / log10(10001))
+//
+// 边界：
+//
+//	density=0     → score=max
+//	density=100   → score≈max*0.5（中等）
+//	density>=10000 → score≈0（爆表）
+//
+// log10(10001) ≈ 4 用作归一化常数，density 上限 10000 = 每 host 平均 100 条
+// 高危条目，超出仍 clamp 到 0。
+func dimScoreFromDensity(weightedCount float64, totalHosts int64, dimMax float64) float64 {
+	if weightedCount <= 0 {
+		return dimMax
+	}
+	hosts := float64(totalHosts)
+	if hosts < 1 {
+		hosts = 1
+	}
+	density := weightedCount * 100.0 / hosts
+	const norm = 4.0 // log10(10001)
+	ratio := math.Log10(1+density) / norm
+	if ratio > 1.0 {
+		ratio = 1.0
+	}
+	score := dimMax * (1.0 - ratio)
+	if score < 0 {
+		score = 0
+	}
+	return score
 }
 
 // calculateAgentChanges 计算Agent数量变化（较昨日）

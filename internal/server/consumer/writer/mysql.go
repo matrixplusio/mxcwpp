@@ -33,6 +33,11 @@ func NewMySQLWriter(db *gorm.DB, logger *zap.Logger) *MySQLWriter {
 	}
 }
 
+// DB 返回内部 gorm.DB，供 consumer Router 等需要直接读写表的子模块使用。
+func (w *MySQLWriter) DB() *gorm.DB {
+	return w.db
+}
+
 // WriteBaseline 处理基线检查结果（DataType 8000），ON DUPLICATE KEY UPDATE 保证幂等
 // 复合主键 (task_id, host_id, rule_id) 天然保证跨主机去重，无需人造 result_id
 func (w *MySQLWriter) WriteBaseline(msg *kafka.MQMessage) error {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -167,7 +166,7 @@ func (h *NetworkBlockHandler) DeleteRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "已删除"})
+	SuccessMessage(c, "已删除")
 }
 
 // dispatchBlockCommand 下发阻断命令（通过 AC 精准路由/广播）

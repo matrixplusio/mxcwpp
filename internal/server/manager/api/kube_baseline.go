@@ -87,17 +87,14 @@ func (h *KubeBaselineHandler) ListBaseline(c *gin.Context) {
 		passRate = float64(passed) / float64(passed+failed) * 100
 	}
 
-	c.JSON(200, gin.H{
-		"code": 0,
-		"data": gin.H{
-			"items": checks,
-			"total": total,
-			"stats": gin.H{
-				"passRate":    int(passRate),
-				"totalChecks": totalChecks,
-				"passed":      passed,
-				"failed":      failed,
-			},
+	Success(c, gin.H{
+		"items": checks,
+		"total": total,
+		"stats": gin.H{
+			"passRate":    int(passRate),
+			"totalChecks": totalChecks,
+			"passed":      passed,
+			"failed":      failed,
 		},
 	})
 }

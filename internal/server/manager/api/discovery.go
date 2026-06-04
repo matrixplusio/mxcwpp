@@ -1,5 +1,15 @@
 package api
 
+// 注意：本文件 c.JSON 直接调用不使用 response.go 助手，因为这是 AgentCenter ↔ Manager
+// 的内部服务发现协议（POST /api/v1/internal/ac/register、heartbeat、deregister）：
+//   - register / deregister 成功响应：{"status":"registered"|"deregistered"}
+//   - heartbeat 成功：{"status":"ok"}
+//   - heartbeat 实例失效：{"error":"实例未注册","action":"re-register"}
+//     （AC 客户端检 "action" 字段决定是否重新 register）
+//   - ListACInstances：{"total":N,"instances":[...]}（Agent 服务发现轮询用）
+//
+// 这些字段是 AC 客户端代码硬编码解析的协议契约，改成统一 {code,data,message}
+// 会破坏 AC 注册/心跳链路（影响所有 prod agent 连接）。保留原 schema。
 import (
 	"net/http"
 

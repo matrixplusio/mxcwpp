@@ -117,6 +117,19 @@
       />
     </div>
 
+    <!-- 长查询进度条：>5s 显示 elapsed + 取消按钮 -->
+    <a-alert
+      v-if="loading && loadingElapsed >= 5"
+      type="warning"
+      show-icon
+      :message="`查询中... 已 ${loadingElapsed}s` + (loadingElapsed >= 30 ? '（数据量较大，建议缩窄时间范围或加 host 过滤）' : '')"
+      style="margin-bottom: 8px"
+    >
+      <template #action>
+        <a-button size="small" danger @click="cancelFetch">取消查询</a-button>
+      </template>
+    </a-alert>
+
     <!-- 事件表格 -->
     <a-table
       :columns="columns"
@@ -211,17 +224,29 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { edrApi } from '@/api/edr'
 import type { EDREvent, EDREventStats } from '@/api/types'
+import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
+
+const route = useRoute()
 
 const loading = ref(false)
 const events = ref<EDREvent[]>([])
 const detailVisible = ref(false)
 const selectedEvent = ref<EDREvent | null>(null)
-const dateRange = ref<[Dayjs, Dayjs] | null>(null)
+// 默认查最近 24h（ebpf_events 表 1 亿+ 行，无精确时间窗会落到慢路径）。
+// 用 hour 而非 day，且 format 带时分秒，避免被后端解析成 [date 00:00, date 23:59:59]
+// 这种 2 天窗口（详见 perf-edr-projection commit）。
+const dateRange = ref<[Dayjs, Dayjs] | null>([dayjs().subtract(24, 'hour'), dayjs()])
 const statsHours = ref(24)
+
+// 加载耗时 + cancel 控制：长查询给用户进度反馈，超 30s 让用户主动取消而不是干等。
+const loadingElapsed = ref(0)
+let loadingTimer: ReturnType<typeof setInterval> | null = null
+let abortCtrl: AbortController | null = null
 
 const stats = reactive<EDREventStats>({
   total: 0,
@@ -236,13 +261,16 @@ const stats = reactive<EDREventStats>({
 
 const filters = reactive({
   hostname: '',
+  // 精确 host_id 过滤；从异常详情跳转过来时自动填充
+  host_id: '' as string,
   keyword: '',
   event_type: undefined as string | undefined,
   data_type: undefined as number | undefined,
   remote_addr: '',
   pid: '',
-  date_from: undefined as string | undefined,
-  date_to: undefined as string | undefined,
+  // 与 dateRange 同步：默认最近 24h，带时分秒精度（避开 perf 慢路径）
+  date_from: dayjs().subtract(24, 'hour').format('YYYY-MM-DD HH:mm:ss') as string | undefined,
+  date_to: dayjs().format('YYYY-MM-DD HH:mm:ss') as string | undefined,
 })
 
 const pagination = reactive({
@@ -311,12 +339,29 @@ const getEventDetail = (record: EDREvent) => {
   return record.cmdline || record.file_path || '-'
 }
 
+const startLoadingTimer = () => {
+  loadingElapsed.value = 0
+  if (loadingTimer) clearInterval(loadingTimer)
+  loadingTimer = setInterval(() => { loadingElapsed.value += 1 }, 1000)
+}
+
+const stopLoadingTimer = () => {
+  if (loadingTimer) { clearInterval(loadingTimer); loadingTimer = null }
+}
+
 const fetchEvents = async () => {
+  // 取消上一次未完成的查询，避免双发
+  if (abortCtrl) abortCtrl.abort()
+  abortCtrl = new AbortController()
+  const myCtrl = abortCtrl
+
   loading.value = true
+  startLoadingTimer()
   try {
     const res = await edrApi.listEvents({
       page: pagination.current,
       page_size: pagination.pageSize,
+      host_id: filters.host_id || undefined,
       hostname: filters.hostname || undefined,
       keyword: filters.keyword || undefined,
       event_type: filters.event_type,
@@ -325,13 +370,28 @@ const fetchEvents = async () => {
       pid: filters.pid || undefined,
       date_from: filters.date_from,
       date_to: filters.date_to,
-    })
+    }, { signal: myCtrl.signal })
+    // 旧请求晚回（被新请求覆盖），丢弃
+    if (myCtrl !== abortCtrl) return
     events.value = res.items || []
     pagination.total = res.total
   } catch {
     // API 客户端已处理错误提示
   } finally {
+    if (myCtrl === abortCtrl) {
+      loading.value = false
+      stopLoadingTimer()
+      abortCtrl = null
+    }
+  }
+}
+
+const cancelFetch = () => {
+  if (abortCtrl) {
+    abortCtrl.abort()
+    abortCtrl = null
     loading.value = false
+    stopLoadingTimer()
   }
 }
 
@@ -356,8 +416,9 @@ const handleRefresh = () => {
 
 const handleDateChange = (dates: [Dayjs, Dayjs] | null) => {
   if (dates) {
-    filters.date_from = dates[0].format('YYYY-MM-DD')
-    filters.date_to = dates[1].format('YYYY-MM-DD')
+    // 带时分秒精度，让后端能命中 partition pruning + projection 快路径
+    filters.date_from = dates[0].format('YYYY-MM-DD HH:mm:ss')
+    filters.date_to = dates[1].format('YYYY-MM-DD HH:mm:ss')
   } else {
     filters.date_from = undefined
     filters.date_to = undefined
@@ -376,7 +437,21 @@ const showDetail = (event: EDREvent) => {
   detailVisible.value = true
 }
 
+// 从异常详情 / Dashboard 跳转过来时，按 query 预过滤（host_id + 证据时间窗）
+const applyRouteQuery = () => {
+  const q = route.query
+  if (typeof q.host_id === 'string' && q.host_id) {
+    filters.host_id = q.host_id
+  }
+  if (typeof q.date_from === 'string' && q.date_from && typeof q.date_to === 'string' && q.date_to) {
+    filters.date_from = q.date_from
+    filters.date_to = q.date_to
+    dateRange.value = [dayjs(q.date_from), dayjs(q.date_to)]
+  }
+}
+
 onMounted(() => {
+  applyRouteQuery()
   fetchEvents()
   fetchStats()
 })

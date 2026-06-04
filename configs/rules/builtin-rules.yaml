@@ -695,12 +695,12 @@ rules:
     description: "检测 LDAP/LDAPS 端口连接，可能为域信息枚举"
 
   - name: "Cobalt Strike 默认端口"
-    expression: 'remote_port == "50050" || remote_port == "443" && !exe.contains("curl") && !exe.contains("wget") && !exe.contains("firefox") && !exe.contains("chrome")'
+    expression: 'remote_port == "50050"'
     severity: high
     category: c2_communication
     mitre_id: "T1071.001"
     data_types: ["3002"]
-    description: "检测 Cobalt Strike 管理端口或非浏览器进程 HTTPS 外连"
+    description: "检测 Cobalt Strike team server 默认管理端口 50050 的外连。原表达式包含 port==443 + exe 黑名单，但 (1) agent ebpf 上报字段是 comm 不是 exe，exe.contains 永不命中；(2) 普通 HTTPS 业务流量与 CS 流量无法靠端口区分，必然误报。2026-05-28 调整为仅匹配 50050（高置信端口）。"
 
   - name: "高频外连检测"
     expression: 'recent_remote_addr_count > 10 && !is_private_ip(remote_addr)'

@@ -111,3 +111,25 @@ func Forbidden(c *gin.Context, message string) {
 		"message": message,
 	})
 }
+
+// TooManyRequests 限流响应
+func TooManyRequests(c *gin.Context, message string) {
+	c.JSON(http.StatusTooManyRequests, gin.H{
+		"code":    429,
+		"message": message,
+	})
+}
+
+// ServiceUnavailable 服务不可用（用于 /health degraded 等）
+//
+// 可附带 data（健康检查报告）。data 传 nil 时只返 code+message。
+func ServiceUnavailable(c *gin.Context, message string, data interface{}) {
+	body := gin.H{
+		"code":    503,
+		"message": message,
+	}
+	if data != nil {
+		body["data"] = data
+	}
+	c.JSON(http.StatusServiceUnavailable, body)
+}

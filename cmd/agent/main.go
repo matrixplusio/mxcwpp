@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	agentcli "github.com/imkerbos/mxsec-platform/internal/agent/cli"
 	"github.com/imkerbos/mxsec-platform/internal/agent/config"
 	"github.com/imkerbos/mxsec-platform/internal/agent/connection"
 	"github.com/imkerbos/mxsec-platform/internal/agent/edr"
@@ -31,6 +32,20 @@ var (
 	updateForce  = flag.Bool("force", false, "强制更新（即使版本相同，需配合 --update 使用）")
 	updateFile   = flag.String("file", "", "使用本地包文件更新（离线模式，需配合 --update 使用）")
 	updateServer = flag.String("server", "", "指定 Server HTTP 地址（如 http://10.0.0.1:8080，需配合 --update 使用）")
+
+	// 运维辅助子命令
+	statusFlag = flag.Bool("status", false, "显示 Agent 运行状态")
+	logsFlag   = flag.Bool("logs", false, "查看 Agent 日志")
+	configFlag = flag.Bool("config", false, "显示 Agent 配置")
+	diagFlag   = flag.Bool("diag", false, "生成诊断信息包")
+	jsonFlag   = flag.Bool("json", false, "以 JSON 格式输出（适用于 --status / --config）")
+
+	// --logs 子选项
+	logsLines  = flag.Int("n", 100, "末尾日志行数（配合 --logs 使用）")
+	logsFollow = flag.Bool("f", false, "实时跟踪日志（配合 --logs 使用）")
+
+	// --diag 子选项
+	diagOutput = flag.String("o", "", "诊断包输出路径（配合 --diag 使用，默认 /tmp/mxsec-agent-diag-<host>-<ts>.tar.gz）")
 )
 
 // 构建时嵌入的变量（通过 -ldflags 设置）
@@ -48,6 +63,45 @@ func main() {
 
 	if *version {
 		printVersion()
+		return
+	}
+
+	// 运维辅助子命令：独立执行路径，不启动 Agent 服务
+	commonOpts := agentcli.CommonOptions{
+		BuildVersion: buildVersion,
+		BuildTime:    buildTime,
+		ServerHost:   serverHost,
+		JSON:         *jsonFlag,
+	}
+	switch {
+	case *statusFlag:
+		if err := agentcli.RunStatus(commonOpts, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *logsFlag:
+		if err := agentcli.RunLogs(agentcli.LogsOptions{
+			Lines:  *logsLines,
+			Follow: *logsFollow,
+		}, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *configFlag:
+		if err := agentcli.RunConfig(commonOpts, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *diagFlag:
+		if _, err := agentcli.RunDiag(commonOpts, agentcli.DiagOptions{
+			OutputPath: *diagOutput,
+		}, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 

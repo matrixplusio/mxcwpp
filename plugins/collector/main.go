@@ -66,7 +66,12 @@ func main() {
 	collectEngine.RegisterHandler("kmod", 12*time.Hour, &handlers.KmodHandler{Logger: logger})
 	collectEngine.RegisterHandler("service", 6*time.Hour, &handlers.ServiceHandler{Logger: logger})
 	collectEngine.RegisterHandler("cron", 12*time.Hour, &handlers.CronHandler{Logger: logger})
-	collectEngine.RegisterHandler("dep_scan", 12*time.Hour, &handlers.DepScannerHandler{Logger: logger})
+	collectEngine.RegisterHandler("binary_probe", 12*time.Hour, &handlers.BinaryProbeHandler{Logger: logger})
+	collectEngine.RegisterHandler("python_packages", 12*time.Hour, &handlers.PythonPackagesHandler{Logger: logger})
+	collectEngine.RegisterHandler("node_packages", 12*time.Hour, &handlers.NodePackagesHandler{Logger: logger})
+	collectEngine.RegisterHandler("jar_scanner", 12*time.Hour, &handlers.JarScannerHandler{Logger: logger})
+	collectEngine.RegisterHandler("go_buildinfo", 12*time.Hour, &handlers.GoBuildInfoHandler{Logger: logger})
+	collectEngine.RegisterHandler("container_sbom", 2*time.Hour, &handlers.ContainerSBOMHandler{Logger: logger})
 
 	// 5. 创建上下文
 	ctx, cancel := context.WithCancel(context.Background())

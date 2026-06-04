@@ -34,6 +34,12 @@ const (
 )
 
 // Advisory 单条漏洞 advisory，承载多源统一的最小信息集。
+//
+// 匹配 gate 二选一（互斥）：
+//   - OS pkg advisory（RHSA/USN/DSA/Alpine secdb 等）：OSFamily + OSMajorVer 必填，Ecosystem 留空
+//   - 语言包 advisory（OSV GHSA/PyPA/govulndb 等）：Ecosystem 必填（npm/PyPI/Maven/Go/...），OSFamily 留空
+//
+// 两个字段全空的 advisory 无法做主机过滤，会被 validateAdvisory 拒绝。
 type Advisory struct {
 	AdvisoryID   string    // 上游 advisory ID，如 RHSA-2024:1234、USN-7890-1、DSA-5678-1
 	CVEIDs       []string  // 关联 CVE 列表（一个 advisory 可修复多个 CVE）
@@ -44,9 +50,18 @@ type Advisory struct {
 	ReferenceURL string    // 上游详情页
 	IssuedAt     time.Time // advisory 发布时间
 	UpdatedAt    time.Time // advisory 最后更新时间
-	AffectedPkgs []PkgFix  // 受影响包 + 修复版本（OS-specific）
-	OSFamily     string    // rhel / rocky / ubuntu / debian / alpine / null（OSV 通用）
-	OSMajorVer   string    // OS 主版本号，如 "9"（RHEL 9 / Rocky 9）
+	AffectedPkgs []PkgFix  // 受影响包 + 修复版本（OS-specific 或语言生态版本）
+	OSFamily     string    // OS pkg advisory: rhel / rocky / ubuntu / debian / alpine；语言包 advisory 留空
+	OSMajorVer   string    // OS 主版本号，如 "9"（RHEL 9 / Rocky 9）；语言包 advisory 留空
+	Ecosystem    string    // 语言包 advisory: npm / PyPI / Maven / Go / RubyGems / crates.io / Packagist / NuGet / Pub / Hex；OS pkg advisory 留空
+
+	// PURL-source 专用字段（仅 OSV 等 PURL-based source 填写）
+	OsvID            string // 上游 OSV vuln ID（如 GHSA-xxx / CVE-xxx）；非 OSV 留空
+	PURL             string // 触发命中的 PURL（如 pkg:maven/io.netty/netty-codec@4.1.115.Final）；非 PURL source 留空
+	AttackVector     string // 攻击向量（如 "network"/"local"），由 CVSS 推导；空表示未知
+	VulnType         string // 漏洞类型（如 "buffer-overflow"/"injection"），由 CVSS 推导；空表示未知
+	AffectedVersions string // 影响版本范围（如 ">= 1.0, < 1.5"）；空表示未提供
+	CurrentVersion   string // 命中 host 当前装的版本（PURL @ 后段）；非 PURL source 留空
 }
 
 // PkgFix 单个受影响 pkg 的修复版本。
@@ -75,19 +90,55 @@ type Source interface {
 	Fetch(ctx context.Context, since time.Time) ([]*Advisory, error)
 }
 
+// PURLSource 是 Source 的扩展接口，描述按 PURL 批量查询能力的 source。
+//
+// 与 Source.Fetch 的时间增量模式不同，PURLSource 由调用方按 host 软件清单驱动，
+// 上游 OSV/GHSA 等 PURL-based vuln DB 适合走这条路径（避免下载全量 advisory）。
+//
+// 实现者：
+//   - OSVSource：osv.dev /v1/querybatch + /v1/vulns/{id}
+//   - 未来 GHSA / Snyk / GitLab Sec 同类生态可实现该接口
+type PURLSource interface {
+	Source
+
+	// FetchByPURLs 按 PURL 批量查询 advisory。
+	//
+	// purls: 已去重的 PURL 列表（调用方负责按 ecosystem 过滤）
+	// 返回 PURL → 该 PURL 命中的 advisory 列表；advisory.PURL 字段填命中 PURL。
+	FetchByPURLs(ctx context.Context, purls []string) (map[string][]*Advisory, error)
+}
+
 // HostSoftware 单台主机的已装软件清单条目，供 Matcher 比对。
+//
+// PkgEcosystem 决定走哪个 advisory gate：
+//   - OS pkg（rpm/deb/apk）：PkgEcosystem 留空，走 OSFamily/OSMajor gate
+//   - 语言包（npm/PyPI/Maven/Go/...）：PkgEcosystem 必填，走 ecosystem gate
+//
+// NEVRA(Name/Epoch/Version/Release/Arch) 比较优先级（matcher 优先级降序）：
+//  1. PkgEpoch / PkgVerRaw / PkgRelease 都非空 → 严格 NEVRA 比较
+//  2. 任一为空 → 退回 PkgVer 字符串 RPM-vercmp（旧路径，可能漏 epoch）
 type HostSoftware struct {
-	HostID   string
-	Hostname string
-	IP       string
-	OSFamily string // rhel / rocky / centos / ubuntu / debian / alpine / null
-	OSVer    string // 完整版本，如 "9.4"
-	OSMajor  string // 主版本，如 "9"
-	Arch     string // amd64 / arm64
-	PkgName  string // 已装 pkg 名（须与 Advisory.AffectedPkgs[].Name 精确匹配）
-	PkgArch  string // 已装 pkg arch
-	PkgVer   string // 已装版本号（含 epoch:version-release.dist，如 "1:3.5.1-3.el9"）
-	PURL     string // package URL，如 pkg:rpm/redhat/openssl@3.5.1-3.el9?arch=x86_64
+	HostID       string
+	Hostname     string
+	IP           string
+	OSFamily     string // rhel / rocky / centos / ubuntu / debian / alpine / null
+	OSVer        string // 完整版本，如 "9.4"
+	OSMajor      string // 主版本，如 "9"
+	Arch         string // amd64 / arm64
+	PkgName      string // 已装 pkg 名（须与 Advisory.AffectedPkgs[].Name 精确匹配）
+	PkgArch      string // 已装 pkg arch
+	PkgVer       string // 已装版本号（旧字段，保持向后兼容；新数据用下面 3 个 NEVRA 字段）
+	PkgEpoch     string // RPM EPOCH（不存在则空）。NEVRA 比较关键字段
+	PkgVerRaw    string // RPM VERSION（不含 epoch/release，如 "3.5.1"）
+	PkgRelease   string // RPM RELEASE（如 "3.el9_4"）
+	PURL         string // package URL，如 pkg:rpm/redhat/openssl@3.5.1-3.el9?arch=x86_64
+	PkgEcosystem string // 语言包 ecosystem（npm/PyPI/Maven/Go/...）；OS pkg 留空
+	// PkgManager 决定 matcher 用哪种版本比较算法。
+	//
+	//	"rpm"  → CompareRPMVersion（RHEL/Rocky/CentOS/AlmaLinux 等）
+	//	"dpkg" → CompareDpkgVersion（Debian/Ubuntu）
+	//	""     → 退回 RPM 算法（向后兼容）
+	PkgManager string
 }
 
 // Matcher 将 advisory 与已装软件做精确版本比对，输出受影响 host 列表。

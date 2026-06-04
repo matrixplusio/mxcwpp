@@ -72,6 +72,12 @@ type serverConfigDoc struct {
 	Log        logDoc        `yaml:"log"`
 	Agent      agentDoc      `yaml:"agent"`
 	Plugins    pluginsDoc    `yaml:"plugins"`
+	PDF        pdfDoc        `yaml:"pdf,omitempty"`
+}
+
+type pdfDoc struct {
+	GotenbergURL string `yaml:"gotenberg_url,omitempty"`
+	InternalURL  string `yaml:"internal_url,omitempty"`
 }
 
 type serverDoc struct {
@@ -414,6 +420,12 @@ func writeServerConfig(path string, cfg *Config, assignment RoleAssignment, mana
 			ConnMaxLifetime: "1h",
 			BatchSize:       10000,
 			FlushTimeout:    "5s",
+		},
+		PDF: pdfDoc{
+			// 控制面节点用 host network，gotenberg 暴露 :3000，
+			// manager 用 host network 监听 ManagerHTTPPort
+			GotenbergURL: "http://127.0.0.1:3000",
+			InternalURL:  fmt.Sprintf("http://127.0.0.1:%d", cfg.App.ManagerHTTPPort),
 		},
 		Metrics: metricsDoc{
 			Prometheus: prometheusDoc{

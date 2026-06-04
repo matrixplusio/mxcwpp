@@ -2,7 +2,6 @@
 package api
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,18 +53,20 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	// 如果数据库不可用，整体状态设为 degraded
 	if dbStatus != "ok" {
 		response.Status = "degraded"
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"code":    503,
-			"message": "服务不可用",
-			"data":    response,
-		})
+		ServiceUnavailable(c, "服务不可用", response)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    response,
+	SuccessWithMessage(c, "success", response)
+}
+
+// Version GET /api/v1/system/version
+// 返回 manager 构建版本（外部健康检查 / 监控轮询用）
+func (h *HealthHandler) Version(c *gin.Context) {
+	SuccessWithMessage(c, "success", gin.H{
+		"version":   BuildVersion,
+		"timestamp": time.Now().Format(model.TimeFormat),
+		"component": "mxsec-manager",
 	})
 }
 

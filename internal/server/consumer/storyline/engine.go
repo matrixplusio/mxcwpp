@@ -5,11 +5,13 @@
 package storyline
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
 	"time"
 
+	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -42,19 +44,45 @@ type storyState struct {
 }
 
 // Engine aggregates story_id-tagged events into attack storylines.
+//
+// storylines 元数据始终写 MySQL (OLTP, frequently updated)
+// storyline_events 按 feature_flag.data_source.storyline_events 路由
+// 到 MySQL 或 ClickHouse。chConn 为 nil 时强制走 MySQL。
 type Engine struct {
 	mu      sync.RWMutex
 	stories map[string]*storyState // story_id → state
 	db      *gorm.DB
+	chConn  chdriver.Conn // 可为 nil
 	logger  *zap.Logger
+
+	// eventsTarget 缓存当前 events 写入目标 ("mysql" / "ch")，由 consumer 启动时读
+	// feature_flag.data_source.storyline_events 设置。运行时不动态变更，需重启进程生效。
+	eventsTarget string
 }
 
 // NewEngine creates a storyline aggregation engine.
 func NewEngine(db *gorm.DB, logger *zap.Logger) *Engine {
 	return &Engine{
-		stories: make(map[string]*storyState),
-		db:      db,
-		logger:  logger,
+		stories:      make(map[string]*storyState),
+		db:           db,
+		logger:       logger,
+		eventsTarget: "mysql",
+	}
+}
+
+// SetClickHouse 注入 CH 连接（启动时一次）。
+func (e *Engine) SetClickHouse(conn chdriver.Conn) {
+	e.chConn = conn
+}
+
+// SetEventsTarget 设置 storyline_events 写入目标 ("mysql" 或 "ch")。
+// 若设为 "ch" 但 chConn 为 nil，writeStorylineEvents 会自动回落 mysql。
+func (e *Engine) SetEventsTarget(target string) {
+	switch target {
+	case "mysql", "ch":
+		e.eventsTarget = target
+	default:
+		e.eventsTarget = "mysql"
 	}
 }
 
@@ -236,12 +264,65 @@ func (e *Engine) persistStory(st *storyState) {
 		return
 	}
 
-	// Batch insert events.
+	// Batch insert events — 按 eventsTarget 路由到 MySQL 或 ClickHouse
 	if len(events) > 0 {
-		if err := e.db.CreateInBatches(events, 100).Error; err != nil {
-			e.logger.Warn("持久化故事线事件失败", zap.String("story_id", record.StoryID), zap.Error(err))
+		e.writeStorylineEvents(record.StoryID, events)
+	}
+}
+
+// writeStorylineEvents 按 feature flag 路由把 events 写到 MySQL 或 ClickHouse。
+//
+// 当前限制：
+//   - ch 路径不写 id 列（CH MergeTree 不需要 auto increment）
+//   - 失败仅 warn，不重试（事件类，可丢忍）
+//   - 不支持双写
+func (e *Engine) writeStorylineEvents(storyID string, events []model.StorylineEvent) {
+	if e.eventsTarget == "ch" && e.chConn != nil {
+		if err := e.writeStorylineEventsCH(events); err != nil {
+			e.logger.Warn("持久化故事线事件 (CH) 失败，回落 MySQL",
+				zap.String("story_id", storyID), zap.Int("count", len(events)), zap.Error(err))
+			// 回落 MySQL，保证不丢
+			if err := e.db.CreateInBatches(events, 100).Error; err != nil {
+				e.logger.Warn("持久化故事线事件 (MySQL fallback) 失败",
+					zap.String("story_id", storyID), zap.Error(err))
+			}
+		}
+		return
+	}
+	if err := e.db.CreateInBatches(events, 100).Error; err != nil {
+		e.logger.Warn("持久化故事线事件失败", zap.String("story_id", storyID), zap.Error(err))
+	}
+}
+
+// writeStorylineEventsCH 批量 INSERT 到 ClickHouse storyline_events 表。
+func (e *Engine) writeStorylineEventsCH(events []model.StorylineEvent) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	batch, err := e.chConn.PrepareBatch(ctx,
+		"INSERT INTO storyline_events (id, story_id, host_id, data_type, event_type, pid, exe, detail, rule_name, severity, timestamp, created_at)")
+	if err != nil {
+		return err
+	}
+	for _, ev := range events {
+		ts := time.Time(ev.Timestamp)
+		ct := time.Time(ev.CreatedAt)
+		if ts.IsZero() {
+			ts = time.Now()
+		}
+		if ct.IsZero() {
+			ct = ts
+		}
+		if err := batch.Append(
+			uint64(ev.ID),
+			ev.StoryID, ev.HostID,
+			int32(ev.DataType), ev.EventType,
+			ev.PID, ev.Exe, ev.Detail, ev.RuleName, ev.Severity,
+			ts, ct,
+		); err != nil {
+			return err
 		}
 	}
+	return batch.Send()
 }
 
 func severityRank(s string) int {

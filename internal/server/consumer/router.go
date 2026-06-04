@@ -28,6 +28,7 @@ const agentACTTL = 180 * time.Second
 
 // Router 订阅所有业务 Topic，根据 DataType 路由到对应写入器
 type Router struct {
+	//nolint:unused // 嵌入 sarama.ConsumerGroupHandler 空实现，避免每次重写 Setup/Cleanup
 	saramaConsumerGroupHandler
 	group           sarama.ConsumerGroup
 	mysql           *writer.MySQLWriter
@@ -119,6 +120,9 @@ func (r *Router) SetStorylineEngine(eng *storyline.Engine) {
 }
 
 // Run 阻塞式消费，直到 ctx 取消
+//
+// 所有 sarama 错误均退避重试，不返回错误退出进程。避免单次 broker 抖动 / rebalance / 网络
+// 中断导致 Consumer 永久死亡（main 会 os.Exit(1)），需依赖容器编排器重启。
 func (r *Router) Run(ctx context.Context) error {
 	// 后台消费 sarama 错误
 	go func() {
@@ -127,24 +131,66 @@ func (r *Router) Run(ctx context.Context) error {
 		}
 	}()
 
+	const (
+		minBackoff = 1 * time.Second
+		maxBackoff = 30 * time.Second
+	)
+	backoff := minBackoff
+
 	for {
-		if err := r.group.Consume(ctx, r.topics, r); err != nil {
-			// ErrNotCoordinatorForConsumer / ErrRebalanceInProgress 是瞬态错误，等待后重试
-			if err == sarama.ErrNotCoordinatorForConsumer || err == sarama.ErrRebalanceInProgress {
-				r.logger.Warn("ConsumerGroup 协调者变更，等待重试", zap.Error(err))
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.After(3 * time.Second):
-				}
-				continue
-			}
-			return fmt.Errorf("消费循环退出: %w", err)
-		}
 		if ctx.Err() != nil {
 			return nil
 		}
+		err := r.group.Consume(ctx, r.topics, r)
+		if err == nil {
+			backoff = minBackoff
+			continue
+		}
+		// ctx 已取消，正常退出
+		if ctx.Err() != nil {
+			return nil
+		}
+		r.logger.Warn("ConsumerGroup Consume 出错，退避后重试",
+			zap.Duration("backoff", backoff),
+			zap.Error(err),
+		)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(backoff):
+		}
+		// 指数退避，最大 30s
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
+}
+
+// Setup 实现 sarama.ConsumerGroupHandler.Setup，记录当前消费组成员数指标。
+// sarama 在每次 rebalance 完成后调用一次，session.Claims() 返回该实例分到的 topic→partitions。
+func (r *Router) Setup(session sarama.ConsumerGroupSession) error {
+	partitions := 0
+	for _, ps := range session.Claims() {
+		partitions += len(ps)
+	}
+	// 成员数无法直接获取，至少表达"本实例已加入组并分到 partition"
+	consumermetrics.SetGroupMembers(1)
+	r.logger.Info("ConsumerGroup Session 建立",
+		zap.String("member_id", session.MemberID()),
+		zap.Int32("generation_id", session.GenerationID()),
+		zap.Int("assigned_partitions", partitions),
+	)
+	return nil
+}
+
+// Cleanup 实现 sarama.ConsumerGroupHandler.Cleanup，rebalance 触发时清零成员指标。
+func (r *Router) Cleanup(session sarama.ConsumerGroupSession) error {
+	consumermetrics.SetGroupMembers(0)
+	r.logger.Info("ConsumerGroup Session 结束", zap.String("member_id", session.MemberID()))
+	return nil
 }
 
 // Close 关闭 ConsumerGroup
@@ -397,7 +443,33 @@ func (r *Router) evaluateBDE(msg *kafka.MQMessage) {
 		return
 	}
 
-	// Generate BDE anomaly alerts.
+	// 持久化每条偏离到 behavior_alerts 表（提供按 metric / z_score 维度的分析能力）。
+	// 与 alerts 表（通用告警，title="bde_anomaly_*"）并存：
+	//   - alerts 表 → CEL 规则引擎统一去重 + AutoResponder 联动
+	//   - behavior_alerts 表 → UI ListBehaviorAlerts API 按 BDE 维度展示 + 趋势分析
+	// 历史问题：behavior_alerts 表定义但无写入逻辑 → 0 行。
+	if r.mysql != nil {
+		if db := r.mysql.DB(); db != nil {
+			for _, dev := range result.Deviations {
+				ba := model.BehaviorAlert{
+					HostID:    msg.AgentID,
+					Hostname:  msg.Hostname,
+					RiskScore: result.RiskScore,
+					Metric:    dev.Metric,
+					Value:     dev.Value,
+					Mean:      dev.Mean,
+					Stddev:    dev.Stddev,
+					ZScore:    dev.ZScore,
+					Status:    "open",
+				}
+				if err := db.Create(&ba).Error; err != nil {
+					r.logger.Warn("写 behavior_alerts 失败", zap.Error(err))
+				}
+			}
+		}
+	}
+
+	// Generate BDE anomaly alerts (统一 alerts 表入口，参与 CEL + AutoResponder 联动).
 	if r.alertGen != nil {
 		for _, dev := range result.Deviations {
 			severity := "medium"

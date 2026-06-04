@@ -34,6 +34,9 @@ use([
 ])
 
 import './styles/global.less'
+import './styles/print.scss'
+// 注册 mxsec ECharts 全局主题（统一配色/字体/圆角）
+import './utils/echartsTheme'
 import App from './App.vue'
 import router from './router'
 import { useSiteConfigStore } from './stores/site-config'

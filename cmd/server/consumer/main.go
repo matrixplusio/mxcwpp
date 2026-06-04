@@ -28,7 +28,25 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
 	"github.com/imkerbos/mxsec-platform/internal/server/database"
 	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
+	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"gorm.io/gorm"
 )
+
+// readDataSourceFlag 读取 feature_flag.{key} 的 value（mysql/ch）。
+// DB 查不到时回落 "mysql" 默认。
+func readDataSourceFlag(db *gorm.DB, logger *zap.Logger, key string) string {
+	var f model.FeatureFlag
+	if err := db.Where("flag_key = ?", key).First(&f).Error; err != nil {
+		logger.Warn("feature flag 查询失败，使用 mysql 默认", zap.String("key", key), zap.Error(err))
+		return "mysql"
+	}
+	v := f.Value
+	if v != "mysql" && v != "ch" {
+		v = "mysql"
+	}
+	logger.Info("feature flag 已加载", zap.String("key", key), zap.String("value", v))
+	return v
+}
 
 var (
 	configPath = flag.String("config", "", "配置文件路径（默认：./configs/server.yaml）")
@@ -149,6 +167,7 @@ func main() {
 	}
 
 	// 6.3 初始化端口扫描检测器（依赖 Redis，可选）
+	// 白名单后台 reload 在 ctx 创建后启动（见 ctx 定义点）
 	scanDetector := celengine.NewScanDetector(redisClient, db, logger)
 	if scanDetector != nil {
 		logger.Info("端口扫描检测器已启动")
@@ -187,6 +206,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// ScanDetector 后台 reload 白名单（依赖 ctx）
+	if scanDetector != nil {
+		scanDetector.StartWhitelistReload(ctx)
+	}
+
 	// 6.7 初始化 BDE 基线引擎（行为检测，支持持久化和冷启动）
 	bdeEngine := baseline.NewEngine(db, logger.Named("bde"))
 	bdeEngine.StartCheckpoint(ctx.Done())
@@ -194,6 +218,9 @@ func main() {
 
 	// 6.8 初始化攻击故事线引擎（聚合 story_id 标记的事件为攻击叙事）
 	storyEngine := storyline.NewEngine(db, logger.Named("storyline"))
+	storyEngine.SetClickHouse(chConn)
+	// 按 feature_flag.data_source.storyline_events 决定 events 写入目标
+	storyEngine.SetEventsTarget(readDataSourceFlag(db, logger, model.FlagDataSourceStorylineEvents))
 	storyEngine.StartFlush(ctx.Done())
 	logger.Info("攻击故事线引擎已启动")
 
@@ -231,7 +258,7 @@ func main() {
 	router.SetStorylineEngine(storyEngine)
 
 	// 初始化 ML 异常检测引擎（IForest + 关联检测）
-	anomalyDet := anomaly.NewDetector(db, logger.Named("anomaly"))
+	anomalyDet := anomaly.NewDetector(db, chConn, logger.Named("anomaly"))
 	anomalyDet.StartRetrain(ctx.Done())
 	router.SetAnomalyDetector(anomalyDet)
 	logger.Info("ML 异常检测引擎已启动")

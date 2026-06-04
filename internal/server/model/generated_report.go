@@ -11,6 +11,7 @@ const (
 	ReportTypeVulnerability ReportType = "vulnerability"
 	ReportTypeKube          ReportType = "kube"
 	ReportTypeRemediation   ReportType = "remediation"
+	ReportTypeEDR           ReportType = "edr"
 )
 
 // ReportJSON 用于存储报告数据的 JSON 类型

@@ -113,6 +113,12 @@ func (h *FIMEventsHandler) listFIMEventsFromCH(c *gin.Context, page, pageSize in
 		h.listFIMEventsFromMySQL(c, page, pageSize)
 		return
 	}
+	// CH count=0 也 fallback MySQL：consumer 可能只写 MySQL（双写未配置）
+	// 避免 UI stats 有数（MySQL）但 list 空（CH）的不一致
+	if total == 0 {
+		h.listFIMEventsFromMySQL(c, page, pageSize)
+		return
+	}
 
 	// 查数据
 	offset := (page - 1) * pageSize

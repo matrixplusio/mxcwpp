@@ -135,6 +135,116 @@ func TestOSCompatible(t *testing.T) {
 	}
 }
 
+func TestDefaultMatcher_EcosystemGate(t *testing.T) {
+	// 语言包 advisory（如 OSV/GHSA 报 npm braces）只允许匹配同 ecosystem 主机软件，
+	// 不允许匹配 OS pkg 或其他生态包。
+	adv := &Advisory{
+		Ecosystem: "npm",
+		AffectedPkgs: []PkgFix{
+			{Name: "braces", FixedVersion: "3.0.3"},
+		},
+	}
+	hosts := []HostSoftware{
+		{HostID: "h1", PkgEcosystem: "npm", PkgName: "braces", PkgVer: "1.8.5"},  // 受影响
+		{HostID: "h2", PkgEcosystem: "PyPI", PkgName: "braces", PkgVer: "1.0.0"}, // 跨生态，必拒
+		{HostID: "h3", PkgEcosystem: "", OSFamily: "centos", OSMajor: "9",
+			PkgName: "braces", PkgVer: "1.8.5"}, // OS pkg 同名，必拒
+	}
+	m := &DefaultMatcher{}
+	out := m.Match(adv, hosts)
+	if len(out) != 1 || out[0].HostID != "h1" {
+		t.Fatalf("ecosystem gate fail: expected only h1, got %+v", out)
+	}
+}
+
+func TestDefaultMatcher_RejectDoubleEmptyGate(t *testing.T) {
+	// advisory 既无 OSFamily 也无 Ecosystem → 无法 gate，全部拒绝。
+	adv := &Advisory{
+		AffectedPkgs: []PkgFix{
+			{Name: "openssl", FixedVersion: "3.5.5"},
+		},
+	}
+	hosts := []HostSoftware{
+		{HostID: "h1", OSFamily: "centos", OSMajor: "9", PkgName: "openssl", PkgVer: "3.0.0"},
+		{HostID: "h2", PkgEcosystem: "npm", PkgName: "openssl", PkgVer: "3.0.0"},
+	}
+	m := &DefaultMatcher{}
+	out := m.Match(adv, hosts)
+	if len(out) != 0 {
+		t.Fatalf("双空 gate advisory 应全拒，got %+v", out)
+	}
+}
+
+func TestDefaultMatcher_RejectMixedGate(t *testing.T) {
+	// advisory 同时声明 Ecosystem 与 OSFamily（数据异常）→ 全部拒绝。
+	adv := &Advisory{
+		OSFamily:   "rhel",
+		OSMajorVer: "9",
+		Ecosystem:  "npm",
+		AffectedPkgs: []PkgFix{
+			{Name: "x", FixedVersion: "1"},
+		},
+	}
+	hosts := []HostSoftware{
+		{HostID: "h1", OSFamily: "centos", OSMajor: "9", PkgName: "x", PkgVer: "0"},
+		{HostID: "h2", PkgEcosystem: "npm", PkgName: "x", PkgVer: "0"},
+	}
+	m := &DefaultMatcher{}
+	out := m.Match(adv, hosts)
+	if len(out) != 0 {
+		t.Fatalf("混合 gate advisory 应全拒，got %+v", out)
+	}
+}
+
+func TestDefaultMatcher_NEVRAEpochOverridesVersion(t *testing.T) {
+	// 回归 prod 残留:libpng 1.6.37 vs fix 2:1.0.14-11
+	// 不带 epoch 字符串比对会被 epoch 翻转：installed 1.6.37 > 1.0.14 但 epoch 0 < 2，
+	// NEVRA 严格比较会认 fix > installed → host needs update。
+	// 这是 RHEL/Rocky 实际语义。
+	adv := &Advisory{
+		OSFamily:   "rhel",
+		OSMajorVer: "9",
+		AffectedPkgs: []PkgFix{
+			{Name: "libpng", Arch: "x86_64", FixedVersion: "2:1.0.14-11"},
+		},
+	}
+	hosts := []HostSoftware{
+		// host pkg epoch=0 但 version 1.6.37 大于 fix epoch=2 的 version 1.0.14。
+		// 旧字符串比对(PkgVer="1.6.37") 错认 host 已超新；NEVRA 比对认 epoch 主导。
+		{HostID: "h1", OSFamily: "rocky", OSMajor: "9", PkgName: "libpng",
+			PkgArch: "x86_64", PkgEpoch: "0", PkgVerRaw: "1.6.37", PkgRelease: "1.el9"},
+	}
+	m := &DefaultMatcher{}
+	out := m.Match(adv, hosts)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(out))
+	}
+	if !out[0].NeedsUpdate {
+		t.Errorf("NEVRA epoch 0<2 应判 needs update，实测 %+v", out[0])
+	}
+}
+
+func TestDefaultMatcher_NEVRAFallback(t *testing.T) {
+	// 缺 NEVRA 字段时退回 PkgVer 字符串。
+	adv := &Advisory{
+		OSFamily:   "rhel",
+		OSMajorVer: "9",
+		AffectedPkgs: []PkgFix{
+			{Name: "openssl", Arch: "x86_64", FixedVersion: "1:3.5.5-1.el9_4"},
+		},
+	}
+	hosts := []HostSoftware{
+		// 旧 collector 数据：PkgVer="3.5.1-3.el9"，无 PkgEpoch/PkgVerRaw/PkgRelease
+		{HostID: "h1", OSFamily: "rocky", OSMajor: "9", PkgName: "openssl",
+			PkgArch: "x86_64", PkgVer: "3.5.1-3.el9"},
+	}
+	m := &DefaultMatcher{}
+	out := m.Match(adv, hosts)
+	if len(out) != 1 || !out[0].NeedsUpdate {
+		t.Errorf("fallback 应判 needs update，实测 %+v", out)
+	}
+}
+
 func TestArchMatch(t *testing.T) {
 	cases := []struct {
 		advArch, hostArch string

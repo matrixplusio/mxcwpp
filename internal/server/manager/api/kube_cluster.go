@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -107,17 +106,14 @@ func (h *KubeClusterHandler) ListClusters(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": gin.H{
-			"items": clusters,
-			"total": total,
-			"stats": gin.H{
-				"total":   totalCount,
-				"running": runningCount,
-				"nodes":   totalNodes,
-				"pods":    totalPods,
-			},
+	Success(c, gin.H{
+		"items": clusters,
+		"total": total,
+		"stats": gin.H{
+			"total":   totalCount,
+			"running": runningCount,
+			"nodes":   totalNodes,
+			"pods":    totalPods,
 		},
 	})
 }
@@ -463,12 +459,9 @@ func (h *KubeClusterHandler) GetClusterPods(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": gin.H{
-			"items": pods,
-			"total": total,
-		},
+	Success(c, gin.H{
+		"items": pods,
+		"total": total,
 	})
 }
 

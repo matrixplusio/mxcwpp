@@ -99,17 +99,14 @@ func (h *KubeBaselineRulesHandler) ListRules(c *gin.Context) {
 	h.db.Model(&model.KubeBaselineRule{}).Where("enabled = ?", true).Count(&enabledCount)
 	h.db.Model(&model.KubeBaselineRule{}).Where("builtin = ?", true).Count(&builtinCount)
 
-	c.JSON(200, gin.H{
-		"code": 0,
-		"data": gin.H{
-			"total": total,
-			"items": items,
-			"stats": gin.H{
-				"totalRules": totalRules,
-				"enabled":    enabledCount,
-				"disabled":   totalRules - enabledCount,
-				"builtin":    builtinCount,
-			},
+	Success(c, gin.H{
+		"total": total,
+		"items": items,
+		"stats": gin.H{
+			"totalRules": totalRules,
+			"enabled":    enabledCount,
+			"disabled":   totalRules - enabledCount,
+			"builtin":    builtinCount,
 		},
 	})
 }

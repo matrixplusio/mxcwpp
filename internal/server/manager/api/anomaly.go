@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
@@ -66,37 +67,60 @@ func (h *AnomalyHandler) ListAnomalies(c *gin.Context) {
 
 // GetAnomalyStats returns anomaly alert statistics.
 // GET /api/v1/anomalies/stats
+//
+// 性能:原 5 query 串行 ~0.76s,合并 3 COUNT 为 1 个 conditional aggregate +
+// 2 个 GROUP BY 并发,~50-100ms。
 func (h *AnomalyHandler) GetAnomalyStats(c *gin.Context) {
-	var total, open, critical int64
+	type aggRow struct {
+		Total    int64
+		OpenCnt  int64
+		Critical int64
+	}
+	var agg aggRow
 
-	h.db.Model(&model.AnomalyAlert{}).Count(&total)
-	h.db.Model(&model.AnomalyAlert{}).Where("status = ?", "open").Count(&open)
-	h.db.Model(&model.AnomalyAlert{}).Where("severity = ? AND status = ?", "critical", "open").Count(&critical)
-
-	// By alert type.
 	type typeCount struct {
 		AlertType string `json:"alert_type"`
 		Count     int64  `json:"count"`
 	}
-	var byType []typeCount
-	h.db.Model(&model.AnomalyAlert{}).
-		Select("alert_type, count(*) as count").
-		Where("status = ?", "open").
-		Group("alert_type").
-		Find(&byType)
+	var byType, byPattern []typeCount
 
-	// By pattern (for correlation alerts).
-	var byPattern []typeCount
-	h.db.Model(&model.AnomalyAlert{}).
-		Select("pattern_name as alert_type, count(*) as count").
-		Where("status = ? AND alert_type = ?", "open", "correlation").
-		Group("pattern_name").
-		Find(&byPattern)
+	g := new(errgroup.Group)
+
+	// 3 COUNT 合并为 1 conditional aggregate query
+	g.Go(func() error {
+		return h.db.Model(&model.AnomalyAlert{}).
+			Select(`COUNT(*) AS total,
+			        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_cnt,
+			        SUM(CASE WHEN severity = 'critical' AND status = 'open' THEN 1 ELSE 0 END) AS critical`).
+			Scan(&agg).Error
+	})
+
+	// By alert type GROUP BY
+	g.Go(func() error {
+		return h.db.Model(&model.AnomalyAlert{}).
+			Select("alert_type, count(*) as count").
+			Where("status = ?", "open").
+			Group("alert_type").
+			Find(&byType).Error
+	})
+
+	// By pattern (correlation only)
+	g.Go(func() error {
+		return h.db.Model(&model.AnomalyAlert{}).
+			Select("pattern_name as alert_type, count(*) as count").
+			Where("status = ? AND alert_type = ?", "open", "correlation").
+			Group("pattern_name").
+			Find(&byPattern).Error
+	})
+
+	if err := g.Wait(); err != nil {
+		h.logger.Warn("异常告警统计查询失败", zap.Error(err))
+	}
 
 	Success(c, gin.H{
-		"total":      total,
-		"open":       open,
-		"critical":   critical,
+		"total":      agg.Total,
+		"open":       agg.OpenCnt,
+		"critical":   agg.Critical,
 		"by_type":    byType,
 		"by_pattern": byPattern,
 	})

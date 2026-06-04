@@ -92,6 +92,32 @@ func initVulnDataSources(db *gorm.DB, logger *zap.Logger) error {
 			Description: "Google OSV 数据库，PURL 精确匹配，覆盖 npm/pypi/golang/maven/OS pkg。",
 		},
 
+		// 信创 OS Advisory (P3-1: stub 当前不实际拉数据，待对接)
+		{
+			Name: "openeuler-sa", DisplayName: "openEuler Security Advisory",
+			Region: model.VulnSourceRegionCN, Category: model.VulnSourceCategoryOSAdvisory,
+			Enabled: false, BaseURL: "https://repo.openeuler.org/security/data/cvrf",
+			Description: "openEuler 官方 CVRF 1.2 advisory，覆盖 openEuler 20.03/22.03/24.03 LTS。当前 stub 待 P3-1a-2 实施。",
+		},
+		{
+			Name: "anolis-ansa", DisplayName: "龙蜥 Anolis Security Advisory",
+			Region: model.VulnSourceRegionCN, Category: model.VulnSourceCategoryOSAdvisory,
+			Enabled: false, BaseURL: "https://anas.openanolis.org/api",
+			Description: "龙蜥 Anolis OS 官方 ANSA advisory。当前 stub 待 P3-1b-2 实施。",
+		},
+		{
+			Name: "kylin-sa", DisplayName: "麒麟 Kylin Security Advisory",
+			Region: model.VulnSourceRegionCN, Category: model.VulnSourceCategoryOSAdvisory,
+			Enabled: false, BaseURL: "",
+			Description: "麒麟 V10 安全公告。官方无公开 API，需对接商业镜像源。当前 stub 待 P3-1c-2 实施。",
+		},
+		{
+			Name: "uos-sa", DisplayName: "统信 UOS Security Advisory",
+			Region: model.VulnSourceRegionCN, Category: model.VulnSourceCategoryOSAdvisory,
+			Enabled: false, BaseURL: "",
+			Description: "统信 UOS 安全公告（基于 Debian 衍生）。官方无公开 API，需对接商业镜像源。当前 stub。",
+		},
+
 		// 0day / Exploit
 		{
 			Name: "cisa-kev", DisplayName: "CISA Known Exploited Vulnerabilities",

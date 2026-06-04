@@ -529,6 +529,30 @@ mxsec-agent --update --server http://manager:8080
 mxsec-agent --update --file ./mxsec-agent-1.1.0.rpm
 ```
 
+### Agent 运维命令
+
+```bash
+# 查看运行状态（systemd 状态、PID、uptime、Server 可达性、Agent ID）
+mxsec-agent --status
+mxsec-agent --status --json      # 机器可解析格式
+
+# 查看本地日志（默认末尾 100 行）
+sudo mxsec-agent --logs
+sudo mxsec-agent --logs -n 500   # 末尾 500 行
+sudo mxsec-agent --logs -f       # 实时跟踪（Ctrl-C 退出）
+
+# 显示配置快照（构建嵌入的 Server 地址、证书包状态、Agent ID）
+mxsec-agent --config
+mxsec-agent --config --json
+
+# 生成诊断包（最近 7 天日志 + systemctl/journalctl/uname/ss 输出）
+sudo mxsec-agent --diag
+sudo mxsec-agent --diag -o /tmp/diag.tar.gz
+# 输出文件权限 0600，上传前检查敏感信息
+```
+
+> `--logs` 和 `--diag` 需要 root 权限读取 `/var/log/mxsec-agent/`。
+
 ---
 
 ## 备份

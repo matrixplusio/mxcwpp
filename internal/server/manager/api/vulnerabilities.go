@@ -33,6 +33,8 @@ type vulnerabilityListFilter struct {
 	ExploitStatus string // has_exploit / in_kev / none
 	Ecosystem     string // OS / Go / npm / PyPI / Maven / Cargo
 	Priority      string // high / medium-high / medium / low
+	VulnCategory  string // P5.1: kernel/critical_shared_lib/shared_lib/system_daemon/cli_tool/web_service/db_service/container_runtime/virtualization/language_dep/other
+	RestartAction string // P5.5: reboot_host/restart_dependent_services/restart_specific_service/no_action/rebuild_app/unknown
 	Sort          string // priority_score / cvss_score
 }
 
@@ -94,6 +96,18 @@ func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityLis
 			Joins("JOIN software sw ON sw.host_id = ehv.host_id AND sw.name = vulnerabilities.component").
 			Where("sw.ecosystem = ?", filter.Ecosystem).
 			Group("vulnerabilities.id")
+	}
+
+	// 分类 / 重启动作筛选（P5.1 + P5.5）— override 优先：COALESCE(override, base) = 用户选值
+	if filter.VulnCategory != "" {
+		query = query.Where(
+			"COALESCE(NULLIF(vulnerabilities.vuln_category_override, ''), vulnerabilities.vuln_category) = ?",
+			filter.VulnCategory)
+	}
+	if filter.RestartAction != "" {
+		query = query.Where(
+			"COALESCE(NULLIF(vulnerabilities.restart_action_override, ''), vulnerabilities.restart_action) = ?",
+			filter.RestartAction)
 	}
 
 	// 优先级筛选
@@ -200,6 +214,8 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 		ExploitStatus: strings.TrimSpace(c.Query("exploit_status")),
 		Priority:      strings.TrimSpace(c.Query("priority")),
 		Ecosystem:     strings.TrimSpace(c.Query("ecosystem")),
+		VulnCategory:  strings.TrimSpace(c.Query("vuln_category")),
+		RestartAction: strings.TrimSpace(c.Query("restart_action")),
 		Sort:          strings.TrimSpace(c.Query("sort")),
 	}
 	if page <= 0 {

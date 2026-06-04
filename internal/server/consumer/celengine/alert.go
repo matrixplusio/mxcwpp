@@ -17,18 +17,29 @@ import (
 // notifyThrottleWindow 通知节流窗口：同一告警在此时间内不重复发送通知
 const notifyThrottleWindow = 30 * time.Minute
 
+const (
+	// defaultHitBurstThreshold 单 (host, rule) 1min 内命中超过此值开启 10min 静默
+	defaultHitBurstThreshold = 50
+	// defaultHitRefillWindow 计数窗口
+	defaultHitRefillWindow = 1 * time.Minute
+	// defaultHitThrottleCapacity LRU 上限 (209 host × 94 rule ≈ 20k，留 2x 余量)
+	defaultHitThrottleCapacity = 40000
+)
+
 // AlertGenerator 负责将 CEL 引擎匹配结果写入 alerts 表（去重模式）
 type AlertGenerator struct {
 	db            *gorm.DB
 	log           *zap.Logger
 	siemForwarder *siem.Forwarder // SIEM 转发器（可选）
+	throttler     *HitThrottler   // (host, rule) 频率限制器
 }
 
 // NewAlertGenerator 创建 AlertGenerator
 func NewAlertGenerator(db *gorm.DB, logger *zap.Logger) *AlertGenerator {
 	return &AlertGenerator{
-		db:  db,
-		log: logger,
+		db:        db,
+		log:       logger,
+		throttler: NewHitThrottler(defaultHitBurstThreshold, defaultHitRefillWindow, defaultHitThrottleCapacity),
 	}
 }
 
@@ -39,9 +50,32 @@ func (g *AlertGenerator) SetSIEMForwarder(f *siem.Forwarder) {
 
 // Generate 根据匹配的规则和事件字段生成或更新告警
 // 去重策略：同一规则 + 同一主机合并为一条告警，累加 HitCount
+//
+// 告警入库前调用 IsAlertWhitelisted 过滤已知误报模式（反代上游 / 内网通信等），
+// 避免 nginx → backend:8888 这种业务流量被 C2 规则刷屏。
 func (g *AlertGenerator) Generate(hostID string, matchedRules []model.DetectionRule, fields map[string]string) {
-	for _, rule := range matchedRules {
-		if err := g.upsertAlert(hostID, &rule, fields); err != nil {
+	now := time.Now()
+	for i := range matchedRules {
+		rule := &matchedRules[i]
+		if ok, reason := IsAlertWhitelisted(rule, fields); ok {
+			g.log.Debug("CEL 告警命中白名单已抑制",
+				zap.Uint("rule_id", rule.ID),
+				zap.String("rule_name", rule.Name),
+				zap.String("host_id", hostID),
+				zap.String("reason", reason),
+				zap.String("exe", fields["exe"]),
+				zap.String("dst_ip", fields["dst_ip"]),
+			)
+			continue
+		}
+		if g.throttler != nil {
+			ruleKey := fmt.Sprintf("cel-%d", rule.ID)
+			if !g.throttler.Allow(hostID, ruleKey, now) {
+				// 不打印日志，避免日志洪水；throttle 统计走 metrics（后续接入）
+				continue
+			}
+		}
+		if err := g.upsertAlert(hostID, rule, fields); err != nil {
 			g.log.Error("CEL 检测告警 upsert 失败",
 				zap.Uint("rule_id", rule.ID),
 				zap.String("rule_name", rule.Name),

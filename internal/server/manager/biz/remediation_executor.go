@@ -333,7 +333,9 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 	}
 
 	now := model.Now()
-	status := "success"
+	// P5.6: agent exit 0 不再直接 success，改 success_pending_verify 等 user 手动确认
+	// 老的 success 路径保留作为兼容（如果调用方传入 success 状态外部）
+	status := model.RemTaskMainSuccessPendingVerify
 	if exitCode != 0 {
 		status = "failed"
 		// 对失败任务进行错误诊断，追加中文提示帮助用户定位问题
@@ -353,35 +355,11 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 		return fmt.Errorf("update task status failed: %w", err)
 	}
 
-	// 修复成功时，先尝试自动验证版本，再更新状态
-	if status == "success" {
-		verifier := NewRemediationVerifier(e.db, e.logger)
-		verifyResult, verifyErr := verifier.VerifyHost(task.VulnID, task.HostID)
+	// P5.6: success_pending_verify 仅设状态等 user，不自动 verify / 不自动 patch vulnerability。
+	// 真 patched 标识在 verify 完成后才落（biz/precheck_result.go 中处理）。
 
-		if verifyErr == nil && verifyResult != nil && verifyResult.Verified {
-			e.logger.Info("修复任务验证通过，版本已更新",
-				zap.Uint("task_id", task.ID),
-				zap.String("current_version", verifyResult.CurrentVersion),
-				zap.String("fixed_version", verifyResult.FixedVersion))
-			// VerifyHost 内部已自动更新 patched 状态
-		} else {
-			// 验证失败或无法验证（无 fixed_version / 软件清单未更新）
-			// 仍然标记为 patched（命令执行成功），但记录日志提示需人工复核
-			e.logger.Warn("修复任务执行成功但自动验证未通过，按执行结果标记修复",
-				zap.Uint("task_id", task.ID),
-				zap.Error(verifyErr))
-			remSvc := NewRemediationService(e.db, e.logger)
-			if err := remSvc.PatchVulnerability(task.VulnID, []string{task.HostID}); err != nil {
-				e.logger.Error("更新漏洞修复状态失败",
-					zap.Uint("task_id", task.ID),
-					zap.Error(err))
-			}
-		}
-	}
-
-	// P4: 修复成功后清 precheck cache，下轮 6h cron 会重检确认 already_latest，
-	// UI 显示"未 pre-check"提示用户主动触发，或等 cron 自动覆盖
-	if status == "success" {
+	// P4: 命令成功后清 precheck cache，user 点"确认已执行"会触发 pre-check 复测
+	if status == model.RemTaskMainSuccessPendingVerify {
 		if err := e.db.Model(&model.HostVulnerability{}).
 			Where("vuln_id = ? AND host_id = ?", task.VulnID, task.HostID).
 			Updates(map[string]any{

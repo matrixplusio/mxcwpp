@@ -187,6 +187,77 @@
             </span>
           </div>
         </div>
+
+        <!-- 触发证据 + 攻击链 IOC（trigger_context 由 detector 在告警生成时回查 ebpf_events 填充） -->
+        <template v-if="selectedAlert.trigger_context">
+          <!-- 触发指标 -->
+          <div v-if="selectedAlert.trigger_context.elevated_metrics?.length" class="ctx-block">
+            <div class="ctx-title">触发指标（current / baseline / ratio）</div>
+            <div class="ctx-table">
+              <div v-for="m in selectedAlert.trigger_context.elevated_metrics" :key="m.name" class="ctx-table-row">
+                <span class="mono-text">{{ m.name }}</span>
+                <span><b style="color:#EF4444">{{ m.current.toFixed(2) }}</b> / {{ m.baseline.toFixed(2) }} = <b>×{{ m.ratio.toFixed(1) }}</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 可疑 IP -->
+          <div v-if="selectedAlert.trigger_context.suspicious_ips?.length" class="ctx-block">
+            <div class="ctx-title">可疑远端 IP（{{ selectedAlert.trigger_context.suspicious_ips.length }}）</div>
+            <div class="ctx-tags">
+              <a-tag v-for="ip in selectedAlert.trigger_context.suspicious_ips" :key="ip" color="red" class="mono-text">{{ ip }}</a-tag>
+            </div>
+          </div>
+
+          <!-- 可疑域名 -->
+          <div v-if="selectedAlert.trigger_context.suspicious_domains?.length" class="ctx-block">
+            <div class="ctx-title">可疑 DNS 域名（{{ selectedAlert.trigger_context.suspicious_domains.length }}）</div>
+            <div class="ctx-tags">
+              <a-tag v-for="d in selectedAlert.trigger_context.suspicious_domains" :key="d" color="volcano" class="mono-text">{{ d }}</a-tag>
+            </div>
+          </div>
+
+          <!-- 敏感文件 -->
+          <div v-if="selectedAlert.trigger_context.sensitive_files?.length" class="ctx-block">
+            <div class="ctx-title">命中敏感文件（{{ selectedAlert.trigger_context.sensitive_files.length }}）</div>
+            <div class="ctx-tags">
+              <a-tag v-for="f in selectedAlert.trigger_context.sensitive_files" :key="f" color="orange" class="mono-text">{{ f }}</a-tag>
+            </div>
+          </div>
+
+          <!-- 进程链 -->
+          <div v-if="selectedAlert.trigger_context.process_chain?.length" class="ctx-block">
+            <div class="ctx-title">高频执行进程（{{ selectedAlert.trigger_context.process_chain.length }}）</div>
+            <div class="ctx-tags">
+              <a-tag v-for="p in selectedAlert.trigger_context.process_chain" :key="p" class="mono-text">{{ p }}</a-tag>
+            </div>
+          </div>
+
+          <!-- 扫描端口 -->
+          <div v-if="selectedAlert.trigger_context.scanned_ports?.length" class="ctx-block">
+            <div class="ctx-title">高频访问端口（{{ selectedAlert.trigger_context.scanned_ports.length }}）</div>
+            <div class="ctx-tags">
+              <a-tag v-for="p in selectedAlert.trigger_context.scanned_ports" :key="p" class="mono-text">{{ p }}</a-tag>
+            </div>
+          </div>
+
+          <!-- 时间窗 + 跳转 EDR 列表按钮 -->
+          <div v-if="selectedAlert.trigger_context.window_start" class="ctx-block">
+            <div class="ctx-title">证据采样窗口</div>
+            <div class="ctx-meta">
+              <span class="mono-text">{{ selectedAlert.trigger_context.window_start }} ~ {{ selectedAlert.trigger_context.window_end }}</span>
+              <a-button size="small" type="link" @click="jumpToEDR(selectedAlert)">查看原始 EDR 事件 →</a-button>
+            </div>
+          </div>
+        </template>
+
+        <!-- 兜底：所有可选字段都空时显示原始 JSON，便于排查 detector 写入问题 -->
+        <div v-if="!selectedAlert.top_metric && !selectedAlert.pattern_name && !selectedAlert.description && !selectedAlert.trigger_context" class="detail-list">
+          <div class="detail-row">
+            <span class="dl-label">原始数据</span>
+            <pre class="dl-val mono-text raw-dump">{{ JSON.stringify(selectedAlert, null, 2) }}</pre>
+          </div>
+        </div>
       </template>
 
       <template #footer v-if="selectedAlert && selectedAlert.status === 'open'">
@@ -199,6 +270,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import StatCard from '@/components/StatCard.vue'
@@ -206,6 +278,8 @@ import DetailDrawer from '@/components/DetailDrawer.vue'
 import { anomalyApi } from '@/api/anomaly'
 import type { AnomalyAlert, AnomalyStats } from '@/api/anomaly'
 import { getSeverityConfig } from '@/constants/severity'
+
+const router = useRouter()
 
 const loading = ref(false)
 const alerts = ref<AnomalyAlert[]>([])
@@ -278,6 +352,20 @@ const handleSearch = () => { pagination.current = 1; fetchAlerts() }
 const handleRefresh = () => { fetchAlerts(); fetchStats() }
 const handleTableChange = (pag: any) => { pagination.current = pag.current; pagination.pageSize = pag.pageSize; fetchAlerts() }
 
+// 从异常详情跳转到 EDR 事件列表，按 host_id + 证据时间窗预过滤
+const jumpToEDR = (alert: AnomalyAlert) => {
+  const ctx = alert.trigger_context
+  if (!ctx?.window_start || !ctx?.window_end) return
+  router.push({
+    path: '/edr/events',
+    query: {
+      host_id: alert.host_id,
+      date_from: ctx.window_start,
+      date_to: ctx.window_end,
+    },
+  })
+}
+
 const handleResolve = async (record: AnomalyAlert, status: 'confirmed' | 'false_positive') => {
   try {
     await anomalyApi.resolve(record.id, status)
@@ -316,4 +404,14 @@ onMounted(() => { fetchAlerts(); fetchStats() })
 .detail-row:last-child { border-bottom: none; }
 .dl-label { color: var(--mxsec-text-3); min-width: 80px; }
 .dl-val { color: var(--mxsec-text-1); text-align: right; word-break: break-all; }
+.raw-dump { font-size: 12px; max-height: 240px; overflow: auto; background: var(--mxsec-card-bg); padding: 8px; border-radius: 4px; text-align: left; margin: 0; }
+
+/* trigger_context 攻击链证据块 */
+.ctx-block { margin-top: 16px; padding: 12px 14px; background: var(--mxsec-body-bg); border: 1px solid var(--mxsec-border-light); border-radius: 8px; }
+.ctx-title { font-size: 12px; color: var(--mxsec-text-3); margin-bottom: 8px; font-weight: 500; }
+.ctx-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctx-tags :deep(.ant-tag) { margin: 0; }
+.ctx-table { display: flex; flex-direction: column; gap: 6px; }
+.ctx-table-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--mxsec-text-2); }
+.ctx-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--mxsec-text-3); }
 </style>

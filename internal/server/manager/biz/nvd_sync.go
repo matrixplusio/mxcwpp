@@ -216,22 +216,16 @@ func (v *VulnScanner) SyncNVDWithSoftware(softwareByName map[string][]installedS
 			continue
 		}
 
-		// 创建主机关联（复用公共方法）
-		entries := make([]hostVulnEntry, 0)
-		hostSeen := make(map[string]struct{})
-		for _, sw := range matches {
-			if _, ok := hostSeen[sw.HostID]; ok {
-				continue
-			}
-			hostSeen[sw.HostID] = struct{}{}
-			entries = append(entries, hostVulnEntry{
-				HostID:   sw.HostID,
-				Hostname: sw.Hostname,
-				IP:       sw.IP,
-				Version:  sw.Version,
-			})
-		}
-		v.upsertHostVulnsBatch(vulnRecord.ID, entries)
+		// P2-3: NVD 不再生成 host_vulnerabilities。
+		//
+		// 原因：NVD 报告上游 fixed_version（如 firefox 151.0.0），不识别 RHEL backport。
+		// RHEL 在 firefox 140 ESR 已 backport 修复，但版本号不变 → NVD 误判 host 仍 vulnerable。
+		// 对 RHEL/Ubuntu/Debian/Alpine 等有 vendor advisory 覆盖的发行版，host_vuln 应只由
+		// vendor advisory（RHSA/USN/DSA/Alpine secdb）生成，不能用 NVD。
+		//
+		// 此处仍写 vulnerabilities 元数据（description/cvss/cwe），仅跳过 host 关联。
+		// matches 变量保留是为了用第一条 firstMatch.Name 取 component name，匹配上下文不变。
+		_ = matches // P2-3 跳过 host_vuln 创建，仅入 vuln 元数据
 
 		// 异步创建漏洞通报 + 发送通知
 		go func(vuln *model.Vulnerability) {

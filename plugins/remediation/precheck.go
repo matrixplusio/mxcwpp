@@ -38,10 +38,11 @@ const dataTypePreCheckResult int32 = 9201
 
 // preCheckPayload 由 manager 推过来
 type preCheckPayload struct {
-	RequestID    string `json:"request_id"`    // pc-<host_vuln_id>-<ts>
-	HostVulnID   uint   `json:"host_vuln_id"`  // host_vulnerabilities.id
-	Component    string `json:"component"`     // vuln.component（可能模糊）
-	FixedVersion string `json:"fixed_version"` // 可空
+	RequestID              string `json:"request_id"`                         // pc-<host_vuln_id>-<ts>
+	HostVulnID             uint   `json:"host_vuln_id"`                       // host_vulnerabilities.id
+	Component              string `json:"component"`                          // vuln.component（可能模糊）
+	FixedVersion           string `json:"fixed_version"`                      // 可空
+	CheckAffectedProcesses bool   `json:"check_affected_processes,omitempty"` // P5.2: shared_lib 类要求列出依赖该 lib 的运行进程
 }
 
 // packageCheckDetail 单个匹配的已装包检查结果
@@ -55,11 +56,12 @@ type packageCheckDetail struct {
 
 // preCheckResult 上报回 manager 的结果
 type preCheckResult struct {
-	RequestID  string               `json:"request_id"`
-	HostVulnID uint                 `json:"host_vuln_id"`
-	Status     string               `json:"status"`
-	Message    string               `json:"message"`
-	Packages   []packageCheckDetail `json:"packages,omitempty"`
+	RequestID         string               `json:"request_id"`
+	HostVulnID        uint                 `json:"host_vuln_id"`
+	Status            string               `json:"status"`
+	Message           string               `json:"message"`
+	Packages          []packageCheckDetail `json:"packages,omitempty"`
+	AffectedProcesses []string             `json:"affected_processes,omitempty"` // P5.2: shared_lib lsof 出的进程列表
 }
 
 // Pre-check 状态（必须与 server 端 model.PreCheckStatus* 对齐）
@@ -187,11 +189,21 @@ func handlePreCheck(ctx context.Context, task *bridge.Task, client *plugins.Clie
 		details = append(details, detail)
 	}
 
+	// P5.2: shared_lib 类，lsof 找受影响进程（升级后这些必须 restart 才安全）
+	var affectedProcs []string
+	if p.CheckAffectedProcesses && anyAvailable {
+		affectedProcs = findAffectedProcesses(ctx, pkgMgr, matched)
+		logger.Info("[PRECHECK] affected processes detected",
+			zap.String("request_id", p.RequestID),
+			zap.Int("count", len(affectedProcs)))
+	}
+
 	// 综合状态判定
 	result := preCheckResult{
-		RequestID:  p.RequestID,
-		HostVulnID: p.HostVulnID,
-		Packages:   details,
+		RequestID:         p.RequestID,
+		HostVulnID:        p.HostVulnID,
+		Packages:          details,
+		AffectedProcesses: affectedProcs,
 	}
 	switch {
 	case anyAvailable && anyViaEPEL:
@@ -211,20 +223,144 @@ func handlePreCheck(ctx context.Context, task *bridge.Task, client *plugins.Clie
 	return sendPreCheckResult(client, result, logger)
 }
 
+// findAffectedProcesses P5.2: 找出系统中依赖给定包提供的 .so 文件的运行进程。
+//
+// 流程：
+//  1. rpm -ql / dpkg -L <pkg> 拿到包安装的所有文件
+//  2. 提取 .so / .so.X 路径
+//  3. lsof -nP +c 0 全系统扫，grep 这些路径
+//  4. 提取 "进程名 (PID xxx)" 列表去重
+//
+// 用例：openssl-libs 升级后，lsof 找到 nginx/sshd/postgres/python3 等用 libssl 的进程
+// 提示用户必须 systemctl restart 这些服务才安全。
+func findAffectedProcesses(ctx context.Context, pkgMgr string, pkgs []string) []string {
+	libPaths := collectPackageLibs(ctx, pkgMgr, pkgs)
+	if len(libPaths) == 0 {
+		return nil
+	}
+	return lsofGrepLibs(ctx, libPaths)
+}
+
+// collectPackageLibs 拿包安装的 .so 文件路径
+func collectPackageLibs(ctx context.Context, pkgMgr string, pkgs []string) []string {
+	cctx, cancel := context.WithTimeout(ctx, precheckTimeout)
+	defer cancel()
+	seen := map[string]struct{}{}
+	for _, pkg := range pkgs {
+		if !validPkgName.MatchString(pkg) {
+			continue
+		}
+		var cmd *exec.Cmd
+		switch pkgMgr {
+		case "dnf", "yum":
+			cmd = exec.CommandContext(cctx, "rpm", "-ql", pkg)
+		case "apt-get":
+			cmd = exec.CommandContext(cctx, "dpkg", "-L", pkg)
+		default:
+			continue
+		}
+		out, err := cmd.Output()
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(strings.NewReader(string(out)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			// 匹配 .so / .so.1 / .so.1.2.3 等共享库后缀
+			if !strings.Contains(line, ".so") {
+				continue
+			}
+			// 简单过滤：必须是绝对路径，不是 /usr/share/doc/foo.so.example 这类文档
+			if !strings.HasPrefix(line, "/") {
+				continue
+			}
+			if _, ok := seen[line]; !ok {
+				seen[line] = struct{}{}
+			}
+		}
+	}
+	libs := make([]string, 0, len(seen))
+	for p := range seen {
+		libs = append(libs, p)
+	}
+	return libs
+}
+
+// lsofGrepLibs lsof 全系统扫，找用 libPaths 中任意 lib 的进程
+func lsofGrepLibs(ctx context.Context, libPaths []string) []string {
+	if len(libPaths) == 0 {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, precheckTimeout)
+	defer cancel()
+	// lsof -nP 不解析 hostname/port，加速；+c 0 完整进程名（不截断 15 字符）
+	out, err := exec.CommandContext(cctx, "lsof", "-nP", "+c", "0").Output()
+	if err != nil {
+		// lsof 退出码 1 表示没找到任何匹配但有部分错误（例如 /proc 部分进程不可读）
+		// 仍尝试解析输出
+		if len(out) == 0 {
+			return nil
+		}
+	}
+	procs := map[string]struct{}{}
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// lsof 输出列：COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+		// NAME 在最后，含路径。简单 substring match
+		matched := false
+		for _, lib := range libPaths {
+			if strings.Contains(line, lib) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// fields[0]=COMMAND  fields[1]=PID
+		key := fmt.Sprintf("%s (PID %s)", fields[0], fields[1])
+		procs[key] = struct{}{}
+	}
+	result := make([]string, 0, len(procs))
+	for p := range procs {
+		result = append(result, p)
+	}
+	// 排序输出，UI 显示稳定
+	sortStrings(result)
+	return result
+}
+
+// sortStrings 简单 in-place 排序（避免引入 sort 包跨文件依赖）
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+}
+
 // sendPreCheckResult 上报预检结果（DataType 9201，kind=precheck_result）
 func sendPreCheckResult(client *plugins.Client, r preCheckResult, logger *zap.Logger) error {
 	pkgsJSON, _ := json.Marshal(r.Packages)
+	procsJSON, _ := json.Marshal(r.AffectedProcesses)
 	record := &bridge.Record{
 		DataType:  dataTypePreCheckResult,
 		Timestamp: time.Now().UnixNano(),
 		Data: &bridge.Payload{
 			Fields: map[string]string{
-				"kind":         "precheck_result",
-				"request_id":   r.RequestID,
-				"host_vuln_id": fmt.Sprintf("%d", r.HostVulnID),
-				"status":       r.Status,
-				"message":      r.Message,
-				"packages":     string(pkgsJSON),
+				"kind":               "precheck_result",
+				"request_id":         r.RequestID,
+				"host_vuln_id":       fmt.Sprintf("%d", r.HostVulnID),
+				"status":             r.Status,
+				"message":            r.Message,
+				"packages":           string(pkgsJSON),
+				"affected_processes": string(procsJSON),
 			},
 		},
 	}

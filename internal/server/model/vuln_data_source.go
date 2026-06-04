@@ -41,8 +41,15 @@ type VulnDataSource struct {
 	LastError    string     `gorm:"column:last_error;type:text" json:"lastError,omitempty"`
 	LastCount    int64      `gorm:"column:last_count;default:0" json:"lastCount"` // 上次同步入库 vuln 数
 	LastDuration int64      `gorm:"column:last_duration_ms;default:0" json:"lastDurationMs"`
-	CreatedAt    LocalTime  `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt    LocalTime  `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+
+	// AdvisoryWatermark 上次成功 fetch 到的 advisory.IssuedAt 最大值（按 source 独立）。
+	// Coordinator.Sync 下次跑该 source 时传 since=AdvisoryWatermark，仅拉 delta：
+	//   - 首次 sync：watermark 为 nil → 全量拉
+	//   - 后续 sync：仅拉 since>watermark 的 advisory，速度 30min→2-5min
+	// 与 LastSyncAt 不同：LastSyncAt 是"啥时跑的"，AdvisoryWatermark 是"拉到啥位置了"。
+	AdvisoryWatermark *LocalTime `gorm:"column:advisory_watermark;type:timestamp" json:"advisoryWatermark,omitempty"`
+	CreatedAt         LocalTime  `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt         LocalTime  `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 // TableName 指定表名。

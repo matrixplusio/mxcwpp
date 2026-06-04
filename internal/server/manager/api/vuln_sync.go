@@ -73,7 +73,9 @@ func (h *VulnSyncHandler) SyncAdvisories(c *gin.Context) {
 	}
 
 	coord := advisory.NewCoordinator(h.db, h.logger)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	// 90min：Rocky-Apollo / Debian-tracker 全量需 10-20min 各，sequential fetch
+	// 累计可超 30min，扩到 90min 留余量。生产 cron 同步同样配置。
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
 	defer cancel()
 	vulnCount, hostVulnCount, err := coord.Sync(ctx, since, hosts)
 	if err != nil {

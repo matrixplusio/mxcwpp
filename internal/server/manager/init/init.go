@@ -67,6 +67,10 @@ func Initialize(configPath string) (*ManagerServices, error) {
 		// 不中断启动，允许后续手动初始化
 	}
 
+	// 5.1.0 seed feature flags + retention policies（幂等，已存在不覆盖）
+	migration.SeedFeatureFlags(db, logger)
+	migration.SeedRetentionPolicies(db, logger)
+
 	// 5.2 初始化基线得分缓存（TTL: 5分钟）
 	scoreCache := biz.NewBaselineScoreCache(db, logger, 5*time.Minute)
 

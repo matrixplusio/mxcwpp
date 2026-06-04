@@ -1,5 +1,12 @@
 <template>
-  <div class="category-report">
+  <div class="category-report report-print-ready">
+    <div class="export-bar no-print">
+      <a-button type="primary" :loading="exporting" @click="exportPDF">
+        <template #icon><FilePdfOutlined /></template>
+        导出 PDF
+      </a-button>
+      <span class="export-bar__hint">服务端 Chromium 渲染 · 矢量可搜索</span>
+    </div>
     <a-spin :spinning="loading">
       <!-- 统计卡片 -->
       <a-row :gutter="[16, 16]" class="stats-overview">
@@ -105,7 +112,7 @@
       <a-row :gutter="[16, 16]" class="charts-row">
         <a-col :xs="24" :md="12">
           <a-card title="不合规项严重级别分布" :bordered="false" class="chart-card">
-            <v-chart
+            <v-chart theme="mxsec"
               v-if="hasBaselineSeverityData"
               :option="baselineSeverityChartOption"
               style="height: 320px"
@@ -116,7 +123,7 @@
         </a-col>
         <a-col :xs="24" :md="12">
           <a-card title="不合规项分类分布" :bordered="false" class="chart-card">
-            <v-chart
+            <v-chart theme="mxsec"
               v-if="hasBaselineCategoryData"
               :option="baselineCategoryChartOption"
               style="height: 320px"
@@ -131,7 +138,7 @@
       <a-row :gutter="[16, 16]" class="charts-row" v-if="hasSeverityData || hasAlarmTypeData">
         <a-col :xs="24" :md="12">
           <a-card title="运行时告警严重级别" :bordered="false" class="chart-card">
-            <v-chart
+            <v-chart theme="mxsec"
               v-if="hasSeverityData"
               :option="severityChartOption"
               style="height: 320px"
@@ -142,7 +149,7 @@
         </a-col>
         <a-col :xs="24" :md="12">
           <a-card title="运行时告警类型" :bordered="false" class="chart-card">
-            <v-chart
+            <v-chart theme="mxsec"
               v-if="hasAlarmTypeData"
               :option="alarmTypeChartOption"
               style="height: 320px"
@@ -157,7 +164,7 @@
       <a-row :gutter="[16, 16]" class="charts-row" v-if="report.clusterDistribution.length > 0">
         <a-col :span="24">
           <a-card title="集群告警分布" :bordered="false" class="chart-card">
-            <v-chart
+            <v-chart theme="mxsec"
               :option="clusterChartOption"
               style="height: 320px"
               autoresize
@@ -213,12 +220,36 @@ import { message } from 'ant-design-vue'
 import type { Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import { reportsApi, type KubeReport } from '@/api/reports'
+import { FilePdfOutlined } from '@ant-design/icons-vue'
 
 interface Props {
   dateRange: [Dayjs, Dayjs]
 }
 
 const props = defineProps<Props>()
+
+const exporting = ref(false)
+const exportPDF = async () => {
+  exporting.value = true
+  try {
+    const blob = await reportsApi.exportKubePDF({
+      start_time: props.dateRange[0].format('YYYY-MM-DD'),
+      end_time: props.dateRange[1].format('YYYY-MM-DD'),
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Kube-Report-${props.dateRange[1].format('YYYYMMDD')}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('PDF 已生成')
+  } catch (e: any) {
+    console.error('PDF 导出失败', e)
+    message.error(`PDF 导出失败: ${e?.response?.data?.message || e?.message || e}`)
+  } finally {
+    exporting.value = false
+  }
+}
 
 const loading = ref(false)
 const report = ref<KubeReport>({
@@ -446,6 +477,22 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.export-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  background: rgba(34, 197, 94, 0.06);
+  border-left: 3px solid #22c55e;
+  border-radius: 6px;
+
+  &__hint {
+    color: rgba(0, 0, 0, 0.45);
+    font-size: 12px;
+  }
+}
+
 .category-report {
   width: 100%;
 }

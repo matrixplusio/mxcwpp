@@ -1,5 +1,8 @@
 <template>
-  <a-config-provider :theme="themeConfig">
+  <a-config-provider
+    :theme="themeConfig"
+    :get-popup-container="getPopupContainer"
+  >
     <router-view />
   </a-config-provider>
 </template>
@@ -35,6 +38,12 @@ const sharedComponents = {
   Tag: { borderRadiusSM: 4 },
   Tabs: { cardBorderRadius: 6 },
 }
+
+// 全局 popup 容器永远锚到 body，避免 tooltip/popover/dropdown 在父组件 unmount 时
+// 触发 "Cannot read properties of null (reading 'parentNode')" 错误。
+// ant-design-vue 4.x + a-table 行内 tooltip / a-drawer 关闭场景常见。
+// 副作用：popup 不跟随父滚动（但 ant-design 用 absolute 位置计算 follow trigger，无影响）。
+const getPopupContainer = () => document.body
 
 const themeConfig = computed(() => {
   if (themeStore.isDark) {

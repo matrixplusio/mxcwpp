@@ -4,7 +4,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -70,37 +69,36 @@ type cdxAffect struct {
 
 // ExportSBOM 导出 CycloneDX v1.5 SBOM
 // GET /api/v1/assets/sbom?host_id=xxx
+//
+// host_id 必填:不传时全量导出 5w 软件包 + 5w 漏洞,响应体 14MB+,严重拖累 MySQL +
+// 网关 + 客户端 IO,且全集群 SBOM 业务意义不大(SBOM 单元应是单主机/容器)。
 func (h *AssetsHandler) ExportSBOM(c *gin.Context) {
 	hostID := c.Query("host_id")
+	if hostID == "" {
+		BadRequest(c, "host_id 必填:SBOM 单元应为单主机,无 host_id 时拒绝全集群导出")
+		return
+	}
 
 	// 查询软件包
-	q := h.db.Model(&model.Software{})
-	if hostID != "" {
-		q = q.Where("host_id = ?", hostID)
-	}
+	q := h.db.Model(&model.Software{}).Where("host_id = ?", hostID)
 
 	var software []model.Software
 	if err := q.Limit(50000).Find(&software).Error; err != nil {
 		h.logger.Error("SBOM 导出查询软件失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "查询失败"})
+		InternalError(c, "查询失败")
 		return
 	}
 
-	// 查询关联漏洞
+	// 查询关联漏洞(单 host scope)
 	var vulns []model.Vulnerability
-	if hostID != "" {
-		// 查该主机的漏洞
-		var hvs []model.HostVulnerability
-		h.db.Where("host_id = ?", hostID).Find(&hvs)
-		if len(hvs) > 0 {
-			vulnIDs := make([]uint, 0, len(hvs))
-			for _, hv := range hvs {
-				vulnIDs = append(vulnIDs, hv.VulnID)
-			}
-			h.db.Where("id IN ?", vulnIDs).Find(&vulns)
+	var hvs []model.HostVulnerability
+	h.db.Where("host_id = ?", hostID).Find(&hvs)
+	if len(hvs) > 0 {
+		vulnIDs := make([]uint, 0, len(hvs))
+		for _, hv := range hvs {
+			vulnIDs = append(vulnIDs, hv.VulnID)
 		}
-	} else {
-		h.db.Limit(50000).Find(&vulns)
+		h.db.Where("id IN ?", vulnIDs).Find(&vulns)
 	}
 
 	// 构造 CycloneDX BOM
@@ -117,11 +115,9 @@ func (h *AssetsHandler) ExportSBOM(c *gin.Context) {
 		},
 	}
 
-	if hostID != "" {
-		bom.Metadata.Component = &cdxComponent{
-			Type: "device",
-			Name: hostID,
-		}
+	bom.Metadata.Component = &cdxComponent{
+		Type: "device",
+		Name: hostID,
 	}
 
 	// 组件去重 (name+version)

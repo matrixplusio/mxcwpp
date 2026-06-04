@@ -90,6 +90,12 @@ type Host struct {
 	SystemBootTime *LocalTime `gorm:"column:system_boot_time;type:timestamp" json:"system_boot_time"` // 系统启动时间
 	AgentStartTime *LocalTime `gorm:"column:agent_start_time;type:timestamp" json:"agent_start_time"` // 客户端启动时间
 	LastActiveTime *LocalTime `gorm:"column:last_active_time;type:timestamp" json:"last_active_time"` // 最近活跃时间
+	// Kernel livepatch 能力（P5.3）— agent collector 周期 detect 上报
+	// 启用 livepatch 的主机，内核漏洞可能不需 reboot；UI 修复弹窗会显示提示
+	KernelLivepatchEnabled  bool   `gorm:"column:kernel_livepatch_enabled;type:tinyint(1);default:0" json:"kernel_livepatch_enabled"`
+	KernelLivepatchProvider string `gorm:"column:kernel_livepatch_provider;type:varchar(50)" json:"kernel_livepatch_provider"` // kpatch / canonical-livepatch / ksplice / kgraft / none
+	ActiveLivepatches       string `gorm:"column:active_livepatches;type:varchar(500)" json:"active_livepatches"`              // 已加载的 livepatch 模块名（逗号分隔）
+
 	// 运行时环境
 	RuntimeType RuntimeType `gorm:"column:runtime_type;type:varchar(20);default:'vm'" json:"runtime_type"` // 运行时类型：vm/docker/k8s
 	IsContainer bool        `gorm:"column:is_container;type:tinyint(1);default:0" json:"is_container"`     // 是否为容器环境

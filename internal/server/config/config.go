@@ -27,6 +27,14 @@ type Config struct {
 	RuleSync   RuleSyncConfig   `mapstructure:"rule_sync"`
 	LLM        LLMConfig        `mapstructure:"llm"`
 	SIEM       SIEMConfig       `mapstructure:"siem"`
+	PDF        PDFConfig        `mapstructure:"pdf"`
+}
+
+// PDFConfig 服务端 PDF 生成（Gotenberg sidecar）配置。
+// gotenberg_url 为空时 PDF endpoint 返回 400，UI 应降级前端 jsPDF。
+type PDFConfig struct {
+	GotenbergURL string `mapstructure:"gotenberg_url"` // 如 http://gotenberg:3000
+	InternalURL  string `mapstructure:"internal_url"`  // Gotenberg → manager 拉取地址，如 http://manager:8080
 }
 
 // SIEMConfig SIEM 转发配置

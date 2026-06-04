@@ -71,7 +71,9 @@ func (h *SoftwareHandler) collectRPMPackages(ctx context.Context) ([]interface{}
 	var packages []interface{}
 
 	// 执行 rpm -qa --queryformat
-	cmd := exec.CommandContext(ctx, "rpm", "-qa", "--queryformat", "%{NAME}|%{VERSION}|%{ARCH}|%{VENDOR}|%{INSTALLTIME}\n")
+	// NEVRA 完整字段：NAME|EPOCH|VERSION|RELEASE|ARCH|VENDOR|INSTALLTIME
+	// %{EPOCH} 不存在时 rpm 输出 "(none)"，调用方需归一化为空串
+	cmd := exec.CommandContext(ctx, "rpm", "-qa", "--queryformat", "%{NAME}|%{EPOCH}|%{VERSION}|%{RELEASE}|%{ARCH}|%{VENDOR}|%{INSTALLTIME}\n")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute rpm: %w", err)
@@ -91,8 +93,13 @@ func (h *SoftwareHandler) collectRPMPackages(ctx context.Context) ([]interface{}
 		}
 
 		parts := strings.Split(line, "|")
-		if len(parts) < 3 {
+		if len(parts) < 5 {
 			continue
+		}
+
+		epoch := parts[1]
+		if epoch == "(none)" {
+			epoch = ""
 		}
 
 		pkg := &engine.SoftwareAsset{
@@ -100,17 +107,19 @@ func (h *SoftwareHandler) collectRPMPackages(ctx context.Context) ([]interface{}
 				CollectedAt: time.Now(),
 			},
 			Name:         parts[0],
-			Version:      parts[1],
-			Architecture: parts[2],
+			Epoch:        epoch,
+			Version:      parts[2],
+			Release:      parts[3],
+			Architecture: parts[4],
 			PackageType:  "rpm",
 		}
 
-		if len(parts) > 3 && parts[3] != "" {
-			pkg.Vendor = parts[3]
+		if len(parts) > 5 && parts[5] != "" {
+			pkg.Vendor = parts[5]
 		}
 
-		if len(parts) > 4 && parts[4] != "" {
-			pkg.InstallTime = parts[4]
+		if len(parts) > 6 && parts[6] != "" {
+			pkg.InstallTime = parts[6]
 		}
 
 		// 生成 PURL: pkg:rpm/{vendor}/{name}@{version}?arch={arch}

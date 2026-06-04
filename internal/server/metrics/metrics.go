@@ -102,6 +102,16 @@ var (
 		[]string{"operation", "table"},
 	)
 
+	// ClickHouse 查询指标（OLAP 慢查询监控；buckets 覆盖 50ms~60s 以观察 P50/P99 与超时）
+	chQueryDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "mxsec_clickhouse_query_duration_seconds",
+			Help:    "ClickHouse 查询延迟（秒）",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 30, 60},
+		},
+		[]string{"operation", "table", "status"},
+	)
+
 	// buildInfo 进程 build 元信息：value=1，version + pid 入 labels
 	// monitor.go 通过 PromQL `mxsec_build_info{job="mxsec-manager"}` 拉取 labels.version + labels.pid
 	buildInfo = prometheus.NewGaugeVec(
@@ -133,6 +143,7 @@ func Init(logger *zap.Logger) *prometheus.Registry {
 			httpRequestsTotal,
 			httpRequestDuration,
 			dbQueryDuration,
+			chQueryDuration,
 			buildInfo,
 		)
 
@@ -197,6 +208,12 @@ func RecordHTTPRequestDuration(method, endpoint string, duration float64) {
 // RecordDBQueryDuration 记录数据库查询延迟
 func RecordDBQueryDuration(operation, table string, duration float64) {
 	dbQueryDuration.WithLabelValues(operation, table).Observe(duration)
+}
+
+// RecordCHQueryDuration 记录 ClickHouse 查询延迟。status: ok / error / timeout。
+// >3s 走慢查询告警链路（Grafana / Alertmanager 规则在 deploy/config/prometheus/）。
+func RecordCHQueryDuration(operation, table, status string, duration float64) {
+	chQueryDuration.WithLabelValues(operation, table, status).Observe(duration)
 }
 
 // SetBuildInfo 设置进程 build 元信息（Manager 启动时调一次）。

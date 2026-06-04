@@ -191,3 +191,56 @@ groups:
         annotations:
           summary: "Manager DB 查询 p99 > 1s ({{ $labels.operation }} on {{ $labels.table }})"
           description: "当前: {{ $value }}s"
+
+  # ============ Manager → ClickHouse 视角（edr_events.go recordCHQuery 埋点）============
+  # 商业级 EDR 查询基线：列表 < 200ms，统计 < 1s。
+  # 慢于此说明 projection 未命中 / 数据量异常 / CH 资源紧张。
+  - name: mxsec_clickhouse
+    interval: 60s
+    rules:
+      - alert: MxSecCHQuerySlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxsec_clickhouse_query_duration_seconds_bucket[5m]))
+          ) > 3.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询 p99 > 3s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            当前 p99: {{ $value }}s
+            排查：
+            1. SELECT * FROM system.parts WHERE table='{{ $labels.table }}' AND active 查 part 数
+            2. SELECT * FROM system.mutations WHERE table='{{ $labels.table }}' AND not is_done
+            3. EXPLAIN PIPELINE SELECT ... 看是否走 projection
+
+      - alert: MxSecCHQueryTimeout
+        expr: |
+          sum by (operation, table) (
+            rate(mxsec_clickhouse_query_duration_seconds_count{status="timeout"}[5m])
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询超时 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            5 分钟内出现超时（max_execution_time 50s 或 ctx 60s 触发）。
+            通常意味着 projection 未命中或数据量暴增。
+            立即检查 system.parts merge backlog + materialize projection 进度。
+
+      - alert: MxSecCHQueryError
+        expr: |
+          sum by (operation, table) (
+            rate(mxsec_clickhouse_query_duration_seconds_count{status="error"}[5m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询错误率高 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前错误率: {{ $value }} qps（持续 5 分钟）"

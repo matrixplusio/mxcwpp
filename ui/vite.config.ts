@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0', // 允许外部访问
+    allowedHosts: true, // 允许任意 host（Gotenberg 从 ui 容器名访问）
     watch: {
       usePolling: true,
       interval: 500,

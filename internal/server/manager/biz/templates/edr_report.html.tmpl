@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{.Meta.Title}}</title>
+<style>
+  /* ============== Page setup ============== */
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 10px;
+      color: #6b7280;
+    }
+    @bottom-left {
+      content: "矩阵云安全平台 · EDR 检测专项报告";
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 9px;
+      color: #9ca3af;
+    }
+    @bottom-right {
+      content: "机密 · 仅限内部使用";
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 9px;
+      color: #dc2626;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @bottom-center { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    color: #1f2937;
+    font-size: 14px;
+    line-height: 1.75;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ============== Cover ============== */
+  .cover {
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 28mm 22mm 24mm 22mm;
+    background:
+      radial-gradient(ellipse at top right, rgba(114,46,209,0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom left, rgba(37,99,235,0.08) 0%, transparent 50%),
+      #ffffff;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    row-gap: 0;
+    page-break-after: always;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .cover-meta { align-self: end; }
+  .cover::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, #2563eb 0%, #722ed1 100%);
+  }
+  .cover-brand { display: flex; align-items: center; gap: 18px; }
+  .cover-brand img { width: 64px; height: 64px; }
+  .cover-brand-name {
+    font-size: 22px; font-weight: 600; color: #1f2937; line-height: 1.2;
+    letter-spacing: 2px;
+  }
+  .cover-brand-en {
+    font-size: 12px; color: #6b7280;
+    font-family: "JetBrains Mono", Consolas, monospace; margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .cover-mid {
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    min-height: 0;
+  }
+  .cover-kind {
+    font-size: 20px; letter-spacing: 10px; color: #2563eb;
+    font-weight: 500; margin-bottom: 24px;
+  }
+  .cover-title {
+    font-size: 60px; font-weight: 700; letter-spacing: 10px;
+    background: linear-gradient(135deg, #2563eb 0%, #722ed1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin: 0 0 30px 0;
+  }
+  .cover-period {
+    font-size: 19px; color: #374151;
+    padding: 10px 28px; border: 1px solid #d1d5db; border-radius: 999px;
+    background: #ffffff;
+  }
+  .cover-deco {
+    margin-top: 22px;
+    width: 240px; height: 4px;
+    background: linear-gradient(90deg, transparent, #2563eb, #722ed1, transparent);
+  }
+
+  /* 亮点四列 */
+  .cover-highlights {
+    margin-top: 36px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    width: 100%;
+  }
+  .cover-highlights .hl {
+    padding: 14px 10px;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #2563eb;
+    border-radius: 6px;
+    background: #ffffff;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .cover-highlights .hl.hl-c { border-top-color: #dc2626; }
+  .cover-highlights .hl.hl-b { border-top-color: #ea580c; }
+  .cover-highlights .hl.hl-p { border-top-color: #722ed1; }
+  .cover-highlights .hl-num {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 26px; font-weight: 700; color: #111827;
+    letter-spacing: -0.5px; line-height: 1.1;
+  }
+  .cover-highlights .hl-lbl {
+    font-size: 11.5px; color: #6b7280; margin-top: 4px;
+  }
+
+  /* 本期摘要 */
+  .cover-summary {
+    margin-top: 28px;
+    width: 100%;
+    padding: 16px 18px;
+    border-left: 4px solid #2563eb;
+    background: linear-gradient(90deg, rgba(37,99,235,0.04) 0%, transparent 100%);
+    border-radius: 4px;
+  }
+  .cover-summary-title {
+    font-size: 15px; font-weight: 600; color: #2563eb;
+    margin-bottom: 8px; letter-spacing: 2px;
+  }
+  .cover-summary-text {
+    font-size: 14px; color: #374151; line-height: 1.9;
+    text-align: justify;
+  }
+
+  .cover-meta {
+    border-top: 2px solid #e5e7eb;
+    padding-top: 22px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 40px;
+    font-size: 14.5px;
+  }
+  .cover-meta-row { display: flex; justify-content: space-between; }
+  .cover-meta-label { color: #6b7280; }
+  .cover-meta-value { font-family: "JetBrains Mono", Consolas, monospace; font-weight: 500; color: #111827; }
+  .cover-class {
+    grid-column: span 2; margin-top: 16px; text-align: center;
+    color: #dc2626; font-weight: 600; letter-spacing: 5px;
+    font-size: 15px;
+    padding: 8px;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    background: rgba(220, 38, 38, 0.04);
+    border-radius: 4px;
+  }
+
+  /* ============== Page ============== */
+  .page {
+    padding: 0 2mm;
+    /* 不再 page-break-before always —— 让内容自然流，只在需要时手动 break */
+  }
+  .force-break { page-break-before: always; break-before: page; }
+
+  /* TOC */
+  .toc.page {
+    /* 不再 min-height: 100vh — 与 box-sizing 在 chromium PDF 下会溢出 1mm 触发空白页 */
+    box-sizing: border-box;
+    padding: 12mm 12mm 14mm 12mm;
+    display: flex; flex-direction: column;
+  }
+  .toc h2 { text-align: center; letter-spacing: 16px; font-size: 30px; margin: 0 0 6mm 0; color: #1f2937; }
+  .toc .toc-list { list-style: none; padding: 0; margin: 0; counter-reset: toc; max-width: 170mm; margin-left: auto; margin-right: auto; width: 100%; }
+  .toc .toc-list > li {
+    counter-increment: toc;
+    display: flex; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px dotted #d1d5db;
+    font-size: 15.5px;
+  }
+  .toc .toc-list > li::before {
+    content: counter(toc) ".";
+    color: #2563eb; font-family: "JetBrains Mono", Consolas, monospace;
+    font-weight: 600; min-width: 32px; font-size: 16px;
+  }
+  .toc-title { flex: 1; }
+  .toc-page { color: #6b7280; font-family: "JetBrains Mono", Consolas, monospace; font-size: 14px; }
+  .toc-hint {
+    margin: 4mm auto 0; max-width: 170mm; padding: 10px 14px;
+    background: #f9fafb; border-left: 3px solid #2563eb;
+    font-size: 12.5px; color: #4b5563; line-height: 1.7;
+  }
+  .toc-extra { max-width: 170mm; margin: 5mm auto 0; width: 100%; }
+  .toc-block { margin-bottom: 5mm; }
+  .toc-block-title {
+    font-size: 16px; font-weight: 600; color: #1f2937;
+    margin-bottom: 6px; padding-left: 10px;
+    border-left: 3px solid #722ed1;
+  }
+  .toc-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .toc-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .toc-table td:first-child {
+    width: 28%; color: #6b7280; font-weight: 500;
+  }
+  .toc-table td:last-child { color: #111827; }
+  .toc-guide { margin: 0; padding-left: 22px; font-size: 13.5px; line-height: 1.8; color: #374151; }
+  .toc-guide li { margin-bottom: 3px; }
+  .toc-guide b { color: #2563eb; }
+  .toc-footer {
+    margin-top: auto; padding-top: 8px;
+    border-top: 1px dashed #d1d5db;
+    text-align: center;
+    font-size: 11.5px; color: #9ca3af;
+    letter-spacing: 1.5px;
+  }
+
+  /* Section heading */
+  h2.sec {
+    font-size: 22px; font-weight: 600;
+    margin: 18px 0 12px 0; padding-bottom: 7px;
+    border-bottom: 2px solid #2563eb;
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #1f2937;
+  }
+  h2.sec:first-of-type { margin-top: 6px; }
+  /* 防孤悬：h2 与紧随的 p / table / stat-row / fig 同组，整体推下页 */
+  h2.sec + p,
+  h2.sec + .stat-row,
+  h2.sec + table.t,
+  h2.sec + .fig,
+  h2.sec + h3.subsec,
+  h2.sec + ul,
+  h2.sec + ol {
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  h3.subsec {
+    font-size: 17px; font-weight: 600;
+    margin: 16px 0 9px 0; padding-left: 11px;
+    border-left: 4px solid #722ed1;
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #1f2937;
+  }
+  h3.subsec + table.t,
+  h3.subsec + p,
+  h3.subsec + .fig {
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  p { margin: 0 0 12px 0; text-indent: 2em; text-align: justify; line-height: 1.85; font-size: 14.5px; }
+  p.no-indent { text-indent: 0; }
+  ul, ol { margin: 6px 0 14px 0; padding-left: 26px; font-size: 14.5px; line-height: 1.9; }
+  ul li, ol li { margin-bottom: 6px; }
+  b, strong { color: #111827; font-weight: 600; }
+
+  /* Tables */
+  table.t {
+    width: 100%; border-collapse: collapse; font-size: 13.5px;
+    margin: 8px 0 14px 0;
+  }
+  table.t thead th {
+    background: #f3f4f6; color: #111827;
+    text-align: left; padding: 9px 12px;
+    border-top: 1px solid #d1d5db;
+    border-bottom: 2px solid #2563eb;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  table.t tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  table.t tbody tr:nth-child(even) td { background: #fafafa; }
+  table.t tr { page-break-inside: avoid; }
+  td.num, th.num { text-align: right; font-family: "JetBrains Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  td.code { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+  td.empty { text-align: center; color: #9ca3af; font-style: italic; padding: 16px; }
+
+  .sev-pill { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+  .sev-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+
+  /* 2 列 layout (减少留白 -- 同章节 2 表/2 段并列) */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 8px 0 10px 0; }
+  .row2 > * { min-width: 0; }
+  .row2 h3.subsec:first-of-type { margin-top: 0; }
+  /* 当 row2 内含 .fig 时，改单列让图表全宽（双栏图太小看不清字） */
+  .row1 { display: block; margin: 8px 0 10px 0; }
+
+  /* figure */
+  .fig { margin: 10px 0 14px 0; page-break-inside: avoid; text-align: center; }
+  .fig svg { max-width: 100%; height: auto; }
+  .fig-cap { margin-top: 4px; font-size: 13px; color: #4b5563; letter-spacing: 1px; }
+
+  .empty-block { color: #9ca3af; font-style: italic; padding: 12px 0; font-size: 14px; }
+
+  /* 紧凑卡片 (用于把 stats 嵌进文本流) */
+  .stat-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin: 10px 0 14px 0;
+  }
+  .stat-row .cell {
+    border: 1px solid #e5e7eb; border-left: 4px solid #2563eb;
+    padding: 12px 14px; border-radius: 4px;
+    background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%);
+  }
+  .stat-row .cell-label { font-size: 13px; color: #6b7280; }
+  .stat-row .cell-value {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 24px; font-weight: 600; color: #111827;
+    letter-spacing: -0.5px;
+    margin-top: 4px;
+  }
+  .stat-row .cell.sev-c { border-left-color: #dc2626; }
+  .stat-row .cell.sev-h { border-left-color: #ea580c; }
+  .stat-row .cell.sev-m { border-left-color: #ca8a04; }
+  .stat-row .cell.sev-l { border-left-color: #0891b2; }
+  .stat-row .cell.brand { border-left-color: #722ed1; }
+  .stat-row .cell.good { border-left-color: #22c55e; }
+</style>
+</head>
+<body>
+
+<!-- ============== Cover (page 1) ============== -->
+<section class="cover">
+  <div class="cover-brand">
+    {{if .Assets.LogoURI}}
+    <img src="{{.Assets.LogoURI}}" alt="logo"/>
+    {{end}}
+    <div>
+      <div class="cover-brand-name">矩阵云安全平台</div>
+      <div class="cover-brand-en">MxSec Security Platform</div>
+    </div>
+  </div>
+  <div class="cover-mid">
+    <div class="cover-kind">EDR 端点检测响应</div>
+    <h1 class="cover-title">专项分析报告</h1>
+    <div class="cover-period">{{.Meta.Period}}</div>
+    <div class="cover-deco"></div>
+
+    <div class="cover-highlights">
+      <div class="hl"><div class="hl-num">{{.Summary.TotalAlerts}}</div><div class="hl-lbl">告警总数</div></div>
+      <div class="hl hl-c"><div class="hl-num">{{.Summary.ActiveAlerts}}</div><div class="hl-lbl">活跃告警</div></div>
+      <div class="hl hl-b"><div class="hl-num">{{.Summary.AffectedHosts}}</div><div class="hl-lbl">受影响主机</div></div>
+      <div class="hl hl-p"><div class="hl-num">{{.Summary.TotalStories}}</div><div class="hl-lbl">攻击故事线</div></div>
+    </div>
+
+    <div class="cover-summary">
+      <div class="cover-summary-title">本期摘要</div>
+      <div class="cover-summary-text">
+        平台基于 <b>{{.Meta.EnabledRules}}</b> 条启用检测规则触发告警 <b>{{.Summary.TotalAlerts}}</b> 条；
+        受影响主机 <b>{{.Summary.AffectedHosts}}</b> 台，关联攻击故事线 <b>{{.Summary.TotalStories}}</b> 条
+        （其中高危 <b>{{.Summary.HighRiskStories}}</b> 条）；
+        平台自动响应执行 <b>{{.AutoResp.Total}}</b> 次（封禁 {{.AutoResp.NetworkBlocks}} / 隔离 {{.AutoResp.HostIsolations}} / 查杀 {{.AutoResp.ProcessKills}}）。
+        告警量{{.Trend.Verb}} <b>{{printf "%.1f" .Trend.AbsPct}}%</b>，整体威胁态势<b>{{.Trend.Descriptor}}</b>。
+      </div>
+    </div>
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-row"><span class="cover-meta-label">报告编号</span><span class="cover-meta-value">{{.Meta.ReportID}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">生成时间</span><span class="cover-meta-value">{{.Meta.GeneratedAt}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">报告周期</span><span class="cover-meta-value">{{.Meta.Period}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">在线主机</span><span class="cover-meta-value">{{.Meta.OnlineHosts}} 台</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">检测规则</span><span class="cover-meta-value">{{.Meta.EnabledRules}} / {{.Meta.TotalRules}} 条启用</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">渲染引擎</span><span class="cover-meta-value">Gotenberg + Chromium</span></div>
+    <div class="cover-class">机　密 · 仅 限 内 部 使 用</div>
+  </div>
+</section>
+
+<!-- ============== TOC (page 2) ============== -->
+<section class="page toc force-break">
+  <h2>目　录</h2>
+  <ol class="toc-list">
+    <li><span class="toc-title">执行摘要 · 关键指标概览</span><span class="toc-page">03</span></li>
+    <li><span class="toc-title">威胁等级与 MITRE ATT&amp;CK 战术分布</span><span class="toc-page">04</span></li>
+    {{if .Raw.Available}}<li><span class="toc-title">原始事件量分析（ClickHouse 实时遥测）</span><span class="toc-page">05</span></li>{{end}}
+    <li><span class="toc-title">Top 10 触发规则与受影响主机</span><span class="toc-page">06</span></li>
+    <li><span class="toc-title">自动响应处置 · IOC · 内存威胁</span><span class="toc-page">07</span></li>
+    <li><span class="toc-title">规则有效性评估与零命中复核</span><span class="toc-page">08</span></li>
+    <li><span class="toc-title">攻击故事线与误报抑制分析</span><span class="toc-page">09</span></li>
+    <li><span class="toc-title">改进建议与报告说明</span><span class="toc-page">10</span></li>
+  </ol>
+  <div class="toc-extra">
+    <div class="toc-block">
+      <div class="toc-block-title">数据范围</div>
+      <table class="toc-table">
+        <tr><td>报告周期</td><td>{{.Meta.Period}}</td></tr>
+        <tr><td>主机覆盖</td><td>{{.Meta.OnlineHosts}} 台 · 规则 {{.Meta.EnabledRules}}/{{.Meta.TotalRules}} 启用</td></tr>
+        <tr><td>原始事件</td><td>{{if .Raw.Available}}{{.Raw.TotalEventsFmt}} 条 · ClickHouse 实时遥测{{else}}未启用 ClickHouse{{end}}</td></tr>
+        <tr><td>告警 / 故事线</td><td>{{.Summary.TotalAlerts}} 条告警 · {{.Summary.TotalStories}} 条故事线（高危 {{.Summary.HighRiskStories}}）</td></tr>
+      </table>
+    </div>
+
+    <div class="toc-footer">
+      © 矩阵云安全 · MxSec Security Platform　|　报告引擎 v1.0　|　所有数据为实时观测，未经任何人工修饰
+    </div>
+  </div>
+</section>
+
+<!-- ============== §1 起始页 (强制新页) ============== -->
+<section class="page force-break">
+  <h2 class="sec">1. 执行摘要</h2>
+  <p>
+    本报告覆盖 <b>{{.Meta.Period}}</b>，对接入矩阵云安全平台的 <b>{{.Meta.OnlineHosts}}</b> 台主机的端点检测响应（EDR）数据进行统计分析。
+    报告期内，平台基于 <b>{{.Meta.EnabledRules}}</b> 条启用检测规则共触发告警 <b>{{.Summary.TotalAlerts}}</b> 条
+    （活跃 <b>{{.Summary.ActiveAlerts}}</b> · 已忽略 <b>{{.Summary.IgnoredAlerts}}</b>），
+    受影响主机 <b>{{.Summary.AffectedHosts}}</b> 台，攻击故事线 <b>{{.Summary.TotalStories}}</b> 条
+    （高危 <b>{{.Summary.HighRiskStories}}</b> 条）。
+    与上一周期对比，告警量{{.Trend.Verb}} <b>{{printf "%.1f" .Trend.AbsPct}}%</b>
+    （{{.Trend.PrevTotal}} → {{.Summary.TotalAlerts}}），整体威胁态势<b>{{.Trend.Descriptor}}</b>。
+  </p>
+
+  <h3 class="subsec">核心结论</h3>
+  <ul>
+    {{range .Conclusions}}<li>{{.}}</li>{{end}}
+  </ul>
+
+  <h2 class="sec">2. 关键指标概览</h2>
+
+  <div class="stat-row">
+    <div class="cell good"><div class="cell-label">在线主机</div><div class="cell-value">{{.Meta.OnlineHosts}}</div></div>
+    <div class="cell"><div class="cell-label">启用规则</div><div class="cell-value">{{.Meta.EnabledRules}}<span style="font-size:11px;color:#6b7280"> / {{.Meta.TotalRules}}</span></div></div>
+    <div class="cell brand"><div class="cell-label">告警总数</div><div class="cell-value">{{.Summary.TotalAlerts}}</div></div>
+    <div class="cell sev-h"><div class="cell-label">活跃告警</div><div class="cell-value">{{.Summary.ActiveAlerts}}</div></div>
+    <div class="cell"><div class="cell-label">已解决</div><div class="cell-value">{{.Summary.ResolvedAlerts}}</div></div>
+    <div class="cell"><div class="cell-label">已忽略</div><div class="cell-value">{{.Summary.IgnoredAlerts}}</div></div>
+    <div class="cell brand"><div class="cell-label">受影响主机</div><div class="cell-value">{{.Summary.AffectedHosts}}</div></div>
+    <div class="cell sev-c"><div class="cell-label">高危故事线</div><div class="cell-value">{{.Summary.HighRiskStories}}</div></div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th style="width:30%">指标</th><th style="width:25%" class="num">本周期</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>规则启用率</td><td class="num">{{printf "%.1f" .Derived.RuleEnableRate}}%</td><td>已启用 / 平台规则总数</td></tr>
+      <tr><td>攻击故事线总数</td><td class="num">{{.Summary.TotalStories}}</td><td>关联多事件形成的攻击链</td></tr>
+      <tr><td>环比变化</td><td class="num">{{.Trend.Arrow}} {{printf "%.1f" .Trend.AbsPct}}%</td><td>vs 上一周期 {{.Trend.PrevTotal}} 条 · {{.Trend.Descriptor}}</td></tr>
+      {{if .Raw.Available}}<tr><td>原始事件量</td><td class="num">{{.Raw.TotalEventsFmt}}</td><td>ClickHouse 采集 · 覆盖 {{.Raw.UniqueHosts}} 台主机</td></tr>
+      <tr><td>告警转化率</td><td class="num">{{printf "%.3f" .Derived.AlertConversionRate}}%</td><td>告警 / 原始事件，健康区间 0.001% - 1%</td></tr>{{end}}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §3 威胁等级 + MITRE 同页 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">3. 威胁等级与 MITRE ATT&amp;CK 战术分布</h2>
+  <p>告警按严重程度与 MITRE ATT&amp;CK 战术维度分布，反映本周期主要威胁面与攻击阶段集中度。</p>
+
+  <div class="fig">
+    {{.Charts.SeverityPie}}
+    <div class="fig-cap">图 3-1　告警严重程度分布</div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th>严重程度</th><th class="num" style="width:120px">数量</th><th class="num" style="width:120px">占比</th></tr></thead>
+    <tbody>
+      {{range .SeverityRows}}
+      <tr>
+        <td><span class="sev-dot" style="background:{{.Color}}"></span>{{.Label}}</td>
+        <td class="num">{{.Count}}</td>
+        <td class="num">{{printf "%.1f" .Pct}}%</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <div class="fig">
+    {{.Charts.TacticBar}}
+    <div class="fig-cap">图 3-2　MITRE ATT&amp;CK 战术分布（按战术维度聚合 category）</div>
+  </div>
+</section>
+
+<!-- ============== §4 原始事件量 (force break) ============== -->
+{{if .Raw.Available}}
+<section class="page">
+  <h2 class="sec">4. 原始事件量分析</h2>
+  <p>
+    EDR Agent 经由内核 eBPF 探针采集进程、网络、文件、模块、提权等原始事件，统一写入 ClickHouse 进行实时检测。
+    本周期共采集原始事件 <b>{{.Raw.TotalEventsFmt}}</b> 条，覆盖 <b>{{.Raw.UniqueHosts}}</b> 台活跃主机，
+    平均每台主机 <b>{{.Raw.AvgPerHost}}</b> 条，告警转化率 <b>{{printf "%.3f" .Derived.AlertConversionRate}}%</b>
+    （事件→告警的提炼效率指标）。
+  </p>
+
+  <div class="stat-row">
+    <div class="cell brand"><div class="cell-label">总事件数</div><div class="cell-value">{{.Raw.TotalEventsFmt}}</div></div>
+    <div class="cell good"><div class="cell-label">活跃主机</div><div class="cell-value">{{.Raw.UniqueHosts}}</div></div>
+    <div class="cell"><div class="cell-label">平均/主机</div><div class="cell-value">{{.Raw.AvgPerHost}}</div></div>
+    <div class="cell sev-m"><div class="cell-label">告警转化率</div><div class="cell-value">{{printf "%.3f" .Derived.AlertConversionRate}}%</div></div>
+  </div>
+
+  {{if .Charts.EventTypePie}}
+  <div class="fig">
+    {{.Charts.EventTypePie}}
+    <div class="fig-cap">图 4-1　事件类型构成</div>
+  </div>
+  {{end}}
+  {{if .Charts.EventTrendLine}}
+  <div class="fig">
+    {{.Charts.EventTrendLine}}
+    <div class="fig-cap">图 4-2　事件量逐小时趋势</div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+<!-- ============== §5 Top 规则 + Top 主机 同页 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">{{if .Raw.Available}}5{{else}}4{{end}}. Top 10 触发规则与受影响主机</h2>
+
+  <div class="row2">
+    <div>
+      <h3 class="subsec">5.1　Top 10 触发规则</h3>
+      <table class="t">
+        <thead><tr><th style="width:28px">#</th><th>规则名称</th><th style="width:60px">级别</th><th class="num" style="width:60px">命中</th></tr></thead>
+        <tbody>
+          {{range $i, $r := .TopRules}}
+          <tr>
+            <td>{{add $i 1}}</td>
+            <td>{{$r.Title}}</td>
+            <td><span class="sev-pill" style="background:{{$r.BgColor}};color:{{$r.Color}}">{{$r.Label}}</span></td>
+            <td class="num">{{$r.Count}}</td>
+          </tr>
+          {{else}}
+          <tr><td class="empty" colspan="4">本周期无规则命中</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3 class="subsec">5.2　Top 10 受影响主机</h3>
+      <table class="t">
+        <thead><tr><th style="width:28px">#</th><th>主机</th><th class="num" style="width:80px">告警数</th></tr></thead>
+        <tbody>
+          {{range $i, $h := .TopHosts}}
+          <tr><td>{{add $i 1}}</td><td>{{$h.Hostname}}</td><td class="num">{{$h.Count}}</td></tr>
+          {{else}}
+          <tr><td class="empty" colspan="3">本周期无主机受影响</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{if .Raw.Available}}
+  <div class="row2">
+    <div>
+      <h3 class="subsec">5.3　Top 10 高事件量主机</h3>
+      <table class="t">
+        <thead><tr><th style="width:28px">#</th><th>主机</th><th class="num" style="width:80px">事件量</th></tr></thead>
+        <tbody>
+          {{range $i, $h := .Raw.TopHosts}}
+          <tr><td>{{add $i 1}}</td><td>{{$h.Hostname}}</td><td class="num">{{$h.CountFmt}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{if .Raw.TopExe}}
+    <div>
+      <h3 class="subsec">5.4　Top 10 最活跃进程</h3>
+      <table class="t">
+        <thead><tr><th style="width:28px">#</th><th>进程路径</th><th class="num" style="width:80px">事件量</th></tr></thead>
+        <tbody>
+          {{range $i, $p := .Raw.TopExe}}
+          <tr><td>{{add $i 1}}</td><td class="code">{{$p.Exe}}</td><td class="num">{{$p.CountFmt}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+
+<!-- ============== §6 自动响应 + §7 IOC 同页 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">{{if .Raw.Available}}6{{else}}5{{end}}. 自动响应与处置统计</h2>
+  <p>
+    本周期平台共触发自动响应动作 <b>{{.AutoResp.Total}}</b> 次，
+    含网络封禁 <b>{{.AutoResp.NetworkBlocks}}</b> 次、
+    主机隔离 <b>{{.AutoResp.HostIsolations}}</b> 次、
+    进程查杀 <b>{{.AutoResp.ProcessKills}}</b> 次。
+  </p>
+
+  <div class="stat-row">
+    <div class="cell brand"><div class="cell-label">累计动作</div><div class="cell-value">{{.AutoResp.Total}}</div></div>
+    <div class="cell"><div class="cell-label">网络封禁</div><div class="cell-value">{{.AutoResp.NetworkBlocks}}</div></div>
+    <div class="cell"><div class="cell-label">主机隔离</div><div class="cell-value">{{.AutoResp.HostIsolations}}</div></div>
+    <div class="cell sev-c"><div class="cell-label">进程查杀</div><div class="cell-value">{{.AutoResp.ProcessKills}}</div></div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th style="width:25%">动作类型</th><th class="num" style="width:15%">次数</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>网络封禁 (network_block)</td><td class="num">{{.AutoResp.NetworkBlocks}}</td><td>对恶意 IP / 端口下发 iptables / nftables 阻断规则</td></tr>
+      <tr><td>主机隔离 (host_isolation)</td><td class="num">{{.AutoResp.HostIsolations}}</td><td>仅保留管理通道，断开主机业务网络流量</td></tr>
+      <tr><td>进程查杀 (kill_process)</td><td class="num">{{.AutoResp.ProcessKills}}</td><td>恶意进程 SIGKILL，记录 audit 日志</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">{{if .Raw.Available}}7{{else}}6{{end}}. IOC 与内存威胁</h2>
+  <p>
+    本周期捕获 IOC 快照 <b>{{.IOC.Snapshots}}</b> 份，内存威胁检测命中 <b>{{.IOC.MemoryThreats}}</b> 次。
+    IOC 快照含进程二进制 hash、网络连接、模块加载等情报维度；内存威胁覆盖 shellcode、code injection、unpacker 等。
+  </p>
+
+  <div class="row2">
+    <div>
+      <div class="stat-row" style="grid-template-columns: 1fr 1fr">
+        <div class="cell brand"><div class="cell-label">IOC 快照</div><div class="cell-value">{{.IOC.Snapshots}}</div></div>
+        <div class="cell sev-c"><div class="cell-label">内存威胁</div><div class="cell-value">{{.IOC.MemoryThreats}}</div></div>
+      </div>
+    </div>
+    <div>
+      {{if .IOC.TopTypes}}
+      <table class="t">
+        <thead><tr><th style="width:28px">#</th><th>技术（MITRE Technique）</th><th class="num" style="width:60px">命中</th></tr></thead>
+        <tbody>
+          {{range $i, $t := .IOC.TopTypes}}
+          <tr><td>{{add $i 1}}</td><td>{{$t.Technique}}</td><td class="num">{{$t.Count}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty-block">本周期未捕获 IOC 技术分类。</div>
+      {{end}}
+    </div>
+  </div>
+</section>
+
+<!-- ============== §8 规则有效性 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">{{if .Raw.Available}}8{{else}}7{{end}}. 规则有效性评估</h2>
+  <p>
+    启用规则共 <b>{{.Rule.EnabledRules}}</b> 条，其中本周期至少命中一次的规则 <b>{{.Rule.HitRules}}</b> 条，
+    命中率 <b>{{printf "%.1f" .Rule.HitRate}}%</b>，零命中规则 <b>{{.Rule.ZeroHitRules}}</b> 条。
+    零命中并不必然意味着规则无效——可能是威胁尚未出现、规则覆盖小众场景或环境无相应攻击面。
+    建议结合规则发布时间、最近 90 天历史命中率综合评估，避免直接下线影响检测覆盖。
+  </p>
+
+  <div class="stat-row">
+    <div class="cell"><div class="cell-label">启用规则</div><div class="cell-value">{{.Rule.EnabledRules}}</div></div>
+    <div class="cell good"><div class="cell-label">命中规则</div><div class="cell-value">{{.Rule.HitRules}}</div></div>
+    <div class="cell sev-m"><div class="cell-label">零命中</div><div class="cell-value">{{.Rule.ZeroHitRules}}</div></div>
+    <div class="cell brand"><div class="cell-label">命中率</div><div class="cell-value">{{printf "%.1f" .Rule.HitRate}}%</div></div>
+  </div>
+
+  {{if .Rule.TopZeroHit}}
+  <h3 class="subsec">{{if .Raw.Available}}8{{else}}7{{end}}.1　建议复核或下线的零命中规则</h3>
+  <table class="t">
+    <thead><tr><th style="width:28px">#</th><th style="width:60px">ID</th><th>规则名称</th><th style="width:200px">类别</th></tr></thead>
+    <tbody>
+      {{range $i, $r := .Rule.TopZeroHit}}
+      <tr><td>{{add $i 1}}</td><td class="num">{{$r.ID}}</td><td>{{$r.Name}}</td><td>{{$r.Category}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div class="empty-block">本周期无零命中规则需复核。</div>
+  {{end}}
+</section>
+
+<!-- ============== §9 故事线 + 抑制 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">{{if .Raw.Available}}9{{else}}8{{end}}. 攻击故事线与误报抑制</h2>
+
+  <h3 class="subsec">{{if .Raw.Available}}9{{else}}8{{end}}.1　Top 5 高风险攻击故事线</h3>
+  <table class="t">
+    <thead>
+      <tr>
+        <th style="width:24px">#</th><th>主机</th><th style="width:120px">阶段 (phase)</th>
+        <th style="width:60px">级别</th>
+        <th class="num" style="width:50px">事件</th>
+        <th class="num" style="width:50px">告警</th>
+        <th class="num" style="width:60px">风险</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $s := .TopStories}}
+      <tr>
+        <td>{{add $i 1}}</td><td>{{$s.Hostname}}</td><td>{{$s.Phase}}</td>
+        <td><span class="sev-pill" style="background:{{$s.BgColor}};color:{{$s.Color}}">{{$s.Label}}</span></td>
+        <td class="num">{{$s.EventCount}}</td>
+        <td class="num">{{$s.AlertCount}}</td>
+        <td class="num"><b>{{$s.RiskScore}}</b></td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="7">本周期无攻击故事线</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <h3 class="subsec">{{if .Raw.Available}}9{{else}}8{{end}}.2　误报抑制原因分布</h3>
+  <p class="no-indent">基于 alerts.resolve_reason 字段聚合，反映误报研判的主要场景，可用于沉淀新的白名单或规则调优。</p>
+  <table class="t">
+    <thead><tr><th>抑制原因</th><th class="num" style="width:120px">数量</th></tr></thead>
+    <tbody>
+      {{range .Suppression}}
+      <tr><td>{{.Reason}}</td><td class="num">{{.Count}}</td></tr>
+      {{else}}
+      <tr><td class="empty" colspan="2">本周期无误报抑制记录</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §10 改进建议 + 附录 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">{{if .Raw.Available}}10{{else}}9{{end}}. 改进建议</h2>
+  <p>基于本周期数据，平台自动生成如下改进建议供安全团队参考：</p>
+  <ol>
+    {{range .Improvements}}<li>{{.}}</li>{{else}}<li>本周期未生成自动建议（数据样本较小或检测充分）。</li>{{end}}
+  </ol>
+
+  <h3 class="subsec">附录 A　报告说明</h3>
+  <table class="t">
+    <tbody>
+      <tr><td style="width:30%">数据来源</td><td>ClickHouse 集群（ebpf_events / storyline_events / alerts / host_metrics 全部事件 + 告警实体）+ MySQL（detection_rules / hosts 等小数据元配置）</td></tr>
+      <tr><td>生成方式</td><td>矩阵云安全平台服务端 Go html/template 渲染，自动生成无人工调整</td></tr>
+      <tr><td>图表渲染</td><td>服务端 SVG 手绘，矢量化、可缩放、PDF 中保持清晰</td></tr>
+      <tr><td>PDF 引擎</td><td>Chromium Headless（Gotenberg HTML→PDF），文本可搜索、可复制、可粘贴</td></tr>
+      <tr><td>报告编号</td><td>{{.Meta.ReportID}}</td></tr>
+      <tr><td>生成时间</td><td>{{.Meta.GeneratedAt}}</td></tr>
+      <tr><td>密级</td><td>机密 · 仅限内部使用 · 不得转发至非授权人员</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="subsec">附录 B　术语对照</h3>
+  <table class="t">
+    <thead><tr><th style="width:25%">术语</th><th>定义</th></tr></thead>
+    <tbody>
+      <tr><td>EDR</td><td>Endpoint Detection &amp; Response 端点检测与响应</td></tr>
+      <tr><td>MITRE ATT&amp;CK</td><td>对手战术、技术与公共知识库，业界标准攻击行为分类</td></tr>
+      <tr><td>故事线 (Storyline)</td><td>关联同一主机内多个时序事件形成的攻击链</td></tr>
+      <tr><td>IOC</td><td>Indicator of Compromise 入侵指标</td></tr>
+      <tr><td>告警转化率</td><td>命中规则的告警数 / 原始事件总数，衡量规则提炼效率</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</body>
+</html>

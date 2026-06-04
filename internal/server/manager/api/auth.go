@@ -3,7 +3,6 @@ package api
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -115,10 +114,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 检查账户是否被锁定
 	if user.LockedUntil != nil && time.Now().Before(time.Time(*user.LockedUntil)) {
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"code":    429,
-			"message": "账户已被临时锁定，请稍后再试",
-		})
+		TooManyRequests(c, "账户已被临时锁定，请稍后再试")
 		return
 	}
 

@@ -102,9 +102,164 @@ func NewClickHouseWriter(conn chdriver.Conn, batchSize int, flushTimeout time.Du
 		done:         make(chan struct{}),
 	}
 	if conn != nil {
+		// 启动时确保新增 schema 已建（init.sql 只在首次跑，存量 prod CH 需 runtime ensure）
+		w.ensureSchemas()
 		go w.flusher()
 	}
 	return w
+}
+
+// ensureSchemas 启动时 CREATE TABLE IF NOT EXISTS 保证新增 CH 表存在。
+// 仅添加 init-clickhouse.sql 后新增的表，避免与原 init 重复。
+// 失败仅 warn，不阻塞启动（已存在的表 IF NOT EXISTS 是 no-op）。
+func (w *ClickHouseWriter) ensureSchemas() {
+	ddls := []struct {
+		name string
+		ddl  string
+	}{
+		{
+			"storyline_events",
+			`CREATE TABLE IF NOT EXISTS storyline_events (
+				id            UInt64,
+				story_id      String,
+				host_id       String,
+				data_type     Int32,
+				event_type    LowCardinality(String),
+				pid           String,
+				exe           String,
+				detail        String,
+				rule_name     LowCardinality(String),
+				severity      LowCardinality(String),
+				timestamp     DateTime64(3),
+				created_at    DateTime64(3),
+				INDEX idx_detail detail TYPE tokenbf_v1(1024, 3, 0) GRANULARITY 4
+			) ENGINE = MergeTree()
+			PARTITION BY toYYYYMM(timestamp)
+			ORDER BY (story_id, timestamp)
+			TTL toDateTime(timestamp) + INTERVAL 90 DAY
+			SETTINGS index_granularity = 8192`,
+		},
+		{
+			"alerts",
+			`CREATE TABLE IF NOT EXISTS alerts (
+				id              UInt64,
+				result_id       String,
+				host_id         String,
+				rule_id         String,
+				policy_id       String,
+				source          LowCardinality(String),
+				severity        LowCardinality(String),
+				category        LowCardinality(String),
+				title           String,
+				description     String,
+				actual          String,
+				expected        String,
+				fix_suggestion  String,
+				status          LowCardinality(String),
+				first_seen_at   DateTime64(3),
+				last_seen_at    DateTime64(3),
+				hit_count       UInt32,
+				last_notified_at DateTime64(3),
+				notify_count    UInt32,
+				resolved_at     DateTime64(3),
+				resolved_by     String,
+				resolve_reason  String,
+				created_at      DateTime64(3),
+				updated_at      DateTime64(3),
+				version         UInt64,
+				INDEX idx_host host_id TYPE bloom_filter GRANULARITY 4,
+				INDEX idx_title title TYPE tokenbf_v1(8192, 3, 0) GRANULARITY 4,
+				INDEX idx_result result_id TYPE bloom_filter GRANULARITY 4
+			) ENGINE = ReplacingMergeTree(version)
+			PARTITION BY toYYYYMM(created_at)
+			ORDER BY (result_id)
+			TTL toDateTime(created_at) + INTERVAL 365 DAY
+			SETTINGS index_granularity = 8192`,
+		},
+		{
+			"vulnerabilities",
+			`CREATE TABLE IF NOT EXISTS vulnerabilities (
+				id                       UInt64,
+				cve_id                   String,
+				osv_id                   String,
+				purl                     String,
+				severity                 LowCardinality(String),
+				cvss_score               Float32,
+				component                String,
+				description              String,
+				affected_hosts           UInt32,
+				patched_hosts            UInt32,
+				status                   LowCardinality(String),
+				discovered_at            DateTime64(3),
+				patched_at               DateTime64(3),
+				current_version          String,
+				fixed_version            String,
+				reference_url            String,
+				cvss_vector              String,
+				attack_vector            LowCardinality(String),
+				vuln_type                LowCardinality(String),
+				affected_versions        String,
+				source                   LowCardinality(String),
+				patch_available          UInt8,
+				epss_score               Float32,
+				cwe_id                   String,
+				confidence               LowCardinality(String),
+				vuln_category            LowCardinality(String),
+				restart_action           LowCardinality(String),
+				vuln_category_override   String,
+				restart_action_override  String,
+				cnvd_id                  String,
+				cnnvd_id                 String,
+				has_exploit              UInt8,
+				in_kev                   UInt8,
+				created_at               DateTime64(3),
+				updated_at               DateTime64(3),
+				version                  UInt64,
+				INDEX idx_cve cve_id TYPE bloom_filter GRANULARITY 4,
+				INDEX idx_purl purl TYPE bloom_filter GRANULARITY 4
+			) ENGINE = ReplacingMergeTree(version)
+			PARTITION BY toYYYYMM(discovered_at)
+			ORDER BY (cve_id)
+			TTL toDateTime(discovered_at) + INTERVAL 730 DAY
+			SETTINGS index_granularity = 8192`,
+		},
+		{
+			"host_vulnerabilities",
+			`CREATE TABLE IF NOT EXISTS host_vulnerabilities (
+				id                            UInt64,
+				vuln_id                       UInt64,
+				host_id                       String,
+				hostname                      String,
+				ip                            String,
+				current_version               String,
+				status                        LowCardinality(String),
+				patched_at                    DateTime64(3),
+				precheck_status               LowCardinality(String),
+				precheck_message              String,
+				precheck_packages             String,
+				precheck_affected_processes   String,
+				precheck_checked_at           DateTime64(3),
+				created_at                    DateTime64(3),
+				updated_at                    DateTime64(3),
+				version                       UInt64,
+				INDEX idx_host host_id TYPE bloom_filter GRANULARITY 4,
+				INDEX idx_vuln vuln_id TYPE bloom_filter GRANULARITY 4
+			) ENGINE = ReplacingMergeTree(version)
+			PARTITION BY toYYYYMM(created_at)
+			ORDER BY (host_id, vuln_id)
+			TTL toDateTime(created_at) + INTERVAL 365 DAY
+			SETTINGS index_granularity = 8192`,
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, t := range ddls {
+		if err := w.conn.Exec(ctx, t.ddl); err != nil {
+			w.logger.Warn("ClickHouse ensure schema 失败", zap.String("table", t.name), zap.Error(err))
+			continue
+		}
+		w.logger.Info("ClickHouse schema 就绪", zap.String("table", t.name))
+	}
 }
 
 // Close 触发最终刷新并关闭后台 goroutine

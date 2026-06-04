@@ -36,10 +36,14 @@ type pendingMsg struct {
 }
 
 // AsyncProducer 封装 sarama AsyncProducer，含降级内存队列
+//
+// 注意: 调用方传入 Send/enqueueToFallback 的 topic 必须是已包含 TopicPrefix 的
+// 完整 topic 名称（kafka.RouteDataType / kafka.DLQTopic 已负责拼接）。
+// 历史上 Producer 内部又拼一次 prefix，导致出现 "prodprodmxsec.agent.ebpf"
+// 这类不存在的 topic，引发 circuit breaker 永久打开 → 所有 EDR 消息被丢弃。
 type AsyncProducer struct {
-	producer    sarama.AsyncProducer
-	topicPrefix string
-	logger      *zap.Logger
+	producer sarama.AsyncProducer
+	logger   *zap.Logger
 
 	// 降级队列：Kafka 不可用时暂存，容量 10000
 	fallback    chan *pendingMsg
@@ -90,11 +94,10 @@ func NewAsyncProducer(cfg config.KafkaConfig, logger *zap.Logger) (*AsyncProduce
 	}
 
 	p := &AsyncProducer{
-		producer:    producer,
-		topicPrefix: cfg.TopicPrefix,
-		logger:      logger,
-		fallback:    make(chan *pendingMsg, 10000),
-		closed:      make(chan struct{}),
+		producer: producer,
+		logger:   logger,
+		fallback: make(chan *pendingMsg, 10000),
+		closed:   make(chan struct{}),
 		msgPool: sync.Pool{
 			New: func() any { return &sarama.ProducerMessage{} },
 		},
@@ -118,13 +121,8 @@ func (p *AsyncProducer) Send(topic, key string, msg *MQMessage) error {
 		return fmt.Errorf("序列化 MQMessage 失败: %w", err)
 	}
 
-	fullTopic := topic
-	if p.topicPrefix != "" {
-		fullTopic = p.topicPrefix + topic
-	}
-
 	pm := p.msgPool.Get().(*sarama.ProducerMessage)
-	pm.Topic = fullTopic
+	pm.Topic = topic
 	pm.Key = sarama.StringEncoder(key)
 	pm.Value = sarama.ByteEncoder(body)
 

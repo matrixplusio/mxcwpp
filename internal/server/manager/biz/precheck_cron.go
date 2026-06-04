@@ -113,16 +113,19 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 			continue
 		}
 
-		// 拉该 host 待巡检列表（带 vuln join 拿 component/fixed_version），上限 maxBatch
+		// 拉该 host 待巡检列表（带 vuln join 拿 component/fixed_version/vuln_category），上限 maxBatch
 		type hvWithVuln struct {
-			HostVulnID   uint   `gorm:"column:id"`
-			VulnID       uint   `gorm:"column:vuln_id"`
-			Component    string `gorm:"column:component"`
-			FixedVersion string `gorm:"column:fixed_version"`
+			HostVulnID           uint   `gorm:"column:id"`
+			VulnID               uint   `gorm:"column:vuln_id"`
+			CveID                string `gorm:"column:cve_id"`
+			Component            string `gorm:"column:component"`
+			FixedVersion         string `gorm:"column:fixed_version"`
+			VulnCategory         string `gorm:"column:vuln_category"`
+			VulnCategoryOverride string `gorm:"column:vuln_category_override"`
 		}
 		var rows []hvWithVuln
 		if err := c.db.Table("host_vulnerabilities AS hv").
-			Select("hv.id, hv.vuln_id, v.component, v.fixed_version").
+			Select("hv.id, hv.vuln_id, v.cve_id, v.component, v.fixed_version, v.vuln_category, v.vuln_category_override").
 			Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
 			Where(
 				`hv.host_id = ? AND hv.status = 'unpatched' AND (
@@ -142,11 +145,22 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 			if r.Component == "" {
 				continue
 			}
+			// P5.2: shared_lib 类要求 agent lsof 找受影响进程
+			effectiveCat := r.VulnCategory
+			if r.VulnCategoryOverride != "" {
+				effectiveCat = r.VulnCategoryOverride
+			}
+			// 优先 advisory_packages 按 host OS 取精确 fixed_version
+			fixedVer := ResolveFixedVersionForHost(c.db, r.CveID, r.Component, b.HostID)
+			if fixedVer == "" {
+				fixedVer = r.FixedVersion
+			}
 			payload := preCheckCronPayload{
-				RequestID:    fmt.Sprintf("pc-cron-%d-%d", r.HostVulnID, time.Now().Unix()),
-				HostVulnID:   r.HostVulnID,
-				Component:    r.Component,
-				FixedVersion: r.FixedVersion,
+				RequestID:              fmt.Sprintf("pc-cron-%d-%d", r.HostVulnID, time.Now().Unix()),
+				HostVulnID:             r.HostVulnID,
+				Component:              r.Component,
+				FixedVersion:           fixedVer,
+				CheckAffectedProcesses: effectiveCat == model.VulnCategorySharedLib,
 			}
 			body, _ := json.Marshal(payload)
 			task := &grpcProto.Task{
@@ -181,10 +195,11 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 }
 
 type preCheckCronPayload struct {
-	RequestID    string `json:"request_id"`
-	HostVulnID   uint   `json:"host_vuln_id"`
-	Component    string `json:"component"`
-	FixedVersion string `json:"fixed_version"`
+	RequestID              string `json:"request_id"`
+	HostVulnID             uint   `json:"host_vuln_id"`
+	Component              string `json:"component"`
+	FixedVersion           string `json:"fixed_version"`
+	CheckAffectedProcesses bool   `json:"check_affected_processes,omitempty"`
 }
 
 // InvalidateCacheForVuln 当某 vuln 的 component / fixed_version 更新（漏洞库同步）时，

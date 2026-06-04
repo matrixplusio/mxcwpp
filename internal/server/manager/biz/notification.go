@@ -34,6 +34,41 @@ func NewNotificationService(db *gorm.DB, logger *zap.Logger) *NotificationServic
 	}
 }
 
+// resolveFrontendURL 解析告警跳转链接的前端域名。
+//
+// 优先级：
+//  1. system_configs.site_config.SiteDomain（全局，UI 设置→系统设置 "前端访问域名"）
+//  2. notification.FrontendURL（每通知单独配置，UI 通知管理）— 兼容历史数据
+//  3. ""（不展示"查看详情"按钮）
+//
+// 历史问题：旧代码只读 notification.FrontendURL，每通知都要单独输入域名；
+// 用户在系统设置里填了域名但 Lark/钉钉/Webhook 仍走 IP（因 notification.frontend_url 空）。
+// 现统一从全局 SiteDomain 取，notification.FrontendURL 仅作为 fallback。
+func (s *NotificationService) resolveFrontendURL(notificationURL string) string {
+	if domain := s.loadSiteDomain(); domain != "" {
+		return strings.TrimSuffix(domain, "/")
+	}
+	return strings.TrimSuffix(notificationURL, "/")
+}
+
+// loadSiteDomain 从 system_configs.site_config 读 site_domain；失败返空（不阻塞通知发送）。
+func (s *NotificationService) loadSiteDomain() string {
+	if s.db == nil {
+		return ""
+	}
+	var row systemConfigRow
+	if err := s.db.Where("`key` = ? AND category = ?", "site_config", "site").Take(&row).Error; err != nil {
+		return ""
+	}
+	var sc struct {
+		SiteDomain string `json:"site_domain"`
+	}
+	if err := json.Unmarshal([]byte(row.Value), &sc); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(sc.SiteDomain)
+}
+
 // AlertData 告警数据（基线安全告警）
 type AlertData struct {
 	// 主机信息
@@ -442,20 +477,14 @@ func (s *NotificationService) buildLarkAlertCard(
 	}
 	rawDataText := "原始数据如下:\n" + strings.Join(rawDataLines, "\n")
 
-	// 构建跳转 URL
+	// 构建跳转 URL：优先全局 site_domain，回退 notification.FrontendURL
 	alertURL := ""
-	if notification.FrontendURL != "" {
-		// 构建告警详情页面的 URL
-		// 格式：前端地址 + /alerts/{alert_id} 或 /alerts?result_id={result_id}
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
 		resultID := alertData.ResultID
 		if resultID == "" {
-			resultID = alertData.RuleID // 如果没有 result_id，使用 rule_id
+			resultID = alertData.RuleID
 		}
-		// 优先使用 result_id 查询告警，如果没有则使用 host_id 和 rule_id
-		alertURL = fmt.Sprintf("%s/alerts?result_id=%s",
-			strings.TrimSuffix(notification.FrontendURL, "/"),
-			resultID,
-		)
+		alertURL = fmt.Sprintf("%s/alerts?result_id=%s", base, resultID)
 	}
 
 	// 构建卡片元素
@@ -989,13 +1018,10 @@ func (s *NotificationService) buildLarkAgentOfflineCard(
 		offlineData.OfflineAt.Format("2006-01-02 15:04:05"),
 	)
 
-	// 构建跳转 URL
+	// 构建跳转 URL：优先全局 site_domain
 	hostURL := ""
-	if notification.FrontendURL != "" {
-		hostURL = fmt.Sprintf("%s/assets/hosts?host_id=%s",
-			strings.TrimSuffix(notification.FrontendURL, "/"),
-			offlineData.HostID,
-		)
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		hostURL = fmt.Sprintf("%s/assets/hosts?host_id=%s", base, offlineData.HostID)
 	}
 
 	// 构建卡片元素
@@ -1278,8 +1304,8 @@ func (s *NotificationService) buildLarkAgentOnlineCard(
 		},
 	}
 
-	// 添加查看详情按钮
-	if notification.FrontendURL != "" {
+	// 添加查看详情按钮：优先全局 site_domain
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
 		elements = append(elements, map[string]interface{}{
 			"tag": "action",
 			"actions": []map[string]interface{}{
@@ -1290,7 +1316,7 @@ func (s *NotificationService) buildLarkAgentOnlineCard(
 						"content": "查看主机详情",
 					},
 					"type": "primary",
-					"url":  fmt.Sprintf("%s/hosts/%s", strings.TrimSuffix(notification.FrontendURL, "/"), onlineData.HostID),
+					"url":  fmt.Sprintf("%s/hosts/%s", base, onlineData.HostID),
 				},
 			},
 		})
@@ -1536,8 +1562,8 @@ func (s *NotificationService) buildLarkVirusCard(notification *model.Notificatio
 		data.Action, data.DetectedAt.Format("2006-01-02 15:04:05"),
 	)
 	elements := []map[string]interface{}{larkTextDiv(desc)}
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/virus/scan", strings.TrimSuffix(notification.FrontendURL, "/"))
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		url := fmt.Sprintf("%s/virus/scan", base)
 		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
 	}
 	return s.buildLarkCardMessage(notification, "🦠 病毒查杀告警", s.getSeverityTemplate(data.Severity), elements)
@@ -1634,8 +1660,8 @@ func (s *NotificationService) buildLarkFIMCard(notification *model.Notification,
 		data.DetectedAt.Format("2006-01-02 15:04:05"),
 	)
 	elements := []map[string]interface{}{larkTextDiv(desc)}
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/fim?host_id=%s", strings.TrimSuffix(notification.FrontendURL, "/"), data.HostID)
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		url := fmt.Sprintf("%s/fim?host_id=%s", base, data.HostID)
 		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
 	}
 	return s.buildLarkCardMessage(notification, "📁 文件完整性告警", s.getSeverityTemplate(data.Severity), elements)
@@ -1719,8 +1745,8 @@ func (s *NotificationService) buildLarkDetectionCard(notification *model.Notific
 	if data.Description != "" {
 		elements = append(elements, larkHR(), larkTextDiv("**规则说明：**\n"+data.Description))
 	}
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/detection/alerts?host_id=%s", strings.TrimSuffix(notification.FrontendURL, "/"), data.HostID)
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		url := fmt.Sprintf("%s/detection/alerts?host_id=%s", base, data.HostID)
 		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
 	}
 	return s.buildLarkCardMessage(notification, "🛡️ 检测告警", s.getSeverityTemplate(data.Severity), elements)
@@ -1821,8 +1847,8 @@ func (s *NotificationService) buildLarkKubeCard(notification *model.Notification
 	if data.Message != "" {
 		elements = append(elements, larkHR(), larkTextDiv("**告警详情：**\n"+data.Message))
 	}
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/kube/alarms", strings.TrimSuffix(notification.FrontendURL, "/"))
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		url := fmt.Sprintf("%s/kube/alarms", base)
 		elements = append(elements, larkHR(), larkActionButton("查看详情", url))
 	}
 	return s.buildLarkCardMessage(notification, "☸️ K8s 安全告警", s.getSeverityTemplate(data.Severity), elements)
@@ -1963,10 +1989,9 @@ func (s *NotificationService) buildLarkBulletinCard(notification *model.Notifica
 		defaultStr(b.Source, "未知"), bulletinStatusLabel(b.Status))
 	elements = append(elements, larkTextDiv(meta))
 
-	// 跳转按钮
-	if notification.FrontendURL != "" {
-		url := fmt.Sprintf("%s/vuln-bulletins/%d",
-			strings.TrimSuffix(notification.FrontendURL, "/"), b.ID)
+	// 跳转按钮：优先全局 site_domain
+	if base := s.resolveFrontendURL(notification.FrontendURL); base != "" {
+		url := fmt.Sprintf("%s/vuln-bulletins/%d", base, b.ID)
 		elements = append(elements, larkActionButton("查看详情", url))
 	}
 

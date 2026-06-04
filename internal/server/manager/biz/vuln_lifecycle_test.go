@@ -79,42 +79,48 @@ func setupVulnLifecycleDB(t *testing.T) *gorm.DB {
 			deleted_at        DATETIME
 		)`,
 		`CREATE TABLE host_vulnerabilities (
-			id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-			vuln_id              INTEGER NOT NULL,
-			host_id              TEXT NOT NULL,
-			hostname             TEXT,
-			ip                   TEXT,
-			current_version      TEXT,
-			status               TEXT NOT NULL DEFAULT 'unpatched',
-			patched_at           DATETIME,
-			precheck_status      TEXT DEFAULT 'unchecked',
-			precheck_message     TEXT,
-			precheck_packages    TEXT,
-			precheck_checked_at  DATETIME,
-			created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+			id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+			vuln_id                       INTEGER NOT NULL,
+			host_id                       TEXT NOT NULL,
+			hostname                      TEXT,
+			ip                            TEXT,
+			current_version               TEXT,
+			status                        TEXT NOT NULL DEFAULT 'unpatched',
+			patched_at                    DATETIME,
+			precheck_status               TEXT DEFAULT 'unchecked',
+			precheck_message              TEXT,
+			precheck_packages             TEXT,
+			precheck_affected_processes   TEXT,
+			precheck_checked_at           DATETIME,
+			created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at                    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(vuln_id, host_id)
 		)`,
 		`CREATE TABLE remediation_tasks (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			vuln_id       INTEGER NOT NULL,
-			cve_id        TEXT NOT NULL,
-			host_id       TEXT NOT NULL,
-			hostname      TEXT,
-			ip            TEXT,
-			component     TEXT,
-			fixed_version TEXT,
-			command       TEXT,
-			status        TEXT NOT NULL DEFAULT 'pending',
-			exec_output   TEXT,
-			exit_code     INTEGER,
-			created_by    TEXT,
-			confirmed_by  TEXT,
-			confirmed_at  DATETIME,
-			started_at    DATETIME,
-			finished_at   DATETIME,
-			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			vuln_id           INTEGER NOT NULL,
+			cve_id            TEXT NOT NULL,
+			host_id           TEXT NOT NULL,
+			hostname          TEXT,
+			ip                TEXT,
+			component         TEXT,
+			fixed_version     TEXT,
+			command           TEXT,
+			status            TEXT NOT NULL DEFAULT 'pending',
+			exec_output       TEXT,
+			exit_code         INTEGER,
+			created_by        TEXT,
+			confirmed_by      TEXT,
+			confirmed_at      DATETIME,
+			started_at        DATETIME,
+			finished_at       DATETIME,
+			exec_confirmed_by TEXT,
+			exec_confirmed_at DATETIME,
+			verify_status     TEXT DEFAULT '',
+			verify_message    TEXT,
+			verified_at       DATETIME,
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE software (
 			id           TEXT PRIMARY KEY,
@@ -280,10 +286,10 @@ func TestScenario_Remediation_FullLifecycle_WithVerification(t *testing.T) {
 		t.Fatalf("HandleResult failed: %v", err)
 	}
 
-	// 验证：任务状态 = success
+	// P5.6: 任务状态 = success_pending_verify（等 user 手动确认）
 	db.First(task, task.ID)
-	if task.Status != "success" {
-		t.Errorf("expected task status 'success', got %q", task.Status)
+	if task.Status != model.RemTaskMainSuccessPendingVerify {
+		t.Errorf("expected task status %q, got %q", model.RemTaskMainSuccessPendingVerify, task.Status)
 	}
 	if task.ExitCode == nil || *task.ExitCode != 0 {
 		t.Error("expected exit_code = 0")
@@ -292,20 +298,15 @@ func TestScenario_Remediation_FullLifecycle_WithVerification(t *testing.T) {
 		t.Error("expected finished_at to be set")
 	}
 
-	// 验证：HostVulnerability = patched（自动验证通过）
+	// P5.6: HostVulnerability 仍 unpatched（等复测通过才标 patched，由 precheck_result.applyVerifyResult 处理）
 	var hv model.HostVulnerability
 	db.Where("vuln_id = ? AND host_id = ?", vuln.ID, "host-001").First(&hv)
-	if hv.Status != "patched" {
-		t.Errorf("expected host_vuln 'patched', got %q", hv.Status)
+	if hv.Status != "unpatched" {
+		t.Errorf("expected host_vuln 'unpatched' (verify pending), got %q", hv.Status)
 	}
-	if hv.PatchedAt == nil {
-		t.Error("expected patched_at to be set")
-	}
-
-	// 验证：漏洞主表 = patched（所有主机都已修复）
-	db.First(vuln, vuln.ID)
-	if vuln.Status != "patched" {
-		t.Errorf("expected vuln status 'patched', got %q", vuln.Status)
+	// precheck cache 应被重置触发下次复测
+	if hv.PreCheckStatus != model.PreCheckStatusUnchecked {
+		t.Errorf("expected precheck_status reset to 'unchecked', got %q", hv.PreCheckStatus)
 	}
 }
 
@@ -341,11 +342,12 @@ func TestScenario_Remediation_FallbackPatch(t *testing.T) {
 		t.Fatalf("HandleResult failed: %v", err)
 	}
 
-	// 验证：尽管自动验证未通过，仍通过 PatchVulnerability 标记为 patched
+	// P5.6: 改后行为 — exit 0 → success_pending_verify, host_vuln 暂不标 patched
+	// 真正 patched 在 user 确认 + 复测通过后由 applyVerifyResult 标记
 	var hv model.HostVulnerability
 	db.Where("vuln_id = ? AND host_id = ?", vuln.ID, "host-002").First(&hv)
-	if hv.Status != "patched" {
-		t.Errorf("expected fallback to mark 'patched', got %q", hv.Status)
+	if hv.Status != "unpatched" {
+		t.Errorf("expected host_vuln still unpatched (verify pending), got %q", hv.Status)
 	}
 }
 

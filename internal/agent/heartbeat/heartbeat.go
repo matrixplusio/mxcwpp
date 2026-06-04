@@ -143,6 +143,10 @@ func (m *Manager) sendHeartbeat() {
 				"os_version": hostInfo.OSVersion,
 				"kernel":     hostInfo.Kernel,
 				"arch":       hostInfo.Arch,
+				// P5.3: kernel livepatch capability
+				"livepatch_enabled":  boolToStr(hostInfo.LivepatchEnabled),
+				"livepatch_provider": hostInfo.LivepatchProvider,
+				"active_livepatches": strings.Join(hostInfo.ActiveLivepatches, ","),
 			},
 		},
 	}
@@ -352,6 +356,11 @@ type HostInfo struct {
 	ExtranetIPv4 []string
 	IntranetIPv6 []string
 	ExtranetIPv6 []string
+
+	// P5.3: kernel livepatch 能力（agent 启动时 detect 上报，UI 提示 kernel 漏洞是否可热补）
+	LivepatchEnabled  bool
+	LivepatchProvider string   // kpatch / canonical-livepatch / ksplice / kgraft / none
+	ActiveLivepatches []string // 已加载 livepatch 模块名（/sys/kernel/livepatch/*）
 }
 
 // collectAgentStat 采集 Agent 状态
@@ -405,7 +414,84 @@ func (m *Manager) collectHostInfo() *HostInfo {
 	// 读取网络接口信息
 	m.collectNetworkInterfaces(hostInfo)
 
+	// P5.3: 检测 kernel livepatch 能力
+	hostInfo.LivepatchEnabled, hostInfo.LivepatchProvider, hostInfo.ActiveLivepatches = m.detectKernelLivepatch()
+
 	return hostInfo
+}
+
+// boolToStr 心跳字段全是 string，bool 转 "true"/"false"
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// detectKernelLivepatch 检测主机是否启用 kernel livepatch。
+//
+// 检查顺序：
+//  1. /sys/kernel/livepatch/ 下有目录 → 已有 livepatch 加载（最准）
+//  2. rpm -q kpatch / kpatch-patch（RHEL/CentOS）
+//  3. dpkg -l canonical-livepatch（Ubuntu Pro）
+//  4. uname -v 含 "kpatch"
+//
+// 返回 provider 标识方便 UI 显示。
+func (m *Manager) detectKernelLivepatch() (enabled bool, provider string, active []string) {
+	// 1. /sys/kernel/livepatch — 已加载的活跃 livepatch（通用，最准）
+	if entries, err := os.ReadDir("/sys/kernel/livepatch"); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			// 读 enabled 文件，1=活跃
+			if data, err := os.ReadFile("/sys/kernel/livepatch/" + name + "/enabled"); err == nil {
+				if strings.TrimSpace(string(data)) == "1" {
+					active = append(active, name)
+				}
+			} else {
+				// 没 enabled 文件也认为是 livepatch 模块（兼容老内核）
+				active = append(active, name)
+			}
+		}
+		if len(active) > 0 {
+			enabled = true
+			provider = "kernel.livepatch"
+		}
+	}
+
+	// 2. RHEL/CentOS kpatch
+	if out, err := exec.Command("rpm", "-q", "kpatch").Output(); err == nil &&
+		!strings.Contains(string(out), "not installed") {
+		enabled = true
+		if provider == "" {
+			provider = "kpatch"
+		}
+	}
+
+	// 3. Ubuntu Pro canonical-livepatch
+	if _, err := os.Stat("/usr/bin/canonical-livepatch"); err == nil {
+		enabled = true
+		if provider == "" {
+			provider = "canonical-livepatch"
+		}
+	}
+
+	// 4. kernel build 含 kpatch 标识（兜底）
+	if out, err := exec.Command("uname", "-v").Output(); err == nil {
+		if strings.Contains(strings.ToLower(string(out)), "kpatch") {
+			enabled = true
+			if provider == "" {
+				provider = "kpatch (kernel-builtin)"
+			}
+		}
+	}
+
+	if !enabled {
+		provider = "none"
+	}
+	return
 }
 
 // readOSRelease 读取 /etc/os-release 文件获取 OS 信息

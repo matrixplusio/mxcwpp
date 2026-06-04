@@ -158,6 +158,41 @@
           </a-select>
 
           <a-select
+            v-model:value="filterVulnCategory"
+            style="width: 150px"
+            placeholder="类别"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="kernel">内核</a-select-option>
+            <a-select-option value="critical_shared_lib">关键共享库</a-select-option>
+            <a-select-option value="shared_lib">共享库</a-select-option>
+            <a-select-option value="system_daemon">系统服务</a-select-option>
+            <a-select-option value="cli_tool">CLI 工具</a-select-option>
+            <a-select-option value="web_service">Web 服务</a-select-option>
+            <a-select-option value="db_service">数据库</a-select-option>
+            <a-select-option value="container_runtime">容器运行时</a-select-option>
+            <a-select-option value="virtualization">虚拟化</a-select-option>
+            <a-select-option value="language_dep">语言依赖</a-select-option>
+            <a-select-option value="other">其他</a-select-option>
+          </a-select>
+
+          <a-select
+            v-model:value="filterRestartAction"
+            style="width: 170px"
+            placeholder="重启影响"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="reboot_host">🔴 需重启主机</a-select-option>
+            <a-select-option value="restart_dependent_services">🟠 需重启依赖</a-select-option>
+            <a-select-option value="restart_specific_service">🟡 需重启服务</a-select-option>
+            <a-select-option value="no_action">🟢 无需重启</a-select-option>
+            <a-select-option value="rebuild_app">🔵 需重 build</a-select-option>
+            <a-select-option value="unknown">⚪ 影响未知</a-select-option>
+          </a-select>
+
+          <a-select
             v-model:value="filterSort"
             style="width: 160px"
             placeholder="排序方式"
@@ -171,6 +206,13 @@
           <div class="filter-actions">
             <a-button @click="handleReset">重置</a-button>
             <a-button @click="handleExport">导出当前结果</a-button>
+            <a-button
+              v-if="isAdmin"
+              :loading="preCheckAllOnlineLoading"
+              @click="handlePreCheckAllOnline"
+            >
+              全集群 Pre-check
+            </a-button>
             <a-dropdown>
               <a-button type="primary">立即扫描 <DownOutlined /></a-button>
               <template #overlay>
@@ -343,20 +385,51 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
 import { vulnerabilitiesApi } from '@/api/vulnerabilities'
 import { remediationTasksApi } from '@/api/remediation-tasks'
+import { hostVulnPreCheckApi } from '@/api/host-vuln-precheck'
+import { useAuthStore } from '@/stores/auth'
 import type { SecurityDBSyncRecord } from '@/api/antivirus'
 import type { Vulnerability, VulnerabilityStats } from '@/api/types'
 import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.user?.role === 'admin')
+
+const preCheckAllOnlineLoading = ref(false)
+const handlePreCheckAllOnline = () => {
+  Modal.confirm({
+    title: '全集群 Pre-check',
+    content:
+      '将对所有 online 主机的未修复漏洞触发本机 dnf/apt 实测校验。集群规模大时会消耗包管理器与仓库源带宽，通常需要数十分钟到数小时。是否继续？',
+    okText: '确认下发',
+    okType: 'primary',
+    cancelText: '取消',
+    onOk: async () => {
+      preCheckAllOnlineLoading.value = true
+      try {
+        const r = await hostVulnPreCheckApi.triggerAllOnline()
+        message.success(
+          `已下发：${r.hosts_dispatched}/${r.hosts_total} 主机，共 ${r.scheduled} 条任务（失败 ${r.failed}），结果数十分钟内陆续回报`,
+        )
+      } catch (err: any) {
+        message.error('全集群 Pre-check 失败: ' + (err?.message || err))
+      } finally {
+        preCheckAllOnlineLoading.value = false
+      }
+    },
+  })
+}
 
 const searchText = ref('')
 const filterSeverity = ref<string>()
 const filterStatus = ref<string>()
+const filterVulnCategory = ref<string>()
+const filterRestartAction = ref<string>()
 const filterComponent = ref('')
 const filterExploitStatus = ref<string>()
 const filterPriority = ref<string>()
@@ -429,6 +502,7 @@ const vulnCategoryConfig: Record<string, { color: string; text: string }> = {
   web_service:         { color: 'cyan',    text: 'Web 服务' },
   db_service:          { color: 'geekblue',text: '数据库' },
   container_runtime:   { color: 'purple',  text: '容器运行时' },
+  virtualization:      { color: 'magenta', text: '虚拟化' },
   language_dep:        { color: 'blue',    text: '语言依赖' },
   other:               { color: 'default', text: '其他' },
 }
@@ -577,6 +651,8 @@ const loadVulns = async () => {
       component: filterComponent.value || undefined,
       exploit_status: filterExploitStatus.value || undefined,
       priority: filterPriority.value || undefined,
+      vuln_category: filterVulnCategory.value || undefined,
+      restart_action: filterRestartAction.value || undefined,
       sort: filterSort.value || undefined,
     })
     vulns.value = res.items ?? []
@@ -714,6 +790,8 @@ const handleReset = () => {
   filterComponent.value = ''
   filterExploitStatus.value = undefined
   filterPriority.value = undefined
+  filterVulnCategory.value = undefined
+  filterRestartAction.value = undefined
   filterSort.value = undefined
   filterHostId.value = undefined
   pagination.value.current = 1

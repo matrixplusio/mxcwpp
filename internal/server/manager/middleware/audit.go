@@ -3,10 +3,13 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"strings"
+	"time"
 
+	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -58,8 +61,18 @@ var sensitiveFields = map[string]bool{
 	"credentials":  true,
 }
 
-// AuditLog 审计日志中间件，记录 POST/PUT/DELETE 操作
+// AuditLog 审计日志中间件，记录 POST/PUT/DELETE 操作。
+//
+// 路径按 feature_flag.data_source.audit_log 决定 MySQL or CH。
+// chConn 为 nil 时强制走 MySQL；flag 启动时读一次缓存。
 func AuditLog(db *gorm.DB, logger *zap.Logger) gin.HandlerFunc {
+	return AuditLogWithCH(db, nil, logger)
+}
+
+// AuditLogWithCH 同 AuditLog 但允许注入 ClickHouse 写入路径。
+func AuditLogWithCH(db *gorm.DB, chConn chdriver.Conn, logger *zap.Logger) gin.HandlerFunc {
+	target := readAuditTarget(db, logger)
+	logger.Info("审计日志通道", zap.String("target", target), zap.Bool("ch_available", chConn != nil))
 	return func(c *gin.Context) {
 		method := c.Request.Method
 		// 只记录写操作
@@ -97,10 +110,94 @@ func AuditLog(db *gorm.DB, logger *zap.Logger) gin.HandlerFunc {
 			Detail:       detail,
 		}
 
+		if target == "ch" && chConn != nil {
+			if err := writeAuditCH(chConn, log); err != nil {
+				logger.Warn("审计日志 CH 写入失败，回落 MySQL", zap.Error(err))
+				if err := db.Create(log).Error; err != nil {
+					logger.Warn("审计日志 MySQL 写入失败", zap.Error(err))
+				}
+			}
+			return
+		}
 		if err := db.Create(log).Error; err != nil {
 			logger.Warn("记录审计日志失败", zap.Error(err))
 		}
 	}
+}
+
+// readAuditTarget 启动时读 feature_flag.data_source.audit_log。
+// 不缓存运行时变化，需重启 manager 生效。
+func readAuditTarget(db *gorm.DB, logger *zap.Logger) string {
+	var f model.FeatureFlag
+	if err := db.Where("flag_key = ?", model.FlagDataSourceAuditLog).First(&f).Error; err != nil {
+		logger.Warn("audit_log feature flag 读取失败，使用 mysql 默认", zap.Error(err))
+		return "mysql"
+	}
+	if f.Value != "ch" {
+		return "mysql"
+	}
+	return "ch"
+}
+
+// writeAuditCH 把单条审计日志写到 CH mxsec.audit_log。
+// CH 端 schema: timestamp / user_id / action / resource / detail / ip
+// MySQL 模型字段更丰富，部分序列化压缩到 resource+detail 字段。
+func writeAuditCH(conn chdriver.Conn, log *model.AuditLog) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	batch, err := conn.PrepareBatch(ctx,
+		"INSERT INTO audit_log (timestamp, user_id, action, resource, detail, ip)")
+	if err != nil {
+		return err
+	}
+	// resource 字段拼 resource_type/resource_id + status_code 信息
+	resource := log.ResourceType
+	if log.ResourceID != "" {
+		resource = resource + "/" + log.ResourceID
+	}
+	if log.Path != "" {
+		resource = resource + " " + log.Path
+	}
+	// detail 拼 status_code 让 CH 端易查
+	detail := log.Detail
+	if log.StatusCode != 0 {
+		if detail != "" {
+			detail = detail + " | "
+		}
+		detail = detail + "status=" + intToStr(log.StatusCode)
+	}
+	ts := time.Time(log.CreatedAt)
+	if ts.IsZero() {
+		ts = time.Now()
+	}
+	if err := batch.Append(ts, log.Username, log.Action, resource, detail, log.IP); err != nil {
+		return err
+	}
+	return batch.Send()
+}
+
+// intToStr 把 int 转字符串，避免引入 strconv 全文件 import。
+func intToStr(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := false
+	if n < 0 {
+		neg = true
+		n = -n
+	}
+	buf := [20]byte{}
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 // captureRequestBody 读取并返回脱敏后的请求体摘要

@@ -6,7 +6,18 @@
         <ArrowLeftOutlined />
       </a-button>
       <div class="header-content">
-        <h2 style="margin: 0">{{ host?.hostname || '主机详情' }}</h2>
+        <h2 style="margin: 0">
+          {{ host?.hostname || '主机详情' }}
+          <!-- P5.3 kernel livepatch badge —— 提示运维内核漏洞可能可热补 -->
+          <a-tooltip
+            v-if="host?.kernel_livepatch_enabled"
+            :title="`Provider: ${host.kernel_livepatch_provider || 'unknown'}\n活跃 livepatch: ${host.active_livepatches || '(无)'}\n\n内核漏洞修复时，可能不需要 reboot 主机（具体 CVE 需查 vendor advisory）`"
+          >
+            <a-tag color="green" style="margin-left: 8px; cursor: help">
+              ✅ kpatch 启用
+            </a-tag>
+          </a-tooltip>
+        </h2>
       </div>
     </div>
 
@@ -51,7 +62,7 @@
         <SecurityAlerts :host-id="hostId" />
       </a-tab-pane>
       <a-tab-pane key="vulnerabilities" :tab="`漏洞风险(${vulnerabilityCount})`">
-        <VulnerabilityRisk :host-id="hostId" />
+        <VulnerabilityRisk :host-id="hostId" :host="host || undefined" />
       </a-tab-pane>
       <a-tab-pane key="baseline" :tab="`基线风险(${baselineCount})`">
         <BaselineRisk :host-id="hostId" />

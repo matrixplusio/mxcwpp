@@ -228,7 +228,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 120s
+      start_period: 180s
     networks:
       - mxsec-net
 
@@ -381,6 +381,28 @@ services:
   #   - 告警路由已由 mxsec alerts 表 + notification 系统覆盖 (Lark/Webhook)
   # 替代：Prometheus 直 webhook 到 manager /api/v1/internal/alerts/prometheus，
   #       告警入 alerts 表 (source=prometheus_infra)，复用现有 notification 分发。
+
+  # ==================== PDF 服务端渲染（Gotenberg） ====================
+  # 提供 Chromium 服务端 PDF 生成，替代前端 jsPDF 大数据集卡死问题。
+  # 通过 HTTP API: POST /forms/chromium/convert/url
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: mxsec-gotenberg
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--chromium-disable-web-security"
+      - "--chromium-allow-list=.*"
+      - "--api-port=3000"
+    ports:
+      - "13000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mxsec-net
 
 networks:
   mxsec-net:

@@ -90,7 +90,7 @@ func (a *AlpineSource) fetchOne(ctx context.Context, url string) (*alpineSecdb, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := a.client.Do(req)
+	resp, err := DoWithBackoff(ctx, a.client, req, 3)
 	if err != nil {
 		return nil, err
 	}

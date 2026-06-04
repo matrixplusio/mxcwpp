@@ -277,6 +277,10 @@ export interface Host {
   agent_start_time?: string // Agent 启动时间
   system_boot_time?: string // 系统启动时间
   last_active_time?: string // 最近活跃时间
+  // P5.3 kernel livepatch capability
+  kernel_livepatch_enabled?: boolean
+  kernel_livepatch_provider?: string // kpatch / canonical-livepatch / kernel.livepatch / none
+  active_livepatches?: string        // 逗号分隔的活跃 livepatch 模块名
 }
 
 // 磁盘信息类型（用于 Host 的 disk_info 字段）

@@ -394,6 +394,79 @@ func (h *RemediationTasksHandler) ConfirmTask(c *gin.Context) {
 	SuccessMessage(c, "任务已确认，等待执行")
 }
 
+// ConfirmExecuted P5.6: user 点 "确认已执行" 后触发复测
+// POST /api/v1/remediation-tasks/:id/confirm-executed
+// 仅 status=success_pending_verify 可调用；成功后 status→main_verifying，触发 pre-check
+type RemediationTaskVerifyHandler struct {
+	db         *gorm.DB
+	logger     *zap.Logger
+	dispatcher biz.PreCheckDispatcher
+}
+
+func NewRemediationTaskVerifyHandler(db *gorm.DB, logger *zap.Logger, dispatcher biz.PreCheckDispatcher) *RemediationTaskVerifyHandler {
+	return &RemediationTaskVerifyHandler{db: db, logger: logger, dispatcher: dispatcher}
+}
+
+func (h *RemediationTaskVerifyHandler) ConfirmExecuted(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		BadRequest(c, "无效的任务 ID")
+		return
+	}
+	var task model.RemediationTask
+	if err := h.db.First(&task, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			NotFound(c, "任务不存在")
+			return
+		}
+		InternalError(c, "查询任务失败")
+		return
+	}
+	if task.Status != model.RemTaskMainSuccessPendingVerify {
+		BadRequest(c, fmt.Sprintf("仅 success_pending_verify 状态可确认（当前 %s）", task.Status))
+		return
+	}
+
+	// 找 host_vuln_id
+	var hv model.HostVulnerability
+	if err := h.db.Where("vuln_id = ? AND host_id = ?", task.VulnID, task.HostID).First(&hv).Error; err != nil {
+		InternalError(c, "找不到关联 host_vulnerability，无法复测")
+		return
+	}
+
+	username, _ := c.Get("username")
+	confirmedBy, _ := username.(string)
+	now := model.Now()
+	if err := h.db.Model(&task).Updates(map[string]any{
+		"status":            model.RemTaskMainVerifying,
+		"exec_confirmed_by": confirmedBy,
+		"exec_confirmed_at": now,
+		"verify_status":     "verifying",
+		"verify_message":    "已确认执行，触发 pre-check 复测中",
+	}).Error; err != nil {
+		InternalError(c, "更新任务状态失败")
+		return
+	}
+
+	// 派发 pre-check 任务给 agent；pre-check 回报后 biz/precheck_result.go 检测有 verifying task → 更新 verify_status
+	reqID, err := biz.DispatchPreCheckForHostVuln(h.db, h.dispatcher, hv.ID, "pc-verify")
+	if err != nil {
+		// 派发失败 → 标 verify_blocked
+		h.db.Model(&task).Updates(map[string]any{
+			"verify_status":  "verify_blocked",
+			"verify_message": "pre-check 派发失败: " + err.Error(),
+		})
+		InternalError(c, "派发复测失败: "+err.Error())
+		return
+	}
+	Success(c, gin.H{
+		"taskId":       task.ID,
+		"requestId":    reqID,
+		"verifyStatus": "verifying",
+		"message":      "已派发 pre-check 复测，结果将异步回报",
+	})
+}
+
 // CancelTask 取消修复任务
 // POST /api/v1/remediation-tasks/:id/cancel
 func (h *RemediationTasksHandler) CancelTask(c *gin.Context) {
@@ -848,12 +921,17 @@ func (h *RemediationTasksHandler) GetTaskStats(c *gin.Context) {
 		Scan(&rows)
 
 	result := map[string]int64{
-		"pending":   0,
-		"confirmed": 0,
-		"running":   0,
-		"success":   0,
-		"failed":    0,
-		"cancelled": 0,
+		"pending":                0,
+		"confirmed":              0,
+		"running":                0,
+		"success":                0,
+		"success_pending_verify": 0, // P5.6
+		"main_verifying":         0, // P5.6
+		"verified":               0, // P5.6
+		"verify_failed":          0, // P5.6
+		"verify_blocked":         0, // P5.6
+		"failed":                 0,
+		"cancelled":              0,
 	}
 	var total int64
 	for _, r := range rows {
@@ -862,10 +940,11 @@ func (h *RemediationTasksHandler) GetTaskStats(c *gin.Context) {
 	}
 	result["total"] = total
 
-	// 今日完成数
+	// 今日完成数：success / verified 都算成功（兼容 legacy）
 	var todaySuccess int64
 	h.db.Model(&model.RemediationTask{}).
-		Where("status = ? AND finished_at >= ?", "success", time.Now().Format("2006-01-02")).
+		Where("status IN ? AND finished_at >= ?",
+			[]string{"success", model.RemTaskMainVerified}, time.Now().Format("2006-01-02")).
 		Count(&todaySuccess)
 	result["todaySuccess"] = todaySuccess
 

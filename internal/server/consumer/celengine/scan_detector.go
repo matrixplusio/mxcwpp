@@ -6,7 +6,10 @@ package celengine
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -28,6 +31,8 @@ const (
 	scanAlertCooldown = 5 * time.Minute
 	// scanCooldownPrefix Redis 冷却 key 前缀
 	scanCooldownPrefix = "scan:cd:"
+	// whitelistReloadInterval 源 IP 白名单 reload 间隔
+	whitelistReloadInterval = 1 * time.Minute
 )
 
 // ScanDetector 端口扫描检测器
@@ -35,6 +40,10 @@ type ScanDetector struct {
 	rdb    *redis.Client
 	db     *gorm.DB
 	logger *zap.Logger
+
+	// 源 IP 白名单缓存（从 alert_whitelists 表 source_ip_cidr 字段加载）
+	whitelistMu    sync.RWMutex
+	whitelistCIDRs []*net.IPNet
 }
 
 // NewScanDetector 创建端口扫描检测器
@@ -43,11 +52,79 @@ func NewScanDetector(rdb *redis.Client, db *gorm.DB, logger *zap.Logger) *ScanDe
 	if rdb == nil {
 		return nil
 	}
-	return &ScanDetector{
+	d := &ScanDetector{
 		rdb:    rdb,
 		db:     db,
 		logger: logger,
 	}
+	// 启动时立即加载一次，后续由 StartWhitelistReload 周期刷新
+	d.reloadWhitelist()
+	return d
+}
+
+// StartWhitelistReload 启动后台 goroutine 周期 reload 源 IP 白名单。
+// 调用方需保证只调用一次；ctx 取消时退出。
+func (d *ScanDetector) StartWhitelistReload(ctx context.Context) {
+	if d == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(whitelistReloadInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				d.reloadWhitelist()
+			}
+		}
+	}()
+}
+
+// reloadWhitelist 从 alert_whitelists 表加载 source_ip_cidr 非空的记录。
+// 解析失败的 CIDR 写 warn 但不影响其他条目。
+func (d *ScanDetector) reloadWhitelist() {
+	var rows []model.AlertWhitelist
+	if err := d.db.Select("source_ip_cidr").
+		Where("source_ip_cidr <> ''").
+		Find(&rows).Error; err != nil {
+		d.logger.Warn("加载 ScanDetector 源 IP 白名单失败", zap.Error(err))
+		return
+	}
+	cidrs := make([]*net.IPNet, 0, len(rows))
+	bad := 0
+	for _, r := range rows {
+		_, n, err := net.ParseCIDR(strings.TrimSpace(r.SourceIPCIDR))
+		if err != nil {
+			bad++
+			continue
+		}
+		cidrs = append(cidrs, n)
+	}
+	d.whitelistMu.Lock()
+	d.whitelistCIDRs = cidrs
+	d.whitelistMu.Unlock()
+	d.logger.Debug("ScanDetector 源 IP 白名单已更新",
+		zap.Int("loaded", len(cidrs)),
+		zap.Int("invalid", bad),
+	)
+}
+
+// isSourceWhitelisted 判断源 IP 是否在白名单内。
+func (d *ScanDetector) isSourceWhitelisted(remoteAddr string) bool {
+	ip := net.ParseIP(strings.TrimSpace(remoteAddr))
+	if ip == nil {
+		return false
+	}
+	d.whitelistMu.RLock()
+	defer d.whitelistMu.RUnlock()
+	for _, n := range d.whitelistCIDRs {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckIncomingConnection 检查入站连接是否构成端口扫描
@@ -57,6 +134,11 @@ func NewScanDetector(rdb *redis.Client, db *gorm.DB, logger *zap.Logger) *ScanDe
 // fields: 事件原始字段（用于告警详情）
 func (d *ScanDetector) CheckIncomingConnection(hostID, remoteAddr, localPort string, fields map[string]string) {
 	if d == nil || remoteAddr == "" || localPort == "" {
+		return
+	}
+	// 跳过用户在 alert_whitelists 表配置的合法扫描源
+	// （如 k8s/GKE node pool 健康探测、集群内部端口扫描工具等）
+	if d.isSourceWhitelisted(remoteAddr) {
 		return
 	}
 

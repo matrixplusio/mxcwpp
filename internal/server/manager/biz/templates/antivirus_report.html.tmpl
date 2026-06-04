@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{.Meta.Title}}</title>
+<style>
+  /* ============== Page setup ============== */
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 10px;
+      color: #6b7280;
+    }
+    @bottom-left {
+      content: "矩阵云安全平台 · 病毒查杀专项报告";
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 9px;
+      color: #9ca3af;
+    }
+    @bottom-right {
+      content: "机密 · 仅限内部使用";
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 9px;
+      color: #dc2626;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @bottom-center { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    color: #1f2937;
+    font-size: 14px;
+    line-height: 1.75;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ============== Cover ============== */
+  .cover {
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 28mm 22mm 24mm 22mm;
+    background:
+      radial-gradient(ellipse at top right, rgba(114,46,209,0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom left, rgba(37,99,235,0.08) 0%, transparent 50%),
+      #ffffff;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    row-gap: 0;
+    page-break-after: always;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .cover-meta { align-self: end; }
+  .cover::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, #2563eb 0%, #722ed1 100%);
+  }
+  .cover-brand { display: flex; align-items: center; gap: 18px; }
+  .cover-brand img { width: 64px; height: 64px; }
+  .cover-brand-name {
+    font-size: 22px; font-weight: 600; color: #1f2937; line-height: 1.2;
+    letter-spacing: 2px;
+  }
+  .cover-brand-en {
+    font-size: 12px; color: #6b7280;
+    font-family: "JetBrains Mono", Consolas, monospace; margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .cover-mid {
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    min-height: 0;
+  }
+  .cover-kind {
+    font-size: 20px; letter-spacing: 10px; color: #2563eb;
+    font-weight: 500; margin-bottom: 24px;
+  }
+  .cover-title {
+    font-size: 60px; font-weight: 700; letter-spacing: 10px;
+    background: linear-gradient(135deg, #2563eb 0%, #722ed1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin: 0 0 30px 0;
+  }
+  .cover-period {
+    font-size: 19px; color: #374151;
+    padding: 10px 28px; border: 1px solid #d1d5db; border-radius: 999px;
+    background: #ffffff;
+  }
+  .cover-deco {
+    margin-top: 22px;
+    width: 240px; height: 4px;
+    background: linear-gradient(90deg, transparent, #2563eb, #722ed1, transparent);
+  }
+
+  /* 亮点四列 */
+  .cover-highlights {
+    margin-top: 36px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    width: 100%;
+  }
+  .cover-highlights .hl {
+    padding: 14px 10px;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #2563eb;
+    border-radius: 6px;
+    background: #ffffff;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .cover-highlights .hl.hl-c { border-top-color: #dc2626; }
+  .cover-highlights .hl.hl-b { border-top-color: #ea580c; }
+  .cover-highlights .hl.hl-p { border-top-color: #722ed1; }
+  .cover-highlights .hl-num {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 26px; font-weight: 700; color: #111827;
+    letter-spacing: -0.5px; line-height: 1.1;
+  }
+  .cover-highlights .hl-lbl {
+    font-size: 11.5px; color: #6b7280; margin-top: 4px;
+  }
+
+  /* 本期摘要 */
+  .cover-summary {
+    margin-top: 28px;
+    width: 100%;
+    padding: 16px 18px;
+    border-left: 4px solid #2563eb;
+    background: linear-gradient(90deg, rgba(37,99,235,0.04) 0%, transparent 100%);
+    border-radius: 4px;
+  }
+  .cover-summary-title {
+    font-size: 15px; font-weight: 600; color: #2563eb;
+    margin-bottom: 8px; letter-spacing: 2px;
+  }
+  .cover-summary-text {
+    font-size: 14px; color: #374151; line-height: 1.9;
+    text-align: justify;
+  }
+
+  .cover-meta {
+    border-top: 2px solid #e5e7eb;
+    padding-top: 22px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 40px;
+    font-size: 14.5px;
+  }
+  .cover-meta-row { display: flex; justify-content: space-between; }
+  .cover-meta-label { color: #6b7280; }
+  .cover-meta-value { font-family: "JetBrains Mono", Consolas, monospace; font-weight: 500; color: #111827; }
+  .cover-class {
+    grid-column: span 2; margin-top: 16px; text-align: center;
+    color: #dc2626; font-weight: 600; letter-spacing: 5px;
+    font-size: 15px;
+    padding: 8px;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    background: rgba(220, 38, 38, 0.04);
+    border-radius: 4px;
+  }
+
+  /* ============== Page ============== */
+  .page {
+    padding: 0 2mm;
+  }
+  .force-break { page-break-before: always; break-before: page; }
+
+  /* TOC */
+  .toc.page {
+    box-sizing: border-box;
+    padding: 12mm 12mm 14mm 12mm;
+    display: flex; flex-direction: column;
+  }
+  .toc h2 { text-align: center; letter-spacing: 16px; font-size: 30px; margin: 0 0 6mm 0; color: #1f2937; }
+  .toc .toc-list { list-style: none; padding: 0; margin: 0; counter-reset: toc; max-width: 170mm; margin-left: auto; margin-right: auto; width: 100%; }
+  .toc .toc-list > li {
+    counter-increment: toc;
+    display: flex; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px dotted #d1d5db;
+    font-size: 15.5px;
+  }
+  .toc .toc-list > li::before {
+    content: counter(toc) ".";
+    color: #2563eb; font-family: "JetBrains Mono", Consolas, monospace;
+    font-weight: 600; min-width: 32px; font-size: 16px;
+  }
+  .toc-title { flex: 1; }
+  .toc-page { color: #6b7280; font-family: "JetBrains Mono", Consolas, monospace; font-size: 14px; }
+  .toc-hint {
+    margin: 4mm auto 0; max-width: 170mm; padding: 10px 14px;
+    background: #f9fafb; border-left: 3px solid #2563eb;
+    font-size: 12.5px; color: #4b5563; line-height: 1.7;
+  }
+  .toc-extra { max-width: 170mm; margin: 5mm auto 0; width: 100%; }
+  .toc-block { margin-bottom: 5mm; }
+  .toc-block-title {
+    font-size: 16px; font-weight: 600; color: #1f2937;
+    margin-bottom: 6px; padding-left: 10px;
+    border-left: 3px solid #722ed1;
+  }
+  .toc-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .toc-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .toc-table td:first-child {
+    width: 28%; color: #6b7280; font-weight: 500;
+  }
+  .toc-table td:last-child { color: #111827; }
+  .toc-guide { margin: 0; padding-left: 22px; font-size: 13.5px; line-height: 1.8; color: #374151; }
+  .toc-guide li { margin-bottom: 3px; }
+  .toc-guide b { color: #2563eb; }
+  .toc-footer {
+    margin-top: auto; padding-top: 8px;
+    border-top: 1px dashed #d1d5db;
+    text-align: center;
+    font-size: 11.5px; color: #9ca3af;
+    letter-spacing: 1.5px;
+  }
+
+  /* Section heading */
+  h2.sec {
+    font-size: 22px; font-weight: 600;
+    margin: 18px 0 12px 0; padding-bottom: 7px;
+    border-bottom: 2px solid #2563eb;
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #1f2937;
+  }
+  h2.sec:first-of-type { margin-top: 6px; }
+  h2.sec + p,
+  h2.sec + .stat-row,
+  h2.sec + table.t,
+  h2.sec + .fig,
+  h2.sec + h3.subsec,
+  h2.sec + ul,
+  h2.sec + ol {
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  h3.subsec {
+    font-size: 17px; font-weight: 600;
+    margin: 16px 0 9px 0; padding-left: 11px;
+    border-left: 4px solid #722ed1;
+    page-break-after: avoid;
+    break-after: avoid;
+    color: #1f2937;
+  }
+  h3.subsec + table.t,
+  h3.subsec + p,
+  h3.subsec + .fig {
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  p { margin: 0 0 12px 0; text-indent: 2em; text-align: justify; line-height: 1.85; font-size: 14.5px; }
+  p.no-indent { text-indent: 0; }
+  ul, ol { margin: 6px 0 14px 0; padding-left: 26px; font-size: 14.5px; line-height: 1.9; }
+  ul li, ol li { margin-bottom: 6px; }
+  b, strong { color: #111827; font-weight: 600; }
+
+  /* Tables */
+  table.t {
+    width: 100%; border-collapse: collapse; font-size: 13.5px;
+    margin: 8px 0 14px 0;
+  }
+  table.t thead th {
+    background: #f3f4f6; color: #111827;
+    text-align: left; padding: 9px 12px;
+    border-top: 1px solid #d1d5db;
+    border-bottom: 2px solid #2563eb;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  table.t tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  table.t tbody tr:nth-child(even) td { background: #fafafa; }
+  table.t tr { page-break-inside: avoid; }
+  td.num, th.num { text-align: right; font-family: "JetBrains Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  td.code { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+  td.empty { text-align: center; color: #9ca3af; font-style: italic; padding: 16px; }
+
+  .sev-pill { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+  .sev-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+
+  /* 2 列 layout */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 8px 0 10px 0; }
+  .row2 > * { min-width: 0; }
+  .row2 h3.subsec:first-of-type { margin-top: 0; }
+  .row1 { display: block; margin: 8px 0 10px 0; }
+
+  /* figure */
+  .fig { margin: 10px 0 14px 0; page-break-inside: avoid; text-align: center; }
+  .fig svg { max-width: 100%; height: auto; }
+  .fig-cap { margin-top: 4px; font-size: 13px; color: #4b5563; letter-spacing: 1px; }
+
+  .empty-block { color: #9ca3af; font-style: italic; padding: 12px 0; font-size: 14px; }
+
+  /* 紧凑卡片 */
+  .stat-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin: 10px 0 14px 0;
+  }
+  .stat-row .cell {
+    border: 1px solid #e5e7eb; border-left: 4px solid #2563eb;
+    padding: 12px 14px; border-radius: 4px;
+    background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%);
+  }
+  .stat-row .cell-label { font-size: 13px; color: #6b7280; }
+  .stat-row .cell-value {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 24px; font-weight: 600; color: #111827;
+    letter-spacing: -0.5px;
+    margin-top: 4px;
+  }
+  .stat-row .cell.sev-c { border-left-color: #dc2626; }
+  .stat-row .cell.sev-h { border-left-color: #ea580c; }
+  .stat-row .cell.sev-m { border-left-color: #ca8a04; }
+  .stat-row .cell.sev-l { border-left-color: #0891b2; }
+  .stat-row .cell.brand { border-left-color: #722ed1; }
+  .stat-row .cell.good { border-left-color: #22c55e; }
+</style>
+</head>
+<body>
+
+<!-- ============== Cover (page 1) ============== -->
+<section class="cover">
+  <div class="cover-brand">
+    {{if .Assets.LogoURI}}
+    <img src="{{.Assets.LogoURI}}" alt="logo"/>
+    {{end}}
+    <div>
+      <div class="cover-brand-name">矩阵云安全平台</div>
+      <div class="cover-brand-en">MxSec Security Platform</div>
+    </div>
+  </div>
+  <div class="cover-mid">
+    <div class="cover-kind">病毒查杀检测</div>
+    <h1 class="cover-title">专项分析报告</h1>
+    <div class="cover-period">{{.Meta.Period}}</div>
+    <div class="cover-deco"></div>
+
+    <div class="cover-highlights">
+      <div class="hl"><div class="hl-num">{{.Summary.TotalTasks}}</div><div class="hl-lbl">扫描任务数</div></div>
+      <div class="hl hl-c"><div class="hl-num">{{.Summary.TotalThreats}}</div><div class="hl-lbl">检出威胁</div></div>
+      <div class="hl hl-b"><div class="hl-num">{{.Summary.QuarantinedThreats}}</div><div class="hl-lbl">已隔离</div></div>
+      <div class="hl hl-p"><div class="hl-num">{{.Summary.AffectedHosts}}</div><div class="hl-lbl">受感染主机</div></div>
+    </div>
+
+    <div class="cover-summary">
+      <div class="cover-summary-title">本期摘要</div>
+      <div class="cover-summary-text">
+        平台在 <b>{{.Meta.OnlineHosts}}</b> 台在线主机执行 <b>{{.Summary.TotalTasks}}</b> 次病毒扫描任务，
+        共检出威胁 <b>{{.Summary.TotalThreats}}</b> 条（隔离 <b>{{.Summary.QuarantinedThreats}}</b> / 清除 <b>{{.Summary.DeletedThreats}}</b> / 待处置 <b>{{.Summary.PendingThreats}}</b>），
+        受影响主机 <b>{{.Summary.AffectedHosts}}</b> 台。
+        威胁清除率 <b>{{printf "%.1f" .Derived.ClearRate}}%</b>，
+        引擎版本 <b>{{.Engine.ClamAVVersion}}</b>，
+        病毒库 <b>{{.Engine.SigDBVersion}}</b>（最近更新 {{.Engine.LastUpdateFmt}}）。
+        威胁量{{.Trend.Verb}} <b>{{printf "%.1f" .Trend.AbsPct}}%</b>，整体感染态势<b>{{.Trend.Descriptor}}</b>。
+      </div>
+    </div>
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-row"><span class="cover-meta-label">报告编号</span><span class="cover-meta-value">{{.Meta.ReportID}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">生成时间</span><span class="cover-meta-value">{{.Meta.GeneratedAt}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">报告周期</span><span class="cover-meta-value">{{.Meta.Period}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">在线主机</span><span class="cover-meta-value">{{.Meta.OnlineHosts}} 台</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">引擎 / 病毒库</span><span class="cover-meta-value">{{.Engine.ClamAVVersion}} / {{.Engine.SigDBVersion}}</span></div>
+    <div class="cover-meta-row"><span class="cover-meta-label">渲染引擎</span><span class="cover-meta-value">Gotenberg + Chromium</span></div>
+    <div class="cover-class">机　密 · 仅 限 内 部 使 用</div>
+  </div>
+</section>
+
+<!-- ============== TOC (page 2) ============== -->
+<section class="page toc force-break">
+  <h2>目　录</h2>
+  <ol class="toc-list">
+    <li><span class="toc-title">执行摘要 · 关键指标概览</span><span class="toc-page">03</span></li>
+    <li><span class="toc-title">扫描任务概览与执行情况</span><span class="toc-page">04</span></li>
+    <li><span class="toc-title">威胁严重程度与类型分布</span><span class="toc-page">05</span></li>
+    <li><span class="toc-title">主机感染分布与 Top 10</span><span class="toc-page">06</span></li>
+    <li><span class="toc-title">Top 威胁名称与文件路径</span><span class="toc-page">07</span></li>
+    <li><span class="toc-title">引擎版本与病毒库状态</span><span class="toc-page">08</span></li>
+    <li><span class="toc-title">处置与隔离动作汇总</span><span class="toc-page">09</span></li>
+    <li><span class="toc-title">改进建议与报告说明</span><span class="toc-page">10</span></li>
+  </ol>
+  <div class="toc-extra">
+    <div class="toc-block">
+      <div class="toc-block-title">数据范围</div>
+      <table class="toc-table">
+        <tr><td>报告周期</td><td>{{.Meta.Period}}</td></tr>
+        <tr><td>主机覆盖</td><td>{{.Meta.OnlineHosts}} 台在线 · 扫描任务 {{.Summary.TotalTasks}} 次</td></tr>
+        <tr><td>引擎 / 病毒库</td><td>ClamAV {{.Engine.ClamAVVersion}} · 病毒库 {{.Engine.SigDBVersion}}（{{.Engine.LastUpdateFmt}}）</td></tr>
+        <tr><td>检出 / 处置</td><td>检出 {{.Summary.TotalThreats}} 条 · 隔离 {{.Summary.QuarantinedThreats}} / 清除 {{.Summary.DeletedThreats}}</td></tr>
+      </table>
+    </div>
+
+    <div class="toc-footer">
+      © 矩阵云安全 · MxSec Security Platform　|　报告引擎 v1.0　|　所有数据为实时观测，未经任何人工修饰
+    </div>
+  </div>
+</section>
+
+<!-- ============== §1 执行摘要 + §2 关键指标 (force break) ============== -->
+<section class="page force-break">
+  <h2 class="sec">1. 执行摘要</h2>
+  <p>
+    本报告覆盖 <b>{{.Meta.Period}}</b>，对接入矩阵云安全平台的 <b>{{.Meta.OnlineHosts}}</b> 台主机的病毒查杀数据进行统计分析。
+    报告期内，平台共执行 <b>{{.Summary.TotalTasks}}</b> 次病毒扫描任务
+    （完成 <b>{{.Tasks.Completed}}</b> · 失败 <b>{{.Tasks.Failed}}</b> · 运行中 <b>{{.Tasks.Running}}</b>），
+    检出威胁 <b>{{.Summary.TotalThreats}}</b> 条，
+    受感染主机 <b>{{.Summary.AffectedHosts}}</b> 台。
+    与上一周期对比，检出威胁量{{.Trend.Verb}} <b>{{printf "%.1f" .Trend.AbsPct}}%</b>
+    （{{.Trend.PrevTotal}} → {{.Summary.TotalThreats}}），整体感染态势<b>{{.Trend.Descriptor}}</b>。
+  </p>
+
+  <h3 class="subsec">核心结论</h3>
+  <ul>
+    {{range .Conclusions}}<li>{{.}}</li>{{end}}
+  </ul>
+
+  <h2 class="sec">2. 关键指标概览</h2>
+
+  <div class="stat-row">
+    <div class="cell good"><div class="cell-label">在线主机</div><div class="cell-value">{{.Meta.OnlineHosts}}</div></div>
+    <div class="cell brand"><div class="cell-label">扫描任务</div><div class="cell-value">{{.Summary.TotalTasks}}</div></div>
+    <div class="cell sev-c"><div class="cell-label">检出威胁</div><div class="cell-value">{{.Summary.TotalThreats}}</div></div>
+    <div class="cell sev-h"><div class="cell-label">受感染主机</div><div class="cell-value">{{.Summary.AffectedHosts}}</div></div>
+    <div class="cell"><div class="cell-label">已隔离</div><div class="cell-value">{{.Summary.QuarantinedThreats}}</div></div>
+    <div class="cell"><div class="cell-label">已清除</div><div class="cell-value">{{.Summary.DeletedThreats}}</div></div>
+    <div class="cell sev-m"><div class="cell-label">待处置</div><div class="cell-value">{{.Summary.PendingThreats}}</div></div>
+    <div class="cell brand"><div class="cell-label">清除率</div><div class="cell-value">{{printf "%.1f" .Derived.ClearRate}}%</div></div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th style="width:30%">指标</th><th style="width:25%" class="num">本周期</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>扫描覆盖率</td><td class="num">{{printf "%.1f" .Derived.ScanCoverageRate}}%</td><td>受扫描主机 / 在线主机</td></tr>
+      <tr><td>感染主机占比</td><td class="num">{{printf "%.1f" .Derived.InfectionRate}}%</td><td>受感染主机 / 在线主机</td></tr>
+      <tr><td>威胁清除率</td><td class="num">{{printf "%.1f" .Derived.ClearRate}}%</td><td>（隔离 + 清除）/ 检出总数</td></tr>
+      <tr><td>环比变化</td><td class="num">{{.Trend.Arrow}} {{printf "%.1f" .Trend.AbsPct}}%</td><td>vs 上一周期 {{.Trend.PrevTotal}} 条 · {{.Trend.Descriptor}}</td></tr>
+      <tr><td>引擎版本</td><td class="num">{{.Engine.ClamAVVersion}}</td><td>ClamAV 扫描引擎版本</td></tr>
+      <tr><td>病毒库版本</td><td class="num">{{.Engine.SigDBVersion}}</td><td>最近更新 {{.Engine.LastUpdateFmt}}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §3 扫描任务概览 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">3. 扫描任务概览与执行情况</h2>
+  <p>
+    报告期内共下发病毒扫描任务 <b>{{.Summary.TotalTasks}}</b> 次，
+    其中完成 <b>{{.Tasks.Completed}}</b> 次、运行中 <b>{{.Tasks.Running}}</b> 次、失败 <b>{{.Tasks.Failed}}</b> 次、已取消 <b>{{.Tasks.Cancelled}}</b> 次。
+    扫描类型上，快速扫描 <b>{{.Tasks.QuickScan}}</b> 次、全盘扫描 <b>{{.Tasks.FullScan}}</b> 次、自定义路径 <b>{{.Tasks.CustomScan}}</b> 次。
+  </p>
+
+  <div class="stat-row">
+    <div class="cell good"><div class="cell-label">已完成</div><div class="cell-value">{{.Tasks.Completed}}</div></div>
+    <div class="cell"><div class="cell-label">运行中</div><div class="cell-value">{{.Tasks.Running}}</div></div>
+    <div class="cell sev-h"><div class="cell-label">失败</div><div class="cell-value">{{.Tasks.Failed}}</div></div>
+    <div class="cell"><div class="cell-label">已取消</div><div class="cell-value">{{.Tasks.Cancelled}}</div></div>
+  </div>
+
+  <h3 class="subsec">3.1　扫描类型分布</h3>
+  <table class="t">
+    <thead><tr><th>扫描类型</th><th class="num" style="width:120px">任务数</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>quick (快速扫描)</td><td class="num">{{.Tasks.QuickScan}}</td><td>仅扫描常见敏感目录（/tmp、/var、/home、/root 等）</td></tr>
+      <tr><td>full (全盘扫描)</td><td class="num">{{.Tasks.FullScan}}</td><td>遍历整个文件系统（排除 /proc、/sys、/dev）</td></tr>
+      <tr><td>custom (自定义)</td><td class="num">{{.Tasks.CustomScan}}</td><td>按用户指定路径范围扫描</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="subsec">3.2　近期扫描任务（Top 10）</h3>
+  <table class="t">
+    <thead>
+      <tr>
+        <th style="width:28px">#</th><th>任务名称</th>
+        <th style="width:70px">类型</th>
+        <th style="width:70px">状态</th>
+        <th class="num" style="width:60px">主机</th>
+        <th class="num" style="width:60px">威胁</th>
+        <th style="width:130px">完成时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $t := .RecentTasks}}
+      <tr>
+        <td>{{add $i 1}}</td><td>{{$t.Name}}</td>
+        <td>{{$t.ScanType}}</td>
+        <td>{{$t.Status}}</td>
+        <td class="num">{{$t.TotalHosts}}</td>
+        <td class="num">{{$t.ThreatCount}}</td>
+        <td>{{$t.FinishedAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="7">本周期无扫描任务</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §4 威胁严重程度 + 类型分布 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">4. 威胁严重程度与类型分布</h2>
+  <p>检出威胁按严重程度与威胁类型维度分布，反映本周期主要恶意软件特征与潜在影响。</p>
+
+  <div class="fig">
+    {{.Charts.SeverityPie}}
+    <div class="fig-cap">图 4-1　威胁严重程度分布</div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th>严重程度</th><th class="num" style="width:120px">数量</th><th class="num" style="width:120px">占比</th></tr></thead>
+    <tbody>
+      {{range .SeverityRows}}
+      <tr>
+        <td><span class="sev-dot" style="background:{{.Color}}"></span>{{.Label}}</td>
+        <td class="num">{{.Count}}</td>
+        <td class="num">{{printf "%.1f" .Pct}}%</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <div class="fig">
+    {{.Charts.ThreatTypePie}}
+    <div class="fig-cap">图 4-2　威胁类型构成（按 ClamAV 签名分类聚合）</div>
+  </div>
+
+  <table class="t">
+    <thead><tr><th>威胁类型</th><th class="num" style="width:120px">数量</th><th class="num" style="width:120px">占比</th></tr></thead>
+    <tbody>
+      {{range .ThreatTypeRows}}
+      <tr>
+        <td><span class="sev-dot" style="background:{{.Color}}"></span>{{.Label}}</td>
+        <td class="num">{{.Count}}</td>
+        <td class="num">{{printf "%.1f" .Pct}}%</td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="3">本周期无威胁类型分布数据</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §5 主机感染 + Top 威胁 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">5. 主机感染分布</h2>
+
+  <div class="fig">
+    {{.Charts.TopHostBar}}
+    <div class="fig-cap">图 5-1　Top 10 受感染主机（按威胁数排序）</div>
+  </div>
+
+  <table class="t">
+    <thead>
+      <tr>
+        <th style="width:28px">#</th>
+        <th>主机</th>
+        <th style="width:160px">IP</th>
+        <th class="num" style="width:80px">威胁数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $h := .TopAffectedHosts}}
+      <tr>
+        <td>{{add $i 1}}</td>
+        <td>{{$h.Hostname}}</td>
+        <td class="code">{{$h.IP}}</td>
+        <td class="num">{{$h.ThreatCount}}</td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="4">本周期无受感染主机</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <h2 class="sec">6. Top 威胁名称</h2>
+  <p>本周期检出频次最高的恶意签名，反映环境中传播最广的病毒家族。</p>
+  <table class="t">
+    <thead>
+      <tr>
+        <th style="width:28px">#</th>
+        <th>威胁名称</th>
+        <th style="width:70px">级别</th>
+        <th class="num" style="width:70px">检出次数</th>
+        <th class="num" style="width:80px">影响主机</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $t := .TopThreats}}
+      <tr>
+        <td>{{add $i 1}}</td>
+        <td class="code">{{$t.ThreatName}}</td>
+        <td><span class="sev-pill" style="background:{{$t.BgColor}};color:{{$t.Color}}">{{$t.Label}}</span></td>
+        <td class="num">{{$t.Count}}</td>
+        <td class="num">{{$t.AffectedHosts}}</td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="5">本周期无威胁检出</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §7 引擎版本与病毒库 + §8 处置 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">7. 引擎版本与病毒库状态</h2>
+  <p>
+    平台采用 ClamAV 作为底层扫描引擎，配合服务端 freshclam 定时拉取最新病毒签名库并通过组件分发系统下发到各 Agent。
+    当前引擎版本 <b>{{.Engine.ClamAVVersion}}</b>，病毒库版本 <b>{{.Engine.SigDBVersion}}</b>，
+    最近一次更新 <b>{{.Engine.LastUpdateFmt}}</b>，更新状态 <b>{{.Engine.LastStatus}}</b>。
+  </p>
+
+  <div class="stat-row">
+    <div class="cell brand"><div class="cell-label">引擎版本</div><div class="cell-value">{{.Engine.ClamAVVersion}}</div></div>
+    <div class="cell good"><div class="cell-label">病毒库版本</div><div class="cell-value">{{.Engine.SigDBVersion}}</div></div>
+    <div class="cell"><div class="cell-label">同步次数</div><div class="cell-value">{{.Engine.SyncCount}}</div></div>
+    <div class="cell sev-h"><div class="cell-label">同步失败</div><div class="cell-value">{{.Engine.FailedSync}}</div></div>
+  </div>
+
+  <h3 class="subsec">7.1　近期病毒库同步记录</h3>
+  <table class="t">
+    <thead>
+      <tr>
+        <th style="width:28px">#</th>
+        <th style="width:140px">同步时间</th>
+        <th>版本</th>
+        <th style="width:70px">状态</th>
+        <th class="num" style="width:80px">耗时(秒)</th>
+        <th class="num" style="width:100px">包大小</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $s := .Engine.RecentSyncs}}
+      <tr>
+        <td>{{add $i 1}}</td>
+        <td>{{$s.StartedAt}}</td>
+        <td class="code">{{$s.Version}}</td>
+        <td>{{$s.Status}}</td>
+        <td class="num">{{$s.Duration}}</td>
+        <td class="num">{{$s.FileSize}}</td>
+      </tr>
+      {{else}}
+      <tr><td class="empty" colspan="6">本周期无病毒库同步记录</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <h2 class="sec">8. 处置与隔离动作汇总</h2>
+  <p>
+    本周期共对 <b>{{.Summary.TotalThreats}}</b> 条威胁执行处置动作，
+    其中隔离 <b>{{.Summary.QuarantinedThreats}}</b> 条、清除 <b>{{.Summary.DeletedThreats}}</b> 条、忽略 <b>{{.Summary.IgnoredThreats}}</b> 条、待处置 <b>{{.Summary.PendingThreats}}</b> 条。
+    清除率 <b>{{printf "%.1f" .Derived.ClearRate}}%</b>（隔离 + 清除 / 检出总数）。
+  </p>
+
+  <table class="t">
+    <thead><tr><th style="width:25%">动作类型</th><th class="num" style="width:15%">数量</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>detected (待处置)</td><td class="num">{{.Summary.PendingThreats}}</td><td>已检出但用户尚未做出处置决策</td></tr>
+      <tr><td>quarantined (已隔离)</td><td class="num">{{.Summary.QuarantinedThreats}}</td><td>文件移至隔离区，可恢复</td></tr>
+      <tr><td>deleted (已清除)</td><td class="num">{{.Summary.DeletedThreats}}</td><td>恶意文件已物理删除</td></tr>
+      <tr><td>ignored (已忽略)</td><td class="num">{{.Summary.IgnoredThreats}}</td><td>用户研判为误报或可信，加入白名单</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== §9 改进建议 + 附录 (force break) ============== -->
+<section class="page">
+  <h2 class="sec">9. 改进建议</h2>
+  <p>基于本周期数据，平台自动生成如下改进建议供安全团队参考：</p>
+  <ol>
+    {{range .Improvements}}<li>{{.}}</li>{{else}}<li>本周期未生成自动建议（数据样本较小或处置充分）。</li>{{end}}
+  </ol>
+
+  <h3 class="subsec">附录 A　报告说明</h3>
+  <table class="t">
+    <tbody>
+      <tr><td style="width:30%">数据来源</td><td>MySQL（antivirus_scan_tasks / antivirus_scan_results / security_db_sync_records / hosts 元数据）</td></tr>
+      <tr><td>扫描引擎</td><td>ClamAV {{.Engine.ClamAVVersion}}，签名库通过服务端 freshclam 定时同步并经组件分发系统下发</td></tr>
+      <tr><td>生成方式</td><td>矩阵云安全平台服务端 Go html/template 渲染，自动生成无人工调整</td></tr>
+      <tr><td>图表渲染</td><td>服务端 SVG 手绘，矢量化、可缩放、PDF 中保持清晰</td></tr>
+      <tr><td>PDF 引擎</td><td>Chromium Headless（Gotenberg HTML→PDF），文本可搜索、可复制、可粘贴</td></tr>
+      <tr><td>报告编号</td><td>{{.Meta.ReportID}}</td></tr>
+      <tr><td>生成时间</td><td>{{.Meta.GeneratedAt}}</td></tr>
+      <tr><td>密级</td><td>机密 · 仅限内部使用 · 不得转发至非授权人员</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="subsec">附录 B　术语对照</h3>
+  <table class="t">
+    <thead><tr><th style="width:25%">术语</th><th>定义</th></tr></thead>
+    <tbody>
+      <tr><td>ClamAV</td><td>开源反病毒引擎，平台底层扫描器</td></tr>
+      <tr><td>freshclam</td><td>ClamAV 病毒库自动更新工具</td></tr>
+      <tr><td>quarantine (隔离)</td><td>把恶意文件移至受控目录、原位置移除，保留恢复能力</td></tr>
+      <tr><td>signature (签名)</td><td>病毒库中描述某恶意特征的指纹（hash / yara / pattern）</td></tr>
+      <tr><td>清除率</td><td>（隔离 + 清除）/ 检出总数，衡量威胁处置闭环效率</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</body>
+</html>

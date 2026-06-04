@@ -124,14 +124,51 @@
             </div>
           </template>
 
+          <!-- P5.6: 受影响进程列表（shared_lib 类才有，agent lsof 上报） -->
+          <template v-if="affectedProcesses.length > 0">
+            <div class="command-section">
+              <span class="command-label">⚠️ 升级后必须重启以下进程（lsof 检出当前在用旧 lib）</span>
+              <a-list size="small" :data-source="affectedProcesses" bordered>
+                <template #renderItem="{ item }">
+                  <a-list-item>
+                    <span>{{ item }}</span>
+                  </a-list-item>
+                </template>
+              </a-list>
+              <a-textarea
+                :value="restartCommandSnippet"
+                :rows="3"
+                readonly
+                style="margin-top: 8px; font-family: monospace"
+              />
+              <a-button size="small" style="margin-top: 4px" @click="copyRestartCmd">
+                复制 systemctl restart 命令
+              </a-button>
+            </div>
+          </template>
+
+          <!-- P5.6: 复测状态显示 -->
+          <template v-if="task.verifyStatus">
+            <a-alert
+              :type="task.verifyStatus === 'verified' ? 'success' : task.verifyStatus === 'verify_failed' ? 'error' : task.verifyStatus === 'verify_blocked' ? 'warning' : 'info'"
+              :message="`复测状态：${task.verifyStatus}`"
+              :description="task.verifyMessage || ''"
+              show-icon
+              style="margin-top: 16px"
+            />
+          </template>
+
           <!-- 操作按钮 -->
-          <div v-if="task.status === 'pending' || task.status === 'confirmed' || task.status === 'failed'" class="action-bar">
+          <div v-if="taskActionable" class="action-bar">
             <a-space>
               <a-button v-if="task.status === 'pending'" type="primary" @click="handleConfirm">
                 确认执行
               </a-button>
-              <a-button v-if="task.status === 'failed'" type="primary" @click="handleRetry">
-                重试
+              <a-button v-if="task.status === 'success_pending_verify'" type="primary" @click="handleConfirmExecuted">
+                ✅ 确认已执行（触发复测）
+              </a-button>
+              <a-button v-if="task.status === 'failed' || task.status === 'verify_failed'" type="primary" @click="handleRetry">
+                {{ task.status === 'verify_failed' ? '复跑' : '重试' }}
               </a-button>
               <a-button v-if="task.status === 'pending' || task.status === 'confirmed'" danger @click="handleCancel">
                 取消任务
@@ -347,6 +384,44 @@ const handleCancel = async () => {
 const copyCommand = (cmd: string) => {
   navigator.clipboard.writeText(cmd)
   message.success('已复制到剪贴板')
+}
+
+// P5.6 受影响进程 + 复测确认
+const affectedProcesses = computed<string[]>(() => {
+  // task 自身不直接带 affected_processes，需要从关联的 host_vulnerability 取
+  // 这里简化：从 task.execOutput 中可能含的提示提取，或后续单独拉取
+  // 当前实现：把 host_vuln 的 affectedProcesses 通过 task.verifyMessage 暂存
+  const t: any = task.value
+  if (t && Array.isArray(t.affectedProcesses)) return t.affectedProcesses
+  return []
+})
+
+const restartCommandSnippet = computed(() => {
+  if (affectedProcesses.value.length === 0) return ''
+  // 提取进程名（去 "(PID xxx)" 后缀）
+  const names = affectedProcesses.value.map(p => p.split(' (PID')[0]).filter((v, i, a) => a.indexOf(v) === i)
+  return names.map(n => `systemctl restart ${n}`).join('\n')
+})
+
+const copyRestartCmd = () => {
+  navigator.clipboard.writeText(restartCommandSnippet.value)
+  message.success('已复制 systemctl restart 命令组')
+}
+
+const taskActionable = computed(() => {
+  const s = task.value?.status
+  return s === 'pending' || s === 'confirmed' || s === 'failed' || s === 'verify_failed' || s === 'success_pending_verify'
+})
+
+const handleConfirmExecuted = async () => {
+  if (!task.value) return
+  try {
+    const r = await remediationTasksApi.confirmExecuted(task.value.id)
+    message.success(`已确认执行，复测中（${r.requestId}）`)
+    setTimeout(loadTask, 5000)
+  } catch (err: any) {
+    message.error('确认失败: ' + (err?.message || err))
+  }
 }
 
 onMounted(() => {

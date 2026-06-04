@@ -72,6 +72,7 @@ export interface AlertWhitelist {
   host_id: string
   category: string
   severity: string
+  source_ip_cidr: string
   reason: string
   created_by: string
   created_at: string
@@ -84,6 +85,7 @@ export interface CreateWhitelistParams {
   host_id?: string
   category?: string
   severity?: string
+  source_ip_cidr?: string
   reason?: string
 }
 

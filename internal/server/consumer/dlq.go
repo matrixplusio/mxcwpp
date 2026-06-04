@@ -59,7 +59,12 @@ func (h *DLQHandler) Send(sourceTopic string, msg *kafka.MQMessage, cause error,
 
 // saramaConsumerGroupHandler 是 sarama.ConsumerGroupHandler 的空实现基类
 // 嵌入到 Router 中以减少样板代码
+//
+//nolint:unused // 接口实现基类，通过嵌入 Router 间接被 sarama 调用
 type saramaConsumerGroupHandler struct{}
 
-func (saramaConsumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
+//nolint:unused
+func (saramaConsumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error { return nil }
+
+//nolint:unused
 func (saramaConsumerGroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }

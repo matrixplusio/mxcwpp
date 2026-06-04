@@ -75,12 +75,13 @@ func (h *AlertWhitelistHandler) ListWhitelist(c *gin.Context) {
 
 // CreateWhitelistRequest 创建白名单请求
 type CreateWhitelistRequest struct {
-	Name     string `json:"name" binding:"required"`
-	RuleID   string `json:"rule_id"`
-	HostID   string `json:"host_id"`
-	Category string `json:"category"`
-	Severity string `json:"severity"`
-	Reason   string `json:"reason"`
+	Name         string `json:"name" binding:"required"`
+	RuleID       string `json:"rule_id"`
+	HostID       string `json:"host_id"`
+	Category     string `json:"category"`
+	Severity     string `json:"severity"`
+	SourceIPCIDR string `json:"source_ip_cidr"` // 源 IP CIDR（供 ScanDetector 等使用）
+	Reason       string `json:"reason"`
 }
 
 // CreateWhitelist 创建白名单条目
@@ -93,12 +94,13 @@ func (h *AlertWhitelistHandler) CreateWhitelist(c *gin.Context) {
 	}
 
 	item := &model.AlertWhitelist{
-		Name:     req.Name,
-		RuleID:   req.RuleID,
-		HostID:   req.HostID,
-		Category: req.Category,
-		Severity: req.Severity,
-		Reason:   req.Reason,
+		Name:         req.Name,
+		RuleID:       req.RuleID,
+		HostID:       req.HostID,
+		Category:     req.Category,
+		Severity:     req.Severity,
+		SourceIPCIDR: req.SourceIPCIDR,
+		Reason:       req.Reason,
 	}
 
 	if err := h.db.Create(item).Error; err != nil {
@@ -113,12 +115,13 @@ func (h *AlertWhitelistHandler) CreateWhitelist(c *gin.Context) {
 
 // UpdateWhitelistRequest 更新白名单请求
 type UpdateWhitelistRequest struct {
-	Name     string `json:"name" binding:"required"`
-	RuleID   string `json:"rule_id"`
-	HostID   string `json:"host_id"`
-	Category string `json:"category"`
-	Severity string `json:"severity"`
-	Reason   string `json:"reason"`
+	Name         string `json:"name" binding:"required"`
+	RuleID       string `json:"rule_id"`
+	HostID       string `json:"host_id"`
+	Category     string `json:"category"`
+	Severity     string `json:"severity"`
+	SourceIPCIDR string `json:"source_ip_cidr"`
+	Reason       string `json:"reason"`
 }
 
 // UpdateWhitelist 更新白名单条目
@@ -151,6 +154,7 @@ func (h *AlertWhitelistHandler) UpdateWhitelist(c *gin.Context) {
 	item.HostID = req.HostID
 	item.Category = req.Category
 	item.Severity = req.Severity
+	item.SourceIPCIDR = req.SourceIPCIDR
 	item.Reason = req.Reason
 
 	if err := h.db.Save(&item).Error; err != nil {

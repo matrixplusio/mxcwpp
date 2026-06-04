@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -156,12 +155,9 @@ func (h *HostIsolationHandler) GetIsolationStatus(c *gin.Context) {
 
 	if err != nil {
 		// No active isolation.
-		c.JSON(http.StatusOK, gin.H{
-			"code": 0,
-			"data": gin.H{
-				"isolated": false,
-				"level":    "none",
-			},
+		Success(c, gin.H{
+			"isolated": false,
+			"level":    "none",
 		})
 		return
 	}

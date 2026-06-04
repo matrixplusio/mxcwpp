@@ -80,6 +80,8 @@ export const vulnerabilitiesApi = {
     component?: string
     exploit_status?: string
     priority?: string
+    vuln_category?: string  // P5.1: kernel/shared_lib/web_service/...
+    restart_action?: string // P5.5: reboot_host/restart_specific_service/...
     sort?: string
   }) => {
     return apiClient.get<VulnerabilityListResult>('/vulnerabilities', { params })

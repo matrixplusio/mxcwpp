@@ -96,8 +96,14 @@ func main() {
 	}()
 
 	// 任务接收循环
-	taskCh := make(chan *bridge.Task, 10)
+	// taskCh 缓冲调到 256：吸收 precheck-all 一次性下发的成百漏洞，配合 lib 端
+	// deferred 投递让 ReceiveTask 保持调用频率（ping/pong 不被业务阻塞）。
+	taskCh := make(chan *bridge.Task, 256)
 	go plugins.ReceiveTaskLoop(ctx, client, taskCh, logger)
+
+	// precheckSem 限制并发 precheck（dnf 进程数），避免 CPU/repo 锁压力过大
+	const maxConcurrentPrecheck = 4
+	precheckSem := make(chan struct{}, maxConcurrentPrecheck)
 
 	for {
 		select {
@@ -111,10 +117,19 @@ func main() {
 			// 按 DataType 分发：9100 = 修复执行；9101 = 单独 pre-check（只查不动）
 			switch task.DataType {
 			case dataTypePreCheckPush:
-				if err := handlePreCheck(ctx, task, client, logger); err != nil {
-					logger.Error("handle precheck failed", zap.Error(err))
-				}
+				// pre-check 走 goroutine + 信号量并发，避免阻塞主 loop
+				// 主 loop 不阻塞 = ReceiveTaskLoop 可持续投递 = ping/pong 不停 = agent 不强杀
+				precheckSem <- struct{}{}
+				go func(t *bridge.Task) {
+					defer plugins.RecoverAndLog(logger, "handlePreCheck")()
+					defer func() { <-precheckSem }()
+					if err := handlePreCheck(ctx, t, client, logger); err != nil {
+						logger.Error("handle precheck failed", zap.Error(err))
+					}
+				}(task)
 			default:
+				// 漏洞修复 (9100) 仍走串行：单 host 同一时刻只跑一次 dnf install，
+				// 避免锁竞争和包管理器并发限制。
 				if err := handleTask(ctx, task, client, logger); err != nil {
 					logger.Error("handle task failed", zap.Error(err))
 				}

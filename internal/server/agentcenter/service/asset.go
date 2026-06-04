@@ -253,17 +253,26 @@ func (s *AssetService) handleSoftwareData(hostID, jsonData string) error {
 
 	// 直接 UPSERT
 	for _, asset := range assets {
+		scope := asset.Scope
+		if scope == "" {
+			scope = "system" // 旧 collector 不发字段，默认 system
+		}
 		software := &model.Software{
-			ID:           shortHash(hostID, asset.PackageType, asset.Name),
-			HostID:       hostID,
-			Name:         asset.Name,
-			Version:      asset.Version,
-			Architecture: asset.Architecture,
-			PackageType:  asset.PackageType,
-			Vendor:       asset.Vendor,
-			InstallTime:  asset.InstallTime,
-			PURL:         asset.PURL,
-			CollectedAt:  model.ToLocalTime(asset.CollectedAt),
+			ID:             shortHash(hostID, asset.PackageType, asset.Name),
+			HostID:         hostID,
+			Name:           asset.Name,
+			Version:        asset.Version,
+			Epoch:          asset.Epoch,
+			Release:        asset.Release,
+			Architecture:   asset.Architecture,
+			PackageType:    asset.PackageType,
+			Vendor:         asset.Vendor,
+			InstallTime:    asset.InstallTime,
+			PURL:           asset.PURL,
+			Scope:          scope,
+			SourceHandler:  asset.SourceHandler,
+			HostBinaryPath: asset.HostBinaryPath,
+			CollectedAt:    model.ToLocalTime(asset.CollectedAt),
 		}
 
 		if err := s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(software).Error; err != nil {

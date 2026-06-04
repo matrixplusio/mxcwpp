@@ -1,6 +1,28 @@
 import apiClient from './client'
 import type { PaginatedResponse } from './types'
 
+// 单个触发指标
+export interface ElevatedMetric {
+  name: string
+  current: number
+  baseline: number
+  ratio: number
+}
+
+// 异常告警触发证据 + 攻击链 IOC
+export interface AnomalyTriggerContext {
+  elevated_metrics?: ElevatedMetric[]
+  metric_snapshot?: Record<string, number>
+  suspicious_ips?: string[]
+  suspicious_domains?: string[]
+  sensitive_files?: string[]
+  process_chain?: string[]
+  scanned_ports?: string[]
+  source_event_ids?: string[]
+  window_start?: string
+  window_end?: string
+}
+
 export interface AnomalyAlert {
   id: number
   host_id: string
@@ -12,6 +34,7 @@ export interface AnomalyAlert {
   top_metric: string
   top_value: number
   description: string
+  trigger_context?: AnomalyTriggerContext
   status: 'open' | 'confirmed' | 'false_positive'
   resolved_by: string
   created_at: string

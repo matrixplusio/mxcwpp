@@ -355,6 +355,89 @@ export interface CategoryReportParams {
   end_time?: string
 }
 
+// EDR 检测报告
+export interface EDRReport {
+  meta: {
+    reportID: string
+    period: string
+    generatedAt: string
+    onlineHosts: number
+    totalRules: number
+    enabledRules: number
+  }
+  summary: {
+    totalAlerts: number
+    activeAlerts: number
+    resolvedAlerts: number
+    ignoredAlerts: number
+    affectedHosts: number
+    totalStories: number
+    highRiskStories: number
+  }
+  severityDistribution: Record<string, number>
+  categoryDistribution: Array<{ category: string; count: number }>
+  tacticDistribution: Record<string, number>
+  topRules: Array<{ title: string; category: string; severity: string; count: number }>
+  topHosts: Array<{ host_id: string; hostname: string; count: number }>
+  topStories: Array<{
+    story_id: string; host_id: string; hostname: string; phase: string
+    severity: string; event_count: number; alert_count: number; risk_score: number
+  }>
+  suppressionStats: Array<{ reason: string; count: number }>
+  trend: {
+    prevPeriodAlerts: number
+    growthPercent: number
+    direction: 'up' | 'down' | 'stable'
+  }
+  rawEventStats: {
+    totalEvents: number
+    uniqueHosts: number
+    eventsByType: Array<{ event_type: string; count: number }>
+    eventsByHour: Array<{ hour: string; count: number }>
+    topHostsByEvent: Array<{ host_id: string; hostname?: string; count: number }>
+    topExe: Array<{ exe: string; count: number }>
+    available: boolean
+  }
+  autoResponseStats: {
+    networkBlocks: number
+    hostIsolations: number
+    processKills: number
+    total: number
+  }
+  iocStats: {
+    iocSnapshots: number
+    memoryThreats: number
+    topIOCTypes: Array<{ technique: string; count: number }>
+  }
+  ruleEfficacy: {
+    totalRules: number
+    enabledRules: number
+    hitRules: number
+    zeroHitRules: number
+    hitRate: number
+    topZeroHit: Array<{ id: number; name: string; category: string }>
+  }
+  improvements: string[]
+}
+
+// EDR 高管摘要报告
+export interface EDRExecutiveReport {
+  meta: { reportID: string; period: string; generatedAt: string }
+  keyMetrics: {
+    totalAlerts: number
+    criticalAlerts: number
+    highAlerts: number
+    totalStories: number
+    highRiskStories: number
+    affectedHosts: number
+    onlineHosts: number
+    coverage: number
+  }
+  riskScore: number
+  conclusion: string
+  suggestions: string[]
+}
+
 // ============================================================
 // Executive Report 类型（可导出 PDF 的专业报告）
 // ============================================================
@@ -684,6 +767,56 @@ export const reportsApi = {
   // 获取容器安全报告
   getKubeReport: async (params?: CategoryReportParams): Promise<KubeReport> => {
     return apiClient.get('/reports/kube', { params })
+  },
+
+  // 获取 EDR 检测报告
+  getEDRReport: async (params?: CategoryReportParams): Promise<EDRReport> => {
+    return apiClient.get('/reports/edr', { params })
+  },
+
+  getEDRExecutiveReport: async (params: { start_time: string; end_time: string }): Promise<EDRExecutiveReport> => {
+    return apiClient.get('/reports/edr/executive', { params })
+  },
+
+  // 服务端 PDF 导出（Gotenberg + Chromium）
+  exportEDRPDF: async (params: { start_time: string; end_time: string; landscape?: boolean }) => {
+    const res = await apiClient.get('/reports/edr/pdf', {
+      params,
+      responseType: 'blob',
+    }) as unknown as Blob
+    return res
+  },
+
+  exportAntivirusPDF: async (params: { start_time: string; end_time: string; landscape?: boolean }) => {
+    const res = await apiClient.get('/reports/antivirus/pdf', {
+      params,
+      responseType: 'blob',
+    }) as unknown as Blob
+    return res
+  },
+
+  exportVulnPDF: async (params: { start_time: string; end_time: string; landscape?: boolean }) => {
+    const res = await apiClient.get('/reports/vulnerability/pdf', {
+      params,
+      responseType: 'blob',
+    }) as unknown as Blob
+    return res
+  },
+
+  exportKubePDF: async (params: { start_time: string; end_time: string; landscape?: boolean }) => {
+    const res = await apiClient.get('/reports/kube/pdf', {
+      params,
+      responseType: 'blob',
+    }) as unknown as Blob
+    return res
+  },
+
+  exportTaskPDF: async (taskId: string, params?: { landscape?: boolean }) => {
+    const res = await apiClient.get(`/reports/task/${taskId}/pdf`, {
+      params,
+      responseType: 'blob',
+    }) as unknown as Blob
+    return res
   },
 
   // Executive 报告（可导出 PDF）
