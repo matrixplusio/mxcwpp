@@ -52,9 +52,17 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 | 组件管理与插件分发 | :white_check_mark: | :white_check_mark: |
 | 系统监控（Prometheus） | :white_check_mark: | :white_check_mark: |
 | 运维巡检与报告导出 | :white_check_mark: | :white_check_mark: |
+| 内存威胁检测（memfd_exec / 进程镂空 / shellcode / LSASS dump） | :white_check_mark: | :white_check_mark: |
+| AD / LDAP 域控审计（DCSync / Kerberoasting / 暴力破解等 7 规则） | :white_check_mark: | :white_check_mark: |
+| DKOM Rootkit 检测（隐藏 PID / 内核模块 / 端口 / LD_PRELOAD） | :white_check_mark: | :white_check_mark: |
+| 蜜罐传感器（SSH / HTTP 蜜罐 + 文件诱饵策略） | :white_check_mark: | :white_check_mark: |
+| VEX 漏洞利用性声明导出（CycloneDX 1.5 / CSAF 2.0） | :white_check_mark: | :white_check_mark: |
+| YARA-X 病毒规则库（73 条规则 / 50 家族） | :white_check_mark: | :white_check_mark: |
+| 威胁狩猎（SPL 风格 DSL → SQL 转译） | :white_check_mark: | :white_check_mark: |
+| 攻击故事线（ATT&CK 杀链时间线） | :white_check_mark: | :white_check_mark: |
+| 行为基线检测（ML 异常评分） | :white_check_mark: | :white_check_mark: |
 | Windows 支持 | :x: | :construction: |
-| 蜜罐 | :x: | :construction: |
-| 主动防御 | :x: | :construction: |
+| 主动防御（NPatch eBPF 热补丁） | `内置样例` | :white_check_mark: |
 | 云查杀 | :x: | :construction: |
 
 > :white_check_mark: 已支持 &nbsp; `内置样例` 含少量示例规则 &nbsp; :x: 未支持 &nbsp; :construction: 规划中
@@ -72,6 +80,12 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 | 容器安全 | K8s 集群管理、容器 CIS 基线（80 条规则）、Audit Webhook 接入 |
 | 告警中心 | 告警聚合、白名单、自动响应（kill/隔离）、溯源时间线 |
 | 威胁情报 | MISP IOC 导入 + Redis 缓存 + CEL 实时碰撞 |
+| 内存取证 | memfd_exec / 进程镂空 / shellcode 注入 / LSASS dump 检测（EDR-3） |
+| AD/LDAP 审计 | 7 条检测规则：DCSync、Kerberoasting、暴力破解、非工时 RDP、特权分配等（EDR-4） |
+| 蜜罐传感器 | SSH/HTTP 蜜罐 + 文件诱饵 + 合法备份工具白名单（C1） |
+| Rootkit 检测 | DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD / /proc 不一致（C2） |
+| 威胁狩猎 | SPL 风格 DSL → SQL 转译，跑在 ClickHouse 事件归档上 |
+| VEX 导出 | CycloneDX VEX 1.5 + CSAF 2.0 给客户出具厂商漏洞声明（B7） |
 
 ## 产品截图
 
@@ -94,10 +108,12 @@ MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能
 
 ```
 浏览器 ─→ Nginx ─→ Manager ×N ─→ MySQL / Redis / ClickHouse / Prometheus
-Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─→ Consumer ×N ─→ 存储层
+Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ 存储层（持久化）
+                                                 └→ Engine ×N    ─→ 告警/Storyline（检测分析）
+Manager ──HTTP──→ LLMProxy ×N（多 LLM 适配）   VulnSync ×N ──Kafka──→ Engine/Manager
 ```
 
-控制面（Manager / AgentCenter / Consumer）无状态，支持多实例水平扩展。通过 Kafka 异步解耦数据写入，Redis 实现服务发现与分布式锁，ClickHouse 承载时序分析与事件归档。
+v2.0 后端拆分为 **六微服务**：Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync，控制面全部无状态，支持水平扩展。Kafka 用两个 ConsumerGroup（持久化 / 检测）独立 offset 解耦，Redis 实现服务发现与分布式锁，ClickHouse 承载时序分析与事件归档。
 
 详细架构参见 [架构设计文档](docs/architecture.md)。
 
@@ -153,15 +169,17 @@ make lint                                                # 代码检查
 
 ```
 mxsec-platform/
-├── cmd/                    # 入口（agent / manager / agentcenter / consumer）
+├── cmd/                    # 入口（agent + 6 个 server 服务 + mxctl + 工具）
+│   ├── agent/              # Agent 入口
+│   └── server/             # manager / agentcenter / consumer / engine / llmproxy / vulnsync
 ├── internal/
-│   ├── server/             # 服务端（manager / agentcenter / consumer / common）
-│   └── agent/              # Agent（connection / transport / plugin / heartbeat）
-├── plugins/                # 插件（baseline / collector / fim / scanner / sensor / remediation）
+│   ├── server/             # 服务端（manager / agentcenter / consumer / engine / llmproxy / vulnsync / common）
+│   └── agent/              # Agent（connection / transport / plugin / heartbeat / edr 25+ 子模块）
+├── plugins/                # 11 个插件（baseline / collector / fim / scanner / avscanner / remediation / rasp-go / rasp-java / rasp-python / rasp-php / rasp-node）
 ├── api/proto/              # Protobuf 定义
 ├── ui/                     # 前端工程（Vue 3 + TypeScript）
 ├── configs/                # 配置文件（server.yaml / agent.yaml / 规则文件）
-├── deploy/                 # 部署配置（Docker Compose / Nginx / systemd）
+├── deploy/                 # 部署配置（Docker Compose dev/v2/pret + Nginx + systemd + 生产集群）
 ├── scripts/                # 构建与部署脚本
 └── docs/                   # 文档
 ```
@@ -173,7 +191,6 @@ mxsec-platform/
 - [配置说明](docs/configuration.md) - 服务端配置、Agent 配置、环境变量
 - [API 文档](docs/api-reference.md) - REST API 端点、请求/响应格式、认证
 - [常见问题](docs/faq.md) - 部署与运行中的常见问题及排查方法
-- [发展路线](docs/roadmap.md) - 已完成能力、近期规划、中远期方向
 - [开源治理](docs/governance.md) - 项目治理模型、决策流程、安全策略
 - [社区规范](docs/contributing.md) - 贡献指南、开发环境、代码规范、提交流程
 

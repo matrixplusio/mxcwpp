@@ -45,6 +45,7 @@ func (t *TargetConfig) Scan(value any) error { return JSONScan(t, value) }
 
 // ScanTask 扫描任务模型
 type ScanTask struct {
+	TenantID     string       `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	TaskID       string       `gorm:"primaryKey;column:task_id;type:varchar(64);not null" json:"task_id"`
 	Name         string       `gorm:"column:name;type:varchar(255)" json:"name"`
 	Type         TaskType     `gorm:"column:type;type:varchar(50);not null" json:"type"`

@@ -242,6 +242,7 @@ func setupAuditDB(t *testing.T) *gorm.DB {
 	sqlDB.SetMaxOpenConns(1)
 
 	err = db.Exec(`CREATE TABLE audit_logs (
+		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		id            INTEGER PRIMARY KEY AUTOINCREMENT,
 		username      TEXT NOT NULL DEFAULT 'unknown',
 		action        TEXT NOT NULL,

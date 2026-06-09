@@ -27,6 +27,7 @@ func setupZombieDB(t *testing.T) *gorm.DB {
 
 	tables := []string{
 		`CREATE TABLE scan_tasks (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			task_id        TEXT PRIMARY KEY,
 			name           TEXT,
 			type           TEXT DEFAULT 'baseline_scan',
@@ -46,6 +47,7 @@ func setupZombieDB(t *testing.T) *gorm.DB {
 			completed_at   DATETIME
 		)`,
 		`CREATE TABLE fix_tasks (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			task_id       TEXT PRIMARY KEY,
 			host_ids      TEXT DEFAULT '[]',
 			rule_ids      TEXT DEFAULT '[]',
@@ -61,6 +63,7 @@ func setupZombieDB(t *testing.T) *gorm.DB {
 			completed_at  DATETIME
 		)`,
 		`CREATE TABLE fim_tasks (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			task_id              TEXT PRIMARY KEY,
 			policy_id            TEXT,
 			status               TEXT DEFAULT 'pending',
@@ -75,6 +78,7 @@ func setupZombieDB(t *testing.T) *gorm.DB {
 			completed_at         DATETIME
 		)`,
 		`CREATE TABLE antivirus_scan_tasks (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			name          TEXT,
 			scan_type     TEXT DEFAULT 'quick',

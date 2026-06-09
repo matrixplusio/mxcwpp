@@ -1,0 +1,142 @@
+{
+  "id": "LINUX_MW_TOMCAT",
+  "name": "Apache Tomcat 中间件基线 (CIS Benchmark + 等保 2.0)",
+  "version": "1.0.0",
+  "description": "Tomcat 9/10 安全配置基线. 参考 CIS Apache Tomcat 9 Benchmark.",
+  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "TOMCAT_001",
+      "category": "默认账号",
+      "title": "禁用默认 tomcat-users.xml",
+      "description": "默认 tomcat-users.xml 含 manager-gui 角色, 删除或禁用所有默认账号.",
+      "severity": "critical",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/tomcat-users.xml", "<user.*password=\"tomcat\"|<user.*password=\"admin\"|<user.*password=\"manager\"", "match"]}
+      ]},
+      "fix": {"suggestion": "清空 tomcat-users.xml 默认账号, 仅保留必要管理用户用强密码"}
+    },
+    {
+      "rule_id": "TOMCAT_002",
+      "category": "默认应用",
+      "title": "删除 manager / host-manager / docs / examples",
+      "description": "生产环境必须删除默认 webapp.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_exists", "param": ["/opt/tomcat/webapps/examples"]}
+      ]},
+      "fix": {"suggestion": "rm -rf /opt/tomcat/webapps/{docs,examples,manager,host-manager}"}
+    },
+    {
+      "rule_id": "TOMCAT_003",
+      "category": "权限管理",
+      "title": "运行用户不应为 root",
+      "description": "tomcat 进程必须以非 root (tomcat 用户) 运行.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["ps -o user= -p $(pgrep -f 'org.apache.catalina')", "^tomcat$|^www-data$"]}
+      ]},
+      "fix": {"suggestion": "systemd 启动 service 加 User=tomcat; chown -R tomcat:tomcat /opt/tomcat"}
+    },
+    {
+      "rule_id": "TOMCAT_004",
+      "category": "信息泄露",
+      "title": "关闭 server 头版本号",
+      "description": "server.xml Connector 加 server=\"\".",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "server=\"\"|server=\"Apache\"", "match"]}
+      ]},
+      "fix": {"suggestion": "<Connector port=\"8080\" ... server=\"\" />"}
+    },
+    {
+      "rule_id": "TOMCAT_005",
+      "category": "信息泄露",
+      "title": "自定义错误页",
+      "description": "默认错误页暴露 Tomcat 版本, web.xml 配置 error-page.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/web.xml", "<error-page>", "match"]}
+      ]},
+      "fix": {"suggestion": "web.xml 加 <error-page><error-code>500</error-code><location>/error/500.html</location></error-page>"}
+    },
+    {
+      "rule_id": "TOMCAT_006",
+      "category": "目录遍历",
+      "title": "禁用 DefaultServlet listings",
+      "description": "web.xml DefaultServlet 的 listings 必须为 false.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/web.xml", "<param-name>listings</param-name>\\s*<param-value>true</param-value>", "match"]}
+      ]},
+      "fix": {"suggestion": "web.xml DefaultServlet 设 listings = false"}
+    },
+    {
+      "rule_id": "TOMCAT_007",
+      "category": "TLS 配置",
+      "title": "禁用 HTTP Connector 或仅作 redirect",
+      "description": "生产应仅暴露 HTTPS Connector.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Connector\\s+port=\"8080\"[^>]*scheme=\"http\"", "match"]}
+      ]},
+      "fix": {"suggestion": "8080 connector 加 redirectPort=8443 或注释掉, 仅保留 8443 SSL"}
+    },
+    {
+      "rule_id": "TOMCAT_008",
+      "category": "TLS 配置",
+      "title": "SSL Connector 强 protocol",
+      "description": "SSLEnabledProtocols 仅 TLSv1.2+.",
+      "severity": "critical",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "sslEnabledProtocols=\"TLSv1\\.2(\\+TLSv1\\.3)?\"|sslEnabledProtocols=\"TLSv1\\.3\"", "match"]}
+      ]},
+      "fix": {"suggestion": "Connector SSL 段 sslEnabledProtocols=\"TLSv1.2+TLSv1.3\""}
+    },
+    {
+      "rule_id": "TOMCAT_009",
+      "category": "权限管理",
+      "title": "配置文件权限 = 600",
+      "description": "server.xml/tomcat-users.xml 权限严格.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_permission", "param": ["/opt/tomcat/conf/tomcat-users.xml", "600"]}
+      ]},
+      "fix": {"suggestion": "chmod 600 /opt/tomcat/conf/tomcat-users.xml && chown tomcat:tomcat"}
+    },
+    {
+      "rule_id": "TOMCAT_010",
+      "category": "权限管理",
+      "title": "Shutdown 端口禁用",
+      "description": "8005 默认 shutdown 端口必须改 -1 (禁用) 或绑定 127.0.0.1.",
+      "severity": "critical",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Server\\s+port=\"-1\"", "match"]}
+      ]},
+      "fix": {"suggestion": "<Server port=\"-1\" shutdown=\"...\">"}
+    },
+    {
+      "rule_id": "TOMCAT_011",
+      "category": "日志",
+      "title": "AccessLogValve 启用",
+      "description": "访问日志启用.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Valve\\s+className=\"org\\.apache\\.catalina\\.valves\\.AccessLogValve\"", "match"]}
+      ]},
+      "fix": {"suggestion": "Host 段加 AccessLogValve"}
+    },
+    {
+      "rule_id": "TOMCAT_012",
+      "category": "JMX 远程",
+      "title": "JMX 远程默认不应开放",
+      "description": "JAVA_OPTS 不应含 -Dcom.sun.management.jmxremote 暴露公网.",
+      "severity": "critical",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/opt/tomcat/bin/setenv.sh", "-Dcom\\.sun\\.management\\.jmxremote(?!\\.authenticate=true)", "match"]}
+      ]},
+      "fix": {"suggestion": "JMX 远程必加 -Dcom.sun.management.jmxremote.authenticate=true 与 ssl=true; 推荐仅本地访问"}
+    }
+  ]
+}

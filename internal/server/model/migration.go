@@ -2,6 +2,7 @@ package model
 
 // MigrationJob MVP1 → MVP2 数据迁移任务
 type MigrationJob struct {
+	TenantID     string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint        `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	SourceURL    string      `gorm:"column:source_url;type:varchar(255);not null" json:"source_url"`
 	SourceUser   string      `gorm:"column:source_user;type:varchar(64);not null" json:"source_user"`

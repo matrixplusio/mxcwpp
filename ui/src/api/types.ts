@@ -196,6 +196,16 @@ export interface VulnerabilityHost {
   ip: string
   currentVersion: string
   status: string
+  // 资产维度分类: os/middleware/app/container/image/unknown (P-vuln-classify)
+  assetType?: string
+  // Subscope: cloud_agent/monitoring_agent/security_agent/system_lib/os_package/business_binary/business_jar
+  subscope?: string
+  // 修复责任方: ops/sre/dba/dev/image_maintainer/cloud_provider/apm_vendor/platform_team/unknown
+  fixOwner?: string
+  // 嵌入式依赖的宿主 binary path (溯源用)
+  hostBinaryPath?: string
+  preCheckStatus?: string
+  preCheckMessage?: string
   createdAt: string
   updatedAt: string
 }
@@ -226,6 +236,17 @@ export interface Vulnerability {
   restartAction?: string        // reboot_host/restart_dependent_services/restart_specific_service/no_action/rebuild_app/unknown
   vulnCategoryOverride?: string // admin 手动覆盖
   restartActionOverride?: string
+  // CWE 高级分类(P-vuln-classify P2): rce/privesc/sqli/xss/info_disclosure/dos/path_traversal/ssrf/other
+  cweId?: string         // 逗号分隔 e.g. "CWE-79,CWE-352"
+  cweCategory?: string
+  // 聚合自 host_vulnerabilities 的资产分类(全局列表展示用)
+  assetType?: string
+  // Subscope (P-vuln-classify P4): cloud_agent/monitoring_agent/security_agent/system_lib/os_package/business_binary/business_jar/unknown
+  // 区分系统组件 vs 业务,消除"装了 docker?"误报
+  subscope?: string
+  fixOwner?: string
+  // hostBinaryPath: scope=embedded 时来源 binary (UI 溯源用)
+  hostBinaryPath?: string
   createdAt?: string
   updatedAt?: string
   hosts?: VulnerabilityHost[]

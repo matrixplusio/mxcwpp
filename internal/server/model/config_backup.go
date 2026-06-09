@@ -2,6 +2,7 @@ package model
 
 // ConfigBackup 配置备份记录
 type ConfigBackup struct {
+	TenantID  string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint        `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name      string      `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	Type      string      `gorm:"column:type;type:varchar(20);not null;default:'manual'" json:"type"`

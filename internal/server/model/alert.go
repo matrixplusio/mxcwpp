@@ -28,10 +28,26 @@ const (
 	AlertSourcePrometheusInfra = "prometheus_infra" // Prometheus 基础设施告警（webhook 入）
 )
 
+// AlertMode 告警来源时所处的运行模式。
+// 对齐 docs/operating-modes.md §6 告警 schema 设计。
+type AlertMode string
+
+const (
+	AlertModeObserve AlertMode = "observe" // 监听模式: 仅产告警, would_action 标注预期动作
+	AlertModeProtect AlertMode = "protect" // 防护模式: 真执行处置动作
+)
+
 // Alert 告警模型
 type Alert struct {
+	TenantID       string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint        `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
-	ResultID       string      `gorm:"column:result_id;type:varchar(128);not null;uniqueIndex" json:"result_id"` // 关联 scan_results.result_id
+	Mode           AlertMode   `gorm:"column:mode;type:varchar(20);not null;default:'observe';index" json:"mode"` // v2.0: observe / protect (对齐 docs/operating-modes.md §6)
+	WouldAction    string      `gorm:"column:would_action;type:text" json:"would_action,omitempty"`               // observe 模式预期动作 (JSON)
+	Action         string      `gorm:"column:action;type:text" json:"action,omitempty"`                           // protect 模式实际执行的动作 (JSON)
+	ActionResult   string      `gorm:"column:action_result;type:text" json:"action_result,omitempty"`             // protect 动作执行结果 (JSON, status/error/ack)
+	ATTCKTactic    string      `gorm:"column:attck_tactic;type:varchar(64)" json:"attck_tactic,omitempty"`        // ATT&CK 战术 ID
+	ATTCKTechnique string      `gorm:"column:attck_technique;type:varchar(64)" json:"attck_technique,omitempty"`  // ATT&CK 技术 ID 列表 (逗号分隔)
+	ResultID       string      `gorm:"column:result_id;type:varchar(128);not null;uniqueIndex" json:"result_id"`  // 关联 scan_results.result_id
 	HostID         string      `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	RuleID         string      `gorm:"column:rule_id;type:varchar(64);not null;index" json:"rule_id"`
 	PolicyID       string      `gorm:"column:policy_id;type:varchar(64);index" json:"policy_id"`

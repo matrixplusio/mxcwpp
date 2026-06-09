@@ -24,6 +24,7 @@ func (c *ChangeDetail) Scan(value any) error { return JSONScan(c, value) }
 
 // FIMEvent FIM 变更事件模型
 type FIMEvent struct {
+	TenantID      string       `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	EventID       string       `gorm:"primaryKey;column:event_id;type:varchar(64);not null" json:"event_id"`
 	HostID        string       `gorm:"column:host_id;type:varchar(64);not null;index:idx_fim_event_host_id" json:"host_id"`
 	Hostname      string       `gorm:"column:hostname;type:varchar(255)" json:"hostname"`

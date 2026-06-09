@@ -3,6 +3,7 @@ package model
 // MemoryThreat records a detected fileless/memory-based attack technique
 // on a host. Events flow from Agent (DataType 3004) through Kafka consumer.
 type MemoryThreat struct {
+	TenantID   string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint      `gorm:"primarykey" json:"id"`
 	HostID     string    `gorm:"type:varchar(64);index" json:"host_id"`
 	Hostname   string    `gorm:"type:varchar(255)" json:"hostname"`

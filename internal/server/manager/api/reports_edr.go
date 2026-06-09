@@ -11,6 +11,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -48,15 +49,38 @@ var mitreTacticByCategory = map[string]string{
 //
 // 报告含 13 个章节，覆盖告警概览、严重程度分布、规则/主机 Top N、
 // MITRE 矩阵、故事线统计、误报抑制统计、周期趋势对比等。
+// 加 60s Redis cache:报表数据 1 分钟内不变,降低 13 章节 query 重复成本。
 func (h *ReportsHandler) GetEDRReport(c *gin.Context) {
 	startTime, endTime, ok := parseReportTimeRange(c)
 	if !ok {
 		return
 	}
+
+	// Redis cache lookup。
+	// 注意:startTime/endTime 默认含 time.Now() → 每次 unix 不同,直接用会让 cache 永远 miss。
+	// 规整到分钟级精度(60s TTL 同期内同分钟落同 key),保证 cache 真命中。
+	cacheKey := fmt.Sprintf(reportsEDRCacheKey,
+		startTime.Truncate(time.Minute).Unix(),
+		endTime.Truncate(time.Minute).Unix(),
+	)
+	if h.redisClient != nil && c.Query("nocache") != "1" {
+		if cached, err := h.redisClient.Get(c.Request.Context(), cacheKey).Bytes(); err == nil {
+			c.Data(200, "application/json; charset=utf-8", cached)
+			return
+		}
+	}
+
 	reportData := h.BuildEDRReportData(startTime, endTime)
 	reportID, _ := reportData["meta"].(gin.H)["reportID"].(string)
 	period, _ := reportData["meta"].(gin.H)["period"].(string)
 	h.saveGeneratedReport(model.ReportTypeEDR, "EDR 检测专项报告", reportID, period, reportData)
+
+	// 写 cache(完整 response body)
+	if h.redisClient != nil {
+		if body, err := json.Marshal(gin.H{"code": 0, "data": reportData}); err == nil {
+			h.redisClient.Set(c.Request.Context(), cacheKey, body, reportsCacheTTL)
+		}
+	}
 	Success(c, reportData)
 }
 

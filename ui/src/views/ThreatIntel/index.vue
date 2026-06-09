@@ -1,27 +1,11 @@
 <template>
   <div class="threat-intel-page">
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 (统一 StatCard) -->
     <a-row :gutter="16" style="margin-bottom: 16px">
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="IOC 总数" :value="stats.total" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="IP 指标" :value="stats.ip" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="Hash 指标" :value="stats.hash" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="域名指标" :value="stats.domain" />
-        </a-card>
-      </a-col>
+      <a-col :span="6"><StatCard title="IOC 总数" :value="stats.total" color="#3B82F6" /></a-col>
+      <a-col :span="6"><StatCard title="IP 指标" :value="stats.ip" color="#22C55E" /></a-col>
+      <a-col :span="6"><StatCard title="Hash 指标" :value="stats.hash" color="#06B6D4" /></a-col>
+      <a-col :span="6"><StatCard title="域名指标" :value="stats.domain" color="#F59E0B" /></a-col>
     </a-row>
 
     <!-- 同步状态栏 -->
@@ -122,6 +106,7 @@ import { message } from 'ant-design-vue'
 import { threatIntelApi } from '@/api/threat-intel'
 import type { SecurityDBSyncRecord } from '@/api/antivirus'
 import { formatDateTime } from '@/utils/date'
+import StatCard from '@/components/StatCard.vue'
 
 const stats = ref({ total: 0, ip: 0, hash: 0, domain: 0, url: 0 })
 const iocType = ref('ip')

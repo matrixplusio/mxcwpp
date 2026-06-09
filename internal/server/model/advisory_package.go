@@ -20,7 +20,8 @@ package model
 // 与 vulnerabilities 关系：vulnerabilities 行存 CVE 元数据（描述/CVSS/CWE 等），
 // advisory_packages 行存"如何修"。一个 CVE 对应多个 advisory_packages（多 OS / 多源）。
 type AdvisoryPackage struct {
-	ID uint `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
+	TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
+	ID       uint   `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 
 	// CVE 关联（cve_id 不强约束 FK，便于 source 先到 vuln 未到的情况）
 	CveID string `gorm:"column:cve_id;type:varchar(50);not null;index:idx_ap_cve" json:"cveId"`

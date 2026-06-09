@@ -1,0 +1,14 @@
+[Unit]
+Description=mxsec MySQL backup timer (daily full + hourly incremental)
+Documentation=https://github.com/imkerbos/mxsec-platform
+
+[Timer]
+# 02:00 daily full backup
+OnCalendar=*-*-* 02:00:00
+# 每小时增量 (实际由脚本 service 决策)
+RandomizedDelaySec=600
+Persistent=true
+Unit=mxsec-mysql-backup.service
+
+[Install]
+WantedBy=timers.target

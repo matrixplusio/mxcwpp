@@ -124,7 +124,7 @@
 
     <!-- 创建/编辑策略对话框 -->
     <PolicyModal
-      v-model:visible="modalVisible"
+      v-model:open="modalVisible"
       :policy="currentPolicy"
       @success="handleModalSuccess"
     />
@@ -353,7 +353,7 @@
 
     <!-- 自动检查配置对话框 -->
     <a-modal
-      v-model:visible="autoConfigVisible"
+      v-model:open="autoConfigVisible"
       title="自动检查配置"
       width="1200px"
       :footer="null"
@@ -514,7 +514,7 @@
 
     <!-- 新建/编辑任务对话框 -->
     <a-modal
-      v-model:visible="taskModalVisible"
+      v-model:open="taskModalVisible"
       :title="editingTask ? '编辑任务' : '新建任务'"
       width="700px"
       @ok="handleSaveTask"

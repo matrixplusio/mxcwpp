@@ -44,6 +44,12 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 
 	logger.Info("开始初始化默认数据", zap.String("policy_dir", policyDir))
 
+	// v2.0: 初始化默认租户 t-default。所有 v1.x 升级的数据归属于该租户。
+	// 必须先于 initDefaultUsers，admin 用户依赖默认租户存在。
+	if err := initDefaultTenant(db, logger); err != nil {
+		return fmt.Errorf("初始化默认租户失败: %w", err)
+	}
+
 	// 初始化默认用户（始终执行，确保admin用户存在）
 	if err := initDefaultUsers(db, logger); err != nil {
 		return fmt.Errorf("初始化默认用户失败: %w", err)
@@ -206,6 +212,53 @@ func markDataInitialized(db *gorm.DB, logger *zap.Logger) {
 }
 
 // initDefaultUsers 初始化默认用户
+// initDefaultTenant 创建/确保默认租户 t-default 存在。
+// v1.x 升级到 v2.0 时，所有历史 User / Host / Alert / Vuln / ... 数据均归属此租户。
+// 后续可通过 mxctl tenant create 创建新租户进行业务隔离。
+func initDefaultTenant(db *gorm.DB, logger *zap.Logger) error {
+	var t model.Tenant
+	err := db.Where("id = ?", model.DefaultTenantID).First(&t).Error
+	if err == nil {
+		// 已存在 → 仅确保 status=active 且默认模式仍是 observe
+		if t.Status != model.TenantStatusActive {
+			t.Status = model.TenantStatusActive
+			if e := db.Save(&t).Error; e != nil {
+				return fmt.Errorf("更新默认租户状态失败: %w", e)
+			}
+			logger.Info("默认租户状态已恢复为 active", zap.String("tenant_id", model.DefaultTenantID))
+		}
+		return nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return fmt.Errorf("查询默认租户失败: %w", err)
+	}
+
+	t = model.Tenant{
+		ID:                  model.DefaultTenantID,
+		Name:                "Default Tenant",
+		Type:                model.TenantTypeInternal,
+		Status:              model.TenantStatusActive,
+		DefaultMode:         model.TenantModeObserve, // 默认监听模式，详见 docs/operating-modes.md
+		MLEnabled:           true,
+		LLMEnabled:          false,
+		QuotaAgents:         10000, // 默认租户配额放宽，避免升级期间触发限制
+		QuotaLLMUSD:         1000.00,
+		QuotaEventsDay:      10000000000,
+		RetentionAlertsDays: 90,
+		RetentionEventsDays: 30,
+		RetentionAuditDays:  180,
+		IsolationStrategy:   model.IsolationShared,
+	}
+	if err := db.Create(&t).Error; err != nil {
+		return fmt.Errorf("创建默认租户失败: %w", err)
+	}
+	logger.Info("默认租户初始化成功",
+		zap.String("tenant_id", t.ID),
+		zap.String("mode", string(t.DefaultMode)),
+	)
+	return nil
+}
+
 func initDefaultUsers(db *gorm.DB, logger *zap.Logger) error {
 	// 检查admin用户是否存在
 	var adminUser model.User
@@ -236,10 +289,12 @@ func initDefaultUsers(db *gorm.DB, logger *zap.Logger) error {
 	}
 
 	defaultUser := &model.User{
+		TenantID:            model.DefaultTenantID,
 		Username:            "admin",
 		Password:            string(hashedPassword),
 		Email:               "admin@example.com",
 		Role:                model.UserRoleAdmin,
+		IsPlatformAdmin:     true, // admin 默认是平台超管，可访问 /api/v2/admin/* 路径
 		Status:              model.UserStatusActive,
 		ForceChangePassword: true,
 	}
@@ -456,18 +511,20 @@ func ensureManagedPluginConfig(db *gorm.DB, logger *zap.Logger, pluginsCfg *conf
 
 	if !found {
 		if hasExisting {
+			// 包不存在不再禁用: Agent 端可能已有本地 cache (历史下载),
+			// 仍发 config 走 cache 启动. download_urls 保留指向 manager,
+			// 让新装 Agent 能感知缺包(下载 404 后管理员补传).
+			downloadURL := buildManagedPluginDownloadURL(pluginsCfg, plugin.Name)
 			updates := map[string]interface{}{
-				"enabled":       false,
-				"download_urls": model.StringArray{},
-				"sha256":        "",
+				"download_urls": model.StringArray{downloadURL},
 				"runtime_types": plugin.RuntimeTypes,
 				"description":   plugin.Description,
 				"detail":        plugin.Detail,
 			}
 			if err := db.Model(&existing).Updates(updates).Error; err != nil {
-				return fmt.Errorf("禁用未上传插件配置 %s 失败: %w", plugin.Name, err)
+				return fmt.Errorf("更新插件配置 %s 失败: %w", plugin.Name, err)
 			}
-			logger.Info("插件尚未上传，已禁用历史插件配置",
+			logger.Info("插件包未上传, 保留 config 让 Agent 端走本地 cache",
 				zap.String("name", plugin.Name),
 				zap.String("current_version", existing.Version),
 			)

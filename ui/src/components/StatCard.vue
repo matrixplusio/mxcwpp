@@ -129,6 +129,18 @@ watch(() => props.value, (newVal) => {
   position: relative;
   overflow: hidden;
   transition: transform 0.2s ease, border-color 0.2s ease;
+  /* 统一 4 卡片高度: 即使无 tags / progress / trend 也保持一致 */
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* value 撑开占上半, 底部元素 (tags/progress/trend) 贴底对齐 */
+.stat-card-ds .stat-card-value {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 6px;
 }
 
 .stat-card-ds.clickable {

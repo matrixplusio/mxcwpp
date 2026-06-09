@@ -43,6 +43,7 @@ func (j *RawJSON) UnmarshalJSON(data []byte) error {
 
 // KubeCluster Kubernetes 集群模型
 type KubeCluster struct {
+	TenantID       string            `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint              `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name           string            `gorm:"column:name;type:varchar(255);not null;uniqueIndex" json:"name"`
 	ApiServer      string            `gorm:"column:api_server;type:varchar(500)" json:"apiServer"`

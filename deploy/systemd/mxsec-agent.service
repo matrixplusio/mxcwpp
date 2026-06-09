@@ -15,9 +15,11 @@ StandardError=journal
 SyslogIdentifier=mxsec-agent
 
 # 资源限制
+# MemoryLimit (legacy)兼容 systemd <231 (Oracle Linux 7 / RHEL 7)
+# 新系统 systemd 仍接受 MemoryLimit
 LimitNOFILE=65536
 LimitNPROC=4096
-MemoryMax=2G
+MemoryLimit=2G
 CPUQuota=100%
 
 # 环境变量

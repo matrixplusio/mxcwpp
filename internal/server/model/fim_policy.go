@@ -20,6 +20,7 @@ func (w *WatchPaths) Scan(value any) error { return JSONScan(w, value) }
 
 // FIMPolicy FIM 策略模型
 type FIMPolicy struct {
+	TenantID             string       `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	PolicyID             string       `gorm:"primaryKey;column:policy_id;type:varchar(64);not null" json:"policy_id"`
 	Name                 string       `gorm:"column:name;type:varchar(255);not null" json:"name"`
 	Description          string       `gorm:"column:description;type:text" json:"description"`

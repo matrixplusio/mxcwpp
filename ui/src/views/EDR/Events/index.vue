@@ -20,35 +20,27 @@
       </a-space>
     </div>
 
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 (统一 StatCard) -->
     <a-row :gutter="16" class="stat-cards">
       <a-col :span="4">
-        <a-card size="small">
-          <a-statistic title="总事件" :value="stats.total" />
-        </a-card>
+        <StatCard title="总事件" :value="stats.total" color="#86909C" />
       </a-col>
       <a-col :span="5">
-        <a-card size="small">
-          <a-statistic title="进程执行" :value="stats.process_exec" :value-style="{ color: '#3B82F6' }" />
-        </a-card>
+        <StatCard title="进程执行" :value="stats.process_exec" color="#3B82F6" />
       </a-col>
       <a-col :span="5">
-        <a-card size="small">
-          <a-statistic title="文件访问" :value="stats.file_open" :value-style="{ color: '#F59E0B' }" />
-        </a-card>
+        <StatCard title="文件访问" :value="stats.file_open" color="#F59E0B" />
       </a-col>
       <a-col :span="5">
-        <a-card size="small">
-          <a-statistic title="网络连接" :value="stats.network_connect" :value-style="{ color: '#0FC6C2' }" />
-        </a-card>
+        <StatCard title="网络连接" :value="stats.network_connect" color="#0FC6C2" />
       </a-col>
       <a-col :span="5">
-        <a-card size="small">
-          <a-statistic title="Top 进程" :value="stats.top_exes.length > 0 ? stats.top_exes[0].exe.split('/').pop() : '-'" :value-style="{ fontSize: '16px' }" />
-          <div v-if="stats.top_exes.length > 0" style="color: #999; font-size: 12px">
-            {{ stats.top_exes[0].count }} 次
-          </div>
-        </a-card>
+        <StatCard
+          title="Top 进程"
+          :value="topExeName"
+          color="#22C55E"
+          :tags="topExeTags"
+        />
       </a-col>
     </a-row>
 
@@ -136,7 +128,7 @@
       :data-source="events"
       :loading="loading"
       :pagination="pagination"
-      :row-key="(_: EDREvent, index: number) => index"
+      :row-key="(record: EDREvent) => `${record.host_id}-${record.timestamp}-${record.pid ?? ''}`"
       size="small"
       @change="handleTableChange"
     >
@@ -223,13 +215,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { edrApi } from '@/api/edr'
 import type { EDREvent, EDREventStats } from '@/api/types'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
+import StatCard from '@/components/StatCard.vue'
 
 const route = useRoute()
 
@@ -257,6 +250,15 @@ const stats = reactive<EDREventStats>({
   top_hosts: [],
   top_exes: [],
   trend: [],
+})
+
+const topExeName = computed(() => {
+  if (stats.top_exes.length === 0) return '-'
+  return stats.top_exes[0].exe.split('/').pop() || '-'
+})
+const topExeTags = computed(() => {
+  if (stats.top_exes.length === 0) return []
+  return [{ label: `${stats.top_exes[0].count.toLocaleString()} 次`, color: '#22C55E' }]
 })
 
 const filters = reactive({

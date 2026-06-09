@@ -151,6 +151,56 @@ func AddPerformanceIndexes(db *gorm.DB, logger *zap.Logger) error {
 			name:  "idx_cmdack_acked_at",
 			sql:   "ALTER TABLE command_ack_records ADD INDEX idx_cmdack_acked_at (acknowledged_at)",
 		},
+
+		// ---- P1-9 审计补强联合索引 (alert/host/vuln tenant 多租户三字段过滤) ----
+		{
+			// alerts 列表 + dashboard: WHERE tenant_id=? AND status=? AND severity=?
+			table: "alerts",
+			name:  "idx_alerts_tenant_status_severity",
+			sql:   "ALTER TABLE alerts ADD INDEX idx_alerts_tenant_status_severity (tenant_id, status, severity)",
+		},
+		{
+			// alerts 高频按 created_at 排序
+			table: "alerts",
+			name:  "idx_alerts_tenant_created",
+			sql:   "ALTER TABLE alerts ADD INDEX idx_alerts_tenant_created (tenant_id, created_at)",
+		},
+		{
+			// vulnerabilities 联合三字段
+			table: "vulnerabilities",
+			name:  "idx_vulns_tenant_status_severity",
+			sql:   "ALTER TABLE vulnerabilities ADD INDEX idx_vulns_tenant_status_severity (tenant_id, status, severity)",
+		},
+		{
+			// hosts.status 高频列表过滤
+			table: "hosts",
+			name:  "idx_hosts_tenant_status",
+			sql:   "ALTER TABLE hosts ADD INDEX idx_hosts_tenant_status (tenant_id, status)",
+		},
+		{
+			// hosts ORDER BY last_heartbeat DESC 全表 sort 加速
+			table: "hosts",
+			name:  "idx_hosts_last_heartbeat",
+			sql:   "ALTER TABLE hosts ADD INDEX idx_hosts_last_heartbeat (last_heartbeat)",
+		},
+		{
+			// audit_logs 高频 username + created_at 查询
+			table: "audit_logs",
+			name:  "idx_audit_tenant_user_created",
+			sql:   "ALTER TABLE audit_logs ADD INDEX idx_audit_tenant_user_created (tenant_id, username, created_at)",
+		},
+		{
+			// host_vulnerabilities 联合三字段 (P1-9 强补强)
+			table: "host_vulnerabilities",
+			name:  "idx_hv_tenant_status_severity",
+			sql:   "ALTER TABLE host_vulnerabilities ADD INDEX idx_hv_tenant_status_severity (tenant_id, status, severity)",
+		},
+		{
+			// fim_events 主机 + 时间倒序
+			table: "fim_events",
+			name:  "idx_fim_host_detected",
+			sql:   "ALTER TABLE fim_events ADD INDEX idx_fim_host_detected (host_id, detected_at)",
+		},
 	}
 
 	migrator := db.Migrator()

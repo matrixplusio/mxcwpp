@@ -3,6 +3,7 @@ package model
 
 // BusinessLine 业务线模型
 type BusinessLine struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name        string    `gorm:"column:name;type:varchar(100);not null;uniqueIndex" json:"name"` // 业务线名称
 	Code        string    `gorm:"column:code;type:varchar(50);not null;uniqueIndex" json:"code"`  // 业务线代码（唯一标识）

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -18,10 +20,19 @@ const (
 	yaraBinary   = "yr" // YARA-X CLI
 )
 
-// YARAScanner 基于 YARA-X CLI 的扫描器
+// YARAScanner 基于 YARA-X CLI 的扫描器 (P0-6: 加 compiled rules cache 减重复编译).
 type YARAScanner struct {
 	logger   *zap.Logger
 	rulesDir string
+
+	// P0-6: 编译后 rules 二进制文件路径 (yr compile 一次产物), 后续 scan 直接 --compiled-rules 引用
+	compiledRulesFile string
+	compiledOnce      sync.Once
+	compiledErr       error
+
+	// Available() 结果 cache 避免每次 scan 重 fork --version
+	availChecked atomic.Bool
+	availResult  atomic.Bool
 }
 
 // NewYARAScanner 创建 YARA-X 扫描器
@@ -40,10 +51,15 @@ func NewYARAScanner(logger *zap.Logger) *YARAScanner {
 	}
 }
 
-// Available 检查 yr (YARA-X) 是否可用（验证二进制可执行，非仅文件存在）
+// Available 检查 yr (YARA-X) 是否可用 (P0-6: 结果 cache, 避免每次 scan 重 fork).
 func (s *YARAScanner) Available() bool {
+	if s.availChecked.Load() {
+		return s.availResult.Load()
+	}
 	bin := s.findBinary()
 	if bin == "" {
+		s.availResult.Store(false)
+		s.availChecked.Store(true)
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -54,9 +70,51 @@ func (s *YARAScanner) Available() bool {
 			zap.String("path", bin),
 			zap.String("output", string(out)),
 			zap.Error(err))
+		s.availResult.Store(false)
+		s.availChecked.Store(true)
 		return false
 	}
+	s.availResult.Store(true)
+	s.availChecked.Store(true)
 	return true
+}
+
+// compileRulesOnce P0-6: 把整个 rules 目录编译到单 .yarc 二进制, scan 直接 --compiled-rules 引用.
+// 避免每次 scanPath 重新 compile 整个 rules 目录 (yr 0.10+ 支持).
+//
+// 失败回退到老路径 (rulesDir scan).
+func (s *YARAScanner) compileRulesOnce(ctx context.Context) string {
+	s.compiledOnce.Do(func() {
+		bin := s.findBinary()
+		if bin == "" {
+			s.compiledErr = fmt.Errorf("yr binary not found")
+			return
+		}
+		tmp, err := os.CreateTemp("", "mxsec-yara-compiled-*.yarc")
+		if err != nil {
+			s.compiledErr = err
+			return
+		}
+		_ = tmp.Close()
+		// yr compile -o /tmp/mxsec-yara-compiled.yarc RULES_DIR
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(cctx, bin, "compile", "-o", tmp.Name(), s.rulesDir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			_ = os.Remove(tmp.Name())
+			s.compiledErr = fmt.Errorf("yr compile: %w (%s)", err, string(out))
+			s.logger.Warn("YARA compile fail, fallback to dir scan", zap.Error(s.compiledErr))
+			return
+		}
+		s.compiledRulesFile = tmp.Name()
+		s.logger.Info("YARA rules compiled to single binary",
+			zap.String("file", tmp.Name()),
+			zap.String("from", s.rulesDir))
+	})
+	if s.compiledErr != nil {
+		return ""
+	}
+	return s.compiledRulesFile
 }
 
 // findBinary 查找 yr 路径：优先插件目录 → 系统 PATH
@@ -119,16 +177,19 @@ func (s *YARAScanner) Scan(ctx context.Context, paths []string) ([]ScanResult, e
 	return results, nil
 }
 
-// scanPath 使用 YARA-X 扫描单个路径
+// scanPath 使用 YARA-X 扫描单个路径 (P0-6: 优先用预编译 rules, 避免每次 fork 重新 compile).
 func (s *YARAScanner) scanPath(ctx context.Context, scanPath string) ([]ScanResult, error) {
-	// yr scan -r --output-format=json RULES_DIR TARGET
-	args := []string{
-		"scan",
-		"-r",
-		"--output-format=json",
-		s.rulesDir,
-		scanPath,
+	// P0-6: 试用预编译 .yarc, 失败回退 rules 目录
+	rulesArg := s.compileRulesOnce(ctx)
+	useCompiled := rulesArg != ""
+	if !useCompiled {
+		rulesArg = s.rulesDir
 	}
+	args := []string{"scan", "-r", "--output-format=json"}
+	if useCompiled {
+		args = append(args, "--compiled-rules")
+	}
+	args = append(args, rulesArg, scanPath)
 
 	cmd := exec.CommandContext(ctx, s.findBinary(), args...)
 	output, err := cmd.Output()

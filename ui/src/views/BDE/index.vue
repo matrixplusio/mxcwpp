@@ -7,28 +7,12 @@
       </a-button>
     </div>
 
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 (统一 StatCard) -->
     <a-row :gutter="16" class="stat-cards">
-      <a-col :span="6">
-        <a-card size="small">
-          <a-statistic title="总主机" :value="stats.total_hosts" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card size="small">
-          <a-statistic title="学习中" :value="stats.learning_hosts" :value-style="{ color: '#3B82F6' }" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card size="small">
-          <a-statistic title="检测中" :value="stats.active_hosts" :value-style="{ color: '#22C55E' }" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card size="small">
-          <a-statistic title="待处理告警" :value="stats.open_alerts" :value-style="{ color: '#EF4444' }" />
-        </a-card>
-      </a-col>
+      <a-col :span="6"><StatCard title="总主机" :value="stats.total_hosts" color="#86909C" /></a-col>
+      <a-col :span="6"><StatCard title="学习中" :value="stats.learning_hosts" color="#3B82F6" /></a-col>
+      <a-col :span="6"><StatCard title="检测中" :value="stats.active_hosts" color="#22C55E" /></a-col>
+      <a-col :span="6"><StatCard title="待处理告警" :value="stats.open_alerts" color="#EF4444" /></a-col>
     </a-row>
 
     <!-- Tab 切换 -->
@@ -158,6 +142,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import { bdeApi } from '@/api/bde'
 import type { HostBaselineState, BehaviorAlert, BaselineStats } from '@/api/bde'
+import StatCard from '@/components/StatCard.vue'
 
 const activeTab = ref('states')
 const statesLoading = ref(false)

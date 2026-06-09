@@ -22,6 +22,10 @@ type MySQLWriter struct {
 	db           *gorm.DB
 	logger       *zap.Logger
 	assetService *service.AssetService
+
+	// P1-2: 异步通知 goroutine semaphore, 限并发避免无界 goroutine 风暴.
+	// 默认 200, FIM/病毒 高 EPS 时通知发送被限流不阻塞 hot path.
+	notifySem chan struct{}
 }
 
 // NewMySQLWriter 创建 MySQLWriter
@@ -30,6 +34,28 @@ func NewMySQLWriter(db *gorm.DB, logger *zap.Logger) *MySQLWriter {
 		db:           db,
 		logger:       logger,
 		assetService: service.NewAssetService(db, logger),
+		notifySem:    make(chan struct{}, 200),
+	}
+}
+
+// runAsyncNotify P1-2: semaphore 限并发跑后台通知.
+// 队列满 → drop 通知 (调用方失败仅 metrics, 不重试).
+func (w *MySQLWriter) runAsyncNotify(name string, fn func()) {
+	select {
+	case w.notifySem <- struct{}{}:
+		go func() {
+			defer func() { <-w.notifySem }()
+			defer func() {
+				if r := recover(); r != nil {
+					w.logger.Error("async notify panic recovered",
+						zap.String("kind", name),
+						zap.Any("panic", r))
+				}
+			}()
+			fn()
+		}()
+	default:
+		w.logger.Warn("async notify queue full, drop", zap.String("kind", name))
 	}
 }
 
@@ -154,8 +180,8 @@ func (w *MySQLWriter) WriteFIMEvent(msg *kafka.MQMessage) error {
 
 	// 仅新插入的记录才发送通知（RowsAffected == 0 表示被 OnConflict 跳过了）
 	if result.RowsAffected > 0 {
-		go func(e *model.FIMEvent) {
-			// 查询主机 IP
+		e := event
+		w.runAsyncNotify("fim", func() {
 			var host model.Host
 			ip := ""
 			if w.db.Select("ipv4").First(&host, "host_id = ?", e.HostID).Error == nil && len(host.IPv4) > 0 {
@@ -174,7 +200,7 @@ func (w *MySQLWriter) WriteFIMEvent(msg *kafka.MQMessage) error {
 			}); err != nil {
 				w.logger.Error("发送 FIM 告警通知失败", zap.Error(err))
 			}
-		}(event)
+		})
 	}
 
 	return nil
@@ -536,8 +562,9 @@ func (w *MySQLWriter) WriteScanResult(msg *kafka.MQMessage) error {
 		w.logger.Warn("递增 threat_count 失败", zap.Uint64("task_id", taskID), zap.Error(err))
 	}
 
-	// 异步发送病毒查杀告警通知
-	go func(r *model.AntivirusScanResult) {
+	// 异步发送病毒查杀告警通知 (P1-2 限并发)
+	w.runAsyncNotify("virus", func() {
+		r := result
 		ns := biz.NewNotificationService(w.db, w.logger)
 		if err := ns.SendVirusAlertNotification(&biz.VirusAlertData{
 			HostID:     r.HostID,
@@ -553,7 +580,7 @@ func (w *MySQLWriter) WriteScanResult(msg *kafka.MQMessage) error {
 		}); err != nil {
 			w.logger.Error("发送病毒告警通知失败", zap.Error(err))
 		}
-	}(result)
+	})
 
 	return nil
 }
@@ -624,6 +651,13 @@ func (w *MySQLWriter) WriteQuarantineResult(msg *kafka.MQMessage) error {
 }
 
 // WriteMemoryThreat persists a memory threat detection event (DataType 3004).
+//
+// Server-side dedup:同 host + exe + threat_type 24h 内已存在 open alert 则跳过。
+// agent 端已有 (exe, threat_type) 24h dedup,server 端再加一层防止 agent 重启 / 多 agent
+// 实例情况下的重复写入。
+//
+// memfd_exec 严重度从 critical 降到 high — prod 实测 dbus/runc 类 memfd_exec 极常见,
+// critical 级别误导 SOC 关注。真 fileless malware 由 anonymous_exec(3+ rwx region) 标 critical。
 func (w *MySQLWriter) WriteMemoryThreat(msg *kafka.MQMessage) error {
 	fields, err := ParseRecordFields(msg.Body)
 	if err != nil {
@@ -632,21 +666,46 @@ func (w *MySQLWriter) WriteMemoryThreat(msg *kafka.MQMessage) error {
 
 	severity := "high"
 	switch fields["threat_type"] {
+	case "anonymous_exec":
+		severity = "critical" // 多个 rwx region,fileless shellcode 典型特征
 	case "memfd_exec":
-		severity = "critical"
-	case "deleted_exe", "anonymous_exec":
+		severity = "medium" // prod 大量正常进程触发,降级
+	case "deleted_exe":
 		severity = "high"
 	}
 
+	hostID := msg.AgentID
+	exe := fields["exe"]
+	threatType := fields["threat_type"]
+
+	// 24h dedup:同 host + exe + threat_type 24h 内任何 status 已有记录则跳过。
+	// 注意 status 不限 open — SOC 标 fp / resolved 后,24h 内同 exe 再触发也应 dedup
+	// (避免 fp 标记后又重新冒出 open 记录,SOC 处置无效)。
+	// 真新威胁:24h 后窗口外新触发能正常写入。
+	if hostID != "" && exe != "" && threatType != "" {
+		var cnt int64
+		cutoff := time.Now().Add(-24 * time.Hour)
+		err := w.db.Model(&model.MemoryThreat{}).
+			Where("host_id = ? AND exe = ? AND threat_type = ? AND created_at >= ?",
+				hostID, exe, threatType, cutoff).
+			Limit(1).
+			Count(&cnt).Error
+		if err != nil {
+			w.logger.Warn("memory_threat dedup query failed,放行写入", zap.Error(err))
+		} else if cnt > 0 {
+			return nil // dedup 命中,丢弃此事件
+		}
+	}
+
 	record := &model.MemoryThreat{
-		HostID:     msg.AgentID,
+		HostID:     hostID,
 		Hostname:   msg.Hostname,
-		ThreatType: fields["threat_type"],
+		ThreatType: threatType,
 		Severity:   severity,
 		PID:        fields["pid"],
 		PPID:       fields["ppid"],
 		UID:        fields["uid"],
-		Exe:        fields["exe"],
+		Exe:        exe,
 		Cmdline:    fields["cmdline"],
 		Detail:     fields["detail"],
 		StoryID:    fields["story_id"],

@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/migration"
 )
@@ -116,6 +117,13 @@ func Init(cfg config.DatabaseConfig, zapLogger *zap.Logger, logCfg ...config.Log
 	// 失败仅警告，不阻塞启动（监控埋点非关键路径）
 	if err := RegisterPromCallback(db); err != nil && zapLogger != nil {
 		zapLogger.Warn("注册 gorm Prometheus callback 失败", zap.Error(err))
+	}
+
+	// 注册多租户 INSERT 自动注入 hook（v2.0 多租户安全网）
+	// model 有 TenantID 字段时，从 ctx 自动注入；调用方显式赋值不会覆盖。
+	// 详见 docs/multi-tenant.md §3.3
+	if err := tenant.RegisterAutoInjectHook(db); err != nil && zapLogger != nil {
+		zapLogger.Warn("注册 tenant auto-inject hook 失败", zap.Error(err))
 	}
 
 	// 保存全局实例

@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -15,13 +16,13 @@ type KubeSyncService struct {
 	db           *gorm.DB
 	logger       *zap.Logger
 	kubeClient   *KubeClientManager
-	alarmService *KubeAlarmService
+	alarmService *kube.KubeAlarmService
 	interval     time.Duration
 	stopCh       chan struct{}
 }
 
 // NewKubeSyncService 创建集群同步服务
-func NewKubeSyncService(db *gorm.DB, logger *zap.Logger, kubeClient *KubeClientManager, alarmService *KubeAlarmService) *KubeSyncService {
+func NewKubeSyncService(db *gorm.DB, logger *zap.Logger, kubeClient *KubeClientManager, alarmService *kube.KubeAlarmService) *KubeSyncService {
 	return &KubeSyncService{
 		db:           db,
 		logger:       logger,

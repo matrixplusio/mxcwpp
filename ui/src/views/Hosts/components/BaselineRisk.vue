@@ -204,23 +204,47 @@ const pagination = ref({
   showTotal: (total: number) => `共 ${total} 条`
 })
 
-// 统计数据
-const totalCount = computed(() => results.value.length)
-const passCount = computed(() => results.value.filter(r => r.status === 'pass').length)
-const failCount = computed(() => results.value.filter(r => r.status === 'fail').length)
-const errorCount = computed(() => results.value.filter(r => r.status === 'error').length)
+// P2-9: 单次 reduce 计算所有统计, 替 9 个 filter() 重复遍历同数组
+const stats = computed(() => {
+  const acc = {
+    total: 0, pass: 0, fail: 0, error: 0,
+    critical: 0, high: 0, medium: 0, low: 0,
+    failed: [] as typeof results.value,
+  }
+  for (const r of results.value) {
+    acc.total++
+    if (r.status === 'pass') acc.pass++
+    else if (r.status === 'fail') acc.fail++
+    else if (r.status === 'error') acc.error++
+    if (r.status === 'fail' || r.status === 'error') {
+      acc.failed.push(r)
+      if (r.severity === 'critical') acc.critical++
+      else if (r.severity === 'high') acc.high++
+      else if (r.severity === 'medium') acc.medium++
+      else if (r.severity === 'low') acc.low++
+    }
+  }
+  return acc
+})
 
-// 按严重级别统计失败项
-const failedResults = computed(() => results.value.filter(r => r.status === 'fail' || r.status === 'error'))
-const criticalCount = computed(() => failedResults.value.filter(r => r.severity === 'critical').length)
-const highCount = computed(() => failedResults.value.filter(r => r.severity === 'high').length)
-const mediumCount = computed(() => failedResults.value.filter(r => r.severity === 'medium').length)
-const lowCount = computed(() => failedResults.value.filter(r => r.severity === 'low').length)
+const totalCount = computed(() => stats.value.total)
+const passCount = computed(() => stats.value.pass)
+const failCount = computed(() => stats.value.fail)
+const errorCount = computed(() => stats.value.error)
+
+const failedResults = computed(() => stats.value.failed)
+const criticalCount = computed(() => stats.value.critical)
+const highCount = computed(() => stats.value.high)
+const mediumCount = computed(() => stats.value.medium)
+const lowCount = computed(() => stats.value.low)
 
 // 点击严重级别快速筛选
 const setSeverityFilter = (severity: string) => {
-  const count = failedResults.value.filter(r => r.severity === severity).length
-  if (count > 0) {
+  const s = stats.value
+  const map: Record<string, number> = {
+    critical: s.critical, high: s.high, medium: s.medium, low: s.low,
+  }
+  if ((map[severity] || 0) > 0) {
     statusFilter.value = 'fail'
     severityFilter.value = severity
   }

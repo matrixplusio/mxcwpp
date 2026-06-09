@@ -5,22 +5,15 @@
       <span class="page-header-hint">实时监控服务器资源使用情况</span>
     </div>
 
-    <!-- 概览统计 -->
+    <!-- 概览统计 (统一 StatCard) -->
     <a-row :gutter="[16, 16]" class="section-row">
       <a-col :span="4" v-for="item in overviewStats" :key="item.key">
-        <div class="monitor-stat-card">
-          <div class="stat-header">
-            <span class="stat-label">{{ item.label }}</span>
-            <a-tag :color="item.statusColor" :bordered="false">{{ item.statusText }}</a-tag>
-          </div>
-          <div class="stat-value">{{ item.value }}</div>
-          <div class="stat-trend">
-            <span class="trend-label">较昨日</span>
-            <span :class="['trend-value', item.trend > 0 ? 'trend-up' : 'trend-down']">
-              {{ item.trend > 0 ? '+' : '' }}{{ item.trend }}%
-            </span>
-          </div>
-        </div>
+        <StatCard
+          :title="item.label"
+          :value="item.value"
+          :color="item.statusColor === 'red' ? '#EF4444' : item.statusColor === 'orange' ? '#F59E0B' : '#22C55E'"
+          :tags="[{ label: item.statusText, color: item.statusColor === 'red' ? '#EF4444' : item.statusColor === 'orange' ? '#F59E0B' : '#22C55E' }, { label: `${item.trend > 0 ? '+' : ''}${item.trend}% vs 昨日`, color: item.trend > 0 ? '#EF4444' : '#22C55E' }]"
+        />
       </a-col>
     </a-row>
 
@@ -110,6 +103,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import StatCard from '@/components/StatCard.vue'
 import apiClient from '@/api/client'
 
 const timeRange = ref('1h')

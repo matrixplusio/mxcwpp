@@ -9,6 +9,7 @@ package model
 //   - CHTable: CH 端实际表名（如 ebpf_events / storyline_events）
 //   - RetentionDays 范围 1-3650
 type RetentionPolicy struct {
+	TenantID      string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID            uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	CHTable       string    `gorm:"column:ch_table;type:varchar(64);uniqueIndex;not null" json:"ch_table"`
 	DisplayName   string    `gorm:"column:display_name;type:varchar(100);not null" json:"display_name"`

@@ -24,6 +24,7 @@ const (
 
 // KubeAlarm 容器安全告警
 type KubeAlarm struct {
+	TenantID       string          `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint            `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ClusterID      uint            `gorm:"column:cluster_id;not null;index" json:"clusterId"`
 	ClusterName    string          `gorm:"column:cluster_name;type:varchar(255)" json:"clusterName"`

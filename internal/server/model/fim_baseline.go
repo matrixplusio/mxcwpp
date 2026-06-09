@@ -2,6 +2,7 @@ package model
 
 // FIMBaseline 基线记录（策略+主机维度，唯一约束）
 type FIMBaseline struct {
+	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	PolicyID   string     `gorm:"column:policy_id;type:varchar(64);not null;uniqueIndex:udx_fim_bl_policy_host" json:"policy_id"`
 	HostID     string     `gorm:"column:host_id;type:varchar(64);not null;uniqueIndex:udx_fim_bl_policy_host" json:"host_id"`
@@ -23,6 +24,7 @@ func (FIMBaseline) TableName() string {
 
 // FIMBaselineEntry 基线文件条目
 type FIMBaselineEntry struct {
+	TenantID   string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint   `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	BaselineID uint   `gorm:"column:baseline_id;type:int unsigned;not null;index:idx_fbe_baseline_id" json:"baseline_id"`
 	FilePath   string `gorm:"column:file_path;type:varchar(1024);not null;index:idx_fbe_file_path,length:255" json:"file_path"`

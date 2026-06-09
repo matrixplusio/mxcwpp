@@ -29,6 +29,7 @@ func (f *FixConfig) Scan(value any) error          { return JSONScan(f, value) }
 
 // Rule 规则模型
 type Rule struct {
+	TenantID     string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	RuleID       string      `gorm:"primaryKey;column:rule_id;type:varchar(64);not null" json:"rule_id"`
 	PolicyID     string      `gorm:"column:policy_id;type:varchar(64);not null;index" json:"policy_id"`
 	Category     string      `gorm:"column:category;type:varchar(50)" json:"category"`

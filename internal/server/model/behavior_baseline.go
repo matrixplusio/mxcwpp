@@ -3,6 +3,7 @@ package model
 // BehaviorAlert stores a BDE (Behavior Detection Engine) anomaly alert.
 // Generated when a host's behavior profile deviates significantly from its baseline.
 type BehaviorAlert struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primarykey" json:"id"`
 	HostID    string    `gorm:"type:varchar(64);index" json:"host_id"`
 	Hostname  string    `gorm:"type:varchar(255)" json:"hostname"`
@@ -22,6 +23,7 @@ func (BehaviorAlert) TableName() string { return "behavior_alerts" }
 // HostBaselineState persists BDE baseline statistics for crash recovery.
 // Welford mean/m2 arrays are stored as JSON text to avoid 13 columns per metric.
 type HostBaselineState struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primarykey" json:"id"`
 	HostID    string    `gorm:"type:varchar(64);uniqueIndex" json:"host_id"`
 	Phase     string    `gorm:"type:varchar(20);default:learning" json:"phase"` // learning/active

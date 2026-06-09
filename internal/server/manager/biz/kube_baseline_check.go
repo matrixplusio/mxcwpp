@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -22,14 +23,14 @@ type KubeBaselineChecker struct {
 	db             *gorm.DB
 	logger         *zap.Logger
 	kubeClient     *KubeClientManager
-	ruleEngine     *KubeRuleEngine
+	ruleEngine     *kube.KubeRuleEngine
 	checkFuncs     map[string]CheckFunc
 	mu             sync.Mutex // 保护 currentCluster 防止并发 RunChecks 竞态
 	currentCluster uint
 }
 
 // NewKubeBaselineChecker 创建基线检查器
-func NewKubeBaselineChecker(db *gorm.DB, logger *zap.Logger, kubeClient *KubeClientManager, ruleEngine *KubeRuleEngine) *KubeBaselineChecker {
+func NewKubeBaselineChecker(db *gorm.DB, logger *zap.Logger, kubeClient *KubeClientManager, ruleEngine *kube.KubeRuleEngine) *KubeBaselineChecker {
 	c := &KubeBaselineChecker{
 		db:         db,
 		logger:     logger,

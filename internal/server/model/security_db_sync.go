@@ -4,6 +4,7 @@ import "time"
 
 // SecurityDBSyncRecord 安全库同步记录（病毒库、YARA 规则库等）
 type SecurityDBSyncRecord struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	DBType    string    `json:"dbType" gorm:"type:varchar(32);not null;index;comment:库类型(clamav/yara-rules)"`
 	Version   string    `json:"version" gorm:"type:varchar(64);comment:版本号"`

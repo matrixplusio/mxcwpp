@@ -81,12 +81,19 @@ else
 fi
 
 # 获取架构列表
+#
+# 支持架构 (M1-7 信创扩展):
+#   amd64      — 主流 x86_64 (CentOS/Rocky/Ubuntu/Debian)
+#   arm64      — ARM64 (Kylin V10 ARM64 / Ampere Altra / Apple Silicon Linux)
+#   loong64    — 龙芯 LoongArch64 (UOS 1060 / 中标麒麟 / Anolis Loong 23)
+#   all        — amd64 + arm64
+#   xc         — amd64 + arm64 + loong64 (信创全栈)
 get_archs() {
-    if [ "$ARCH" = "all" ]; then
-        echo "amd64 arm64"
-    else
-        echo "$ARCH"
-    fi
+    case "$ARCH" in
+        all) echo "amd64 arm64" ;;
+        xc)  echo "amd64 arm64 loong64" ;;
+        *)   echo "$ARCH" ;;
+    esac
 }
 
 # 打包 Agent
@@ -322,12 +329,16 @@ case "$TARGET" in
     remediation)
         for arch in $(get_archs); do build_plugin remediation $arch; done
         ;;
+    avscanner)
+        for arch in $(get_archs); do build_plugin avscanner $arch; done
+        ;;
     plugins)
         for arch in $(get_archs); do
             build_plugin baseline $arch
             build_plugin collector $arch
             build_plugin fim $arch
             build_plugin remediation $arch
+            build_plugin avscanner $arch
             build_scanner $arch || echo -e "${YELLOW}[WARN] scanner 构建失败（依赖下载问题），已跳过。可单独执行: $0 scanner${NC}"
         done
         ;;
@@ -338,12 +349,13 @@ case "$TARGET" in
             build_plugin collector $arch
             build_plugin fim $arch
             build_plugin remediation $arch
+            build_plugin avscanner $arch
             build_scanner $arch || echo -e "${YELLOW}[WARN] scanner 构建失败（依赖下载问题），已跳过。可单独执行: $0 scanner${NC}"
         done
         ;;
     *)
         echo -e "${RED}Unknown target: $TARGET${NC}"
-        echo "Usage: $0 [agent|baseline|collector|fim|scanner|remediation|plugins|all] [--arch=amd64|arm64|all]"
+        echo "Usage: $0 [agent|baseline|collector|fim|scanner|remediation|avscanner|plugins|all] [--arch=amd64|arm64|all]"
         exit 1
         ;;
 esac

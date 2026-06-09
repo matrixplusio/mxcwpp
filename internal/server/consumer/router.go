@@ -4,7 +4,6 @@ package consumer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,13 +12,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"github.com/imkerbos/mxsec-platform/internal/common/jsonx"
 	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/anomaly"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/baseline"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
 	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/storyline"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/anomaly"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/baseline"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/storyline"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -34,22 +33,19 @@ type Router struct {
 	mysql           *writer.MySQLWriter
 	ch              *writer.ClickHouseWriter
 	dlq             *DLQHandler
-	redisClient     *redis.Client               // 可选，用于写 agent:ac: 映射
-	celEngine       *celengine.Engine           // CEL 规则引擎（可选）
-	alertGen        *celengine.AlertGenerator   // CEL 告警生成器（可选）
-	autoResponder   *celengine.AutoResponder    // 自动响应执行器（可选）
-	scanDetector    *celengine.ScanDetector     // 端口扫描检测器（可选）
-	seqDetector     *celengine.SequenceDetector // 序列检测器（可选）
-	bdeEngine       *baseline.Engine            // BDE 基线引擎（可选）
-	anomalyDetector *anomaly.Detector           // ML 异常检测引擎（可选）
-	storyEngine     *storyline.Engine           // 攻击故事线引擎（可选）
+	redisClient     *redis.Client     // 可选，用于写 agent:ac: 映射
+	bdeEngine       *baseline.Engine  // BDE 基线引擎（可选）
+	anomalyDetector *anomaly.Detector // ML 异常检测引擎（可选）
+	storyEngine     *storyline.Engine // 攻击故事线引擎（可选）
 	topics          []string
 	logger          *zap.Logger
 }
 
-// NewRouter 创建 Router
-// celEng 和 alertGen 可为 nil，此时跳过 CEL 规则评估
-// autoResponder/scanDetector/seqDetector 可为 nil
+// NewRouter 创建 Router (v2 拆分: Consumer 仅 writer 路径, 不做 CEL 检测).
+//
+// CEL/AlertGenerator/AutoResponder/ScanDetector/SequenceDetector 全部迁到 Engine 服务
+// (cmd/server/engine + internal/server/engine/stage_cel). Consumer 只订阅 Kafka writer topic
+// 持久化到 MySQL/ClickHouse.
 func NewRouter(
 	brokers []string,
 	groupID string,
@@ -58,11 +54,6 @@ func NewRouter(
 	ch *writer.ClickHouseWriter,
 	dlq *DLQHandler,
 	redisClient *redis.Client, // 可为 nil，Redis 不可用时跳过 agent:ac: 写入
-	celEng *celengine.Engine,
-	alertGen *celengine.AlertGenerator,
-	autoResponder *celengine.AutoResponder, // 可为 nil，跳过自动响应
-	scanDetector *celengine.ScanDetector, // 可为 nil，端口扫描检测
-	seqDetector *celengine.SequenceDetector, // 可为 nil，序列检测
 	logger *zap.Logger,
 ) (*Router, error) {
 	cfg := sarama.NewConfig()
@@ -89,18 +80,13 @@ func NewRouter(
 	}
 
 	return &Router{
-		group:         group,
-		mysql:         mysql,
-		ch:            ch,
-		dlq:           dlq,
-		redisClient:   redisClient,
-		celEngine:     celEng,
-		alertGen:      alertGen,
-		autoResponder: autoResponder,
-		scanDetector:  scanDetector,
-		seqDetector:   seqDetector,
-		topics:        topics,
-		logger:        logger,
+		group:       group,
+		mysql:       mysql,
+		ch:          ch,
+		dlq:         dlq,
+		redisClient: redisClient,
+		topics:      topics,
+		logger:      logger,
 	}, nil
 }
 
@@ -223,8 +209,10 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 		consumermetrics.RecordProcessing(raw.Topic, dataTypeLabel, procStatus, time.Since(start))
 	}()
 
-	var msg kafka.MQMessage
-	if err := json.Unmarshal(raw.Value, &msg); err != nil {
+	// P2-6: 池化 MQMessage 减 GC 压力
+	msg := kafka.GetMQMessage()
+	defer kafka.PutMQMessage(msg)
+	if err := jsonx.Unmarshal(raw.Value, msg); err != nil {
 		r.logger.Error("反序列化 MQMessage 失败",
 			zap.String("topic", raw.Topic),
 			zap.Error(err),
@@ -239,82 +227,82 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 	switch {
 	case msg.DataType == 1000:
 		// 心跳：upsert hosts 表 + 写 Redis agent:ac: 映射 + 写 ClickHouse 指标
-		writeErr = r.mysql.WriteHeartbeat(&msg)
-		r.writeAgentACMapping(&msg)
-		_ = r.ch.WriteHostMetrics(&msg)
+		writeErr = r.mysql.WriteHeartbeat(msg)
+		r.writeAgentACMapping(msg)
+		_ = r.ch.WriteHostMetrics(msg)
 	case msg.DataType == 1001:
-		_ = r.ch.WriteHostMetrics(&msg) // 插件心跳，Phase 4 实现
+		_ = r.ch.WriteHostMetrics(msg) // 插件心跳，Phase 4 实现
 
 	// 资产数据（5050~5060）
 	case msg.DataType >= 5050 && msg.DataType <= 5060:
-		writeErr = r.mysql.WriteAsset(&msg, msg.DataType)
+		writeErr = r.mysql.WriteAsset(msg, msg.DataType)
 
 	// FIM 事件
 	case msg.DataType == 6001:
-		writeErr = r.mysql.WriteFIMEvent(&msg)
+		writeErr = r.mysql.WriteFIMEvent(msg)
 		if writeErr == nil {
-			_ = r.ch.WriteFIMEvent(&msg)
-			r.evaluateCEL(&msg)
+			_ = r.ch.WriteFIMEvent(msg)
+			r.evaluateCEL(msg)
 		}
 	// FIM 任务完成
 	case msg.DataType == 6002:
-		writeErr = r.mysql.WriteFIMTaskComplete(&msg)
+		writeErr = r.mysql.WriteFIMTaskComplete(msg)
 
 	// 基线检查结果
 	case msg.DataType == 8000:
-		writeErr = r.mysql.WriteBaseline(&msg)
+		writeErr = r.mysql.WriteBaseline(msg)
 	// 基线扫描任务完成
 	case msg.DataType == 8001:
-		writeErr = r.mysql.WriteTaskCompletion(&msg)
+		writeErr = r.mysql.WriteTaskCompletion(msg)
 	// 修复结果
 	case msg.DataType == 8003:
-		writeErr = r.mysql.WriteFixResult(&msg)
+		writeErr = r.mysql.WriteFixResult(msg)
 	// 修复任务完成
 	case msg.DataType == 8004:
-		writeErr = r.mysql.WriteFixTaskComplete(&msg)
+		writeErr = r.mysql.WriteFixTaskComplete(msg)
 
 	// Scanner 扫描结果
 	case msg.DataType == 7001:
-		writeErr = r.mysql.WriteScanResult(&msg)
+		writeErr = r.mysql.WriteScanResult(msg)
 		if writeErr == nil {
-			r.evaluateCEL(&msg)
+			r.evaluateCEL(msg)
 		}
 	// Scanner 任务完成
 	case msg.DataType == 7002:
-		writeErr = r.mysql.WriteScanTaskComplete(&msg)
+		writeErr = r.mysql.WriteScanTaskComplete(msg)
 	// Scanner 隔离/删除结果
 	case msg.DataType == 7004:
-		writeErr = r.mysql.WriteQuarantineResult(&msg)
+		writeErr = r.mysql.WriteQuarantineResult(msg)
 
 	// BDE 行为画像快照
 	case msg.DataType == 3010:
-		r.evaluateBDE(&msg)
+		r.evaluateBDE(msg)
 
 	// 内存威胁事件
 	case msg.DataType == 3004:
-		r.writeMemoryThreat(&msg)
+		r.writeMemoryThreat(msg)
 
 	// eBPF 事件（3000-3003，含 DNS 事件）
 	case msg.DataType >= 3000 && msg.DataType <= 3003:
-		_ = r.ch.WriteEBPFEvent(&msg)
-		r.evaluateCEL(&msg)
-		r.ingestStoryline(&msg)
+		_ = r.ch.WriteEBPFEvent(msg)
+		r.evaluateCEL(msg)
+		r.ingestStoryline(msg)
 		// 网络事件额外进行端口扫描检测
 		if msg.DataType == 3002 {
-			r.checkPortScan(&msg)
+			r.checkPortScan(msg)
 		}
 
 	// 漏洞修复结果
 	case msg.DataType == 9200:
-		writeErr = r.mysql.WriteRemediationResult(&msg)
+		writeErr = r.mysql.WriteRemediationResult(msg)
 
 	// 漏洞修复阶段进度（11 state lifecycle 实时事件）
 	case msg.DataType == 9201:
-		writeErr = r.mysql.WriteRemediationProgress(&msg)
+		writeErr = r.mysql.WriteRemediationProgress(msg)
 
 	// 命令执行回包
 	case msg.DataType == 9999:
-		writeErr = r.mysql.WriteCommandAck(&msg)
+		writeErr = r.mysql.WriteCommandAck(msg)
 
 	default:
 		r.logger.Debug("Consumer 忽略未路由的 DataType",
@@ -330,7 +318,7 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 			zap.String("agent_id", msg.AgentID),
 			zap.Error(writeErr),
 		)
-		r.dlq.Send(raw.Topic, &msg, writeErr, 1)
+		r.dlq.Send(raw.Topic, msg, writeErr, 1)
 		procStatus = "dlq"
 	}
 
@@ -338,73 +326,18 @@ func (r *Router) handleMessage(session sarama.ConsumerGroupSession, raw *sarama.
 	session.MarkMessage(raw, "")
 }
 
-// evaluateCEL 解析消息字段并交给 CEL 引擎评估，命中规则时生成告警
-func (r *Router) evaluateCEL(msg *kafka.MQMessage) {
-	if r.celEngine == nil || r.alertGen == nil {
-		return
-	}
-
-	fields, err := writer.ParseRecordFields(msg.Body)
-	if err != nil {
-		return
-	}
-
-	// 补充消息级别字段（Body 中可能没有）
-	if fields["agent_id"] == "" {
-		fields["agent_id"] = msg.AgentID
-	}
-	if fields["hostname"] == "" {
-		fields["hostname"] = msg.Hostname
-	}
-
-	matched := r.celEngine.Evaluate(msg.DataType, fields)
-	if len(matched) > 0 {
-		r.alertGen.Generate(msg.AgentID, matched, fields)
-		// 自动响应：critical 规则命中时下发 kill/隔离/阻断命令
-		if r.autoResponder != nil {
-			r.autoResponder.Execute(msg.AgentID, matched, fields)
-		}
-	}
-
-	// 序列检测：多步攻击链状态机
-	if r.seqDetector != nil {
-		seqMatched := r.seqDetector.Evaluate(msg.AgentID, msg.DataType, fields)
-		if len(seqMatched) > 0 {
-			// 将序列规则命中转换为 DetectionRule 格式，复用告警生成器
-			for _, sr := range seqMatched {
-				r.alertGen.Generate(msg.AgentID, []model.DetectionRule{{
-					ID:       sr.ID,
-					Name:     sr.Name,
-					Severity: sr.Severity,
-					Category: sr.Category,
-				}}, fields)
-			}
-		}
-	}
+// evaluateCEL noop (v2 拆分: 检测全部走 Engine 服务).
+//
+// 旧架构 Consumer 内嵌 CEL 引擎评估事件 + 写 alerts 表. v2 重构后所有 CEL / Sequence /
+// AutoResponse 迁到 cmd/server/engine, Consumer 仅 writer (Kafka → MySQL/CH). 此函数保留
+// 为空 stub 兼容 Process 调用点, 不实际执行检测.
+func (r *Router) evaluateCEL(_ *kafka.MQMessage) {
+	// no-op: 检测能力已迁到 Engine 服务 (internal/server/engine/stage_cel.go)
 }
 
-// checkPortScan 对入站连接事件进行端口扫描检测
-func (r *Router) checkPortScan(msg *kafka.MQMessage) {
-	if r.scanDetector == nil {
-		return
-	}
-
-	fields, err := writer.ParseRecordFields(msg.Body)
-	if err != nil {
-		return
-	}
-
-	// 仅处理入站连接（tcp_accept）
-	if fields["event_type"] != "tcp_accept" {
-		return
-	}
-
-	r.scanDetector.CheckIncomingConnection(
-		msg.AgentID,
-		fields["remote_addr"],
-		fields["local_port"],
-		fields,
-	)
+// checkPortScan noop (v2 拆分: 端口扫描检测迁到 Engine 服务).
+func (r *Router) checkPortScan(_ *kafka.MQMessage) {
+	// no-op: ScanDetector 现归 cmd/server/engine 管理
 }
 
 // evaluateBDE parses a BDE behavior profile snapshot and feeds it to the baseline engine.
@@ -469,31 +402,8 @@ func (r *Router) evaluateBDE(msg *kafka.MQMessage) {
 		}
 	}
 
-	// Generate BDE anomaly alerts (统一 alerts 表入口，参与 CEL + AutoResponder 联动).
-	if r.alertGen != nil {
-		for _, dev := range result.Deviations {
-			severity := "medium"
-			if result.RiskScore >= 70 {
-				severity = "critical"
-			} else if result.RiskScore >= 40 {
-				severity = "high"
-			}
-			r.alertGen.Generate(msg.AgentID, []model.DetectionRule{{
-				Name:     "bde_anomaly_" + dev.Metric,
-				Severity: severity,
-				Category: "behavior_anomaly",
-			}}, map[string]string{
-				"agent_id":   msg.AgentID,
-				"hostname":   msg.Hostname,
-				"risk_score": fmt.Sprintf("%.1f", result.RiskScore),
-				"metric":     dev.Metric,
-				"value":      fmt.Sprintf("%.4f", dev.Value),
-				"mean":       fmt.Sprintf("%.4f", dev.Mean),
-				"stddev":     fmt.Sprintf("%.4f", dev.Stddev),
-				"z_score":    fmt.Sprintf("%.2f", dev.ZScore),
-			})
-		}
-	}
+	// v2 拆分: BDE 异常 alerts 改由 Engine 服务的 StorylineStage / Anomaly stage 升级落 DB.
+	// Consumer 只持久化 behavior_alerts 维度 (上面 db.Create), 不直接写 alerts 表.
 
 	r.logger.Info("BDE 异常检出",
 		zap.String("host_id", msg.AgentID),

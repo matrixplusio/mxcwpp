@@ -13,6 +13,7 @@ const (
 // ScanResult 检测结果模型
 // 复合主键 (task_id, host_id, rule_id) — 一次任务中每台主机的每条规则只有一条结果
 type ScanResult struct {
+	TenantID      string       `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	TaskID        string       `gorm:"primaryKey;column:task_id;type:varchar(64);not null" json:"task_id"`
 	HostID        string       `gorm:"primaryKey;column:host_id;type:varchar(64);not null" json:"host_id"`
 	RuleID        string       `gorm:"primaryKey;column:rule_id;type:varchar(64);not null" json:"rule_id"`

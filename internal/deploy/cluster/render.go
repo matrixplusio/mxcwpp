@@ -46,6 +46,9 @@ type nodeTemplateData struct {
 	ManagerImage     string
 	AgentCenterImage string
 	ConsumerImage    string
+	EngineImage      string
+	LLMProxyImage    string
+	VulnSyncImage    string
 	UIImage          string
 	MySQLImage       string
 	RedisImage       string
@@ -277,6 +280,9 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 		ManagerImage:     cfg.ImageRef("mxsec-manager"),
 		AgentCenterImage: cfg.ImageRef("mxsec-agentcenter"),
 		ConsumerImage:    cfg.ImageRef("mxsec-consumer"),
+		EngineImage:      cfg.ImageRef("mxsec-engine"),
+		LLMProxyImage:    cfg.ImageRef("mxsec-llmproxy"),
+		VulnSyncImage:    cfg.ImageRef("mxsec-vulnsync"),
 		UIImage:          cfg.ImageRef("mxsec-ui"),
 		MySQLImage:       "mysql:8.0",
 		RedisImage:       "redis:7-alpine",
@@ -499,6 +505,9 @@ func writeNodeSummary(path string, cfg *Config, assignment RoleAssignment) error
 		builder.WriteString(fmt.Sprintf("manager replicas: %d\n", assignment.ManagerReplicas))
 		builder.WriteString(fmt.Sprintf("agentcenter replicas: %d\n", assignment.AgentCenterReplicas))
 		builder.WriteString(fmt.Sprintf("consumer replicas: %d\n", assignment.ConsumerReplicas))
+		builder.WriteString(fmt.Sprintf("engine replicas: %d\n", assignment.EngineReplicas))
+		builder.WriteString(fmt.Sprintf("llmproxy replicas: %d\n", assignment.LLMProxyReplicas))
+		builder.WriteString(fmt.Sprintf("vulnsync replicas: %d\n", assignment.VulnSyncReplicas))
 		builder.WriteString("start: docker compose -f compose/docker-compose.control.yml up -d\n")
 	}
 	if assignment.Node.HasRole(RoleStorage) {

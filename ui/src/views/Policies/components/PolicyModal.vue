@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    v-model:visible="visible"
+    v-model:open="visible"
     :title="policy ? '编辑策略' : '新建策略'"
     width="900px"
     @ok="handleSubmit"

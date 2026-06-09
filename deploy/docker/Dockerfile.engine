@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+# Engine 生产镜像 (v2.0 检测引擎)
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+ARG VERSION=dev
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+RUN apk add --no-cache git protobuf protobuf-dev && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+RUN mkdir -p api/proto/bridge api/proto/grpc && \
+    protoc \
+    --go_out=api/proto/bridge --go_opt=paths=source_relative \
+    -I=api/proto api/proto/bridge.proto && \
+    protoc \
+    --go_out=api/proto/grpc --go_opt=paths=source_relative \
+    --go-grpc_out=api/proto/grpc --go-grpc_opt=paths=source_relative \
+    -I=api/proto api/proto/grpc.proto
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-s -w -X main.buildVersion=${VERSION}" \
+    -o engine ./cmd/server/engine
+
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY --from=builder /app/engine /usr/bin/engine
+
+RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform
+
+WORKDIR /opt/mxsec-platform
+
+EXPOSE 8082
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD wget -q --spider http://127.0.0.1:8082/health || exit 1
+
+ENTRYPOINT ["/usr/bin/engine"]
+CMD ["-config", "/etc/mxsec-platform/server.yaml"]

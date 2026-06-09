@@ -431,6 +431,10 @@ func (h *KubeClusterHandler) GetClusterNodes(c *gin.Context) {
 	nodes, err := h.kubeClient.GetNodes(uint(id))
 	if err != nil {
 		h.logger.Error("查询节点列表失败", zap.Uint64("cluster_id", id), zap.Error(err))
+		if isK8sUnreachable(err) {
+			ServiceUnavailable(c, "K8s 集群不可达, 检查 kubeconfig / 网络连通性", gin.H{"items": []any{}})
+			return
+		}
 		InternalError(c, "查询节点列表失败")
 		return
 	}
@@ -455,6 +459,10 @@ func (h *KubeClusterHandler) GetClusterPods(c *gin.Context) {
 	pods, total, pErr := h.kubeClient.GetPods(uint(id), namespace, search, status, page, pageSize)
 	if pErr != nil {
 		h.logger.Error("查询 Pod 列表失败", zap.Uint64("cluster_id", id), zap.Error(pErr))
+		if isK8sUnreachable(pErr) {
+			ServiceUnavailable(c, "K8s 集群不可达, 检查 kubeconfig / 网络连通性", gin.H{"items": []any{}, "total": 0})
+			return
+		}
 		InternalError(c, "查询 Pod 列表失败")
 		return
 	}
@@ -476,11 +484,41 @@ func (h *KubeClusterHandler) GetClusterWorkloads(c *gin.Context) {
 	workloads, wErr := h.kubeClient.GetWorkloads(uint(id))
 	if wErr != nil {
 		h.logger.Error("查询 Workload 列表失败", zap.Uint64("cluster_id", id), zap.Error(wErr))
+		if isK8sUnreachable(wErr) {
+			ServiceUnavailable(c, "K8s 集群不可达, 检查 kubeconfig / 网络连通性", gin.H{"items": []any{}})
+			return
+		}
 		InternalError(c, "查询 Workload 列表失败")
 		return
 	}
 
 	Success(c, gin.H{"items": workloads})
+}
+
+// isK8sUnreachable 判定错误是否为 K8s 集群网络/连接不可达类
+// (connection refused / dial tcp / i/o timeout / no route to host / EOF).
+// 这类错应返 503 (依赖不可达), 不是 500 (服务器内部错).
+func isK8sUnreachable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, kw := range []string{
+		"connection refused",
+		"dial tcp",
+		"i/o timeout",
+		"no route to host",
+		"context deadline exceeded",
+		"x509: certificate",
+		"no such host",
+		"network is unreachable",
+		"EOF",
+	} {
+		if strings.Contains(msg, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 // RegenerateAuditToken 重新生成集群的 audit_token

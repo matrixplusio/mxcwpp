@@ -1,0 +1,26 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mxsecrequirelabel
+spec:
+  crd:
+    spec:
+      names:
+        kind: MxsecRequireLabel
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            requiredLabels:
+              type: array
+              items: {type: string}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mxsec.requirelabel
+
+        violation[{"msg": msg}] {
+          required := input.parameters.requiredLabels[_]
+          not input.review.object.metadata.labels[required]
+          msg := sprintf("namespace %v missing required label %v", [input.review.object.metadata.name, required])
+        }

@@ -20,6 +20,7 @@ const (
 // PluginConfig 插件配置表
 // 存储可下发给 Agent 的插件配置信息
 type PluginConfig struct {
+	TenantID     string         `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint           `gorm:"primaryKey" json:"id"`
 	Name         string         `gorm:"size:64;uniqueIndex;not null" json:"name"`            // 插件名称 (唯一)
 	Type         PluginType     `gorm:"size:32;not null" json:"type"`                        // 插件类型

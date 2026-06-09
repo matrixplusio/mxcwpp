@@ -29,6 +29,7 @@ const (
 //
 // UI WebSocket/SSE 订阅 task_id 的 events，30s 内 stream 全部 stage 转换。
 type RemediationTaskEvent struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	TaskID    uint      `gorm:"column:task_id;not null;index:idx_rte_task_seq,priority:1" json:"taskId"`
 	Sequence  uint      `gorm:"column:sequence;not null;index:idx_rte_task_seq,priority:2" json:"sequence"`

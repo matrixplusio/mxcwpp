@@ -1,0 +1,39 @@
+# mxsec VulnSync 配置 (P1-5)
+
+http_addr: ":8083"
+sync_interval: "6h"
+advisory_topic: "mxsec.vuln.advisory"
+nvd_api_key: ""                # 可选, 提升 NVD API 速率上限
+
+# 启用的漏洞源 (15 源全开)
+sources:
+  - nvd
+  - osv
+  - cisa-kev
+  - epss
+  - redhat
+  - ubuntu
+  - debian
+  - alpine
+  - suse
+  - openeuler
+  - anolis
+  - kylin
+  - uos
+  - cnnvd
+  - edb
+
+database:
+  dsn: ""
+  max_open_conns: 30
+  max_idle_conns: 10
+
+kafka:
+  brokers: []
+
+redis:
+  addr: "localhost:6379"
+
+otel:
+  enabled: false
+  sample_rate: 0.1

@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -29,7 +29,7 @@ func subscriptionKey(projectID, subscription string) string {
 type ConsumerManager struct {
 	db           *gorm.DB
 	logger       *zap.Logger
-	alarmService *biz.KubeAlarmService
+	alarmService *kube.KubeAlarmService
 
 	mu        sync.Mutex
 	consumers map[string]*consumerEntry // key: "project_id/subscription"
@@ -37,7 +37,7 @@ type ConsumerManager struct {
 }
 
 // NewConsumerManager 创建消费者管理器
-func NewConsumerManager(db *gorm.DB, logger *zap.Logger, alarmService *biz.KubeAlarmService) *ConsumerManager {
+func NewConsumerManager(db *gorm.DB, logger *zap.Logger, alarmService *kube.KubeAlarmService) *ConsumerManager {
 	return &ConsumerManager{
 		db:           db,
 		logger:       logger,

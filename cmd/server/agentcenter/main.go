@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/setup"
+	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
 )
 
 var (
@@ -33,6 +34,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer services.Cleanup()
+
+	// P3-B: GC + 内存上限调优
+	gctune.Apply("agentcenter", gctune.ProfileServer, services.Logger)
 
 	// 启动后台服务（任务调度器和状态更新器）
 	services.StartBackgroundServices()

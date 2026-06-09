@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_KYLIN_V10",
+  "name": "银河麒麟 V10 (Kylin V10 SP1/SP2/SP3) 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "银河麒麟 V10 安全基线 (兼容 RHEL 系). 适配 SP1 (4.19) / SP2 (5.4) / SP3 (5.10).",
+  "os_family": ["kylin"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "KYLIN_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90 in /etc/login.defs"}},
+    {"rule_id": "KYLIN_002", "category": "身份鉴别", "title": "麒麟统一登录认证 KyUSec 启用", "description": "信创特有: KyUSec 统一管理", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["kysec", "active"]}, {"type": "service_status", "param": ["KyUSec", "active"]}, {"type": "command_exec", "param": ["test -d /etc/kysec 2>/dev/null && echo enabled || echo disabled", "enabled"]}]}, "fix": {"suggestion": "systemctl enable --now kysec"}},
+    {"rule_id": "KYLIN_003", "category": "身份鉴别", "title": "禁用 root SSH 直连", "description": "等保 + 信创安全要求", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "^no$|^without-password$"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
+    {"rule_id": "KYLIN_004", "category": "访问控制", "title": "KySEC 强制访问控制启用", "description": "麒麟自带 MAC (类似 SELinux)", "severity": "high", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["kysec-status 2>/dev/null | grep -c 'enforce\\|enabled'", "^[1-9]"]}, {"type": "command_exec", "param": ["getenforce 2>/dev/null", "^Enforcing$"]}]}, "fix": {"suggestion": "kysec-tune enforce; 或 SELinux Enforcing"}},
+    {"rule_id": "KYLIN_005", "category": "访问控制", "title": "/etc/shadow 权限 ≤000", "description": "麒麟默认 000", "severity": "critical", "check": {"condition": "any", "rules": [{"type": "file_permission", "param": ["/etc/shadow", "000"]}, {"type": "file_permission", "param": ["/etc/shadow", "640"]}]}, "fix": {"suggestion": "chmod 000 /etc/shadow"}},
+    {"rule_id": "KYLIN_006", "category": "安全审计", "title": "auditd 启用", "description": "等保 8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
+    {"rule_id": "KYLIN_007", "category": "入侵防范", "title": "防火墙 firewalld 运行", "description": "兼容 RHEL", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["firewalld", "active"]}, {"type": "service_status", "param": ["nftables", "active"]}]}, "fix": {"suggestion": "systemctl enable --now firewalld"}},
+    {"rule_id": "KYLIN_008", "category": "入侵防范", "title": "SSH 端口非默认 (推荐)", "description": "降低自动化扫描风险", "severity": "low", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["grep -E '^Port' /etc/ssh/sshd_config | awk '{print $2}'", "^(?!22$)[0-9]+$"]}]}, "fix": {"suggestion": "Port 改非 22; 防火墙同步"}},
+    {"rule_id": "KYLIN_009", "category": "恶意代码", "title": "ClamAV 或 360 Linux 安装", "description": "等保 8.1.4.6", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["clamav"]}, {"type": "file_exists", "param": ["/usr/local/360safe"]}, {"type": "service_status", "param": ["clamav-daemon", "active"]}]}, "fix": {"suggestion": "dnf install clamav-daemon; 或部署 360 安全客户端"}},
+    {"rule_id": "KYLIN_010", "category": "国密", "title": "SM3/SM4 算法支持检查", "description": "信创要求商用密码支持", "severity": "low", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["openssl ciphers -v 2>/dev/null | grep -ci 'SM\\|GMSSL'", "^[1-9]"]}, {"type": "package_installed", "param": ["gmssl"]}]}, "fix": {"suggestion": "dnf install gmssl 或启用 openssl SM3/SM4 patch"}}
+  ]
+}

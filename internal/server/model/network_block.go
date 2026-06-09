@@ -3,6 +3,7 @@ package model
 // NetworkBlockRule 网络阻断规则
 // 通过 AC 下发 iptables/nftables 命令到 Agent 执行
 type NetworkBlockRule struct {
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primaryKey;autoIncrement" json:"id"`
 	HostID      string     `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	IP          string     `gorm:"column:ip;type:varchar(45);not null" json:"ip"` // 被阻断的 IP (IPv4/IPv6)

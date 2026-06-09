@@ -54,6 +54,9 @@ IMAGES=(
     "mxsec-agentcenter"
     "mxsec-manager"
     "mxsec-consumer"
+    "mxsec-engine"
+    "mxsec-llmproxy"
+    "mxsec-vulnsync"
     "mxsec-ui"
 )
 
@@ -97,9 +100,39 @@ docker build \
     -t "${PREFIX}mxsec-consumer:latest" \
     .
 
+echo ""
+echo "[4/7] 构建 Engine..."
+docker build \
+    --network=host \
+    --build-arg VERSION="${VERSION}" \
+    -f deploy/docker/Dockerfile.engine \
+    -t "${PREFIX}mxsec-engine:${VERSION}" \
+    -t "${PREFIX}mxsec-engine:latest" \
+    .
+
+echo ""
+echo "[5/7] 构建 LLMProxy..."
+docker build \
+    --network=host \
+    --build-arg VERSION="${VERSION}" \
+    -f deploy/docker/Dockerfile.llmproxy \
+    -t "${PREFIX}mxsec-llmproxy:${VERSION}" \
+    -t "${PREFIX}mxsec-llmproxy:latest" \
+    .
+
+echo ""
+echo "[6/7] 构建 VulnSync..."
+docker build \
+    --network=host \
+    --build-arg VERSION="${VERSION}" \
+    -f deploy/docker/Dockerfile.vulnsync \
+    -t "${PREFIX}mxsec-vulnsync:${VERSION}" \
+    -t "${PREFIX}mxsec-vulnsync:latest" \
+    .
+
 # 构建 UI
 echo ""
-echo "[4/4] 构建 UI..."
+echo "[7/7] 构建 UI..."
 docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
@@ -109,7 +142,7 @@ docker build \
     .
 
 echo ""
-echo "[5/5] 编译 mxctl 部署工具（host 二进制）..."
+echo "[mxctl] 编译 mxctl 部署工具（host 二进制）..."
 # mxctl 是部署工具 binary，不在容器内跑；改 internal/deploy/cluster/render.go 等
 # 时若不重 build，prometheus.yml 等模板配置不会更新。
 export PATH=/usr/local/go/bin:$PATH

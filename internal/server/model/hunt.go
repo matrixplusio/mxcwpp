@@ -2,6 +2,7 @@ package model
 
 // HuntQuery represents a saved threat hunting query.
 type HuntQuery struct {
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primarykey" json:"id"`
 	Name        string     `gorm:"type:varchar(200);uniqueIndex" json:"name"`
 	Description string     `gorm:"type:text" json:"description"`

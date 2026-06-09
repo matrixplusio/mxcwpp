@@ -30,20 +30,46 @@ type Client struct {
 	logger         *zap.Logger
 }
 
-// NewClient 创建 SD Client
-// managerAddr:    Manager HTTP 地址，如 http://manager:8080
-// instanceID:     AC 实例唯一 ID，留空则用 hostname
-// grpcAddr:       AC gRPC 地址（Agent 连接用）
-// httpAddr:       AC HTTP 管理地址（Manager 探测用）
-// internalSecret: 内部通信共享密钥（与 Manager 端 internal_secret 一致）
+// NewClient 创建 SD Client (v1 兼容,HTTP + X-Internal-Secret)。
+//
+// 旧调用方继续使用此构造函数。新代码建议使用 NewClientWithTLS。
+//
+// managerAddr:    Manager HTTP 地址,如 http://manager:8080
+// instanceID:     AC 实例唯一 ID,留空则用 hostname
+// grpcAddr:       AC gRPC 地址(Agent 连接用)
+// httpAddr:       AC HTTP 管理地址(Manager 探测用)
+// internalSecret: 内部通信共享密钥(与 Manager 端 internal_secret 一致)
 // connCount:      返回当前在线连接数的回调
 func NewClient(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret string, connCount func() int, logger *zap.Logger) *Client {
+	c, _ := NewClientWithTLS(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret, MTLSConfig{}, connCount, logger)
+	return c
+}
+
+// NewClientWithTLS 创建支持 mTLS 的 SD Client (v2.0 新)。
+//
+// 当 mtls.Enabled = true 时, manager_addr 必须为 https:// 前缀,
+// 客户端证书 / 私钥 / CA 证书必须可读。
+// 当 mtls.Enabled = false 时, 行为与 NewClient 相同(向后兼容)。
+//
+// 详见 docs/architecture.md §7 + docs/configuration.md mtls 配置示例.
+func NewClientWithTLS(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret string, mtls MTLSConfig, connCount func() int, logger *zap.Logger) (*Client, error) {
 	if instanceID == "" {
 		if h, err := os.Hostname(); err == nil {
 			instanceID = h
 		} else {
 			instanceID = "unknown-ac"
 		}
+	}
+	httpClient, err := buildHTTPClient(mtls, requestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if logger != nil {
+		logger.Info("AC SD client initialized",
+			zap.String("instance_id", instanceID),
+			zap.String("manager_addr", managerAddr),
+			zap.Bool("mtls_enabled", mtls.Enabled),
+		)
 	}
 	return &Client{
 		managerAddr:    managerAddr,
@@ -52,9 +78,9 @@ func NewClient(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret strin
 		httpAddr:       httpAddr,
 		internalSecret: internalSecret,
 		connCount:      connCount,
-		httpClient:     &http.Client{Timeout: requestTimeout},
+		httpClient:     httpClient,
 		logger:         logger,
-	}
+	}, nil
 }
 
 // Start 注册并启动心跳循环，直到 ctx 取消后自动注销

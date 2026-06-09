@@ -1,0 +1,22 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mxsecdisallowdangerouscaps
+spec:
+  crd:
+    spec:
+      names:
+        kind: MxsecDisallowDangerousCaps
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mxsec.disallowdangerouscaps
+
+        dangerous := {"SYS_ADMIN","NET_ADMIN","SYS_PTRACE","SYS_MODULE","SYS_RAWIO","SYS_TIME","DAC_READ_SEARCH","MAC_OVERRIDE","MAC_ADMIN","AUDIT_CONTROL","SETFCAP","BPF"}
+
+        violation[{"msg": msg}] {
+          c := input.review.object.spec.containers[_]
+          cap := c.securityContext.capabilities.add[_]
+          dangerous[upper(cap)]
+          msg := sprintf("container %v: dangerous cap %v forbidden", [c.name, cap])
+        }

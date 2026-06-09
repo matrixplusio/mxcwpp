@@ -61,6 +61,7 @@ func (c *NotificationConfig) Scan(value any) error { return JSONScan(c, value) }
 
 // Notification 通知配置模型
 type Notification struct {
+	TenantID       string             `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint               `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name           string             `gorm:"column:name;type:varchar(100);not null" json:"name"`                            // 通知名称（自定义名称）
 	Description    string             `gorm:"column:description;type:text" json:"description"`                               // 描述

@@ -2,6 +2,7 @@ package model
 
 // QuarantineFile 隔离箱文件
 type QuarantineFile struct {
+	TenantID       string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ScanResultID   uint       `gorm:"column:scan_result_id;index" json:"scanResultId"` // 关联的扫描结果 ID（可选）
 	HostID         string     `gorm:"column:host_id;type:varchar(64);not null;index" json:"hostId"`

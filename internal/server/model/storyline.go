@@ -3,6 +3,7 @@ package model
 // Storyline represents an attack narrative spanning multiple related events
 // on a single host. Events are correlated by story_id assigned at the Agent.
 type Storyline struct {
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primarykey" json:"id"`
 	StoryID     string     `gorm:"type:varchar(64);uniqueIndex" json:"story_id"`
 	HostID      string     `gorm:"type:varchar(64);index" json:"host_id"`
@@ -28,6 +29,7 @@ func (Storyline) TableName() string { return "storylines" }
 // StorylineEvent links an individual event to a storyline.
 // Stores denormalized event fields for quick timeline rendering without ClickHouse query.
 type StorylineEvent struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primarykey" json:"id"`
 	StoryID   string    `gorm:"type:varchar(64);index:idx_story_ts" json:"story_id"`
 	HostID    string    `gorm:"type:varchar(64)" json:"host_id"`

@@ -105,19 +105,34 @@ func (h *HostVulnPreCheckHandler) CreateForHostAll(c *gin.Context) {
 
 	var hvs []model.HostVulnerability
 	// 默认只 pre-check unchecked / failed / >24h 过期的（避免重复打包管理器）
+	// 同时排除 asset_type=app/container/image: 这些漏洞来源 SBOM(Go/jar 静态依赖、
+	// 容器镜像扫描),不归属 OS 包管理器,precheck 必失败,无效噪音。
 	cutoff := time.Now().Add(-24 * time.Hour)
 	if err := h.db.Where(
-		"host_id = ? AND status = ? AND (precheck_status = ? OR precheck_status = ? OR precheck_checked_at IS NULL OR precheck_checked_at < ?)",
+		"host_id = ? AND status = ? AND (precheck_status = ? OR precheck_status = ? OR precheck_checked_at IS NULL OR precheck_checked_at < ?) AND (asset_type IS NULL OR asset_type IN (?))",
 		hostID, "unpatched",
 		model.PreCheckStatusUnchecked, model.PreCheckStatusFailed,
 		cutoff,
+		[]string{model.AssetTypeOS, model.AssetTypeMiddleware, model.AssetTypeUnknown, ""},
 	).Find(&hvs).Error; err != nil {
 		InternalError(c, "查询 host_vulnerabilities 失败")
 		return
 	}
 
+	// 统计被自动跳过的应用/容器漏洞数,告诉用户走哪条路修
+	var skippedAppContainer int64
+	h.db.Model(&model.HostVulnerability{}).
+		Where("host_id = ? AND status = ? AND asset_type IN (?)",
+			hostID, "unpatched",
+			[]string{model.AssetTypeApp, model.AssetTypeContainer, model.AssetTypeImage}).
+		Count(&skippedAppContainer)
+
 	if len(hvs) == 0 {
-		Success(c, gin.H{"scheduled": 0, "message": "无需要 pre-check 的漏洞"})
+		Success(c, gin.H{
+			"scheduled":             0,
+			"skipped_app_container": skippedAppContainer,
+			"message":               "无 OS/中间件类漏洞需要 pre-check",
+		})
 		return
 	}
 
@@ -134,10 +149,11 @@ func (h *HostVulnPreCheckHandler) CreateForHostAll(c *gin.Context) {
 	}
 
 	Success(c, gin.H{
-		"hostId":    hostID,
-		"scheduled": scheduled,
-		"failed":    failed,
-		"total":     len(hvs),
+		"hostId":                hostID,
+		"scheduled":             scheduled,
+		"failed":                failed,
+		"total":                 len(hvs),
+		"skipped_app_container": skippedAppContainer,
 	})
 }
 
@@ -180,11 +196,13 @@ func (h *HostVulnPreCheckHandler) CreateForAllOnline(c *gin.Context) {
 
 	for _, hid := range hostIDs {
 		var hvs []model.HostVulnerability
+		// 同 CreateForHostAll 跳过 app/container/image,只 precheck OS/middleware/unknown
 		if err := h.db.Where(
-			"host_id = ? AND status = ? AND (precheck_status = ? OR precheck_status = ? OR precheck_checked_at IS NULL OR precheck_checked_at < ?)",
+			"host_id = ? AND status = ? AND (precheck_status = ? OR precheck_status = ? OR precheck_checked_at IS NULL OR precheck_checked_at < ?) AND (asset_type IS NULL OR asset_type IN (?))",
 			hid, "unpatched",
 			model.PreCheckStatusUnchecked, model.PreCheckStatusFailed,
 			cutoff,
+			[]string{model.AssetTypeOS, model.AssetTypeMiddleware, model.AssetTypeUnknown, ""},
 		).Limit(maxBatchPerHost).Find(&hvs).Error; err != nil {
 			h.logger.Warn("query host_vulnerabilities for precheck-all-online failed",
 				zap.String("host_id", hid), zap.Error(err))

@@ -334,7 +334,7 @@
 
     <!-- 创建/编辑策略对话框 -->
     <PolicyModal
-      v-model:visible="policyModalVisible"
+      v-model:open="policyModalVisible"
       :policy="editingPolicy"
       :default-group-id="currentGroup?.id"
       @success="handlePolicyModalSuccess"

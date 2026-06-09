@@ -20,6 +20,7 @@ func (a *AffectedResources) Scan(value any) error { return JSONScan(a, value) }
 
 // KubeBaseline CIS 基线检查结果
 type KubeBaseline struct {
+	TenantID          string            `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID                uint              `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ClusterID         uint              `gorm:"column:cluster_id;not null;index" json:"clusterId"`
 	ClusterName       string            `gorm:"column:cluster_name;type:varchar(255)" json:"clusterName"`

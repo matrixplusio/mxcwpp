@@ -32,6 +32,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		}
 	})
 	if err := db.Exec(`CREATE TABLE hosts (
+		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		host_id TEXT PRIMARY KEY,
 		hostname TEXT,
 		ipv4 JSON,

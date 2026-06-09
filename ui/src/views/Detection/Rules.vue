@@ -1,27 +1,11 @@
 <template>
   <div class="detection-rules-page">
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 (统一 StatCard) -->
     <a-row :gutter="16" style="margin-bottom: 16px">
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="规则总数" :value="statistics.total" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="已启用" :value="statistics.enabled" :value-style="{ color: '#3f8600' }" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="已禁用" :value="statistics.disabled" :value-style="{ color: '#999' }" />
-        </a-card>
-      </a-col>
-      <a-col :span="6">
-        <a-card>
-          <a-statistic title="高危规则" :value="(statistics.severity?.critical || 0) + (statistics.severity?.high || 0)" :value-style="{ color: '#cf1322' }" />
-        </a-card>
-      </a-col>
+      <a-col :span="6"><StatCard title="规则总数" :value="statistics.total" color="#3B82F6" /></a-col>
+      <a-col :span="6"><StatCard title="已启用" :value="statistics.enabled" color="#22C55E" /></a-col>
+      <a-col :span="6"><StatCard title="已禁用" :value="statistics.disabled" color="#86909C" /></a-col>
+      <a-col :span="6"><StatCard title="高危规则" :value="(statistics.severity?.critical || 0) + (statistics.severity?.high || 0)" color="#EF4444" /></a-col>
     </a-row>
 
     <!-- 操作栏 -->
@@ -123,6 +107,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { detectionRulesAPI, type DetectionRule, type DetectionRuleStatistics } from '@/api/detection-rules'
+import StatCard from '@/components/StatCard.vue'
 
 const loading = ref(false)
 const submitting = ref(false)

@@ -74,6 +74,7 @@ func (f *PriorityFactors) Scan(value any) error { return JSONScan(f, value) }
 
 // VulnBulletin 漏洞通报
 type VulnBulletin struct {
+	TenantID   string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint   `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	BulletinNo string `gorm:"column:bulletin_no;type:varchar(30);uniqueIndex;not null" json:"bulletinNo"` // MX-2026-0001
 	VulnID     uint   `gorm:"column:vuln_id;not null;index" json:"vulnId"`

@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    :visible="visible"
+    :open="visible"
     :title="user ? '编辑用户' : '新建用户'"
     :confirm-loading="loading"
     @ok="handleSubmit"

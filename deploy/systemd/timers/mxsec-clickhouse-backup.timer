@@ -1,0 +1,12 @@
+[Unit]
+Description=mxsec ClickHouse backup timer
+Documentation=https://github.com/imkerbos/mxsec-platform
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=600
+Persistent=true
+Unit=mxsec-clickhouse-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
@@ -53,8 +54,9 @@ func (h *HostsHandler) ListHosts(c *gin.Context) {
 	isContainerStr := c.Query("is_container") // 容器/主机类型筛选（废弃，使用 runtime_type）
 	runtimeType := c.Query("runtime_type")    // 运行环境类型筛选：vm/docker/k8s
 
-	// 构建查询
-	query := h.db.Model(&model.Host{})
+	// 构建查询。Scopes(tenant.GinScope) 会自动追加 WHERE tenant_id = ?，
+	// 实现行级多租户隔离；详见 docs/multi-tenant.md §3.3。
+	query := h.db.Model(&model.Host{}).Scopes(tenant.GinScope(c))
 
 	// 过滤条件
 	if osFamily != "" {
@@ -847,14 +849,24 @@ func (h *HostsHandler) BatchDeleteHost(c *gin.Context) {
 		return
 	}
 
-	// 单事务批量删除所有关联数据和主机记录
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		return h.deleteHostsByIDs(tx, deleteIDs)
-	})
-	if err != nil {
-		h.logger.Error("批量删除主机失败", zap.Error(err), zap.Int("count", len(deleteIDs)))
-		InternalError(c, "批量删除主机失败")
-		return
+	// P2-7: 拆批 500 / 事务, 防 1w 主机单事务锁 16 关联表 +100ms
+	const batchSize = 500
+	for start := 0; start < len(deleteIDs); start += batchSize {
+		end := start + batchSize
+		if end > len(deleteIDs) {
+			end = len(deleteIDs)
+		}
+		batch := deleteIDs[start:end]
+		if err := h.db.Transaction(func(tx *gorm.DB) error {
+			return h.deleteHostsByIDs(tx, batch)
+		}); err != nil {
+			h.logger.Error("批量删除主机失败",
+				zap.Error(err),
+				zap.Int("batch_start", start),
+				zap.Int("batch_size", len(batch)))
+			InternalError(c, "批量删除主机失败")
+			return
+		}
 	}
 
 	deleted := len(deleteIDs)

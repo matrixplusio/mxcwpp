@@ -98,8 +98,12 @@ func NewClickHouseWriter(conn chdriver.Conn, batchSize int, flushTimeout time.Du
 		logger:       logger,
 		batchSize:    batchSize,
 		flushTimeout: flushTimeout,
-		flushCh:      make(chan struct{}, 1),
-		done:         make(chan struct{}),
+		// P2-2: 预分配 cap 避免 append 多次 realloc + 大块 GC.
+		metricRows: make([]hostMetricRow, 0, batchSize),
+		fimRows:    make([]fimEventRow, 0, batchSize),
+		ebpfRows:   make([]ebpfEventRow, 0, batchSize),
+		flushCh:    make(chan struct{}, 1),
+		done:       make(chan struct{}),
 	}
 	if conn != nil {
 		// 启动时确保新增 schema 已建（init.sql 只在首次跑，存量 prod CH 需 runtime ensure）
@@ -355,9 +359,10 @@ func (w *ClickHouseWriter) flush() {
 	metrics := w.metricRows
 	fim := w.fimRows
 	ebpf := w.ebpfRows
-	w.metricRows = nil
-	w.fimRows = nil
-	w.ebpfRows = nil
+	// P2-2: 复用底层数组, 仅 reset len 而非 nil, 减下次 append 分配
+	w.metricRows = w.metricRows[:0]
+	w.fimRows = w.fimRows[:0]
+	w.ebpfRows = w.ebpfRows[:0]
 	w.mu.Unlock()
 
 	if len(metrics) > 0 {

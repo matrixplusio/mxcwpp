@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_NEOKYLIN_7",
+  "name": "中标麒麟 NeoKylin 7 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "中标麒麟 NeoKylin 7.0 (V7.0 桌面/服务器) 安全基线, 适配 7.0 U3+/U6/U10",
+  "os_family": ["neokylin"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "NEOKYLIN_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90 in /etc/login.defs"}},
+    {"rule_id": "NEOKYLIN_002", "category": "身份鉴别", "title": "口令最短长度 ≥12", "description": "等保密码长度要求", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/security/pwquality.conf", "^minlen\\s*=\\s*(1[2-9]|[2-9][0-9])", "match"]}]}, "fix": {"suggestion": "minlen=12 in /etc/security/pwquality.conf"}},
+    {"rule_id": "NEOKYLIN_003", "category": "身份鉴别", "title": "登录失败 5 次锁定", "description": "等保 8.1.4.3", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/pam.d/system-auth", "pam_faillock.*deny=([1-5])", "match"]}]}, "fix": {"suggestion": "auth required pam_faillock.so preauth silent deny=5 unlock_time=900"}},
+    {"rule_id": "NEOKYLIN_004", "category": "访问控制", "title": "禁止 root 远程 SSH 登录", "description": "等保 8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "^PermitRootLogin\\s+no", "match"]}]}, "fix": {"suggestion": "PermitRootLogin no in /etc/ssh/sshd_config"}},
+    {"rule_id": "NEOKYLIN_005", "category": "访问控制", "title": "SSH 仅密钥认证", "description": "禁用密码登录", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "^PasswordAuthentication\\s+no", "match"]}]}, "fix": {"suggestion": "PasswordAuthentication no"}},
+    {"rule_id": "NEOKYLIN_006", "category": "审计", "title": "auditd 服务运行", "description": "等保审计要求", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
+    {"rule_id": "NEOKYLIN_007", "category": "审计", "title": "rsyslog 远程日志", "description": "本地+异地双备审计", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/rsyslog.conf", "^\\*\\.\\*\\s+@", "match"]}, {"type": "file_line_match", "param": ["/etc/rsyslog.d/.*\\.conf", "^\\*\\.\\*\\s+@", "match"]}]}, "fix": {"suggestion": "*.* @logsvr.example.com:514"}},
+    {"rule_id": "NEOKYLIN_008", "category": "安全审计", "title": "NeoKylin 麒麟安全审计模块启用", "description": "信创特有: NeoKylin 内置审计模块", "severity": "high", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["test -f /etc/neokylin-audit/audit.conf && echo enabled || echo disabled", "enabled"]}, {"type": "service_status", "param": ["nk-audit", "active"]}]}, "fix": {"suggestion": "systemctl enable --now nk-audit"}},
+    {"rule_id": "NEOKYLIN_009", "category": "入侵防御", "title": "禁用空账户登录", "description": "/etc/passwd 不应有空 shell", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["awk -F: '($2==\"\")' /etc/shadow | wc -l", "^0$"]}]}, "fix": {"suggestion": "passwd -l <user> 锁定空密码账户"}},
+    {"rule_id": "NEOKYLIN_010", "category": "防恶意代码", "title": "中标麒麟内置 ClamAV 启用", "description": "等保 8.1.7.3", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["clamd", "active"]}, {"type": "service_status", "param": ["clamav-daemon", "active"]}]}, "fix": {"suggestion": "systemctl enable --now clamd@scan"}}
+  ]
+}

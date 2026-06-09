@@ -61,6 +61,72 @@ services:
       start_period: 30s
 {{- end }}
 
+{{- if gt .Assignment.EngineReplicas 0 }}
+  # ===== Engine v2.0 检测分析引擎 =====
+  # 订阅 mxsec.agent.* (ConsumerGroup B "mxsec-engine"), 与 consumer 独立 offset.
+  # 16 stages: CEL / sequence / anomaly / ML / audit / intrusion / kube / RASP / storyline 等.
+  engine:
+    image: {{ .EngineImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/engine:/var/log/mxsec-platform
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+{{- end }}
+
+{{- if gt .Assignment.LLMProxyReplicas 0 }}
+  # ===== LLMProxy v2.0 多 LLM 厂商适配网关 =====
+  # 7 providers: OpenAI / Anthropic / Gemini / DashScope / DeepSeek / Ollama / vLLM
+  # 4 scene routing: alert_explain / storyline_summary / nl2query / rule_draft
+  llmproxy:
+    image: {{ .LLMProxyImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/llmproxy:/var/log/mxsec-platform
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8085/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+{{- end }}
+
+{{- if gt .Assignment.VulnSyncReplicas 0 }}
+  # ===== VulnSync v2.0 漏洞情报融合 =====
+  # 11+ sources: NVD / OSV / RHSA / USN / CISA KEV / EPSS / CNNVD / 信创 (Kylin/UOS/openEuler/anolis)
+  # PURL+NEVRA 双索引 + Leader Election (redsync 避免多副本重复抓取).
+  vulnsync:
+    image: {{ .VulnSyncImage }}
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
+      - {{ .DataRoot }}/logs/vulnsync:/var/log/mxsec-platform
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8083/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+{{- end }}
+
   ui:
     image: {{ .UIImage }}
     restart: always

@@ -1,0 +1,56 @@
+# Engine 服务配置示例 (v2.0 六微服务架构)
+# 详见 docs/engine-design.md / docs/configuration.md
+#
+# 本 PR (PR3) 仅消费 http: 配置,其余字段在后续 PR 接入。
+
+server:
+  http_addr: ":8082"
+  service: "engine"
+
+# 后续 PR 接入字段(本 PR 仅占位):
+
+# kafka 消费者组 (mxsec-engine, 与 mxsec-writers Group 互不干扰)
+kafka:
+  brokers: ["localhost:9092"]
+  group_id: "mxsec-engine"
+  topics:
+    - "mxsec.agent.ebpf"
+    - "mxsec.agent.events"
+    - "mxsec.agent.scanner"
+    - "mxsec.agent.baseline"
+    - "mxsec.vuln.advisory"
+
+# 多租户开关 (rule/model 按 tenant 加载)
+multi_tenant:
+  enabled: true
+
+# ML 推理 (本地 ONNX,可全局关闭或按租户 override)
+ml:
+  enabled: true
+  models:
+    iforest_host:
+      enabled: true
+      path: "models/iforest_host.onnx"
+    markov_proctree:
+      enabled: true
+    lightgbm_elf:
+      enabled: false
+      path: "models/lightgbm_elf.onnx"
+
+# LLM 增强 (通过 LLMProxy 调用,可全局关闭)
+llm:
+  enabled: false
+  proxy_endpoint: "http://llmproxy:8084"
+  scenes:
+    - alert_explain
+    - storyline_summary
+
+# observe / protect 模式默认 (租户级可覆盖)
+mode:
+  default: "observe"
+
+# OTel
+otel:
+  endpoint: "http://otel-collector:4318"
+  service_name: "engine"
+  sample_rate: 0.1

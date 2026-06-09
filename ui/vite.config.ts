@@ -10,6 +10,28 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  // P0-7: bundle 拆分 + 按需加载 + 大依赖独立 chunk (审计修复: 2.1MB → 拆为多 chunk 浏览器并行加载)
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-antd': ['ant-design-vue', '@ant-design/icons-vue'],
+          'vendor-echarts': ['echarts', 'vue-echarts'],
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-pdf': ['html2pdf.js'],
+          'vendor-utils': ['dayjs', 'axios'],
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    sourcemap: false,
+    minify: 'esbuild',
+    cssCodeSplit: true,
+    reportCompressedSize: false,
+  },
   server: {
     port: 3000,
     host: '0.0.0.0', // 允许外部访问
@@ -20,17 +42,14 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        // 在 Docker 容器内，使用服务名访问；本地开发时使用 localhost
         target: process.env.VITE_API_TARGET || 'http://manager:8080',
         changeOrigin: true,
       },
       '/uploads': {
-        // 代理静态文件服务（Logo 等上传的文件）
         target: process.env.VITE_API_TARGET || 'http://manager:8080',
         changeOrigin: true,
       },
       '/agent': {
-        // 代理 Agent 安装/卸载脚本（不需要认证）
         target: process.env.VITE_API_TARGET || 'http://manager:8080',
         changeOrigin: true,
       },

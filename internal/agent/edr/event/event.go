@@ -17,6 +17,8 @@ const (
 	DataTypeDNS     int32 = 3003 // dns_query (Phase 6)
 	DataTypeBDE     int32 = 3010 // behavior_profile (BDE Phase 10)
 	DataTypeMemory  int32 = 3004 // memory threat (memfd/deleted_exe/anonymous_exec, Phase 15)
+	DataTypePriv    int32 = 3005 // privilege escalation (M1-1: commit_creds / setuid / ptrace / mount / kmod)
+	DataTypeRootkit int32 = 3006 // anti-rootkit integrity report (M1-2: syscall_table / kmod hide / sysfs anomaly)
 )
 
 // EventType is the specific event subtype string carried in the "event_type" field.

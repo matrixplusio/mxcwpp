@@ -1,0 +1,917 @@
+openapi: 3.0.3
+info:
+  title: mxsec Platform API
+  description: |
+    mxsec 商业级 CWPP 平台 REST API.
+
+    认证: JWT Bearer token (登录后获得).
+    路径前缀:
+      - /api/v1: v1 业务 API (向后兼容)
+      - /api/v2: v2 多租户 / 配置中心 / mode 等新功能
+
+    错误响应: 统一 JSON 信封 {code, message, data}.
+  version: "2.0.0"
+  contact:
+    name: mxsec dev
+    url: https://github.com/imkerbos/mxsec-platform
+  license:
+    name: Commercial
+    url: https://github.com/imkerbos/mxsec-platform/blob/main/LICENSE
+
+servers:
+  - url: https://mxsec.example.com
+    description: 生产
+  - url: http://localhost:8080
+    description: 本地开发
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: 认证
+  - name: hosts
+    description: 主机管理
+  - name: alerts
+    description: 告警管理
+  - name: vulnerabilities
+    description: 漏洞管理
+  - name: baseline
+    description: 基线检查
+  - name: mode
+    description: 运行模式 (observe/protect) + 6 闸门
+  - name: config-changes
+    description: 配置变更审批 (P1-1)
+  - name: quarantine
+    description: 文件隔离箱
+  - name: kube
+    description: K8s 集群管理
+  - name: ti
+    description: 威胁情报 (STIX/TAXII)
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  /api/v1/hosts:
+    get:
+      tags: [hosts]
+      summary: 主机列表
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [online, offline, isolated] }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostList'
+
+  /api/v1/hosts/{host_id}:
+    get:
+      tags: [hosts]
+      summary: 主机详情
+      parameters:
+        - name: host_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Host'
+
+  /api/v1/alerts:
+    get:
+      tags: [alerts]
+      summary: 告警列表
+      parameters:
+        - name: severity
+          in: query
+          schema: { type: string, enum: [critical, high, medium, low, info] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, ack, resolved, false_positive] }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertList'
+
+  /api/v1/vulnerabilities:
+    get:
+      tags: [vulnerabilities]
+      summary: 漏洞列表
+      responses:
+        '200':
+          description: 成功
+
+  /api/v2/system/mode:
+    get:
+      tags: [mode]
+      summary: 查询当前运行模式
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeInfo'
+
+  /api/v2/admin/tenants/{tenant_id}/mode:
+    post:
+      tags: [mode]
+      summary: 切换租户模式 (admin)
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, reason]
+              properties:
+                mode: { type: string, enum: [observe, protect] }
+                reason: { type: string, minLength: 10 }
+      responses:
+        '200':
+          description: 成功
+
+  /api/v2/config/change-requests:
+    post:
+      tags: [config-changes]
+      summary: 提交配置变更请求 (P1-1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChangeRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigChangeRequest'
+    get:
+      tags: [config-changes]
+      summary: 列出变更请求
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: target_table
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+
+  /api/v2/config/change-requests/{id}/approve:
+    post:
+      tags: [config-changes]
+      summary: 审批通过
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 成功
+
+  /api/v2/config/change-requests/{id}/reject:
+    post:
+      tags: [config-changes]
+      summary: 拒绝
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5 }
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/quarantine:
+    get:
+      tags: [quarantine]
+      summary: 隔离箱文件列表
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/quarantine/{qid}/restore:
+    post:
+      tags: [quarantine]
+      summary: 还原隔离文件
+      parameters:
+        - name: qid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+
+  # ===================== P4-12 扩展端点 =====================
+
+  /api/v1/hosts/{host_id}/processes:
+    get:
+      tags: [hosts]
+      summary: 主机进程实时列表
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+
+  /api/v1/hosts/{host_id}/network:
+    get:
+      tags: [hosts]
+      summary: 主机网络连接列表
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+
+  /api/v1/hosts/{host_id}/isolate:
+    post:
+      tags: [hosts]
+      summary: 隔离主机 (切断南北向流量)
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10 }
+      responses:
+        '200': { description: 成功 }
+
+  /api/v1/hosts/{host_id}/unisolate:
+    post:
+      tags: [hosts]
+      summary: 解除隔离
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+
+  /api/v1/hosts/{host_id}/agent/upgrade:
+    post:
+      tags: [hosts]
+      summary: 触发 Agent 升级
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+
+  /api/v1/hosts/{host_id}/baseline-scan:
+    post:
+      tags: [baseline]
+      summary: 触发基线扫描
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 已下发 }
+
+  /api/v1/baseline/policies:
+    get:
+      tags: [baseline]
+      summary: 基线策略列表
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [baseline]
+      summary: 新建基线策略
+      responses:
+        '201': { description: 已创建 }
+
+  /api/v1/baseline/policies/{policy_id}:
+    parameters:
+      - { name: policy_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [baseline]
+      summary: 策略详情
+      responses: { '200': { description: 成功 } }
+    put:
+      tags: [baseline]
+      summary: 更新策略
+      responses: { '200': { description: 成功 } }
+    delete:
+      tags: [baseline]
+      summary: 删除策略
+      responses: { '204': { description: 已删除 } }
+
+  /api/v1/baseline/rules:
+    get:
+      tags: [baseline]
+      summary: 基线规则列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/baseline/results:
+    get:
+      tags: [baseline]
+      summary: 基线扫描结果列表
+      parameters:
+        - { name: host_id, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [pass, fail] } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/vulnerabilities/{cve_id}:
+    get:
+      tags: [vulnerabilities]
+      summary: 漏洞详情
+      parameters:
+        - { name: cve_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/vulnerabilities/{cve_id}/affected-hosts:
+    get:
+      tags: [vulnerabilities]
+      summary: 受影响主机
+      parameters:
+        - { name: cve_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/vulnerabilities/{cve_id}/remediate:
+    post:
+      tags: [vulnerabilities]
+      summary: 触发漏洞修复
+      parameters:
+        - { name: cve_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 已下发 } }
+
+  /api/v1/vulnerabilities/scan:
+    post:
+      tags: [vulnerabilities]
+      summary: 定向漏洞扫描
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host_ids]
+              properties:
+                host_ids: { type: array, items: { type: string } }
+                cve_filter: { type: array, items: { type: string } }
+      responses: { '200': { description: 已下发 } }
+
+  /api/v1/alerts/{alert_id}:
+    get:
+      tags: [alerts]
+      summary: 告警详情
+      parameters:
+        - { name: alert_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/alerts/{alert_id}/ack:
+    post:
+      tags: [alerts]
+      summary: 确认告警
+      parameters:
+        - { name: alert_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/alerts/{alert_id}/close:
+    post:
+      tags: [alerts]
+      summary: 关闭告警
+      parameters:
+        - { name: alert_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/alerts/{alert_id}/storyline:
+    get:
+      tags: [alerts]
+      summary: 告警关联 Storyline (攻击链)
+      parameters:
+        - { name: alert_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/policies:
+    get:
+      tags: [policies]
+      summary: 策略列表
+      responses: { '200': { description: 成功 } }
+    post:
+      tags: [policies]
+      summary: 新建策略
+      responses: { '201': { description: 已创建 } }
+
+  /api/v1/policies/{policy_id}:
+    parameters:
+      - { name: policy_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [policies]
+      summary: 策略详情
+      responses: { '200': { description: 成功 } }
+    put:
+      tags: [policies]
+      summary: 更新
+      responses: { '200': { description: 成功 } }
+    delete:
+      tags: [policies]
+      summary: 删除
+      responses: { '204': { description: 成功 } }
+
+  /api/v1/users:
+    get:
+      tags: [users]
+      summary: 用户列表
+      responses: { '200': { description: 成功 } }
+    post:
+      tags: [users]
+      summary: 新建用户
+      responses: { '201': { description: 已创建 } }
+
+  /api/v1/users/{user_id}:
+    parameters:
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [users]
+      responses: { '200': { description: 成功 } }
+    put:
+      tags: [users]
+      responses: { '200': { description: 成功 } }
+    delete:
+      tags: [users]
+      responses: { '204': { description: 成功 } }
+
+  /api/v1/users/{user_id}/reset-password:
+    post:
+      tags: [users]
+      parameters:
+        - { name: user_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/users/{user_id}/lock:
+    post:
+      tags: [users]
+      parameters:
+        - { name: user_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 已锁定 } }
+
+  /api/v1/users/{user_id}/unlock:
+    post:
+      tags: [users]
+      parameters:
+        - { name: user_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 已解锁 } }
+
+  /api/v1/roles:
+    get:
+      tags: [users]
+      summary: 角色列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/audit-logs:
+    get:
+      tags: [audit]
+      summary: 审计日志查询
+      parameters:
+        - { name: username, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v1/audit-logs/export:
+    post:
+      tags: [audit]
+      summary: 审计日志导出
+      responses: { '200': { description: 成功, content: { application/octet-stream: {} } } }
+
+  /api/v2/threat-intel/ioc:
+    get:
+      tags: [threat-intel]
+      summary: IOC 列表
+      responses: { '200': { description: 成功 } }
+    post:
+      tags: [threat-intel]
+      summary: 提交 IOC
+      responses: { '201': { description: 已收录 } }
+
+  /api/v2/threat-intel/ioc/{ioc_id}:
+    parameters:
+      - { name: ioc_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [threat-intel]
+      responses: { '200': { description: 成功 } }
+    delete:
+      tags: [threat-intel]
+      responses: { '204': { description: 成功 } }
+
+  /api/v2/threat-intel/match:
+    post:
+      tags: [threat-intel]
+      summary: IOC 实时匹配
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                indicators:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string, enum: [ip, domain, sha256, md5, url] }
+                      value: { type: string }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/sbom/{host_id}:
+    get:
+      tags: [sbom]
+      summary: 主机 SBOM (CycloneDX)
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [json, xml], default: json } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/sbom/{host_id}/diff:
+    get:
+      tags: [sbom]
+      summary: SBOM 历史 diff
+      parameters:
+        - { name: host_id, in: path, required: true, schema: { type: string } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/kube/clusters:
+    get:
+      tags: [kube]
+      summary: K8s 集群列表
+      responses: { '200': { description: 成功 } }
+    post:
+      tags: [kube]
+      summary: 接入集群
+      responses: { '201': { description: 已接入 } }
+
+  /api/v2/kube/clusters/{cluster_id}/baseline:
+    post:
+      tags: [kube]
+      summary: 触发 K8s CIS 基线扫描
+      parameters:
+        - { name: cluster_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 已下发 } }
+
+  /api/v2/kube/clusters/{cluster_id}/admission:
+    get:
+      tags: [kube]
+      summary: K8s Admission Webhook 事件流
+      parameters:
+        - { name: cluster_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/soar/playbooks:
+    get:
+      tags: [soar]
+      summary: SOAR Playbook 列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/soar/playbooks/{id}/run:
+    post:
+      tags: [soar]
+      summary: 手动触发 Playbook
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 已触发 } }
+
+  /api/v2/soar/runs:
+    get:
+      tags: [soar]
+      summary: Playbook 执行历史
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/honeypot/sensors:
+    get:
+      tags: [honeypot]
+      summary: 蜜罐传感器列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/honeypot/events:
+    get:
+      tags: [honeypot]
+      summary: 蜜罐捕获事件
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/microseg/policies:
+    get:
+      tags: [microseg]
+      summary: 微隔离策略列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/microseg/policies/{id}/enforce:
+    post:
+      tags: [microseg]
+      summary: 强制下发微隔离策略
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/anomaly/baselines:
+    get:
+      tags: [anomaly]
+      summary: 异常检测基线列表
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/anomaly/events:
+    get:
+      tags: [anomaly]
+      summary: 异常事件流
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/llm/chat:
+    post:
+      tags: [llm]
+      summary: LLM 安全分析对话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant] }
+                      content: { type: string }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/llm/summarize-incident:
+    post:
+      tags: [llm]
+      summary: LLM 总结事件
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                incident_id: { type: string }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/mssp/dashboard:
+    get:
+      tags: [mssp]
+      summary: MSSP 控制台汇总
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/mssp/child-tenants:
+    get:
+      tags: [mssp]
+      summary: 子租户列表
+      responses: { '200': { description: 成功 } }
+    post:
+      tags: [mssp]
+      summary: 新增子租户
+      responses: { '201': { description: 已创建 } }
+
+  /api/v2/mssp/child-tenants/{tenant_id}/suspend:
+    post:
+      tags: [mssp]
+      summary: 暂停子租户
+      parameters:
+        - { name: tenant_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/mssp/child-tenants/{tenant_id}/resume:
+    post:
+      tags: [mssp]
+      summary: 恢复子租户
+      parameters:
+        - { name: tenant_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/mssp/alerts:
+    get:
+      tags: [mssp]
+      summary: 横跨子租户告警
+      responses: { '200': { description: 成功 } }
+
+  /api/v2/graphql:
+    post:
+      tags: [graphql]
+      summary: GraphQL 风格查询
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operation]
+              properties:
+                operation: { type: string }
+                variables: { type: object }
+      responses: { '200': { description: 成功 } }
+
+  /metrics:
+    get:
+      tags: [observability]
+      summary: Prometheus metrics
+      responses: { '200': { description: 成功 } }
+
+  /healthz:
+    get:
+      tags: [observability]
+      summary: 健康检查
+      responses: { '200': { description: 成功 } }
+
+  /readyz:
+    get:
+      tags: [observability]
+      summary: 就绪检查
+      responses: { '200': { description: 成功 } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        code: { type: integer, example: 0 }
+        message: { type: string, example: success }
+        data: { type: object }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+        captcha_id: { type: string }
+        captcha_value: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            token: { type: string }
+            user:
+              $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [admin, ops, user, viewer] }
+        tenant_id: { type: string }
+
+    Host:
+      type: object
+      properties:
+        host_id: { type: string }
+        hostname: { type: string }
+        ip: { type: string }
+        os: { type: string }
+        os_version: { type: string }
+        kernel: { type: string }
+        arch: { type: string }
+        status: { type: string, enum: [online, offline, isolated] }
+        agent_version: { type: string }
+        last_heartbeat: { type: string, format: date-time }
+        tenant_id: { type: string }
+
+    HostList:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Host' }
+            total: { type: integer }
+
+    Alert:
+      type: object
+      properties:
+        alert_id: { type: string }
+        host_id: { type: string }
+        rule_id: { type: string }
+        severity: { type: string, enum: [critical, high, medium, low, info] }
+        category: { type: string }
+        title: { type: string }
+        description: { type: string }
+        mitre_id: { type: string }
+        status: { type: string, enum: [open, ack, resolved, false_positive] }
+        created_at: { type: string, format: date-time }
+        tenant_id: { type: string }
+
+    AlertList:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Alert' }
+            total: { type: integer }
+
+    ModeInfo:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            mode: { type: string, enum: [observe, protect] }
+            updated_by: { type: string }
+            updated_at: { type: string, format: date-time }
+
+    CreateChangeRequest:
+      type: object
+      required: [target_table, target_key, proposed_value, reason]
+      properties:
+        target_table:
+          type: string
+          enum: [feature_flags, system_config, kube_clusters]
+        target_key: { type: string }
+        proposed_value: { type: string }
+        reason: { type: string, minLength: 10 }
+
+    ConfigChangeRequest:
+      type: object
+      properties:
+        id: { type: integer }
+        target_table: { type: string }
+        target_key: { type: string }
+        old_value: { type: string }
+        proposed_value: { type: string }
+        reason: { type: string }
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled, applied, failed]
+        requested_by: { type: string }
+        approval_required_count: { type: integer }
+        approved_count: { type: integer }
+        approvers: { type: string }
+        created_at: { type: string, format: date-time }

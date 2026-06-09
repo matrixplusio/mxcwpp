@@ -7,6 +7,7 @@ import (
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -15,9 +16,10 @@ import (
 
 // ReportsHandler 是报表 API 处理器
 type ReportsHandler struct {
-	db     *gorm.DB
-	chConn chdriver.Conn // 可为 nil（CH 未启用降级 MySQL）
-	logger *zap.Logger
+	db          *gorm.DB
+	chConn      chdriver.Conn // 可为 nil（CH 未启用降级 MySQL）
+	redisClient *redis.Client // 可为 nil(Redis 未启用时跳过 cache)
+	logger      *zap.Logger
 }
 
 // NewReportsHandler 创建报表处理器
@@ -32,6 +34,17 @@ func NewReportsHandler(db *gorm.DB, logger *zap.Logger) *ReportsHandler {
 func (h *ReportsHandler) SetClickHouse(conn chdriver.Conn) {
 	h.chConn = conn
 }
+
+// SetRedis 启动时注入 Redis client,启用报表 cache。
+func (h *ReportsHandler) SetRedis(c *redis.Client) {
+	h.redisClient = c
+}
+
+// 报表 cache TTL:60s。同时间段同 host 集报表内容稳定,1 分钟内不变。
+const (
+	reportsEDRCacheKey = "mxsec:reports:edr:%d_%d" // start_unix _ end_unix
+	reportsCacheTTL    = 60 * time.Second
+)
 
 // GetStats 获取报表统计数据
 // GET /api/v1/reports/stats

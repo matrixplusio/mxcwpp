@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_ANOLIS_8",
+  "name": "龙蜥 Anolis OS 8 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "龙蜥操作系统 Anolis 8.x 安全基线 (兼容 RHEL 8). 适配 8.4/8.6/8.8/8.9.",
+  "os_family": ["anolis"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "ANOLIS_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90 in /etc/login.defs"}},
+    {"rule_id": "ANOLIS_002", "category": "身份鉴别", "title": "Anolis 默认密码策略 (pwquality)", "description": "minlen 12 ucredit -1 lcredit -1 dcredit -1 ocredit -1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/security/pwquality.conf", "minlen\\s*=\\s*(1[2-9]|[2-9][0-9])", "match"]}]}, "fix": {"suggestion": "/etc/security/pwquality.conf: minlen=12 + 复杂度策略"}},
+    {"rule_id": "ANOLIS_003", "category": "访问控制", "title": "禁用 root SSH", "description": "等保要求", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "^PermitRootLogin\\s+no", "match"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
+    {"rule_id": "ANOLIS_004", "category": "访问控制", "title": "Anolis SELinux enforcing", "description": "强制安全策略", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["getenforce", "^Enforcing$"]}]}, "fix": {"suggestion": "setenforce 1 + SELINUX=enforcing in /etc/selinux/config"}},
+    {"rule_id": "ANOLIS_005", "category": "审计", "title": "auditd 启用", "description": "等保审计", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
+    {"rule_id": "ANOLIS_006", "category": "入侵防御", "title": "firewalld 启用", "description": "默认拒绝", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["firewalld", "active"]}]}, "fix": {"suggestion": "systemctl enable --now firewalld"}},
+    {"rule_id": "ANOLIS_007", "category": "运行环境", "title": "龙蜥内核安全模块 LSM lockdown 模式", "description": "kernel lockdown=integrity 或 confidentiality", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["cat /sys/kernel/security/lockdown 2>/dev/null | grep -oE '\\[[a-z]+\\]'", "\\[(integrity|confidentiality)\\]"]}]}, "fix": {"suggestion": "GRUB cmdline lockdown=integrity"}},
+    {"rule_id": "ANOLIS_008", "category": "运行环境", "title": "kdump 启用 (生产侦察基线)", "description": "崩溃 dump", "severity": "low", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["kdump", "active"]}]}, "fix": {"suggestion": "systemctl enable --now kdump"}},
+    {"rule_id": "ANOLIS_009", "category": "时间同步", "title": "chronyd 时间同步", "description": "审计时间一致性", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["chronyd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now chronyd"}},
+    {"rule_id": "ANOLIS_010", "category": "防恶意代码", "title": "yum-cron 自动安全更新", "description": "及时补丁", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["dnf-automatic.timer", "active"]}, {"type": "service_status", "param": ["yum-cron", "active"]}]}, "fix": {"suggestion": "dnf install dnf-automatic && systemctl enable --now dnf-automatic.timer"}}
+  ]
+}

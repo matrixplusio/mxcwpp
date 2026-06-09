@@ -34,8 +34,8 @@
           <div class="metric-label">故事线</div>
         </div>
         <div class="banner-metric">
-          <div class="metric-value" :style="{ color: '#06B6D4' }">{{ formatCompact(stats.iocTotal || 0) }}</div>
-          <div class="metric-label">IOC</div>
+          <div class="metric-value" :style="{ color: '#06B6D4' }">{{ stats.pendingVulnerabilities || 0 }}</div>
+          <div class="metric-label">待修漏洞</div>
         </div>
       </div>
     </div>
@@ -54,12 +54,14 @@
       </a-col>
       <a-col :span="6">
         <StatCard
-          title="IOC 情报"
-          :value="stats.iocTotal || 0"
+          title="Agent 在线率"
+          :value="agentOnlinePercent"
+          suffix="%"
           color="#06B6D4"
-          :tags="iocTags"
+          :progress="agentOnlinePercent"
+          :tags="agentTags"
           clickable
-          @click="$router.push('/threat-intel')"
+          @click="$router.push('/hosts')"
         />
       </a-col>
       <a-col :span="6">
@@ -114,7 +116,7 @@
       <a-col :span="7">
         <div class="dashboard-card">
           <div class="card-header">
-            <span class="card-title">IOC 分布</span>
+            <span class="card-title">告警严重等级分布</span>
           </div>
           <div class="card-body">
             <v-chart :option="iocPieOption" autoresize style="height: 260px" />
@@ -218,6 +220,22 @@ const iocTags = computed(() => {
   ]
 })
 
+// Agent 在线率 (替代 IOC 情报)
+const agentOnlinePercent = computed(() => {
+  const total = stats.value.totalAgents || stats.value.totalHosts || 0
+  const online = stats.value.onlineAgents || 0
+  if (total === 0) return 0
+  return Math.round((online / total) * 100)
+})
+const agentTags = computed(() => {
+  const online = stats.value.onlineAgents || 0
+  const total = stats.value.totalAgents || stats.value.totalHosts || 0
+  const offline = Math.max(0, total - online)
+  const tags = [{ label: `在线 ${online}/${total}`, color: '#22C55E' }]
+  if (offline > 0) tags.push({ label: `离线 ${offline}`, color: '#EF4444' })
+  return tags
+})
+
 // ========== 告警趋势 ==========
 const alertTrendOption = computed(() => ({
   tooltip: {
@@ -262,10 +280,13 @@ const alertTrendOption = computed(() => ({
   ],
 }))
 
-// ========== IOC 环形图 ==========
+// ========== 告警严重等级分布环形图 (替代 IOC) ==========
 const iocPieOption = computed(() => {
-  const ioc = stats.value.iocByType || { ip: 0, hash: 0, url: 0 }
-  const total = stats.value.iocTotal || (ioc.ip + ioc.hash + ioc.url)
+  const critical = stats.value.criticalAlerts || 0
+  const high = stats.value.highAlerts || 0
+  const medium = stats.value.mediumAlerts || 0
+  const low = stats.value.lowAlerts || 0
+  const total = critical + high + medium + low || stats.value.pendingAlerts || 0
   return {
     tooltip: {
       trigger: 'item',
@@ -283,7 +304,7 @@ const iocPieOption = computed(() => {
       avoidLabelOverlap: false,
       label: {
         show: true, position: 'center',
-        formatter: () => `{total|${formatCompact(total)}}\n{label|总计}`,
+        formatter: () => `{total|${formatCompact(total)}}\n{label|告警总数}`,
         rich: {
           total: { fontSize: 20, fontWeight: 700, color: chartTheme.value.tooltipText, lineHeight: 28 },
           label: { fontSize: 11, color: chartTheme.value.axisLabel, lineHeight: 18 },
@@ -291,9 +312,10 @@ const iocPieOption = computed(() => {
       },
       itemStyle: { borderColor: themeStore.isDark ? '#161B22' : '#FFFFFF', borderWidth: 2 },
       data: [
-        { value: ioc.ip, name: `IP ${ioc.ip.toLocaleString()}`, itemStyle: { color: '#3B82F6' } },
-        { value: ioc.hash, name: `Hash ${ioc.hash.toLocaleString()}`, itemStyle: { color: '#06B6D4' } },
-        { value: ioc.url, name: `URL ${ioc.url.toLocaleString()}`, itemStyle: { color: '#F59E0B' } },
+        { value: critical, name: `严重 ${critical.toLocaleString()}`, itemStyle: { color: '#EF4444' } },
+        { value: high, name: `高危 ${high.toLocaleString()}`, itemStyle: { color: '#F59E0B' } },
+        { value: medium, name: `中危 ${medium.toLocaleString()}`, itemStyle: { color: '#FADC19' } },
+        { value: low, name: `低危 ${low.toLocaleString()}`, itemStyle: { color: '#3B82F6' } },
       ],
     }],
   }

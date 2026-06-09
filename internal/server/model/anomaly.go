@@ -44,6 +44,7 @@ func (c *AnomalyTriggerContext) Scan(value any) error { return JSONScan(c, value
 
 // AnomalyAlert represents an ML-detected behavioral anomaly.
 type AnomalyAlert struct {
+	TenantID       string                `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint                  `gorm:"primarykey" json:"id"`
 	HostID         string                `gorm:"type:varchar(64);index" json:"host_id"`
 	Hostname       string                `gorm:"type:varchar(255)" json:"hostname"`

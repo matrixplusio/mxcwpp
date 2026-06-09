@@ -2,6 +2,7 @@ package model
 
 // ImageScan 容器镜像扫描记录
 type ImageScan struct {
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Image       string     `gorm:"column:image;type:varchar(500);not null;index" json:"image"`
 	Digest      string     `gorm:"column:digest;type:varchar(100)" json:"digest"`
@@ -22,6 +23,7 @@ func (ImageScan) TableName() string {
 
 // ImageVulnerability 镜像漏洞关联
 type ImageVulnerability struct {
+	TenantID     string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint   `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ImageScanID  uint   `gorm:"column:image_scan_id;not null;index" json:"imageScanId"`
 	VulnID       *uint  `gorm:"column:vuln_id;index" json:"vulnId"`
@@ -40,6 +42,7 @@ func (ImageVulnerability) TableName() string {
 
 // ImageRegistry 镜像仓库配置
 type ImageRegistry struct {
+	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name       string     `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	URL        string     `gorm:"column:url;type:varchar(500);not null" json:"url"`

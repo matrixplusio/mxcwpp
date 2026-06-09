@@ -1,6 +1,6 @@
 # DataType 分配表
 
-**最后更新**: 2026-05-20 | **维护者**: Kerbos
+**最后更新**: 2026-06-09 | **维护者**: Kerbos
 
 > **强制规则**: 新增任何 DataType 前必须先在本文档注册，确认无冲突后再写代码。
 > 违反此规则会导致消息被错误路由（静默丢弃或写入错误 Topic），排查成本极高。
@@ -121,8 +121,9 @@
 |----------|------|------|--------|--------|
 | 9100 | Server→Plugin | 修复任务下发 | Manager | Remediation 插件 |
 | 9101-9199 | - | **预留修复扩展**（如预检结果、回滚指令） | - | - |
-| 9200 | Plugin→Server | 修复执行结果 | Remediation 插件 | Consumer→MySQL |
-| 9201-9299 | - | **预留修复结果扩展** | - | - |
+| 9200 | Plugin→Server | 修复执行结果（最终） | Remediation 插件 | Consumer→MySQL |
+| 9201 | Plugin→Server | 修复阶段进度 / 漏洞预检结果（precheck_result） | Remediation 插件 | Consumer→MySQL (`WriteRemediationProgress`) |
+| 9202-9299 | - | **预留修复结果扩展** | - | - |
 
 ### 威胁情报 (9300-9399) — AC→Agent 直接下发（不走 Kafka）
 

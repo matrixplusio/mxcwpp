@@ -1,0 +1,26 @@
+# mxsec Consumer 配置 (P1-5)
+
+http_addr: ":8081"
+analysis_enabled: false        # 走 Engine 微服务时此项为 false
+consumer_group: "mxsec-consumer"
+batch_size: 500
+batch_timeout: "5s"
+
+database:
+  dsn: ""
+  max_open_conns: 50
+  max_idle_conns: 10
+
+redis:
+  addr: "localhost:6379"
+
+kafka:
+  brokers: []                  # 必填
+
+clickhouse:
+  addr: "localhost:9000"
+  database: mxsec
+
+otel:
+  enabled: false
+  sample_rate: 0.1

@@ -18,7 +18,7 @@
             <div class="detail-card">
               <a-descriptions :column="2" bordered size="small">
                 <a-descriptions-item label="漏洞编号">{{ vuln.cveId }}</a-descriptions-item>
-                <a-descriptions-item v-if="vuln.osvId" label="OSV ID">{{ vuln.osvId }}</a-descriptions-item>
+                <a-descriptions-item label="OSV ID">{{ vuln.osvId || '-' }}</a-descriptions-item>
                 <a-descriptions-item label="CVSS 评分">
                   <span :class="cvssClass(vuln.cvssScore)">{{ vuln.cvssScore }}</span>
                 </a-descriptions-item>
@@ -182,7 +182,31 @@ const severityTextMap: Record<string, string> = {
 const statusTextMap: Record<string, string> = {
   unpatched: '未修复',
   patched: '已修复',
+  vanished: '已失效',
+  resurfaced: '回归告警',
   ignored: '已忽略',
+  false_positive: '误报',
+}
+
+// 状态机扩展（targeted scan v1）
+const statusIconMap: Record<string, string> = {
+  unpatched: '🔴',
+  patched: '🟢',
+  vanished: '⚪',
+  resurfaced: '🟡',
+  ignored: '🚫',
+  false_positive: '🤷',
+}
+
+const patchedReasonMap: Record<string, string> = {
+  auto_version_match: '版本自动匹配',
+  package_removed: '包消失',
+  manual: '手动确认',
+  remediation_task: '修复任务',
+}
+
+function patchedReasonLabel(reason: string): string {
+  return patchedReasonMap[reason] || reason
 }
 
 const hostColumns = [
@@ -194,8 +218,15 @@ const hostColumns = [
 
 const statusColor = (status: string) => {
   if (status === 'patched') return 'green'
+  if (status === 'vanished') return 'default'
+  if (status === 'resurfaced') return 'orange'
   if (status === 'ignored') return 'default'
+  if (status === 'false_positive') return 'default'
   return 'red'
+}
+
+function statusIcon(status: string): string {
+  return statusIconMap[status] || '❓'
 }
 
 const cvssClass = (score: number) => {

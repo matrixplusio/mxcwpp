@@ -13,6 +13,7 @@ const (
 // ComponentPushHost 组件推送主机记录表
 // 记录每个主机的推送详细状态
 type ComponentPushHost struct {
+	TenantID  string                  `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint                    `gorm:"primaryKey" json:"id"`
 	RecordID  uint                    `gorm:"index;not null" json:"record_id"`       // 推送记录 ID
 	HostID    string                  `gorm:"size:64;not null" json:"host_id"`       // 主机 ID

@@ -1,0 +1,143 @@
+# mxsec CRD: MxsecPolicy (B10)
+#
+# 用户在 K8s 集群里声明式管理 mxsec 策略 (alert / runtime / network / RASP),
+# 走 GitOps 流程 (kubectl apply / FluxCD / ArgoCD) 而非 Manager UI.
+#
+# 示例:
+#
+#   apiVersion: mxsec.io/v1
+#   kind: MxsecPolicy
+#   metadata:
+#     name: prod-block-shell-reverse
+#   spec:
+#     scope:
+#       namespaceSelector: {matchLabels: {env: prod}}
+#     rules:
+#       - id: T1059-004-reverse-shell
+#         severity: critical
+#         expression: 'cmdline.contains("bash -i") && cmdline.contains("/dev/tcp/")'
+#     mode: observe
+#     rolloutPercent: 100
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mxsecpolicies.mxsec.io
+spec:
+  group: mxsec.io
+  scope: Cluster
+  names:
+    plural: mxsecpolicies
+    singular: mxsecpolicy
+    kind: MxsecPolicy
+    shortNames: [mxp]
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [rules, mode]
+              properties:
+                scope:
+                  type: object
+                  properties:
+                    namespaceSelector:
+                      type: object
+                      properties:
+                        matchLabels:
+                          type: object
+                          additionalProperties: {type: string}
+                    hostSelector:
+                      type: object
+                      properties:
+                        matchLabels:
+                          type: object
+                          additionalProperties: {type: string}
+                rules:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [id, expression, severity]
+                    properties:
+                      id: {type: string}
+                      severity: {type: string, enum: [critical, high, medium, low, info]}
+                      expression: {type: string}
+                      attck: {type: string}
+                      description: {type: string}
+                mode:
+                  type: string
+                  enum: [observe, protect]
+                rolloutPercent:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+            status:
+              type: object
+              properties:
+                appliedAt:
+                  type: string
+                  format: date-time
+                hostsCovered:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: {type: string}
+                      status: {type: string}
+                      reason: {type: string}
+                      message: {type: string}
+      additionalPrinterColumns:
+        - {name: Mode, type: string, jsonPath: .spec.mode}
+        - {name: Rollout, type: integer, jsonPath: .spec.rolloutPercent}
+        - {name: Hosts, type: integer, jsonPath: .status.hostsCovered}
+        - {name: Age, type: date, jsonPath: .metadata.creationTimestamp}
+---
+# CRD: MxsecAgent (节点级 Agent 安装声明)
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mxsecagents.mxsec.io
+spec:
+  group: mxsec.io
+  scope: Cluster
+  names:
+    plural: mxsecagents
+    singular: mxsecagent
+    kind: MxsecAgent
+    shortNames: [mxa]
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [image, serverHost]
+              properties:
+                image: {type: string}
+                serverHost: {type: string}
+                nodeSelector:
+                  type: object
+                  additionalProperties: {type: string}
+                resources:
+                  type: object
+                hostNetwork: {type: boolean}
+                privileged: {type: boolean, default: false}
+            status:
+              type: object
+              properties:
+                readyNodes: {type: integer}
+                totalNodes: {type: integer}
+                version: {type: string}

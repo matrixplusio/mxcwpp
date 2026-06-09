@@ -1,0 +1,44 @@
+# mxsec Manager 配置 (P1-5 viper schema)
+#
+# 优先级: env (MXSEC_MANAGER_*) > 本文件 > 内置默认
+# 示例 env:
+#   MXSEC_MANAGER_HTTP_ADDR=:9080
+#   MXSEC_MANAGER_DATABASE_DSN=mysql://...
+#   MXSEC_MANAGER_KAFKA_BROKERS=k1:9092,k2:9092
+
+http_addr: ":8080"
+jwt_secret: ""               # >= 32 chars, 必填
+internal_secret: ""          # AC <-> Manager 内部调用密钥
+upload_dir: "./uploads"
+
+database:
+  dsn: ""                    # MySQL DSN, 必填
+  max_open_conns: 100
+  max_idle_conns: 20
+  conn_max_lifetime: "1h"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+kafka:
+  brokers: []
+  sasl_enabled: false
+  sasl_user: ""
+  sasl_pass: ""
+
+clickhouse:
+  addr: "localhost:9000"
+  database: mxsec
+  user: default
+  password: ""
+
+plugins:
+  base_url: "http://localhost:8080"
+
+otel:
+  enabled: false
+  endpoint: "localhost:4318"
+  insecure: true
+  sample_rate: 0.1

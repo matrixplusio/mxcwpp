@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,6 +29,7 @@ func NewEngine(logger *zap.Logger) *Engine {
 	engine.RegisterChecker("file_exists", NewFileExistsChecker(logger))
 	engine.RegisterChecker("file_permission", NewFilePermissionChecker(logger))
 	engine.RegisterChecker("file_line_match", NewFileLineMatchChecker(logger))
+	engine.RegisterChecker("file_line_expr", NewFileLineExprChecker(logger))
 	engine.RegisterChecker("command_exec", NewCommandExecChecker(logger))
 	engine.RegisterChecker("sysctl", NewSysctlChecker(logger))
 	engine.RegisterChecker("service_status", NewServiceStatusChecker(logger))
@@ -42,12 +44,17 @@ func (e *Engine) RegisterChecker(name string, checker Checker) {
 	e.checkers[name] = checker
 }
 
-// Execute 执行基线检查
+// Execute 执行基线检查 (P1-4: 规则级并行 + fork 限流).
+//
+// 收集所有 OS-match rule 后并行执行, semaphore (16) 限 fork 子进程并发,
+// 防 200 条 CIS 规则同时压满 CPU. 单 rule panic recover 不影响其它.
 func (e *Engine) Execute(ctx context.Context, policies []*Policy, osFamily, osVersion string) []*Result {
-	var results []*Result
-
+	type job struct {
+		policy *Policy
+		rule   *Rule
+	}
+	var jobs []job
 	for _, policy := range policies {
-		// OS 匹配
 		if !policy.MatchOS(osFamily, osVersion) {
 			e.logger.Debug("policy OS mismatch",
 				zap.String("policy_id", policy.ID),
@@ -55,16 +62,42 @@ func (e *Engine) Execute(ctx context.Context, policies []*Policy, osFamily, osVe
 				zap.String("os_version", osVersion))
 			continue
 		}
-
-		// 执行规则
 		for _, rule := range policy.Rules {
-			result := e.executeRule(ctx, policy, rule)
-			if result != nil {
-				results = append(results, result)
-			}
+			jobs = append(jobs, job{policy: policy, rule: rule})
 		}
 	}
-
+	if len(jobs) == 0 {
+		return nil
+	}
+	const forkSemaphore = 16
+	sem := make(chan struct{}, forkSemaphore)
+	resultsCh := make(chan *Result, len(jobs))
+	var wg sync.WaitGroup
+	for i := range jobs {
+		j := jobs[i]
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					e.logger.Error("baseline check panic recovered",
+						zap.String("rule_id", j.rule.RuleID),
+						zap.Any("panic", r))
+				}
+			}()
+			if res := e.executeRule(ctx, j.policy, j.rule); res != nil {
+				resultsCh <- res
+			}
+		}()
+	}
+	wg.Wait()
+	close(resultsCh)
+	results := make([]*Result, 0, len(jobs))
+	for r := range resultsCh {
+		results = append(results, r)
+	}
 	return results
 }
 
@@ -232,6 +265,10 @@ func (e *Engine) describeCheckRule(rule *CheckRule) string {
 	case "file_line_match":
 		if len(rule.Param) >= 2 {
 			return fmt.Sprintf("文件 %s 包含匹配行", rule.Param[0])
+		}
+	case "file_line_expr":
+		if len(rule.Param) >= 1 {
+			return fmt.Sprintf("文件 %s 满足表达式 %s", rule.Param[0], rule.Result)
 		}
 	case "sysctl":
 		if len(rule.Param) >= 2 {

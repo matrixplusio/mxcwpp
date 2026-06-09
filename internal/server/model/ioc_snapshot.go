@@ -6,6 +6,7 @@ import "time"
 // The Manager creates snapshots after each SyncIOCs() run, and the AgentCenter
 // reads them to broadcast IOC updates to online agents.
 type IOCSnapshot struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primarykey" json:"id"`
 	Version   string    `gorm:"type:varchar(32);index" json:"version"`        // SHA256[:16] of full data
 	Data      string    `gorm:"type:mediumtext" json:"-"`                     // Full IOC JSON: {"ip":[...], "hash":[...], "url":[...]}

@@ -20,6 +20,7 @@ func (o *OSRequirements) Scan(value any) error { return JSONScan(o, value) }
 
 // Policy 策略集模型
 type Policy struct {
+	TenantID       string         `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             string         `gorm:"primaryKey;column:id;type:varchar(64);not null" json:"id"`
 	Name           string         `gorm:"column:name;type:varchar(255);not null" json:"name"`
 	Version        string         `gorm:"column:version;type:varchar(50)" json:"version"`

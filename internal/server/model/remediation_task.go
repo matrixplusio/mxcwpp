@@ -14,6 +14,7 @@ package model
 //
 // 兼容性：历史 status='success' 视为已 verified（legacy），新任务走完整 5 状态。
 type RemediationTask struct {
+	TenantID     string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	VulnID       uint       `gorm:"column:vuln_id;not null;index" json:"vulnId"`
 	CveID        string     `gorm:"column:cve_id;type:varchar(50);not null" json:"cveId"`

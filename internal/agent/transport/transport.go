@@ -152,8 +152,8 @@ func StartupWithManager(ctx context.Context, wg *sync.WaitGroup, mgr *Manager) {
 					zap.Int("retry_count", retryCount),
 					zap.Duration("retry_delay", retryDelay),
 				)
-				// 指数退避：延迟时间 = min(初始延迟 * 2^(重试次数-1), 最大延迟)
-				time.Sleep(retryDelay)
+				// P2-3: 指数退避 + ±30% jitter 防雷鸣群 (1w 主机同时重连冲击 AgentCenter)
+				time.Sleep(withJitter(retryDelay))
 				retryDelay = retryDelay * 2
 				if retryDelay > maxRetryDelay {
 					retryDelay = maxRetryDelay
@@ -178,8 +178,8 @@ func StartupWithManager(ctx context.Context, wg *sync.WaitGroup, mgr *Manager) {
 					zap.Int("retry_count", retryCount),
 					zap.Duration("retry_delay", retryDelay),
 				)
-				// 指数退避
-				time.Sleep(retryDelay)
+				// P2-3: jitter 退避
+				time.Sleep(withJitter(retryDelay))
 				retryDelay = retryDelay * 2
 				if retryDelay > maxRetryDelay {
 					retryDelay = maxRetryDelay
@@ -436,7 +436,9 @@ func (m *Manager) receiveCommands(ctx context.Context, wg *sync.WaitGroup, strea
 
 			// 处理任务（按插件名称分发到对应通道）
 			if len(cmd.Tasks) > 0 {
-				m.logger.Info("received tasks from server", zap.Int("count", len(cmd.Tasks)))
+				// Debug level: cron task 流量大(precheck cron 单 host 单 tick 可达 200 条),
+				// Info 会触发 journald rate-limit 抑制其他关键日志。详见 follow-up 修复说明。
+				m.logger.Debug("received tasks from server", zap.Int("count", len(cmd.Tasks)))
 				for _, task := range cmd.Tasks {
 					// DataType=9900 是任务取消信号，不分发到插件，直接回调
 					if task.DataType == 9900 {

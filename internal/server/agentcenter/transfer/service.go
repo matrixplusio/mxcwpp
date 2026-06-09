@@ -98,6 +98,48 @@ type Service struct {
 
 	// 优雅关闭标志：Server 自身重启时跳过离线通知，避免假告警
 	shutdownFlag atomic.Bool
+
+	// P1-3: 异步通知 ctx + semaphore 限并发, 服务关闭时取消所有 dangling goroutine.
+	notifyCtx    context.Context
+	notifyCancel context.CancelFunc
+	notifySem    chan struct{}
+}
+
+// initAsyncNotify P1-3: 启动时调一次, 后续 SpawnNotify 用 notifyCtx 接管 dangling goroutine.
+func (s *Service) initAsyncNotify() {
+	if s.notifyCtx == nil {
+		s.notifyCtx, s.notifyCancel = context.WithCancel(context.Background())
+		s.notifySem = make(chan struct{}, 100)
+	}
+}
+
+// SpawnNotify P1-3: 接 service ctx + 限并发跑异步通知, 替代裸 go func().
+// service 关闭时所有 dangling 通知统一取消.
+func (s *Service) SpawnNotify(name string, fn func(ctx context.Context)) {
+	s.initAsyncNotify()
+	select {
+	case s.notifySem <- struct{}{}:
+		go func() {
+			defer func() { <-s.notifySem }()
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Error("transfer notify panic recovered",
+						zap.String("kind", name),
+						zap.Any("panic", r))
+				}
+			}()
+			fn(s.notifyCtx)
+		}()
+	default:
+		s.logger.Warn("transfer notify queue full, drop", zap.String("kind", name))
+	}
+}
+
+// CancelAsyncNotify P1-3: Shutdown 调.
+func (s *Service) CancelAsyncNotify() {
+	if s.notifyCancel != nil {
+		s.notifyCancel()
+	}
 }
 
 // SetKafkaProducer 注入 Kafka 生产者（在 AgentCenter 启动后调用）
@@ -194,16 +236,20 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 
 	// 创建连接对象
 	conn := &Connection{
-		AgentID:   agentID,
-		Hostname:  firstData.Hostname,
-		IPv4:      append(firstData.IntranetIpv4, firstData.ExtranetIpv4...),
-		IPv6:      append(firstData.IntranetIpv6, firstData.ExtranetIpv6...),
-		Version:   firstData.Version,
-		LastSeen:  time.Now(),
-		stream:    stream,
-		ctx:       ctx,
-		cancel:    cancel,
-		sendCh:    make(chan *grpcProto.Command, 10),
+		AgentID:  agentID,
+		Hostname: firstData.Hostname,
+		IPv4:     append(firstData.IntranetIpv4, firstData.ExtranetIpv4...),
+		IPv6:     append(firstData.IntranetIpv6, firstData.ExtranetIpv6...),
+		Version:  firstData.Version,
+		LastSeen: time.Now(),
+		stream:   stream,
+		ctx:      ctx,
+		cancel:   cancel,
+		// sendCh 容量 100: precheck cron 单 host 单 tick 可投 200 条 task,
+		// 加上 plugin update/rule sync/heartbeat ack 共用此 ch,
+		// 容量过小(原 10)会导致 agent stream 短暂卡住时 SendCommand 立即 drop,
+		// 影响 update push 等关键命令投递。
+		sendCh:    make(chan *grpcProto.Command, 100),
 		workerSem: make(chan struct{}, 10),
 	}
 
@@ -2011,10 +2057,11 @@ func (s *Service) resolvePluginDelivery(pc model.PluginConfig) ([]string, string
 	}
 
 	if s.pluginConfigUsesManagerDownload(pc, downloadURLs) && !s.pluginPackageExists(pc) {
-		s.logger.Warn("插件组件包不存在，跳过下发插件配置",
+		// 服务端无组件包,仍下发 config: Agent 端若有本地 cache + 可执行可继续使用.
+		// 仅 warn 提醒管理员补上传, 避免新装 Agent 拉不到.
+		s.logger.Warn("插件组件包不存在,仍下发(依赖 Agent 本地 cache)",
 			zap.String("plugin", pc.Name),
 			zap.String("version", pc.Version))
-		return nil, ""
 	}
 
 	return downloadURLs, pc.SHA256

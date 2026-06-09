@@ -2,6 +2,7 @@ package model
 
 // RemediationPolicy 修复策略模板
 type RemediationPolicy struct {
+	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name        string     `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	Description string     `gorm:"column:description;type:text" json:"description"`
@@ -27,6 +28,7 @@ func (RemediationPolicy) TableName() string {
 
 // RemediationPolicyExecution 修复策略执行记录
 type RemediationPolicyExecution struct {
+	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	PolicyID   uint       `gorm:"column:policy_id;not null;index" json:"policyId"`
 	Status     string     `gorm:"column:status;type:varchar(16);not null;default:running" json:"status"`

@@ -1,0 +1,31 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mxsecrequireimagesignature
+spec:
+  crd:
+    spec:
+      names:
+        kind: MxsecRequireImageSignature
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            allowedRegistries:
+              type: array
+              items: {type: string}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mxsec.requireimagesignature
+
+        violation[{"msg": msg}] {
+          c := input.review.object.spec.containers[_]
+          not allowed_registry(c.image)
+          msg := sprintf("container %v image %v: not from allowedRegistries (cosign verify required)", [c.name, c.image])
+        }
+
+        allowed_registry(img) {
+          reg := input.parameters.allowedRegistries[_]
+          startswith(img, reg)
+        }

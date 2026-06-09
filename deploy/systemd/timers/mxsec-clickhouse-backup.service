@@ -1,0 +1,13 @@
+[Unit]
+Description=mxsec ClickHouse backup
+After=clickhouse-server.service
+Wants=clickhouse-server.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mxsec/backup.env
+ExecStart=/usr/local/bin/mxsec-clickhouse-backup.sh
+StandardOutput=append:/var/log/mxsec-backup/clickhouse-systemd.log
+StandardError=append:/var/log/mxsec-backup/clickhouse-systemd.log
+TimeoutStartSec=2h
+Nice=10

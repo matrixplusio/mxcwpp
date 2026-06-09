@@ -30,13 +30,14 @@
 
 ## 部署模式概览
 
-项目支持三种部署模式，分别面向不同阶段的需求：
+项目支持四种部署模式，分别面向不同阶段的需求：
 
 | 模式 | 配置文件 | 特点 | 适用场景 |
 |------|---------|------|---------|
-| 开发环境 | `docker-compose.dev.yml` | 源码热重载（Air），单 Kafka 节点 | 日常开发调试 |
+| 开发环境 | `docker-compose.dev.yml` | 源码热重载（Air），单 Kafka 节点，包含 engine/llmproxy/vulnsync 全 6 微服务 | 日常开发调试 |
+| 完整 v2 编排 | `docker-compose.v2.yml` | 预构建镜像，**完整 6 微服务**（manager + agentcenter + consumer + engine + llmproxy + vulnsync + ui）+ 基础设施 | 单机 v2 部署、验证联调 |
 | 压测环境 | `docker-compose.pret.yml` | 预构建镜像，3 Kafka 节点，支持 `--scale` 多副本 | 性能压测、预发布验证 |
-| 生产环境 | `cluster.example.yaml` + `deploy.sh` | 多节点角色分离，完整 HA | 正式生产部署 |
+| 生产环境 | `cluster.example.yaml` + `mxctl deploy` | 多节点角色分离，完整 HA | 正式生产部署 |
 
 ---
 
@@ -58,12 +59,45 @@ make dev-docker-restart  # 重启 manager + ui
 | UI | http://localhost:3000 |
 | AgentCenter gRPC | localhost:6751 |
 | AgentCenter HTTP | localhost:6752 -> 8080 |
+| Engine HTTP | localhost:8090 |
+| LLMProxy HTTP | localhost:8091 |
+| VulnSync HTTP | localhost:8092 |
 | MySQL | localhost:13306 -> 3306 |
 | Redis | localhost:16379 -> 6379 |
 | Kafka | localhost:9092 |
 | ClickHouse HTTP | localhost:8123 |
 | ClickHouse TCP | localhost:9000 |
 | Prometheus | localhost:9090 |
+
+> 端口为示例，以 `deploy/docker-compose.dev.yml` 实际映射为准。
+
+---
+
+## v2 完整微服务编排
+
+`docker-compose.v2.yml` 提供 v2.0 完整六微服务架构的单机编排，可在单台机器上启动全部 6 个 mxsec 服务 + 基础设施，用于联调和功能验证。
+
+```bash
+cd deploy/
+cp env.example .env
+vim .env  # 修改密码、SERVER_IP 等
+
+docker compose -f docker-compose.v2.yml up -d
+```
+
+包含的 mxsec 服务：
+
+| 服务 | 端口 | 职责 |
+|------|------|------|
+| manager | 8080 | HTTP API + 控制台后端 |
+| agentcenter | 6751/6752 | Agent gRPC 接入 |
+| consumer | - | Kafka 持久化（无对外端口） |
+| engine | 8090 | 检测分析引擎（16 stages） |
+| llmproxy | 8091 | LLM 适配网关 |
+| vulnsync | 8092 | 漏洞情报融合 |
+| ui | 3000 | Vue3 SPA |
+
+基础设施服务：mysql / redis / kafka(KRaft) / clickhouse / prometheus / grafana。
 
 ---
 
@@ -129,6 +163,9 @@ curl -X POST http://localhost/api/v1/auth/login \
 |  Manager           |    |  Redis 7           |    |  (KRaft 模式)      |
 |  AgentCenter       |    |  ClickHouse 24     |    |                    |
 |  Consumer          |    |  Prometheus        |    |                    |
+|  Engine            |    |                    |    |                    |
+|  LLMProxy          |    |                    |    |                    |
+|  VulnSync          |    |                    |    |                    |
 |  UI (SPA)          |    |                    |    |                    |
 +--------------------+    +--------------------+    +--------------------+
 ```
@@ -209,7 +246,7 @@ go build -o ./bin/mxctl ./cmd/tools/mxctl
 [1/5] 准备远端节点    -- 创建 release 目录、SCP 上传 bundle、切换 current 软链、安装依赖、Docker login
 [2/5] 启动 Kafka      -- docker compose up kafka 节点
 [3/5] 启动 Storage    -- docker compose up storage 节点（MySQL / Redis / ClickHouse）
-[4/5] 启动 Control    -- docker compose up control 节点（Manager / AgentCenter / Consumer / UI）
+[4/5] 启动 Control    -- docker compose up control 节点（Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync / UI）
 [5/5] 健康检查        -- docker compose ps + curl /health
 ```
 

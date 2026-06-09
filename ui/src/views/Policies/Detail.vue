@@ -260,7 +260,7 @@
 
     <!-- 主机选择对话框 -->
     <HostSelectorModal
-      v-model:visible="hostSelectorVisible"
+      v-model:open="hostSelectorVisible"
       :title="hostSelectorTitle"
       :policy-os-family="policy?.os_family || []"
       :policy-os-version="policy?.os_version || ''"

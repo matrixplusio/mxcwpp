@@ -28,6 +28,16 @@ type Config struct {
 	LLM        LLMConfig        `mapstructure:"llm"`
 	SIEM       SIEMConfig       `mapstructure:"siem"`
 	PDF        PDFConfig        `mapstructure:"pdf"`
+	Vuln       VulnConfig       `mapstructure:"vuln"`
+}
+
+// VulnConfig 漏洞数据相关配置。
+type VulnConfig struct {
+	// NVDAPIKey NVD JSON 2.0 API key。
+	// 留空走无 key 限速(6s 间隔,5471 vuln ≈ 9h 跑完);
+	// 配 key 后 50 req / 30s(0.6s 间隔,~1h)。
+	// 申请: https://nvd.nist.gov/developers/request-an-api-key
+	NVDAPIKey string `mapstructure:"nvd_api_key"`
 }
 
 // PDFConfig 服务端 PDF 生成（Gotenberg sidecar）配置。
@@ -77,14 +87,29 @@ type PluginsConfig struct {
 
 // ServerConfig 是服务器配置
 type ServerConfig struct {
-	GRPC           GRPCConfig `mapstructure:"grpc"`
-	HTTP           HTTPConfig `mapstructure:"http"`
-	JWTSecret      string     `mapstructure:"jwt_secret"`      // JWT 密钥，用于生成和验证 Token
-	ManagerAddr    string     `mapstructure:"manager_addr"`    // AC 向 Manager SD 注册的 Manager HTTP 地址（如 http://manager:8080）
-	InstanceID     string     `mapstructure:"instance_id"`     // AC 实例唯一 ID（多实例部署时区分，留空则用 hostname）
-	ExternalURL    string     `mapstructure:"external_url"`    // 外网访问地址（如 https://mxsec.example.com），用于拼接 K8s Audit Webhook URL
-	CORSOrigins    []string   `mapstructure:"cors_origins"`    // CORS 允许的 Origin 列表（为空时默认仅允许同源访问）
-	InternalSecret string     `mapstructure:"internal_secret"` // AC 内部通信共享密钥（为空时不验证）
+	GRPC           GRPCConfig         `mapstructure:"grpc"`
+	HTTP           HTTPConfig         `mapstructure:"http"`
+	JWTSecret      string             `mapstructure:"jwt_secret"`      // JWT 密钥，用于生成和验证 Token
+	ManagerAddr    string             `mapstructure:"manager_addr"`    // AC 向 Manager SD 注册的 Manager HTTP 地址（如 http://manager:8080）
+	InstanceID     string             `mapstructure:"instance_id"`     // AC 实例唯一 ID（多实例部署时区分，留空则用 hostname）
+	ExternalURL    string             `mapstructure:"external_url"`    // 外网访问地址（如 https://mxsec.example.com），用于拼接 K8s Audit Webhook URL
+	CORSOrigins    []string           `mapstructure:"cors_origins"`    // CORS 允许的 Origin 列表（为空时默认仅允许同源访问）
+	InternalSecret string             `mapstructure:"internal_secret"` // AC 内部通信共享密钥（为空时不验证）
+	InternalMTLS   InternalMTLSConfig `mapstructure:"internal_mtls"`   // v2.0: AC↔Manager 内部通信 mTLS 配置
+}
+
+// InternalMTLSConfig 是 AC↔Manager 内部通信 mTLS 配置。
+//
+// 启用后,sdclient 通过 https + 客户端证书向 Manager 注册/心跳/注销。
+// 兼容期内可与 InternalSecret 同时启用,二者构成纵深防御。
+//
+// 详见 docs/architecture.md §7 安全与通信 / docs/configuration.md
+type InternalMTLSConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`      // 是否启用 mTLS,默认 false (v1 兼容)
+	CACertPath string `mapstructure:"ca_cert_path"` // PEM CA 证书路径
+	ClientCert string `mapstructure:"client_cert"`  // PEM 客户端证书路径
+	ClientKey  string `mapstructure:"client_key"`   // PEM 客户端私钥路径
+	ServerName string `mapstructure:"server_name"`  // 期望 Manager 证书 SAN
 }
 
 // GRPCConfig 是 gRPC 服务配置

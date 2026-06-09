@@ -25,6 +25,7 @@ const (
 
 // FixTaskHostStatus 修复任务主机执行状态
 type FixTaskHostStatus struct {
+	TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	TaskID   string `gorm:"type:varchar(64);not null;index:idx_fix_task_host,priority:1" json:"task_id"`
 	HostID   string `gorm:"type:varchar(64);not null;index:idx_fix_task_host,priority:2" json:"host_id"`
@@ -62,6 +63,7 @@ const FixTaskHostStatusFailed = "failed"
 
 // FixTask 修复任务模型
 type FixTask struct {
+	TenantID     string        `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	TaskID       string        `gorm:"primaryKey;column:task_id;type:varchar(64);not null" json:"task_id"`
 	HostIDs      StringArray   `gorm:"column:host_ids;type:json;not null" json:"host_ids"`
 	RuleIDs      StringArray   `gorm:"column:rule_ids;type:json;not null" json:"rule_ids"`
@@ -85,6 +87,7 @@ func (FixTask) TableName() string {
 // FixResult 修复结果模型
 // 复合主键 (task_id, host_id, rule_id) — 一次修复任务中每台主机的每条规则只有一条结果
 type FixResult struct {
+	TenantID string          `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	TaskID   string          `gorm:"primaryKey;column:task_id;type:varchar(64);not null" json:"task_id"`
 	HostID   string          `gorm:"primaryKey;column:host_id;type:varchar(64);not null" json:"host_id"`
 	RuleID   string          `gorm:"primaryKey;column:rule_id;type:varchar(64);not null" json:"rule_id"`

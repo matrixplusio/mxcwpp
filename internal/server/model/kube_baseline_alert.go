@@ -14,6 +14,7 @@ const (
 // KubeBaselineAlert 容器 CIS 基线告警
 // 与 KubeAlarm（运行时威胁）分离，专用于合规性基线违规
 type KubeBaselineAlert struct {
+	TenantID          string                  `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID                uint                    `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ClusterID         uint                    `gorm:"column:cluster_id;not null;index" json:"clusterId"`
 	ClusterName       string                  `gorm:"column:cluster_name;type:varchar(255)" json:"clusterName"`

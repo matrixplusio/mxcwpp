@@ -32,6 +32,7 @@ func setupPoliciesDB(t *testing.T) *gorm.DB {
 
 	tables := []string{
 		`CREATE TABLE policies (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			id           TEXT PRIMARY KEY,
 			name         TEXT NOT NULL,
 			version      TEXT DEFAULT '',
@@ -47,6 +48,7 @@ func setupPoliciesDB(t *testing.T) *gorm.DB {
 			updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE rules (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			rule_id       TEXT PRIMARY KEY,
 			policy_id     TEXT NOT NULL,
 			category      TEXT DEFAULT '',
@@ -62,6 +64,7 @@ func setupPoliciesDB(t *testing.T) *gorm.DB {
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE scan_tasks (
+			tenant_id TEXT NOT NULL DEFAULT 't-default',
 			task_id        TEXT PRIMARY KEY,
 			name           TEXT DEFAULT '',
 			type           TEXT DEFAULT 'baseline_scan',

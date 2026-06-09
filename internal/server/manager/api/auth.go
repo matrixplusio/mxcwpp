@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -62,9 +63,15 @@ type LoginResponse struct {
 }
 
 // Claims JWT Claims
+//
+// v2.0 加入 TenantID / IsPlatformAdmin 字段以支持多租户。
+// 旧版 token（仅 Username / Role）解析后 TenantID 自动回填 model.DefaultTenantID，
+// 保证升级期间已下发的 token 仍然有效。
 type Claims struct {
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	Username        string `json:"username"`
+	Role            string `json:"role"`
+	TenantID        string `json:"tenant_id,omitempty"`
+	IsPlatformAdmin bool   `json:"is_platform_admin,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -148,9 +155,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 生成 JWT Token
 	now := time.Now()
+	tenantID := user.TenantID
+	if tenantID == "" {
+		tenantID = model.DefaultTenantID
+	}
 	claims := Claims{
-		Username: user.Username,
-		Role:     string(user.Role),
+		Username:        user.Username,
+		Role:            string(user.Role),
+		TenantID:        tenantID,
+		IsPlatformAdmin: user.IsPlatformAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    jwtIssuer,
 			Subject:   user.Username,
@@ -271,6 +284,17 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 		// 将用户信息存储到上下文
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)
+
+		// v2.0: 注入租户身份。旧 token 缺 TenantID 时回填默认租户，
+		// 升级期间已下发的 token 仍然有效；新 token 走正常 claims 路径。
+		tid := claims.TenantID
+		if tid == "" {
+			tid = model.DefaultTenantID
+		}
+		tenant.SetIdentity(c, tenant.Identity{
+			ID:              tid,
+			IsPlatformAdmin: claims.IsPlatformAdmin,
+		})
 
 		c.Next()
 	}

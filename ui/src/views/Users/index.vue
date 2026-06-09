@@ -93,7 +93,7 @@
 
     <!-- 用户编辑对话框 -->
     <UserModal
-      v-model:visible="modalVisible"
+      v-model:open="modalVisible"
       :user="currentUser"
       @success="handleModalSuccess"
     />

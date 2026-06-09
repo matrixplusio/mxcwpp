@@ -11,7 +11,7 @@ import (
 	"google.golang.org/api/option"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -29,16 +29,16 @@ type Consumer struct {
 	cfg       ClusterGCPConfig
 	db        *gorm.DB
 	logger    *zap.Logger
-	processor *biz.KubeAuditProcessor
+	processor *kube.KubeAuditProcessor
 }
 
 // NewConsumer 创建 Pub/Sub 消费者
-func NewConsumer(cfg ClusterGCPConfig, db *gorm.DB, logger *zap.Logger, alarmService *biz.KubeAlarmService) *Consumer {
+func NewConsumer(cfg ClusterGCPConfig, db *gorm.DB, logger *zap.Logger, alarmService *kube.KubeAlarmService) *Consumer {
 	return &Consumer{
 		cfg:       cfg,
 		db:        db,
 		logger:    logger,
-		processor: biz.NewKubeAuditProcessor(db, logger, alarmService),
+		processor: kube.NewKubeAuditProcessor(db, logger, alarmService),
 	}
 }
 

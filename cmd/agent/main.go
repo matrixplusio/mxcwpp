@@ -12,14 +12,19 @@ import (
 
 	"go.uber.org/zap"
 
+	"time"
+
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
 	agentcli "github.com/imkerbos/mxsec-platform/internal/agent/cli"
 	"github.com/imkerbos/mxsec-platform/internal/agent/config"
 	"github.com/imkerbos/mxsec-platform/internal/agent/connection"
 	"github.com/imkerbos/mxsec-platform/internal/agent/edr"
+	"github.com/imkerbos/mxsec-platform/internal/agent/edr/antidebug"
+	agentgctune "github.com/imkerbos/mxsec-platform/internal/agent/gctune"
 	"github.com/imkerbos/mxsec-platform/internal/agent/heartbeat"
 	"github.com/imkerbos/mxsec-platform/internal/agent/id"
 	"github.com/imkerbos/mxsec-platform/internal/agent/logger"
+	"github.com/imkerbos/mxsec-platform/internal/agent/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/agent/plugin"
 	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
 	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
@@ -59,6 +64,19 @@ var (
 )
 
 func main() {
+	// Watchdog child 入口: 在 flag.Parse 之前判定, 避免 flag 处理影响 child 行为
+	if antidebug.IsChild() {
+		// child 用最小日志栈 (避开 /var/log/mxsec-agent 锁竞争)
+		minimalLog, _ := zap.NewProduction()
+		if err := antidebug.ServeAsChild(antidebug.WatchdogConfig{
+			Logger:         minimalLog,
+			RestartCommand: []string{"/bin/systemctl", "restart", "mxsec-agent"},
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "watchdog child exited: %v\n", err)
+		}
+		return
+	}
+
 	flag.Parse()
 
 	if *version {
@@ -153,12 +171,57 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
+	// P3-B: Agent GC + 内存上限调优 (默认 200MB / GOGC=100)
+	agentgctune.Apply(log)
+
 	log.Info("Agent starting",
 		zap.String("version", cfg.GetVersion()),
 		zap.String("product", cfg.GetProduct()),
 		zap.String("server", serverHost),
 		zap.Bool("remote_config_loaded", cfg.Remote.Loaded),
 	)
+
+	// 3.1 自我加固 (Phase 3 P3-1):
+	//   PR_SET_DUMPABLE=0 + PR_SET_NO_NEW_PRIVS=1 + PTRACE_TRACEME 自挂
+	//   失败仅 warn, 不阻塞 Agent 启动
+	if err := antidebug.SelfProtect(log); err != nil {
+		log.Warn("Agent self-protect 部分失败 (内核老/容器限制)", zap.Error(err))
+	}
+
+	// 3.2 ELF 完整性周期校验 (5 min)
+	//   命中即触发 onTamper (默认 os.Exit(2)), systemd 拉起新进程
+	elfMon := antidebug.NewELFIntegrityMonitor("/proc/self/exe", 5*time.Minute, log)
+	elfStop := make(chan struct{})
+	go elfMon.Run(elfStop)
+	defer close(elfStop)
+
+	// 3.3 Watchdog 双进程互保
+	//   fork child + 心跳 + reap 重启
+	watchdog := antidebug.NewWatchdog(antidebug.WatchdogConfig{
+		HeartbeatInterval: 3 * time.Second,
+		MaxHeartbeatMiss:  3,
+		RestartCommand:    []string{"/bin/systemctl", "restart", "mxsec-agent"},
+		Logger:            log,
+	})
+	watchdog.OnSuspectKill = func(reason string) {
+		log.Error("watchdog: 可疑 kill 检测",
+			zap.String("reason", reason),
+			zap.String("action", "已触发 child 重启"))
+		// 后续 PR 调 transport.ReportTamper(reason)
+	}
+	if err := watchdog.StartAsParent(); err != nil {
+		log.Warn("Watchdog 启动失败, 跳过双进程互保",
+			zap.Error(err),
+			zap.String("hint", "非 root 或 systemctl 不可用时降级正常"))
+	} else {
+		defer func() { _ = watchdog.Stop() }()
+	}
+
+	// 3.4 Agent /metrics Prometheus (9101)
+	metrics.Init(cfg.GetVersion(), buildTime, log)
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	defer metricsCancel()
+	go metrics.Get().Serve(metricsCtx, ":9101")
 
 	// 3.5 初始化运行时环境检测（全局单例，供所有模块使用）
 	rtInfo := agentrt.Init(log)

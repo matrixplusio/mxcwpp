@@ -131,6 +131,9 @@ type ControlPlane struct {
 	ManagerReplicas     int `yaml:"manager_replicas"`
 	AgentCenterReplicas int `yaml:"agentcenter_replicas"`
 	ConsumerReplicas    int `yaml:"consumer_replicas"`
+	EngineReplicas      int `yaml:"engine_replicas"`
+	LLMProxyReplicas    int `yaml:"llmproxy_replicas"`
+	VulnSyncReplicas    int `yaml:"vulnsync_replicas"`
 }
 
 type Node struct {
@@ -150,6 +153,9 @@ type RoleAssignment struct {
 	ManagerReplicas     int
 	AgentCenterReplicas int
 	ConsumerReplicas    int
+	EngineReplicas      int
+	LLMProxyReplicas    int
+	VulnSyncReplicas    int
 }
 
 // WithACHTTPPort 返回一个浅拷贝，将 ManagerHTTPPort 替换为 ACHTTPPort，
@@ -280,6 +286,15 @@ func (c *Config) ApplyDefaults() {
 	if c.ControlPlane.ConsumerReplicas == 0 {
 		c.ControlPlane.ConsumerReplicas = controlCount
 	}
+	if c.ControlPlane.EngineReplicas == 0 {
+		c.ControlPlane.EngineReplicas = controlCount
+	}
+	if c.ControlPlane.LLMProxyReplicas == 0 {
+		c.ControlPlane.LLMProxyReplicas = controlCount
+	}
+	if c.ControlPlane.VulnSyncReplicas == 0 {
+		c.ControlPlane.VulnSyncReplicas = controlCount
+	}
 }
 
 func (c *Config) Validate() error {
@@ -352,6 +367,15 @@ func (c *Config) Validate() error {
 	}
 	if c.ControlPlane.AgentCenterReplicas < controlCount {
 		return fmt.Errorf("control_plane.agentcenter_replicas 不能小于 control 节点数 %d", controlCount)
+	}
+	if c.ControlPlane.EngineReplicas < controlCount {
+		return fmt.Errorf("control_plane.engine_replicas 不能小于 control 节点数 %d", controlCount)
+	}
+	if c.ControlPlane.LLMProxyReplicas < controlCount {
+		return fmt.Errorf("control_plane.llmproxy_replicas 不能小于 control 节点数 %d", controlCount)
+	}
+	if c.ControlPlane.VulnSyncReplicas < controlCount {
+		return fmt.Errorf("control_plane.vulnsync_replicas 不能小于 control 节点数 %d", controlCount)
 	}
 	if c.App.PrometheusEnabled {
 		if _, err := c.StorageNode(); err != nil {
@@ -532,6 +556,9 @@ func (c *Config) RoleAssignments() []RoleAssignment {
 	controlDistManager := distribute(c.ControlPlane.ManagerReplicas, len(controls))
 	controlDistAC := distribute(c.ControlPlane.AgentCenterReplicas, len(controls))
 	controlDistConsumer := distribute(c.ControlPlane.ConsumerReplicas, len(controls))
+	controlDistEngine := distribute(c.ControlPlane.EngineReplicas, len(controls))
+	controlDistLLMProxy := distribute(c.ControlPlane.LLMProxyReplicas, len(controls))
+	controlDistVulnSync := distribute(c.ControlPlane.VulnSyncReplicas, len(controls))
 	controlIndex := 0
 	for _, node := range c.Nodes {
 		assignment := RoleAssignment{Node: node, Roles: append([]string(nil), node.Roles...)}
@@ -539,6 +566,9 @@ func (c *Config) RoleAssignments() []RoleAssignment {
 			assignment.ManagerReplicas = controlDistManager[controlIndex]
 			assignment.AgentCenterReplicas = controlDistAC[controlIndex]
 			assignment.ConsumerReplicas = controlDistConsumer[controlIndex]
+			assignment.EngineReplicas = controlDistEngine[controlIndex]
+			assignment.LLMProxyReplicas = controlDistLLMProxy[controlIndex]
+			assignment.VulnSyncReplicas = controlDistVulnSync[controlIndex]
 			controlIndex++
 		}
 		assignments = append(assignments, assignment)

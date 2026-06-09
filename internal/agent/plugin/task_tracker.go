@@ -78,7 +78,7 @@ func (t *TaskTracker) TrackTask(task *grpc.Task, pluginName string) error {
 	// 去重：已存在的未完成任务不覆盖
 	if existing, ok := t.tasks[task.Token]; ok {
 		if existing.Status == TaskStatusReceived || existing.Status == TaskStatusDispatched {
-			t.logger.Info("task already tracked, skipping duplicate",
+			t.logger.Debug("task already tracked, skipping duplicate",
 				zap.String("token", task.Token),
 				zap.String("status", string(existing.Status)))
 			return nil
@@ -99,7 +99,7 @@ func (t *TaskTracker) TrackTask(task *grpc.Task, pluginName string) error {
 		return fmt.Errorf("failed to save task: %w", err)
 	}
 
-	t.logger.Info("task tracked",
+	t.logger.Debug("task tracked",
 		zap.String("token", task.Token),
 		zap.String("plugin", pluginName),
 		zap.String("status", string(TaskStatusReceived)))

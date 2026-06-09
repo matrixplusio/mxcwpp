@@ -1442,7 +1442,9 @@ func (m *Manager) sendTask(plugin *Plugin) {
 				}
 			}
 
-			plugin.logger.Info("task sent to plugin",
+			// Debug level: cron task 高频(每条都打 Info 会导致 journald rate-limit
+			// 抑制后续所有日志,看起来像 agent hang 但实际只是日志被丢)
+			plugin.logger.Debug("task sent to plugin",
 				zap.String("task_token", task.Token),
 				zap.Int32("data_type", task.DataType))
 		}

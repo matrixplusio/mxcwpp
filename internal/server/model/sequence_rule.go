@@ -37,6 +37,7 @@ func (s *SequenceSteps) Scan(value interface{}) error {
 // SequenceRule 序列检测规则模型
 // 用于 Consumer 端基于多步 CEL 表达式 + Redis 状态机的行为序列检测
 type SequenceRule struct {
+	TenantID    string        `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint          `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name        string        `gorm:"type:varchar(200);not null;uniqueIndex" json:"name"`
 	Steps       SequenceSteps `gorm:"type:json;not null" json:"steps"`

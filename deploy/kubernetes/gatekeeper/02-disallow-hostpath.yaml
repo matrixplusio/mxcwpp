@@ -1,0 +1,32 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mxsecdisallowhostpath
+spec:
+  crd:
+    spec:
+      names:
+        kind: MxsecDisallowHostPath
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            allowedPaths:
+              type: array
+              items: {type: string}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mxsec.disallowhostpath
+
+        violation[{"msg": msg}] {
+          v := input.review.object.spec.volumes[_]
+          v.hostPath
+          not allowed_path(v.hostPath.path)
+          msg := sprintf("volume %v hostPath %v not in allowedPaths", [v.name, v.hostPath.path])
+        }
+
+        allowed_path(p) {
+          allowed := input.parameters.allowedPaths[_]
+          startswith(p, allowed)
+        }

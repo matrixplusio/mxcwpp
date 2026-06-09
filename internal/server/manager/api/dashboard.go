@@ -232,12 +232,23 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	// 10. 最新告警（最近 5 条 active 告警，精简字段）
 	stats["latestAlerts"] = h.queryLatestAlerts()
 
+	// 10b. 攻击故事线 TopN + 总数
+	storylineTop, storylineCount := h.queryStorylineTop()
+	stats["storylineTop"] = storylineTop
+	stats["storylineCount"] = storylineCount
+
+	// 10c. 告警严重等级分布 (medium/low 补充 Dashboard 饼图)
+	mediumAlertCount, lowAlertCount := h.countAlertsBySeverityLow()
+	stats["mediumAlerts"] = mediumAlertCount
+	stats["lowAlerts"] = lowAlertCount
+
 	// 11. 安全态势综合评分
 	// 替代 UI 端硬编码的 82 默认值；综合 critical/high 告警 + 漏洞 + 受影响主机比例 + 合规率
 	criticalAlertCount, highAlertCount := h.countAlertsBySeverity()
 	criticalVulnCount, highVulnCount := h.countVulnsBySeverity()
 	stats["criticalAlerts"] = criticalAlertCount
 	stats["highAlerts"] = highAlertCount
+	stats["totalAgents"] = onlineHostCount + offlineHostCount + onlineContainerCount + offlineContainerCount
 	stats["securityScore"] = h.computeSecurityScore(
 		criticalAlertCount, highAlertCount,
 		criticalVulnCount, highVulnCount,
@@ -251,6 +262,66 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 }
 
 // countAlertsBySeverity 按 severity 统计活跃告警数（仅 critical/high）
+// countAlertsBySeverityLow 仿 countAlertsBySeverity 统计 medium / low active 告警.
+func (h *DashboardHandler) countAlertsBySeverityLow() (medium, low int64) {
+	var rows []struct {
+		Severity string `gorm:"column:severity"`
+		Cnt      int64  `gorm:"column:cnt"`
+	}
+	h.db.Model(&model.Alert{}).
+		Select("severity, COUNT(*) as cnt").
+		Where("status = ?", model.AlertStatusActive).
+		Group("severity").
+		Scan(&rows)
+	for _, r := range rows {
+		switch r.Severity {
+		case "medium":
+			medium = r.Cnt
+		case "low":
+			low = r.Cnt
+		}
+	}
+	return
+}
+
+// queryStorylineTop 返回最近 5 条高风险攻击故事线 + 总数 (用于 Dashboard 攻击故事线卡).
+func (h *DashboardHandler) queryStorylineTop() ([]gin.H, int64) {
+	var total int64
+	h.db.Model(&model.Storyline{}).Where("status = ?", "active").Count(&total)
+
+	var rows []model.Storyline
+	h.db.Model(&model.Storyline{}).
+		Where("status = ?", "active").
+		Order("risk_score DESC, last_seen_at DESC").
+		Limit(5).
+		Find(&rows)
+
+	out := make([]gin.H, 0, len(rows))
+	for _, r := range rows {
+		title := r.Summary
+		if title == "" {
+			title = r.Phase
+		}
+		if title == "" {
+			title = r.StoryID
+		}
+		out = append(out, gin.H{
+			"story_id":      r.StoryID,
+			"host_id":       r.HostID,
+			"hostname":      r.Hostname,
+			"title":         title,
+			"phase":         r.Phase,
+			"severity":      r.Severity,
+			"risk_score":    r.RiskScore,
+			"event_count":   r.EventCount,
+			"alert_count":   r.AlertCount,
+			"last_seen_at":  r.LastSeenAt,
+			"first_seen_at": r.FirstSeenAt,
+		})
+	}
+	return out, total
+}
+
 func (h *DashboardHandler) countAlertsBySeverity() (critical, high int64) {
 	var rows []struct {
 		Severity string `gorm:"column:severity"`

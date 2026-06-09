@@ -4,6 +4,7 @@ package model
 // DetectionRule CEL 检测规则模型
 // 用于 Consumer 端基于 CEL 表达式对 Kafka 事件进行实时检测并生成告警
 type DetectionRule struct {
+	TenantID     string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint        `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name         string      `gorm:"type:varchar(200);not null;uniqueIndex" json:"name"`
 	Expression   string      `gorm:"type:text;not null" json:"expression"` // CEL 表达式

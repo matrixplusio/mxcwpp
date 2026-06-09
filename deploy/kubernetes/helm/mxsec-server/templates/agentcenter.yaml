@@ -1,0 +1,74 @@
+{{- if .Values.agentcenter.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mxsec.serviceName" (dict "Release" .Release "component" "agentcenter") }}
+  labels:
+    {{- include "mxsec.serviceLabels" (dict "root" . "name" "agentcenter") | nindent 4 }}
+spec:
+  replicas: {{ .Values.agentcenter.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Release.Name }}
+      app.kubernetes.io/component: agentcenter
+  template:
+    metadata:
+      labels:
+        {{- include "mxsec.serviceLabels" (dict "root" . "name" "agentcenter") | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: agentcenter
+          image: {{ include "mxsec.image" (dict "svc" .Values.agentcenter "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 6751
+            - name: http
+              containerPort: 6752
+          env:
+            {{- include "mxsec.kmsEnv" . | nindent 12 }}
+            {{- include "mxsec.dbEnv" . | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.agentcenter.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mxsec.serviceName" (dict "Release" .Release "component" "agentcenter") }}
+spec:
+  type: {{ .Values.agentcenter.service.type }}
+  ports:
+    - port: {{ .Values.agentcenter.service.grpcPort }}
+      targetPort: grpc
+      name: grpc
+    - port: {{ .Values.agentcenter.service.httpPort }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/component: agentcenter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mxsec.serviceName" (dict "Release" .Release "component" "agentcenter") }}-external
+  annotations:
+    description: "Agent connection entrypoint (NodePort or LoadBalancer)"
+spec:
+  type: {{ .Values.agentcenter.agentService.type }}
+  ports:
+    - port: 6751
+      targetPort: grpc
+      nodePort: {{ .Values.agentcenter.agentService.nodePort }}
+      name: agent-grpc
+  selector:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/component: agentcenter
+{{- end }}

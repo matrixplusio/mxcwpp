@@ -2,6 +2,7 @@ package model
 
 // FIMTask FIM 任务模型
 type FIMTask struct {
+	TenantID            string       `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	TaskID              string       `gorm:"primaryKey;column:task_id;type:varchar(64);not null" json:"task_id"`
 	PolicyID            string       `gorm:"column:policy_id;type:varchar(64)" json:"policy_id"`
 	Status              string       `gorm:"column:status;type:varchar(20);default:'pending'" json:"status"` // pending/running/completed/failed
@@ -23,6 +24,7 @@ func (FIMTask) TableName() string {
 
 // FIMTaskHostStatus FIM 任务主机状态
 type FIMTaskHostStatus struct {
+	TenantID     string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	TaskID       string     `gorm:"column:task_id;type:varchar(64);not null;index:idx_fim_ths_task_id" json:"task_id"`
 	HostID       string     `gorm:"column:host_id;type:varchar(64);not null;index:idx_fim_ths_host_id" json:"host_id"`

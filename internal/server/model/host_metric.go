@@ -3,6 +3,7 @@ package model
 
 // HostMetric 主机监控指标模型
 type HostMetric struct {
+	TenantID     string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint64    `gorm:"primaryKey;column:id;type:bigint;autoIncrement" json:"id"`
 	HostID       string    `gorm:"column:host_id;type:varchar(64);not null;index:idx_host_collected" json:"host_id"`
 	CPUUsage     *float64  `gorm:"column:cpu_usage;type:decimal(5,2)" json:"cpu_usage"`
@@ -20,6 +21,7 @@ func (HostMetric) TableName() string {
 
 // HostMetricHourly 主机监控指标聚合表（按小时）
 type HostMetricHourly struct {
+	TenantID          string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID                uint64    `gorm:"primaryKey;column:id;type:bigint;autoIncrement" json:"id"`
 	HostID            string    `gorm:"column:host_id;type:varchar(64);not null;index:idx_host_hour" json:"host_id"`
 	CPUUsageAvg       *float64  `gorm:"column:cpu_usage_avg;type:decimal(5,2)" json:"cpu_usage_avg"`

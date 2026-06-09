@@ -1,0 +1,24 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mxsecdisallowlatesttag
+spec:
+  crd:
+    spec:
+      names:
+        kind: MxsecDisallowLatestTag
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mxsec.disallowlatesttag
+
+        violation[{"msg": msg}] {
+          c := input.review.object.spec.containers[_]
+          endswith(c.image, ":latest")
+          msg := sprintf("container %v: image %v uses :latest tag (forbidden)", [c.name, c.image])
+        }
+        violation[{"msg": msg}] {
+          c := input.review.object.spec.containers[_]
+          not contains(c.image, ":")
+          msg := sprintf("container %v: image %v missing explicit tag", [c.name, c.image])
+        }

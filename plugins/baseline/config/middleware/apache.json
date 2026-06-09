@@ -1,0 +1,149 @@
+{
+  "id": "LINUX_MW_APACHE",
+  "name": "Apache HTTP Server 中间件基线 (CIS Benchmark + 等保 2.0)",
+  "version": "1.0.0",
+  "description": "Apache 2.4+ 安全配置基线. 参考 CIS Apache HTTP Server 2.4 Benchmark.",
+  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "APACHE_001",
+      "category": "权限管理",
+      "title": "运行用户不应为 root",
+      "description": "User/Group 必须为非 root (apache/www-data).",
+      "severity": "high",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*User\\s+(apache|www-data|nobody|daemon)", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/apache2.conf", "^\\s*User\\s+\\$\\{APACHE_RUN_USER\\}", "match"]}
+      ]},
+      "fix": {"suggestion": "httpd.conf 设置: User apache; Group apache"}
+    },
+    {
+      "rule_id": "APACHE_002",
+      "category": "信息泄露",
+      "title": "ServerTokens Prod",
+      "description": "默认 Full 暴露版本+模块, 必须设 Prod.",
+      "severity": "medium",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*ServerTokens\\s+Prod", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "ServerTokens\\s+Prod", "match"]}
+      ]},
+      "fix": {"suggestion": "ServerTokens Prod"}
+    },
+    {
+      "rule_id": "APACHE_003",
+      "category": "信息泄露",
+      "title": "ServerSignature Off",
+      "description": "错误页面不应附加 server 信息.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*ServerSignature\\s+Off", "match"]}
+      ]},
+      "fix": {"suggestion": "ServerSignature Off"}
+    },
+    {
+      "rule_id": "APACHE_004",
+      "category": "TLS 配置",
+      "title": "禁用 SSLv2/SSLv3/TLSv1.0/TLSv1.1",
+      "description": "SSLProtocol 仅 TLSv1.2+.",
+      "severity": "critical",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf.d/ssl.conf", "SSLProtocol\\s+.*-SSLv2\\s+-SSLv3\\s+-TLSv1\\s+-TLSv1\\.1", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/mods-enabled/ssl.conf", "SSLProtocol\\s+all\\s+-SSLv3\\s+-TLSv1\\s+-TLSv1\\.1", "match"]}
+      ]},
+      "fix": {"suggestion": "SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1"}
+    },
+    {
+      "rule_id": "APACHE_005",
+      "category": "TLS 配置",
+      "title": "SSLHonorCipherOrder On",
+      "description": "强制服务端密码套件优先级.",
+      "severity": "medium",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf.d/ssl.conf", "SSLHonorCipherOrder\\s+On", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/mods-enabled/ssl.conf", "SSLHonorCipherOrder\\s+On", "match"]}
+      ]},
+      "fix": {"suggestion": "SSLHonorCipherOrder On"}
+    },
+    {
+      "rule_id": "APACHE_006",
+      "category": "HSTS",
+      "title": "Strict-Transport-Security",
+      "description": "HSTS header.",
+      "severity": "medium",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Header.*Strict-Transport-Security", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "Header.*Strict-Transport-Security", "match"]}
+      ]},
+      "fix": {"suggestion": "Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\""}
+    },
+    {
+      "rule_id": "APACHE_007",
+      "category": "目录遍历",
+      "title": "禁用 Indexes",
+      "description": "Options 不应含 Indexes.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Options.*\\bIndexes\\b", "match"]}
+      ]},
+      "fix": {"suggestion": "Directory 段去掉 Indexes: Options -Indexes +FollowSymLinks"}
+    },
+    {
+      "rule_id": "APACHE_008",
+      "category": "权限管理",
+      "title": "配置文件权限 ≤ 640",
+      "description": "httpd.conf 权限.",
+      "severity": "medium",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_permission", "param": ["/etc/httpd/conf/httpd.conf", "640"]},
+        {"type": "file_permission", "param": ["/etc/apache2/apache2.conf", "640"]}
+      ]},
+      "fix": {"suggestion": "chmod 640 httpd.conf && chown root:apache"}
+    },
+    {
+      "rule_id": "APACHE_009",
+      "category": "权限管理",
+      "title": "TraceEnable Off",
+      "description": "防 XST 攻击.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "TraceEnable\\s+Off", "match"]}
+      ]},
+      "fix": {"suggestion": "TraceEnable Off"}
+    },
+    {
+      "rule_id": "APACHE_010",
+      "category": "限流",
+      "title": "Timeout 合理值",
+      "description": "防 Slowloris, 推荐 ≤ 60s.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Timeout\\s+(60|[1-5][0-9])", "match"]}
+      ]},
+      "fix": {"suggestion": "Timeout 60"}
+    },
+    {
+      "rule_id": "APACHE_011",
+      "category": "限流",
+      "title": "KeepAliveTimeout 合理值",
+      "description": "≤ 15s.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "KeepAliveTimeout\\s+(15|1[0-4]|[5-9])", "match"]}
+      ]},
+      "fix": {"suggestion": "KeepAliveTimeout 15"}
+    },
+    {
+      "rule_id": "APACHE_012",
+      "category": "HTTP 头",
+      "title": "X-Content-Type-Options nosniff",
+      "description": "防 MIME 嗅探.",
+      "severity": "low",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "X-Content-Type-Options.*nosniff", "match"]},
+        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "X-Content-Type-Options.*nosniff", "match"]}
+      ]},
+      "fix": {"suggestion": "Header always set X-Content-Type-Options nosniff"}
+    }
+  ]
+}

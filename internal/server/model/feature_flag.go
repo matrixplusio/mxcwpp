@@ -10,6 +10,7 @@ package model
 //   - 默认值在代码侧 hardcode，DB 缺失时 fallback
 //   - 修改记审计日志（who/when/from/to）
 type FeatureFlag struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Key         string    `gorm:"column:flag_key;type:varchar(128);uniqueIndex;not null" json:"key"`
 	Value       string    `gorm:"column:value;type:varchar(255);not null" json:"value"`

@@ -23,6 +23,7 @@ func setupHeartbeatTestDB(t *testing.T) *gorm.DB {
 
 	// 手动建表，避免 MySQL 特有语法（ON UPDATE CURRENT_TIMESTAMP）
 	db.Exec(`CREATE TABLE IF NOT EXISTS hosts (
+		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		host_id TEXT PRIMARY KEY,
 		hostname TEXT,
 		ipv4 TEXT,
@@ -32,6 +33,7 @@ func setupHeartbeatTestDB(t *testing.T) *gorm.DB {
 		updated_at TIMESTAMP
 	)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS alerts (
+		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		result_id TEXT UNIQUE,
 		host_id TEXT,

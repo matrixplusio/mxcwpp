@@ -328,10 +328,27 @@ func (h *PolicyImportExportHandler) updatePolicy(existing *model.Policy, data *P
 				}
 			}
 		} else {
+			// P2-8: 一次性预取所有现存规则, 避免 N+1
+			ruleIDs := make([]string, 0, len(data.Rules))
+			for _, rd := range data.Rules {
+				ruleIDs = append(ruleIDs, rd.RuleID)
+			}
+			var existRules []model.Rule
+			_ = tx.Where("policy_id = ? AND rule_id IN ?", existing.ID, ruleIDs).Find(&existRules).Error
+			existMap := make(map[string]*model.Rule, len(existRules))
+			for i := range existRules {
+				existMap[existRules[i].RuleID] = &existRules[i]
+			}
+
 			// 更新模式：更新或创建规则
 			for _, ruleData := range data.Rules {
 				var existingRule model.Rule
-				err := tx.Where("rule_id = ? AND policy_id = ?", ruleData.RuleID, existing.ID).First(&existingRule).Error
+				var err error
+				if existPtr, found := existMap[ruleData.RuleID]; found {
+					existingRule = *existPtr
+				} else {
+					err = gorm.ErrRecordNotFound
+				}
 
 				if err == gorm.ErrRecordNotFound {
 					// 规则不存在，创建新规则

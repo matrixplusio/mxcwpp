@@ -2,6 +2,7 @@ package model
 
 // PolicyGroup 策略组模型
 type PolicyGroup struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          string    `gorm:"primaryKey;column:id;type:varchar(64);not null" json:"id"`
 	Name        string    `gorm:"column:name;type:varchar(255);not null" json:"name"`
 	Description string    `gorm:"column:description;type:text" json:"description"`

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/kms"
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/database"
 	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
@@ -67,6 +68,18 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	// 4. 初始化 Prometheus 指标 + 自暴露 mxsec_build_info（含 version + PID）
 	metrics.Init(logger)
 	metrics.SetBuildInfo(api.BuildVersion, "")
+
+	// 4.5 初始化 KMS (必须在 DB 之前注入 model 全局, 否则首次读写敏感字段走明文)
+	kmsInst, kmsErr := kms.New()
+	if kmsErr != nil {
+		logger.Warn("KMS 未初始化, KubeConfig/GCP 凭证将以明文落库",
+			zap.Error(kmsErr),
+			zap.String("hint", "设置 MXSEC_KMS_KEK_V1=<base64-32-bytes> 启用 envelope encryption"))
+	} else {
+		model.SetKMS(kmsInst)
+		logger.Info("KMS 已启用 envelope encryption",
+			zap.Uint16("kek_version", kmsInst.CurrentVersion()))
+	}
 
 	// 5. 初始化数据库
 	db, err := database.Init(cfg.Database, logger, cfg.Log)

@@ -367,6 +367,30 @@ func (m *Manager) doUpdate(ctx context.Context, update *grpc.AgentUpdate) error 
 
 	m.logger.Info("checksum verified successfully")
 
+	// P0-8: ed25519 签名校验.
+	// signature 优先级:
+	//   1. update proto 后续加 Signature 字段 (proto 待 PR)
+	//   2. 当前: 尝试下载 <pkgPath>.sig 同目录文件
+	//   3. 都没 → 仅当未嵌入公钥 (dev build) 时允许通过, 否则拒绝
+	sigPath := pkgPath + ".sig"
+	sigB64 := ""
+	if data, err := os.ReadFile(sigPath); err == nil {
+		sigB64 = strings.TrimSpace(string(data))
+	}
+	if err := VerifySignature(pkgPath, sigB64); err != nil {
+		if HasEmbeddedKey() {
+			m.logger.Error("ed25519 signature verification failed",
+				zap.String("pkg_fingerprint", EmbeddedPublicKeyFingerprint()),
+				zap.Error(err))
+			return fmt.Errorf("signature verify failed: %w", err)
+		}
+		m.logger.Warn("signature check skipped (dev build, no embedded key)",
+			zap.Error(err))
+	} else if HasEmbeddedKey() {
+		m.logger.Info("ed25519 signature verified",
+			zap.String("pubkey_fp", EmbeddedPublicKeyFingerprint()))
+	}
+
 	// 5. 诊断系统环境
 	m.diagnoseSystemEnv(update.PkgType)
 

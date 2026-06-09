@@ -2,6 +2,7 @@ package model
 
 // AntivirusScanTask 病毒查杀扫描任务
 type AntivirusScanTask struct {
+	TenantID     string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint        `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name         string      `gorm:"column:name;type:varchar(200);not null" json:"name"`
 	ScanType     string      `gorm:"column:scan_type;type:varchar(30);not null;default:'quick'" json:"scanType"` // quick(快速), full(全盘), custom(自定义)
@@ -27,6 +28,7 @@ func (AntivirusScanTask) TableName() string {
 
 // AntivirusScanResult 病毒查杀扫描结果
 type AntivirusScanResult struct {
+	TenantID   string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	TaskID     uint      `gorm:"column:task_id;not null;index" json:"taskId"`
 	HostID     string    `gorm:"column:host_id;type:varchar(64);not null;index" json:"hostId"`

@@ -125,7 +125,7 @@
 
     <!-- 规则编辑对话框 -->
     <RuleModal
-      v-model:visible="ruleModalVisible"
+      v-model:open="ruleModalVisible"
       :rule="editingRule"
       :policy-id="policyId"
       @success="handleRuleModalSuccess"

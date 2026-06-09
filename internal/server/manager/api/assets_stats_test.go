@@ -231,17 +231,13 @@ func TestAssetHistory(t *testing.T) {
 	if resp.Data.Scope != "host" {
 		t.Fatalf("scope = %q, want host", resp.Data.Scope)
 	}
-	if resp.Data.TotalSnapshots != 2 || len(resp.Data.Points) != 2 {
+	// history 改 DATE(collected_at) 按日聚合后,oldTime(2h 前) + newTime(now) 同一天 → 1 个 point
+	// 包含全部 6 行(3 process + 3 ports)= Total 6
+	if resp.Data.TotalSnapshots != 1 || len(resp.Data.Points) != 1 {
 		t.Fatalf("unexpected history points: %+v", resp.Data)
 	}
-	if resp.Data.Points[0].Total != 2 {
-		t.Fatalf("first point total = %d, want 2", resp.Data.Points[0].Total)
-	}
-	if resp.Data.Points[1].Total != 4 {
-		t.Fatalf("second point total = %d, want 4", resp.Data.Points[1].Total)
-	}
-	if resp.Data.Points[1].DeltaTotal != 2 {
-		t.Fatalf("second point delta_total = %d, want 2", resp.Data.Points[1].DeltaTotal)
+	if resp.Data.Points[0].Total != 6 {
+		t.Fatalf("point total = %d, want 6 (3 process + 3 ports same day)", resp.Data.Points[0].Total)
 	}
 	if resp.Data.LatestCollectedAt == "" {
 		t.Fatalf("latest_collected_at should not be empty")

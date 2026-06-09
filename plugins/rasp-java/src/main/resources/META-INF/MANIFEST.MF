@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Premain-Class: io.mxsec.rasp.MxsecAgent
+Agent-Class: io.mxsec.rasp.MxsecAgent
+Can-Redefine-Classes: true
+Can-Retransform-Classes: true
+Implementation-Vendor: mxsec
+Implementation-Title: mxsec Java RASP
+Implementation-Version: 0.1.0

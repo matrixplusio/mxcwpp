@@ -85,11 +85,35 @@
       <div class="scan-status-actions">
         <a-button size="small" @click="showScanHistory">历史记录</a-button>
         <a-button size="small" type="primary" @click="handleSync">手动同步</a-button>
+        <a-button size="small" type="primary" @click="scanDialogOpen = true">立即扫描</a-button>
       </div>
     </div>
 
+    <!-- 定向扫描进度（targeted scan v1） -->
+    <ScanTaskProgress
+      v-if="activeTaskId"
+      :task-id="activeTaskId"
+      @done="onScanDone"
+      @close="activeTaskId = ''"
+    />
+
+    <ScanScopeDialog v-model:open="scanDialogOpen" @success="onScanStarted" />
+
     <div class="dashboard-card">
       <div class="card-body">
+        <!-- subscope tab 切换:业务 / 云厂商组件 / 监控探针 / 安全平台 / 系统库 / OS 包 / 全部 -->
+        <a-tabs v-model:active-key="subscopeTab" @change="handleSubscopeTabChange" style="margin-bottom: 12px">
+          <a-tab-pane key="" tab="全部" />
+          <a-tab-pane key="business_binary,business_jar" tab="🟢 业务" />
+          <a-tab-pane key="cloud_agent" tab="☁️ 云厂商组件" />
+          <a-tab-pane key="monitoring_agent" tab="📊 监控探针" />
+          <a-tab-pane key="security_agent" tab="🛡 安全平台" />
+          <a-tab-pane key="system_tool" tab="🔨 系统工具" />
+          <a-tab-pane key="os_package" tab="📦 OS 包" />
+          <a-tab-pane key="system_lib" tab="🔧 系统库" />
+          <a-tab-pane key="unknown" tab="❓ 未分类" />
+        </a-tabs>
+
         <div class="filter-bar">
           <a-input-search
             v-model:value="searchText"
@@ -193,6 +217,54 @@
           </a-select>
 
           <a-select
+            v-model:value="filterAssetType"
+            style="width: 150px"
+            placeholder="资产类型"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="os">🖥 OS 主机</a-select-option>
+            <a-select-option value="middleware">⚙️ 中间件</a-select-option>
+            <a-select-option value="app">📦 应用依赖</a-select-option>
+            <a-select-option value="container">🐳 容器</a-select-option>
+            <a-select-option value="image">🖼 镜像</a-select-option>
+            <a-select-option value="unknown">❓ 未分类</a-select-option>
+          </a-select>
+
+          <a-select
+            v-model:value="filterFixOwner"
+            style="width: 150px"
+            placeholder="责任方"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="ops">运维</a-select-option>
+            <a-select-option value="sre">SRE</a-select-option>
+            <a-select-option value="dba">DBA</a-select-option>
+            <a-select-option value="dev">研发</a-select-option>
+            <a-select-option value="image_maintainer">镜像维护</a-select-option>
+            <a-select-option value="unknown">未分配</a-select-option>
+          </a-select>
+
+          <a-select
+            v-model:value="filterCWECategory"
+            style="width: 160px"
+            placeholder="攻击类型 CWE"
+            allow-clear
+            @change="handleFilterChange"
+          >
+            <a-select-option value="rce">远程代码执行</a-select-option>
+            <a-select-option value="privesc">权限提升</a-select-option>
+            <a-select-option value="sqli">SQL 注入</a-select-option>
+            <a-select-option value="xss">跨站脚本</a-select-option>
+            <a-select-option value="info_disclosure">信息泄露</a-select-option>
+            <a-select-option value="path_traversal">路径遍历</a-select-option>
+            <a-select-option value="ssrf">SSRF</a-select-option>
+            <a-select-option value="dos">拒绝服务</a-select-option>
+            <a-select-option value="other">其他</a-select-option>
+          </a-select>
+
+          <a-select
             v-model:value="filterSort"
             style="width: 160px"
             placeholder="排序方式"
@@ -279,17 +351,64 @@
               </a-tag>
             </template>
 
+            <template v-else-if="column.key === 'component'">
+              <div style="line-height: 1.4">
+                <a-tooltip :title="purlTypeFromComponent(record.component || '').tip">
+                  <a-tag :color="purlTypeFromComponent(record.component || '').color" :bordered="false" style="font-size: 10px; margin-right: 4px">
+                    {{ purlTypeFromComponent(record.component || '').type }}
+                  </a-tag>
+                </a-tooltip>
+                <span style="font-size: 12px">{{ record.component || '-' }}</span>
+              </div>
+            </template>
+
             <template v-else-if="column.key === 'category'">
-              <a-tag :color="vulnCategoryConfig[effectiveCategory(record)].color" :bordered="false">
-                {{ vulnCategoryConfig[effectiveCategory(record)].text }}
+              <a-tag :color="safeVulnCat(effectiveCategory(record)).color" :bordered="false">
+                {{ safeVulnCat(effectiveCategory(record)).text }}
               </a-tag>
               <span v-if="record.vulnCategoryOverride" style="margin-left:4px;font-size:11px;color:#86909C">(manual)</span>
             </template>
 
+            <template v-else-if="column.key === 'cwe'">
+              <a-tooltip :title="record.cweId || ''">
+                <a-tag :color="safeCWE(record.cweCategory || 'other').color" :bordered="false">
+                  {{ safeCWE(record.cweCategory || 'other').text }}
+                </a-tag>
+              </a-tooltip>
+            </template>
+
+            <template v-else-if="column.key === 'assetType'">
+              <a-tag :color="safeAssetType(firstHostAssetType(record) || 'unknown').color" :bordered="false">
+                {{ safeAssetType(firstHostAssetType(record) || 'unknown').icon }} {{ safeAssetType(firstHostAssetType(record) || 'unknown').text }}
+              </a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'fixOwner'">
+              <a-tag :color="safeFixOwner(firstHostFixOwner(record) || 'unknown').color" :bordered="false">
+                {{ safeFixOwner(firstHostFixOwner(record) || 'unknown').text }}
+              </a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'subscope'">
+              <a-tooltip :title="safeSubscope(firstHostSubscope(record) || 'unknown').text">
+                <a-tag :color="safeSubscope(firstHostSubscope(record) || 'unknown').color" :bordered="false">
+                  {{ safeSubscope(firstHostSubscope(record) || 'unknown').icon }} {{ safeSubscope(firstHostSubscope(record) || 'unknown').text }}
+                </a-tag>
+              </a-tooltip>
+            </template>
+
+            <template v-else-if="column.key === 'source'">
+              <a-tooltip :title="record.hostBinaryPath || record.hosts?.[0]?.hostBinaryPath || '-'">
+                <span style="font-family: monospace; font-size: 12px; color: #595959">
+                  {{ shortBinary(record.hostBinaryPath || record.hosts?.[0]?.hostBinaryPath) || '—' }}
+                </span>
+              </a-tooltip>
+            </template>
+
             <template v-else-if="column.key === 'restart'">
-              <a-tooltip :title="`修复影响：${restartActionConfig[effectiveRestartAction(record)].text}`">
-                <a-tag :color="restartActionConfig[effectiveRestartAction(record)].color" :bordered="false">
-                  {{ restartActionConfig[effectiveRestartAction(record)].text }}
+              <a-tooltip :title="`修复影响：${safeRestart(effectiveRestartAction(record)).text}`">
+                <a-tag :color="safeRestart(effectiveRestartAction(record)).color" :bordered="false">
+                  {{ safeRestart(effectiveRestartAction(record)).text }}
                 </a-tag>
               </a-tooltip>
             </template>
@@ -394,9 +513,25 @@ import { useAuthStore } from '@/stores/auth'
 import type { SecurityDBSyncRecord } from '@/api/antivirus'
 import type { Vulnerability, VulnerabilityStats } from '@/api/types'
 import { formatDateTime } from '@/utils/date'
+import ScanScopeDialog from './components/ScanScopeDialog.vue'
+import ScanTaskProgress from './components/ScanTaskProgress.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+// 定向扫描状态
+const scanDialogOpen = ref(false)
+const activeTaskId = ref('')
+function onScanStarted(taskId: string) {
+  activeTaskId.value = taskId
+}
+function onScanDone() {
+  // 任务完成后由 onMounted 的 fetchVulnList/loadStats 等已有逻辑刷新（保持 toast 显示统计）
+}
+// 主机列表点击"扫此机"跳过来后自动显示进度
+if (route.query.task_id) {
+  activeTaskId.value = String(route.query.task_id)
+}
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 
@@ -430,11 +565,23 @@ const filterSeverity = ref<string>()
 const filterStatus = ref<string>()
 const filterVulnCategory = ref<string>()
 const filterRestartAction = ref<string>()
+const filterAssetType = ref<string>()
+const filterSubscope = ref<string>()
+const filterFixOwner = ref<string>()
+const filterCWECategory = ref<string>()
 const filterComponent = ref('')
 const filterExploitStatus = ref<string>()
 const filterPriority = ref<string>()
 const filterSort = ref<string>()
 const filterHostId = ref<string>()
+const subscopeTab = ref<string>('')
+
+const handleSubscopeTabChange = (key: string) => {
+  // tab key 可能含多个 subscope (业务=binary+jar) 用逗号分隔,filter 用单值时取首个
+  filterSubscope.value = key ? key.split(',')[0] : undefined
+  pagination.value.current = 1
+  loadVulns()
+}
 
 const loading = ref(false)
 const vulns = ref<Vulnerability[]>([])
@@ -481,9 +628,14 @@ const columns = [
   { title: '漏洞编号', key: 'cve', width: 180 },
   { title: '严重级别', key: 'severity', width: 90 },
   { title: 'CVSS', key: 'cvss', width: 70 },
+  { title: '攻击类型', key: 'cwe', width: 110 },
+  { title: '资产类型', key: 'assetType', width: 110 },
+  { title: '细分', key: 'subscope', width: 130 },
+  { title: '责任方', key: 'fixOwner', width: 100 },
+  { title: '来源', key: 'source', width: 200 },
   { title: '优先级', key: 'priority', width: 130 },
   { title: '利用状态', key: 'exploit', width: 100 },
-  { title: '影响组件', dataIndex: 'component', key: 'component', width: 160 },
+  { title: '影响组件', dataIndex: 'component', key: 'component', width: 220 },
   { title: '类别', key: 'category', width: 110 },
   { title: '重启影响', key: 'restart', width: 130 },
   { title: '受影响主机', key: 'hosts', width: 140 },
@@ -491,6 +643,91 @@ const columns = [
   { title: '发现时间', dataIndex: 'discoveredAt', key: 'discoveredAt', width: 160 },
   { title: '操作', key: 'action', width: 120, fixed: 'right' },
 ]
+
+// Subscope 显示配置
+const subscopeConfig: Record<string, { color: string; text: string; icon: string }> = {
+  cloud_agent:      { color: 'geekblue', text: '云厂商组件',   icon: '☁️' },
+  monitoring_agent: { color: 'cyan',     text: '监控探针',     icon: '📊' },
+  security_agent:   { color: 'purple',   text: '安全平台',     icon: '🛡' },
+  system_tool:      { color: 'magenta',  text: '系统工具',     icon: '🔨' },
+  system_lib:       { color: 'orange',   text: '系统库',       icon: '🔧' },
+  os_package:       { color: 'blue',     text: 'OS 包',        icon: '📦' },
+  business_binary:  { color: 'green',    text: '业务 binary',  icon: '🟢' },
+  business_jar:     { color: 'green',    text: '业务 jar',     icon: '🟢' },
+  unknown:          { color: 'default',  text: '未分类',       icon: '❓' },
+}
+
+// PURL 前缀 → 包类型徽章
+const purlTypeFromComponent = (comp: string): { type: string; color: string; tip: string } => {
+  if (!comp) return { type: 'pkg', color: 'default', tip: '' }
+  if (comp.startsWith('pkg:')) {
+    const t = comp.split('/')[0].replace('pkg:', '')
+    return { type: t, color: 'blue', tip: 'PURL: ' + comp }
+  }
+  if (comp.includes('/')) {
+    // Go module / GitHub path
+    if (comp.startsWith('github.com/') || comp.startsWith('golang.org/') || comp.includes('go-')) {
+      return { type: 'Go 模块', color: 'cyan', tip: `Go module path: ${comp} (源码 import 路径,非主机服务)` }
+    }
+    return { type: '模块', color: 'cyan', tip: comp }
+  }
+  if (comp.includes(':') && (comp.startsWith('io.') || comp.startsWith('org.') || comp.startsWith('com.'))) {
+    return { type: 'Java jar', color: 'orange', tip: `Maven GAV: ${comp}` }
+  }
+  return { type: 'OS 包', color: 'blue', tip: comp }
+}
+
+// host_binary_path 截短显示
+const shortBinary = (path?: string): string => {
+  if (!path) return ''
+  const parts = path.split('/')
+  if (parts.length <= 3) return path
+  return '…/' + parts.slice(-2).join('/')
+}
+
+// 资产类型显示配置
+const assetTypeConfig: Record<string, { color: string; text: string; icon: string }> = {
+  os:         { color: 'blue',     text: 'OS 主机',   icon: '🖥' },
+  middleware: { color: 'cyan',     text: '中间件',    icon: '⚙️' },
+  app:        { color: 'purple',   text: '应用依赖',  icon: '📦' },
+  container:  { color: 'geekblue', text: '容器',      icon: '🐳' },
+  image:      { color: 'magenta',  text: '镜像',      icon: '🖼' },
+  unknown:    { color: 'default',  text: '未分类',    icon: '❓' },
+}
+
+// 修复责任方显示配置
+const fixOwnerConfig: Record<string, { color: string; text: string }> = {
+  ops:              { color: 'green',    text: '运维' },
+  sre:              { color: 'cyan',     text: 'SRE' },
+  dba:              { color: 'geekblue', text: 'DBA' },
+  dev:              { color: 'purple',   text: '研发' },
+  image_maintainer: { color: 'magenta',  text: '镜像维护' },
+  cloud_provider:   { color: 'orange',   text: '云厂商' },
+  apm_vendor:       { color: 'cyan',     text: 'APM 厂商' },
+  platform_team:    { color: 'purple',   text: '平台团队' },
+  unknown:          { color: 'default',  text: '未分配' },
+}
+
+// 通用 fallback helper(避免某天 backend 加新枚举值 UI 未同步导致 undefined.color 抛错)
+const safeFixOwner = (k: string) => fixOwnerConfig[k] || fixOwnerConfig.unknown
+const safeAssetType = (k: string) => assetTypeConfig[k] || assetTypeConfig.unknown
+const safeSubscope = (k: string) => subscopeConfig[k] || subscopeConfig.unknown
+const safeCWE = (k: string) => cweCategoryConfig[k] || cweCategoryConfig.other
+const safeVulnCat = (k: string) => vulnCategoryConfig[k] || vulnCategoryConfig.other
+const safeRestart = (k: string) => restartActionConfig[k] || restartActionConfig.unknown
+
+// CWE 高级分类显示配置
+const cweCategoryConfig: Record<string, { color: string; text: string }> = {
+  rce:             { color: 'red',     text: 'RCE 远程执行' },
+  privesc:         { color: 'volcano', text: '权限提升' },
+  sqli:            { color: 'orange',  text: 'SQL 注入' },
+  xss:             { color: 'gold',    text: 'XSS 跨站' },
+  info_disclosure: { color: 'cyan',    text: '信息泄露' },
+  path_traversal:  { color: 'blue',    text: '路径遍历' },
+  ssrf:            { color: 'geekblue',text: 'SSRF' },
+  dos:             { color: 'purple',  text: '拒绝服务' },
+  other:           { color: 'default', text: '其他' },
+}
 
 // 9 类 vuln_category 显示
 const vulnCategoryConfig: Record<string, { color: string; text: string }> = {
@@ -519,6 +756,13 @@ const restartActionConfig: Record<string, { color: string; text: string }> = {
 
 const effectiveCategory = (v: Vulnerability) => v.vulnCategoryOverride || v.vulnCategory || 'other'
 const effectiveRestartAction = (v: Vulnerability) => v.restartActionOverride || v.restartAction || 'unknown'
+
+// 优先用 vulnerability 顶层聚合字段(后端从 host_vulnerabilities GROUP BY 算的);
+// 没聚合字段时 fallback 到 hosts[0](host_id filter 场景);
+// 都没就 unknown
+const firstHostAssetType = (v: Vulnerability) => v.assetType || v.hosts?.[0]?.assetType || 'unknown'
+const firstHostFixOwner = (v: Vulnerability) => v.fixOwner || v.hosts?.[0]?.fixOwner || 'unknown'
+const firstHostSubscope = (v: Vulnerability) => v.subscope || v.hosts?.[0]?.subscope || 'unknown'
 
 // === 扫描状态 ===
 const scanStatus = ref<SecurityDBSyncRecord | null>(null)
@@ -653,6 +897,10 @@ const loadVulns = async () => {
       priority: filterPriority.value || undefined,
       vuln_category: filterVulnCategory.value || undefined,
       restart_action: filterRestartAction.value || undefined,
+      asset_type: filterAssetType.value || undefined,
+      subscope: filterSubscope.value || undefined,
+      fix_owner: filterFixOwner.value || undefined,
+      cwe_category: filterCWECategory.value || undefined,
       sort: filterSort.value || undefined,
     })
     vulns.value = res.items ?? []
@@ -792,8 +1040,13 @@ const handleReset = () => {
   filterPriority.value = undefined
   filterVulnCategory.value = undefined
   filterRestartAction.value = undefined
+  filterAssetType.value = undefined
+  filterSubscope.value = undefined
+  filterFixOwner.value = undefined
+  filterCWECategory.value = undefined
   filterSort.value = undefined
   filterHostId.value = undefined
+  subscopeTab.value = ''
   pagination.value.current = 1
   syncRouteQuery()
   loadVulns()

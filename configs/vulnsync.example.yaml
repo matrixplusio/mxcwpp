@@ -1,0 +1,77 @@
+# VulnSync 服务配置示例 (v2.0 六微服务架构)
+# 详见 docs/vulnsync-design.md / docs/configuration.md
+#
+# 本 PR (PR3) 仅消费 http: 配置,其余字段在后续 PR 接入。
+
+server:
+  http_addr: ":8083"
+  service: "vulnsync"
+
+# Leader Election (避免重复抓取)
+leader_election:
+  enabled: true
+  redis_key: "mxsec:vulnsync:lock"
+  ttl: "30m"
+  redis_addr: "redis:6379"
+
+# 11+ 数据源 (含信创 4 源)
+sources:
+  nvd:
+    enabled: true
+    cron: "@every 1h"
+    api_url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+  osv:
+    enabled: true
+    cron: "@every 1h"
+  redhat:
+    enabled: true
+    cron: "@every 4h"
+  ubuntu:
+    enabled: true
+    cron: "@every 4h"
+  debian:
+    enabled: true
+    cron: "@every 4h"
+  alpine:
+    enabled: true
+    cron: "@every 4h"
+  suse:
+    enabled: true
+    cron: "@every 4h"
+  cisa_kev:
+    enabled: true
+    cron: "@every 6h"
+  exploitdb:
+    enabled: true
+    cron: "@every 6h"
+  cnnvd:
+    enabled: true
+    cron: "@daily"
+  epss:
+    enabled: true
+    cron: "@daily"
+
+  # 信创 4 源 (M1 阶段接入,先占位)
+  openeuler:
+    enabled: false
+  anolis:
+    enabled: false
+  kylin:
+    enabled: false
+  uos:
+    enabled: false
+
+# 仲裁
+merge:
+  strategy: "purl_nevra_dual_index"
+  confidence_levels: ["authoritative", "verified", "best_effort"]
+
+# Kafka 产出
+kafka:
+  brokers: ["localhost:9092"]
+  topic: "mxsec.vuln.advisory"
+
+otel:
+  endpoint: "http://otel-collector:4318"
+  service_name: "vulnsync"
+  sample_rate: 0.1

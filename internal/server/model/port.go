@@ -3,6 +3,7 @@ package model
 
 // Port 端口资产模型
 type Port struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          string    `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
 	HostID      string    `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	Protocol    string    `gorm:"column:protocol;type:varchar(10);not null" json:"protocol"` // tcp/udp

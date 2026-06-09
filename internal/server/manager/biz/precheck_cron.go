@@ -74,13 +74,15 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 		N      int64  `gorm:"column:n"`
 	}
 	var batches []hostBatch
+	// 排除 app/container/image asset_type: SBOM 类漏洞不归 OS 包管理器,precheck 必失败
 	if err := c.db.Model(&model.HostVulnerability{}).
 		Select("host_id, COUNT(*) as n").
 		Where(
 			`status = 'unpatched' AND (
 				precheck_status IN (?,?) OR precheck_checked_at IS NULL OR precheck_checked_at < ?
-			)`,
+			) AND (asset_type IS NULL OR asset_type IN (?))`,
 			model.PreCheckStatusUnchecked, model.PreCheckStatusFailed, cutoff,
+			[]string{model.AssetTypeOS, model.AssetTypeMiddleware, model.AssetTypeUnknown, ""},
 		).
 		Group("host_id").
 		Scan(&batches).Error; err != nil {

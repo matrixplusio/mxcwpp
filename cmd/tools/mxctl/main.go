@@ -224,7 +224,9 @@ func printSummary(cfg *cluster.Config) {
 		if !item.Node.HasRole(cluster.RoleControl) {
 			continue
 		}
-		fmt.Printf("- %s manager=%d agentcenter=%d consumer=%d\n", item.Node.Name, item.ManagerReplicas, item.AgentCenterReplicas, item.ConsumerReplicas)
+		fmt.Printf("- %s manager=%d agentcenter=%d consumer=%d engine=%d llmproxy=%d vulnsync=%d\n",
+			item.Node.Name, item.ManagerReplicas, item.AgentCenterReplicas, item.ConsumerReplicas,
+			item.EngineReplicas, item.LLMProxyReplicas, item.VulnSyncReplicas)
 	}
 }
 

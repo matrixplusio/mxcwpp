@@ -3,10 +3,11 @@ package model
 
 // Software 软件包资产模型
 type Software struct {
-	ID      string `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
-	HostID  string `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
-	Name    string `gorm:"column:name;type:varchar(255);not null" json:"name"`
-	Version string `gorm:"column:version;type:varchar(100)" json:"version"`
+	TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
+	ID       string `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
+	HostID   string `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
+	Name     string `gorm:"column:name;type:varchar(255);not null" json:"name"`
+	Version  string `gorm:"column:version;type:varchar(100)" json:"version"`
 	// Epoch RPM 的 EPOCH 字段（不存在则为空或 "0"）。NEVRA 比较时若 epoch 不同则直接定胜负。
 	Epoch string `gorm:"column:epoch;type:varchar(16)" json:"epoch"`
 	// Release RPM 的 RELEASE 字段（如 "284.11.1.el9_2"）。NEVRA 比较 release 段。

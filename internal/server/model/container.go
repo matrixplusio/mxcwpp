@@ -3,6 +3,7 @@ package model
 
 // Container 容器资产模型
 type Container struct {
+	TenantID      string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID            string    `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
 	HostID        string    `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	ContainerID   string    `gorm:"column:container_id;type:varchar(128);not null" json:"container_id"`

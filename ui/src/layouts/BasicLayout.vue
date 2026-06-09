@@ -122,9 +122,12 @@
 
       <!-- 内容区 -->
       <a-layout-content class="content" :style="{ marginLeft: collapsed ? '48px' : '200px' }">
-        <router-view v-slot="{ Component }">
+        <!-- P0-7: keep-alive 缓存路由组件, 切回时复用实例避免重拉数据 -->
+        <router-view v-slot="{ Component, route }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" />
+            <keep-alive :max="10" :exclude="['PrintReport', 'Login']">
+              <component :is="Component" :key="route.fullPath" />
+            </keep-alive>
           </transition>
         </router-view>
       </a-layout-content>

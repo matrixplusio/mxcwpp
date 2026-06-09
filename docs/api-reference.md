@@ -1,10 +1,15 @@
 # API 参考文档
 
+> 最后更新：2026-06-09 | 适用版本：v2.x
+
 ## 概览
 
-- **Base URL**: `/api/v1`
+- **Base URL**:
+  - `/api/v1` — v1 业务 API（向后兼容）
+  - `/api/v2` — v2 多租户 / 配置中心 / mode / MSSP / SOAR 等新功能
 - **认证方式**: JWT Bearer Token（公开接口除外）
 - **请求头**: `Authorization: Bearer <token>`，`Content-Type: application/json`
+- **OpenAPI 规范**: 见 [`docs/openapi/openapi.yaml`](openapi/openapi.yaml)（包含 v1+v2 全部端点的标准定义，是本文档的权威来源）
 
 **统一响应格式**：
 
@@ -598,9 +603,11 @@
 | GET | `/api/v1/vulnerabilities` | 漏洞列表 |
 | POST | `/api/v1/vulnerabilities/:id/ignore` | 忽略漏洞 |
 | POST | `/api/v1/vulnerabilities/sync` | 触发漏洞库同步 |
-| POST | `/api/v1/vulnerabilities/scan` | 触发漏洞扫描 |
+| POST | `/api/v1/vulnerabilities/scan` | 触发漏洞扫描（支持 scope=global/hosts/business_line） |
 | GET | `/api/v1/vulnerabilities/scan-status` | 扫描状态 |
 | GET | `/api/v1/vulnerabilities/scan-history` | 扫描历史 |
+| GET | `/api/v1/vulnerabilities/scan-tasks` | 定向扫描任务列表 |
+| GET | `/api/v1/vulnerabilities/scan-tasks/:task_id` | 定向扫描任务进度 |
 | GET | `/api/v1/vulnerabilities/:id/advice` | 修复建议 |
 | POST | `/api/v1/vulnerabilities/:id/patch` | 修复漏洞 |
 | POST | `/api/v1/vulnerabilities/:id/verify` | 验证修复 |
@@ -637,6 +644,125 @@
 | GET | `/api/v1/system/migration/jobs` | 迁移任务列表 |
 | GET | `/api/v1/system/migration/jobs/:id` | 迁移任务详情 |
 | POST | `/api/v1/system/migration/jobs/:id/cancel` | 取消迁移任务 |
+
+---
+
+## 内存威胁 (EDR-3)
+
+memfd_exec / 进程镂空 / shellcode 注入 / LSASS dump 检测.
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v1/memory-threats` | 内存威胁事件列表 (filter: host_id / status / severity / kind) |
+| GET  | `/api/v1/memory-threats/stats` | 24h 聚合统计 (by_threat_type / severity / open / critical_open) |
+| PUT  | `/api/v1/memory-threats/:id/resolve` | 标记一条威胁为已处理 |
+
+---
+
+## AD / LDAP 域控审计 (EDR-4)
+
+7 条规则: DCSync / Kerberoasting / 暴力破解 / 非工时 RDP / 特权分配 / 高权限组成员添加 / 攻击工具执行.
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v1/ad-audit/events` | 原始 AD 审计事件列表 (filter: kind / username / source_ip) |
+| GET  | `/api/v1/ad-audit/alerts` | 命中规则的告警列表 (filter: rule_id / status) |
+| GET  | `/api/v1/ad-audit/stats` | 24h 统计 (total / by_kind / top_failed_users) |
+
+---
+
+## Rootkit / DKOM 检测 (C2)
+
+DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD 异常 / /proc 不一致.
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v1/rootkit/findings` | 已发现 Rootkit 异常列表 (filter: host_id / status) |
+| POST | `/api/v1/rootkit/scan` | 触发一台主机扫描 (body: {host_id}); 返回最近一次扫描快照 |
+| POST | `/api/v1/rootkit/findings/:id/resolve` | 标记一条 finding 为已处理 (body: {note}) |
+
+---
+
+## 蜜罐传感器 (C1)
+
+SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v1/v2/honeypot/sensors` | 已部署传感器列表 (按租户隔离) |
+| POST | `/api/v1/v2/honeypot/sensors` | 部署传感器 (body: {host_id, kind, bind_addr}) |
+| POST | `/api/v1/v2/honeypot/sensors/:id/stop` | 停止/删除一个传感器 |
+| GET  | `/api/v1/v2/honeypot/events` | 蜜罐命中告警事件 (filter: sensor_id / kind / src_ip) |
+
+---
+
+## VEX 漏洞利用性声明 (B7)
+
+CycloneDX VEX 1.5 + CSAF 2.0 标准. 4 状态: not_affected / affected / fixed / under_investigation.
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v1/vex/:product_id?version=X.Y.Z` | 完整 VEX 文档 (JSON) |
+| GET  | `/api/v1/vex/:product_id/statements` | CVE 声明列表 |
+| GET  | `/api/v1/vex/:product_id/cyclonedx?version=X.Y.Z` | 下载 CycloneDX VEX 1.5 |
+| GET  | `/api/v1/vex/:product_id/csaf?version=X.Y.Z` | 下载 CSAF 2.0 |
+
+---
+
+## v2 多租户与平台管理
+
+### 系统模式（observe / protect）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v2/system/mode` | 当前租户的模式（observe/protect） |
+| GET  | `/api/v2/admin/tenants/modes` | 列出全部租户的模式（超管） |
+| POST | `/api/v2/admin/tenants/:id/mode` | 切换租户模式（超管） |
+
+### 租户管理（超管）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v2/admin/tenants` | 租户列表 |
+| GET  | `/api/v2/admin/tenants/:id` | 租户详情 |
+| POST | `/api/v2/admin/tenants` | 创建租户 |
+| POST | `/api/v2/admin/tenants/:id/suspend` | 暂停租户 |
+| POST | `/api/v2/admin/tenants/:id/resume` | 恢复租户 |
+
+### 配置变更审批
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v2/config/change-requests` | 提交配置变更请求 |
+| GET  | `/api/v2/config/change-requests` | 变更请求列表 |
+| GET  | `/api/v2/config/change-requests/sensitivity` | 配置项敏感度定义 |
+| GET  | `/api/v2/config/change-requests/:id` | 变更请求详情 |
+| POST | `/api/v2/config/change-requests/:id/approve` | 审批通过 |
+| POST | `/api/v2/config/change-requests/:id/reject` | 审批拒绝 |
+| POST | `/api/v2/config/change-requests/:id/cancel` | 撤销请求 |
+
+### MSSP 控制台（多租户托管）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/v2/mssp/dashboard` | MSSP 总览面板 |
+| GET  | `/api/v2/mssp/child-tenants` | 子租户列表 |
+| POST | `/api/v2/mssp/child-tenants` | 创建子租户 |
+| GET  | `/api/v2/mssp/child-tenants/:id` | 子租户详情 |
+| POST | `/api/v2/mssp/child-tenants/:id/suspend` | 暂停子租户 |
+| POST | `/api/v2/mssp/child-tenants/:id/resume` | 恢复子租户 |
+| GET  | `/api/v2/mssp/alerts` | 跨租户告警视图 |
+
+### 其它 v2 子领域
+
+以下 v2 端点详见 OpenAPI 规范（[`docs/openapi/openapi.yaml`](openapi/openapi.yaml)）：
+
+- `/api/v2/threat-intel/*` — 威胁情报 IOC 管理与匹配
+- `/api/v2/sbom/*` — SBOM 软件物料清单 + 差异比对
+- `/api/v2/kube/clusters/*` — K8s 集群基线、Admission 接入
+- `/api/v2/soar/*` — SOAR 剧本编排与执行
+- `/api/v2/honeypot/*` — 蜜罐 v2 接口（含 sensor / events）
+- `/api/v2/microseg/*` — 微隔离策略生成与下发
 
 ---
 

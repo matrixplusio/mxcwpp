@@ -52,9 +52,17 @@ To build a more comprehensive security operations system, we recommend extending
 | Component management and plugin distribution | :white_check_mark: | :white_check_mark: |
 | System monitoring (Prometheus) | :white_check_mark: | :white_check_mark: |
 | Ops inspection and report export | :white_check_mark: | :white_check_mark: |
+| Memory threat detection (memfd_exec / process hollowing / shellcode / LSASS dump) | :white_check_mark: | :white_check_mark: |
+| AD / LDAP domain controller audit (7 rules: DCSync / Kerberoasting / brute force / etc.) | :white_check_mark: | :white_check_mark: |
+| DKOM rootkit detection (hidden PID / kernel module / port / LD_PRELOAD) | :white_check_mark: | :white_check_mark: |
+| Honeypot sensors (SSH / HTTP decoys + file decoy policy) | :white_check_mark: | :white_check_mark: |
+| VEX vulnerability statement export (CycloneDX 1.5 / CSAF 2.0) | :white_check_mark: | :white_check_mark: |
+| YARA-X malware signature library (73 rules / 50 families) | :white_check_mark: | :white_check_mark: |
+| Threat hunting (SPL-like DSL → SQL transpiler) | :white_check_mark: | :white_check_mark: |
+| Attack storyline (ATT&CK kill-chain timeline) | :white_check_mark: | :white_check_mark: |
+| Behavior baseline detection (ML anomaly scoring) | :white_check_mark: | :white_check_mark: |
 | Windows support | :x: | :construction: |
-| Honeypot | :x: | :construction: |
-| Active defense | :x: | :construction: |
+| Active defense (NPatch eBPF hot-patching) | `built-in samples` | :white_check_mark: |
 | Cloud antivirus | :x: | :construction: |
 
 > :white_check_mark: Supported &nbsp; `built-in samples` includes sample rules &nbsp; :x: Not supported &nbsp; :construction: Planned
@@ -72,6 +80,12 @@ To build a more comprehensive security operations system, we recommend extending
 | Container Security | K8s cluster management, container CIS baseline (80 rules), Audit Webhook integration |
 | Alert Center | Alert aggregation, whitelisting, auto-response (kill/quarantine), tracing timeline |
 | Threat Intelligence | MISP IOC import + Redis cache + CEL real-time matching |
+| Memory Forensics | memfd_exec / process hollowing / shellcode injection / LSASS dump detection (EDR-3) |
+| AD/LDAP Audit | 7 detection rules: DCSync, Kerberoasting, brute force, off-hour RDP, privilege assignment, etc. (EDR-4) |
+| Honeypot Sensors | SSH/HTTP decoys + file decoys with whitelist for legitimate backup tools (C1) |
+| Rootkit Detection | DKOM hidden PID / kernel module / port / LD_PRELOAD / /proc inconsistency (C2) |
+| Threat Hunting | SPL-like DSL → SQL transpiler over ClickHouse event archive |
+| VEX Export | CycloneDX VEX 1.5 + CSAF 2.0 for vendor vulnerability statements (B7) |
 
 ## Screenshots
 
@@ -94,10 +108,12 @@ To build a more comprehensive security operations system, we recommend extending
 
 ```
 Browser ─→ Nginx ─→ Manager ×N ─→ MySQL / Redis / ClickHouse / Prometheus
-Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─→ Consumer ×N ─→ Storage
+Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ Storage (持久化)
+                                                 └→ Engine ×N    ─→ Alerts (检测分析)
+Manager ──HTTP──→ LLMProxy ×N (多 LLM 适配)    VulnSync ×N ──Kafka──→ Engine/Manager
 ```
 
-The control plane (Manager / AgentCenter / Consumer) is stateless and supports horizontal scaling. Kafka decouples asynchronous data writes, Redis handles service discovery and distributed locks, and ClickHouse powers time-series analysis and event archiving.
+v2.0 后端拆分为 **六微服务**：Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync。控制面全部无状态，支持水平扩展。Kafka 解耦数据写入与检测（两个 ConsumerGroup 独立 offset），Redis 处理服务发现与分布式锁，ClickHouse 承载时序分析和事件归档。
 
 See [Architecture Documentation](docs/architecture.md) for details.
 
@@ -153,15 +169,17 @@ make lint                                                # Lint check
 
 ```
 mxsec-platform/
-├── cmd/                    # Entry points (agent / manager / agentcenter / consumer)
+├── cmd/                    # Entry points (agent + 6 server services + mxctl + tools)
+│   ├── agent/              # Agent entry
+│   └── server/             # manager / agentcenter / consumer / engine / llmproxy / vulnsync
 ├── internal/
-│   ├── server/             # Server (manager / agentcenter / consumer / common)
-│   └── agent/              # Agent (connection / transport / plugin / heartbeat)
-├── plugins/                # Plugins (baseline / collector / fim / scanner / remediation)
+│   ├── server/             # Server packages (manager / agentcenter / consumer / engine / llmproxy / vulnsync / common)
+│   └── agent/              # Agent (connection / transport / plugin / heartbeat / edr 25+ submods)
+├── plugins/                # 11 plugins (baseline / collector / fim / scanner / avscanner / remediation / rasp-go / rasp-java / rasp-python / rasp-php / rasp-node)
 ├── api/proto/              # Protobuf definitions
 ├── ui/                     # Frontend (Vue 3 + TypeScript)
 ├── configs/                # Config files (server.yaml / agent.yaml / rule files)
-├── deploy/                 # Deployment configs (Docker Compose / Nginx / systemd)
+├── deploy/                 # Docker Compose (dev / v2 / pret) + Nginx + systemd + prod cluster
 ├── scripts/                # Build and deployment scripts
 └── docs/                   # Documentation
 ```
@@ -173,7 +191,6 @@ mxsec-platform/
 - [Configuration](docs/configuration.md) - Server config, Agent config, environment variables
 - [API Reference](docs/api-reference.md) - REST API endpoints, request/response formats, authentication
 - [FAQ](docs/faq.md) - Common issues and troubleshooting
-- [Roadmap](docs/roadmap.md) - Completed features, near-term plans, long-term direction
 - [Governance](docs/governance.md) - Project governance model, decision process, security policy
 - [Contributing](docs/contributing.md) - Contribution guide, dev environment, code standards, submission process
 

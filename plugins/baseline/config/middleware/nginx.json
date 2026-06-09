@@ -1,0 +1,145 @@
+{
+  "id": "LINUX_MW_NGINX",
+  "name": "Nginx 中间件基线 (CIS Benchmark 1.0 + 等保 2.0)",
+  "version": "1.0.0",
+  "description": "Nginx 安全配置基线. 适用 nginx 1.18+. 参考 CIS Nginx Benchmark 1.0 + DevSec Hardening Framework.",
+  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "NGINX_001",
+      "category": "权限管理",
+      "title": "运行用户不应为 root",
+      "description": "Nginx master 进程必须以 root 启动监听 80/443, 但 worker 必须降权为非 root 用户 (典型 nginx/www-data).",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "^\\s*user\\s+(nginx|www-data|nobody);", "match"]}
+      ]},
+      "fix": {"suggestion": "/etc/nginx/nginx.conf 第一行 设置: user nginx; 重启 systemctl reload nginx"}
+    },
+    {
+      "rule_id": "NGINX_002",
+      "category": "信息泄露",
+      "title": "关闭 server_tokens",
+      "description": "默认 Nginx 在响应头 Server: nginx/1.x.x 泄露版本号, 攻击者可针对版本漏洞攻击.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "server_tokens\\s+off;", "match"]}
+      ]},
+      "fix": {"suggestion": "http {} 段加: server_tokens off;"}
+    },
+    {
+      "rule_id": "NGINX_003",
+      "category": "TLS 配置",
+      "title": "禁用 SSLv2/SSLv3/TLSv1.0/TLSv1.1",
+      "description": "SSLv2/3 + TLSv1.0/1.1 含已知漏洞 (POODLE/BEAST), 等保三级要求最低 TLSv1.2.",
+      "severity": "critical",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_protocols\\s+(TLSv1\\.2|TLSv1\\.3)", "match"]},
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_protocols.*SSLv[23]", "not_match"]}
+      ]},
+      "fix": {"suggestion": "server {} 段加: ssl_protocols TLSv1.2 TLSv1.3;"}
+    },
+    {
+      "rule_id": "NGINX_004",
+      "category": "TLS 配置",
+      "title": "强密码套件",
+      "description": "禁用 DES/RC4/MD5/EXPORT 等弱套件.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_ciphers.*(ECDHE-RSA-AES|ECDHE-ECDSA)", "match"]},
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_ciphers.*(RC4|DES|MD5|EXPORT)", "not_match"]}
+      ]},
+      "fix": {"suggestion": "ssl_ciphers 仅保留 ECDHE-RSA-AES128-GCM-SHA256 等强套件; ssl_prefer_server_ciphers on;"}
+    },
+    {
+      "rule_id": "NGINX_005",
+      "category": "HSTS",
+      "title": "启用 HSTS",
+      "description": "HTTP Strict Transport Security 强制浏览器只走 HTTPS, 防中间人.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "Strict-Transport-Security.*max-age=", "match"]}
+      ]},
+      "fix": {"suggestion": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"}
+    },
+    {
+      "rule_id": "NGINX_006",
+      "category": "目录遍历",
+      "title": "禁用 autoindex",
+      "description": "autoindex on 会列出目录内容, 信息泄露.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "autoindex\\s+on;", "match"]}
+      ]},
+      "fix": {"suggestion": "确认所有 server / location 段无 autoindex on;"}
+    },
+    {
+      "rule_id": "NGINX_007",
+      "category": "权限管理",
+      "title": "配置文件权限 ≤ 640",
+      "description": "nginx.conf 不应世界可读 (含 ssl key 路径 / 上游凭证).",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_permission", "param": ["/etc/nginx/nginx.conf", "640"]}
+      ]},
+      "fix": {"suggestion": "chmod 640 /etc/nginx/nginx.conf && chown root:nginx /etc/nginx/nginx.conf"}
+    },
+    {
+      "rule_id": "NGINX_008",
+      "category": "权限管理",
+      "title": "SSL 私钥权限 = 400",
+      "description": "私钥仅 owner 可读, 防泄漏.",
+      "severity": "critical",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_permission", "param": ["/etc/nginx/ssl/server.key", "400"]},
+        {"type": "file_permission", "param": ["/etc/ssl/private/server.key", "400"]}
+      ]},
+      "fix": {"suggestion": "chmod 400 /etc/nginx/ssl/server.key"}
+    },
+    {
+      "rule_id": "NGINX_009",
+      "category": "HTTP 头",
+      "title": "X-Frame-Options",
+      "description": "防点击劫持.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "X-Frame-Options.*(DENY|SAMEORIGIN)", "match"]}
+      ]},
+      "fix": {"suggestion": "add_header X-Frame-Options SAMEORIGIN always;"}
+    },
+    {
+      "rule_id": "NGINX_010",
+      "category": "HTTP 头",
+      "title": "X-Content-Type-Options",
+      "description": "防 MIME 类型嗅探.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "X-Content-Type-Options.*nosniff", "match"]}
+      ]},
+      "fix": {"suggestion": "add_header X-Content-Type-Options nosniff always;"}
+    },
+    {
+      "rule_id": "NGINX_011",
+      "category": "限流",
+      "title": "配置 limit_req",
+      "description": "防 CC 攻击/暴力破解.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "limit_req_zone\\s+", "match"]}
+      ]},
+      "fix": {"suggestion": "http {} 段加 limit_req_zone $binary_remote_addr zone=one:10m rate=10r/s;"}
+    },
+    {
+      "rule_id": "NGINX_012",
+      "category": "请求体",
+      "title": "client_max_body_size 合理上限",
+      "description": "默认 1m 太低导致业务异常, 过高导致 DoS. 推荐 ≤ 50m.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "client_max_body_size\\s+(1|2|3|4|5|6|7|8|9|10|20|30|40|50)m", "match"]}
+      ]},
+      "fix": {"suggestion": "client_max_body_size 50m;"}
+    }
+  ]
+}

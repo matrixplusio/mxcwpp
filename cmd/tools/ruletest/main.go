@@ -36,7 +36,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 

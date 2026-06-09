@@ -102,7 +102,7 @@ type sendCommandReq struct {
 func (h *Handler) SendCommand(c *gin.Context) {
 	var req sendCommandReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ackErr(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -112,10 +112,10 @@ func (h *Handler) SendCommand(c *gin.Context) {
 			zap.String("agent_id", req.AgentID),
 			zap.Error(err),
 		)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		ackErr(c, http.StatusServiceUnavailable, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "sent"})
+	ackStatus(c, http.StatusOK, "sent")
 }
 
 // batchCommandReq 是 /command/batch 的请求体
@@ -136,7 +136,7 @@ type batchCommandResp struct {
 func (h *Handler) SendCommandBatch(c *gin.Context) {
 	var req batchCommandReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ackErr(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -197,7 +197,7 @@ type depInstallReq struct {
 func (h *Handler) SendDependencyInstall(c *gin.Context) {
 	var req depInstallReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ackErr(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -207,8 +207,8 @@ func (h *Handler) SendDependencyInstall(c *gin.Context) {
 			zap.String("name", req.Name),
 			zap.Error(err),
 		)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		ackErr(c, http.StatusServiceUnavailable, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "sent"})
+	ackStatus(c, http.StatusOK, "sent")
 }

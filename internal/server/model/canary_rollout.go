@@ -9,8 +9,12 @@ import (
 type RolloutType string
 
 const (
-	RolloutTypeAgent RolloutType = "agent" // Agent 版本升级
-	RolloutTypeRule  RolloutType = "rule"  // 规则推送
+	RolloutTypeAgent     RolloutType = "agent"         // Agent 版本升级 (v1 已有)
+	RolloutTypeRule      RolloutType = "rule"          // 规则推送 (v1 已有)
+	RolloutTypeBaseline  RolloutType = "baseline_fix"  // v2: 基线修复批量执行
+	RolloutTypeVulnFix   RolloutType = "vuln_fix"      // v2: 漏洞修复 (补丁/包升级)
+	RolloutTypeAntivirus RolloutType = "antivirus_act" // v2: 病毒处置 (隔离/还原/删除)
+	RolloutTypeConfig    RolloutType = "config_change" // v2: 配置变更 (运行模式/规则启停)
 )
 
 // RolloutStatus 灰度发布状态

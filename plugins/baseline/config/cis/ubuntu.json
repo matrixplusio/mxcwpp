@@ -1,0 +1,473 @@
+{
+  "id": "LINUX_CIS_UBUNTU",
+  "name": "Ubuntu 基线 (CIS + 等保 2.0, 借鉴 Elkeid)",
+  "version": "1.0",
+  "description": "字节跳动最佳实践-ubuntu基线检查 / bytedance Standard-ubuntu Security Baseline Check\n借鉴 Elkeid baseline (Apache 2.0, https://github.com/bytedance/Elkeid).",
+  "os_family": [
+    "ubuntu"
+  ],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0001",
+      "category": "身份鉴别",
+      "title": "设置密码失效时间\u003c=90天 / Ensure password expiration is 180 days or less",
+      "description": "请设置密码失效时间，定期修改密码策略，减少密码被泄漏和猜测风险，使用非密码登陆方式(如密钥对)请忽略此项。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/login.defs",
+              "\\s*\\t*PASS_MAX_DAYS\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003c=)90"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "使用非密码登陆方式如密钥对，请忽略此项。\n采用root权限登录系统;\n输入:\n在 /etc/login.defs;\n将 PASS_MAX_DAYS 参数设置\u003c=90"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0002",
+      "category": "身份鉴别",
+      "title": "密码修改最短周期\u003e=2天 / Ensure minimum days between password changes is 2 or more",
+      "description": "设置密码修改最小间隔时间，限制密码更改过于频繁。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/login.defs",
+              "\\s*\\t*PASS_MIN_DAYS\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003e=)2"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/login.defs 中将 PASS_MIN_DAYS 参数设置为 \u003e=2。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0003",
+      "category": "身份鉴别",
+      "title": "密码到期时间警告\u003e=7天 / Ensure password expiration warning days is 7 or more",
+      "description": "确保密码到期警告天数为7或更多。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/login.defs",
+              "\\s*\\t*PASS_WARN_AGE\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003e=)7"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/login.defs 中将 PASS_WARN_AGE 参数设置为 \u003e=7。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0004",
+      "category": "身份鉴别",
+      "title": "密码复杂性检查 / Ensure password creation requirements are configured",
+      "description": "检查密码长度和密码是否使用多种字符类型。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "dpkg -s libpam-cracklib"
+            ],
+            "result": "install ok installed"
+          },
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/pam.d/common-password"
+            ],
+            "result": "$(not)^#$(\u0026\u0026)password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minlen=8"
+          },
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/pam.d/common-password"
+            ],
+            "result": "$(not)^#$(\u0026\u0026)password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minclass=3"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "1.安装libpam-cracklib: apt-get update \u0026\u0026 apt-get install libpam-cracklib。\n2.编辑/etc/pam.d/common-password，在password requisite pam_cracklib.so开头的这一行配置:minclass=3(至少包含小写字母、大写字母、数字、特殊字符等4类字符中的3类)以及minlen=8(长度八位以上)。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0005",
+      "category": "身份鉴别",
+      "title": "确保root是唯一UID为0的用户 / Ensure root is the only UID 0 account",
+      "description": "除root以外其他UID为0的用户都应该删除，或者为其分配新的UID。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/passwd"
+            ],
+            "result": "$(not)^root:$(\u0026\u0026)^\\w+:\\w+:0:"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "除root以外其他UID为0的用户(查看命令cat /etc/passwd | awk -F: '($3 == 0) { print $1 }'|grep -v '^root$' )都应该删除，或者为其分配新的UID。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0006",
+      "category": "身份鉴别",
+      "title": "检查是否限制密码重用 / Ensure password reuse is limited",
+      "description": "应限制用户之间重用密码的行为，降低密码泄漏的风险。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/pam.d/common-password",
+              "remember\\s*\\t*=\\s*\\t*(\\d+)"
+            ],
+            "result": "password.*pam_unix.so$(\u0026\u0026)$(\u003c)5"
+          },
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/pam.d/common-password"
+            ],
+            "result": "password.*pam_unix.so$(\u0026\u0026)$(not)remember"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑/etc/pam.d/common-password，在password [success=1 default=ignore] pam_unix.so开头的行插入配置remember\u003e=5的值，建议为5，即在行末尾加上参数remember=5。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0007",
+      "category": "身份鉴别",
+      "title": "空口令账户检测 / Ensure password fields are not empty",
+      "description": "检查系统空密码账户。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/shadow"
+            ],
+            "result": "^\\w+::"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "为空口令的用户设置安全密码，或者执行passwd -l \u003cusername\u003e锁定用户。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0008",
+      "category": "SSH检测",
+      "title": "SSH空密码检测 / Ensure SSH PermitEmptyPasswords is disabled",
+      "description": "禁止SSH空密码用户登录。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "^\\s*PermitEmptyPasswords\\s+(.*)"
+            ],
+            "result": "no"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑文件/etc/ssh/sshd_config，将PermitEmptyPasswords配置为no。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0009",
+      "category": "SSH检测",
+      "title": "SSH失败尝试次数\u003c5 / Ensure SSH MaxAuthTries is set to 5 or less",
+      "description": "设置较低的Max AuthTrimes参数将降低SSH服务器被暴力攻击成功的风险。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "^\\s*MaxAuthTries\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003c)5"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在/etc/ssh/sshd_config中取消MaxAuthTries注释符号#，设置最大密码尝试失败次数小于5。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0010",
+      "category": "安全审计",
+      "title": "确保开启日志守护进程(auditd) / Ensure auditd Service is enabled",
+      "description": "确保auditd服务已启用，记录日志用于审计。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "systemctl is-enabled auditd"
+            ],
+            "result": "enabled"
+          },
+          {
+            "type": "command_exec",
+            "param": [
+              "systemctl status auditd"
+            ],
+            "result": "active \\(running\\)"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "运行以下命令启用auditd服务：\nservice auditd start"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0011",
+      "category": "SSH检测",
+      "title": "减少空闲超时退出时间 / Ensure SSH Idle Timeout Interval is configured",
+      "description": "设置SSH空闲超时退出时间,可降低未授权用户访问其他用户ssh会话的风险。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "ClientAliveInterval\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003c=)900"
+          },
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "ClientAliveCountMax\\s*\\t*(\\d+)"
+            ],
+            "result": "$(\u003c=)3"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑/etc/ssh/sshd_config，将ClientAliveInterval 设置为\u003c=900(15分钟)，将ClientAliveCountMax设置为0-3之间。"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0012",
+      "category": "SSH检测",
+      "title": "确保log level为info / Ensure SSH LogLevel is set to INFO",
+      "description": "确保SSH LogLevel设置为INFO,记录登录和注销活动。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "^\\s*LogLevel\\s+(.*)"
+            ],
+            "result": "INFO"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数(取消注释):\nLogLevel INFO"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0013",
+      "category": "SSH检测",
+      "title": "确保ssh协议设置为2 / Ensure SSH Protocol is set to 2",
+      "description": "SSH 支持两种不同且不兼容的协议：SSH1 和 SSH2。SSH1 是原始协议，存在安全问题。SSH2 更先进、更安全。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_expr",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "Protocol\\s*\\t*(.*)"
+            ],
+            "result": "2"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数:\nProtocol 2"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0014",
+      "category": "安全审计",
+      "title": "确保开启日志守护进程(rsyslog) / Ensure rsyslog Service is enabled",
+      "description": "确保rsyslog服务已启用，记录日志用于审计。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "systemctl is-enabled rsyslog"
+            ],
+            "result": "enabled"
+          },
+          {
+            "type": "command_exec",
+            "param": [
+              "systemctl status rsyslog"
+            ],
+            "result": "active \\(running\\)"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "运行以下命令启用rsyslog服务：\nservice rsyslog start"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0015",
+      "category": "入侵防范",
+      "title": "开启地址随机化(ASLR) / Ensure address space layout randomization (ASLR) is enabled",
+      "description": "它将进程的内存空间地址随机化来增大入侵者预测目的地址难度，从而降低进程被成功入侵的风险。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "grep -Rh ^kernel\\.randomize_va_space /etc/sysctl.conf /etc/sysctl.d"
+            ],
+            "result": "\\s*\\t*2"
+          },
+          {
+            "type": "command_exec",
+            "param": [
+              "sysctl kernel.randomize_va_space"
+            ],
+            "result": "^kernel.randomize_va_space\\s*\\t*=\\s*\\t*2"
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在/etc/sysctl.conf或/etc/sysctl.d/*文件中设置以下参数： \nkernel.randomize_va_space = 2 \n执行命令： \nsysctl -w kernel.randomize_va_space=2"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0016",
+      "category": "文件权限",
+      "title": "确保配置文件的安全性 / Ensure permissions on files",
+      "description": "为了保证系统的安全性，请确保配置文件的安全性和唯一性，限制未授权用户对配置文件的一切操作，包括访问、读写、删除等。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/passwd",
+              "644"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "400"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/group",
+              "644"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/gshadow",
+              "400"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行以下5条命令\nchown root:root /etc/passwd /etc/shadow /etc/group /etc/gshadow\nchmod 0644 /etc/group\nchmod 0644 /etc/passwd\nchmod 0400 /etc/shadow\nchmod 0400 /etc/gshadow"
+      }
+    },
+    {
+      "rule_id": "LINUX_CIS_UBUNTU_0017",
+      "category": "设置用户访问配置文件的权限",
+      "title": "设置用户访问配置文件的权限 / Verify permissions on files",
+      "description": "设置用户访问配置文件的权限。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/hosts.allow",
+              "644"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/hosts.deny",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "运行以下4条命令：\nchown root:root /etc/hosts.allow\nchown root:root /etc/hosts.deny\nchmod 644 /etc/hosts.allow\nchmod 644 /etc/hosts.deny"
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ package model
 
 // VulnCache 离线漏洞缓存
 type VulnCache struct {
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	OsvID     string    `gorm:"column:osv_id;type:varchar(100);uniqueIndex" json:"osvId"`
 	RawJSON   string    `gorm:"column:raw_json;type:mediumtext" json:"rawJson"`
@@ -16,6 +17,7 @@ func (VulnCache) TableName() string {
 
 // VulnDBImport 离线漏洞库导入记录
 type VulnDBImport struct {
+	TenantID   string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	FileName   string    `gorm:"column:file_name;type:varchar(200)" json:"fileName"`
 	FileSize   int64     `gorm:"column:file_size" json:"fileSize"`

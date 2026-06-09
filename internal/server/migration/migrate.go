@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/advisory"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
 )
 
 // Migrate 执行数据库迁移
@@ -113,6 +113,17 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("漏洞分类回填失败", zap.Error(err))
 	}
 
+	// 回填 host_vulnerabilities.asset_type / fix_owner(P-vuln-classify)
+	// 全表 join software 推导,首次部署后单次跑一致即可,后续写入路径由 BeforeSave 自动维护
+	// 走异步,避免阻塞 manager 启动(prod 11k+ host_vuln × software join 耗时)
+	go func() {
+		if err := BackfillAssetTypeAndFixOwner(db, logger); err != nil {
+			logger.Warn("host_vuln asset_type 回填失败(异步)", zap.Error(err))
+		} else {
+			logger.Info("host_vuln asset_type 异步回填完成")
+		}
+	}()
+
 	// 修历史 vuln source 字段被 OS source 错误覆盖（OSV 写入后 debian-tracker 覆盖）
 	// 需放在 CleanupHostVulnFP 之前，否则 cleanup 会把 OSV 命中的 host_vuln 误删
 	if err := migrateFixOverwrittenEcosystemSource(db, logger); err != nil {
@@ -120,9 +131,16 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 	}
 
 	// 清理 v2.5.0 之前 ScanAll 留下的跨 OS host_vuln 误报 + OSS-Fuzz 噪音
-	if err := migrateCleanupLegacyHostVuln(db, logger); err != nil {
-		logger.Warn("legacy host_vuln 清理失败", zap.Error(err))
-	}
+	// 改为后台 goroutine 跑:涉及 host_vulnerabilities × software 60M+ 行 JOIN,
+	// 单次 cleanup 60-90s,会阻塞 HTTP server 启动 → manager unhealthy。
+	// 这是 housekeeping 数据修复,无业务实时性要求,后台跑即可。
+	go func() {
+		if err := migrateCleanupLegacyHostVuln(db, logger); err != nil {
+			logger.Warn("legacy host_vuln 清理失败(异步)", zap.Error(err))
+		} else {
+			logger.Info("legacy host_vuln 异步清理完成")
+		}
+	}()
 
 	// 扩 advisory_packages.source_advisory_id varchar(64)→255（Alpine 拼接 ID 易超 64）
 	if err := migrateAdvisoryPackagesSourceAdvisoryID(db, logger); err != nil {
@@ -132,6 +150,12 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 	// 创建 advisory_packages 唯一组合索引（GORM AutoMigrate 不创建多列 UNIQUE）
 	if err := ensureAdvisoryPackagesIndex(db, logger); err != nil {
 		logger.Warn("advisory_packages 唯一索引创建失败", zap.Error(err))
+	}
+
+	// 修 host_isolations.host_id 旧版 UNIQUE 索引 → 普通索引.
+	// 旧表 idx_host_isolations_host_id UNIQUE 阻止同主机第二次 isolate (Error 1062), 转事件流模型.
+	if err := dropHostIsolationsHostIDUnique(db, logger); err != nil {
+		logger.Warn("host_isolations.host_id UNIQUE 索引修复失败", zap.Error(err))
 	}
 
 	// 从 vulnerabilities.fixed_version 回填 advisory_packages（仅首次空表时跑）

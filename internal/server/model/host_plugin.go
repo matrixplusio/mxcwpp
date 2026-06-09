@@ -19,6 +19,7 @@ const (
 // HostPlugin 主机插件状态表
 // 记录每个主机上实际运行的插件版本和状态
 type HostPlugin struct {
+	TenantID  string           `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint             `gorm:"primaryKey" json:"id"`
 	HostID    string           `gorm:"size:64;index;not null" json:"host_id"` // 主机 ID
 	Name      string           `gorm:"size:64;not null" json:"name"`          // 插件名称

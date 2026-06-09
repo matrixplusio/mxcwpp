@@ -40,6 +40,240 @@ const (
 	RestartActionUnknown                  = "unknown"
 )
 
+// AssetType 资产维度漏洞分类（写入 host_vulnerabilities.asset_type）
+// 决定修复责任方和修复路径:
+//
+//	os         → 运维 yum/apt patch (OS RPM/DEB)
+//	middleware → DBA/SRE 升级中间件包 (jar/binary_probe 主机本体服务)
+//	app        → 研发 rebuild 业务程序 (embedded scope, Go/Python/Node 静态依赖)
+//	container  → 镜像维护者 rebuild image (container scope, docker 容器内 SBOM)
+//	image      → 镜像维护者 (image_scans 来源)
+//	unknown    → 软件关联缺失,数据治理
+const (
+	AssetTypeOS         = "os"
+	AssetTypeMiddleware = "middleware"
+	AssetTypeApp        = "app"
+	AssetTypeContainer  = "container"
+	AssetTypeImage      = "image"
+	AssetTypeUnknown    = "unknown"
+)
+
+// FixOwner 修复责任方枚举（写入 host_vulnerabilities.fix_owner）
+const (
+	FixOwnerOps             = "ops"              // 运维: os asset + 系统类 vuln_category
+	FixOwnerDev             = "dev"              // 研发: app asset + language_dep
+	FixOwnerDBA             = "dba"              // DBA: middleware + db_service
+	FixOwnerSRE             = "sre"              // SRE/中间件: middleware + web_service/container_runtime
+	FixOwnerImageMaintainer = "image_maintainer" // 镜像维护者: container/image
+	FixOwnerCloudProvider   = "cloud_provider"   // 云厂商 GCP/AWS/Azure 系统 agent
+	FixOwnerAPMVendor       = "apm_vendor"       // SkyWalking/Datadog 等 APM 探针
+	FixOwnerPlatformTeam    = "platform_team"    // mxsec 平台自身组件
+	FixOwnerUnknown         = "unknown"
+)
+
+// Subscope 细分类(P-vuln-classify Phase4): host_vulnerabilities.subscope 字段
+//
+// 用于区分系统组件 vs 业务: 比如 golang.org/x/crypto v0.38.0 同一个 CVE,
+// 如果来自 /usr/bin/google_osconfig_agent (GCP 自带 agent) 归 cloud_agent,
+// 如果来自 /opt/app/myservice (用户业务 binary) 才归 business_binary。
+// 决定 fix_owner 责任方,避免把 GCP 系统组件漏洞甩锅给业务研发。
+const (
+	SubscopeCloudAgent      = "cloud_agent"      // GCP/AWS/Azure/Aliyun 自带
+	SubscopeMonitoringAgent = "monitoring_agent" // SkyWalking/Datadog/Prometheus exporter
+	SubscopeSecurityAgent   = "security_agent"   // mxsec-agent/EDR/ClamAV
+	SubscopeSystemTool      = "system_tool"      // OS 自带工具 buildah/podman/skopeo/runc/git (RPM 装的 Go binary)
+	SubscopeSystemLib       = "system_lib"       // glibc/libssl 关键共享库
+	SubscopeOSPackage       = "os_package"       // 主流 OS RPM/DEB
+	SubscopeBusinessBinary  = "business_binary"  // 真业务 Go/Python/Node
+	SubscopeBusinessJar     = "business_jar"     // 真业务 Java jar
+	SubscopeUnknown         = "unknown"
+)
+
+// systemPathPatterns subscope 路径前缀匹配规则,排序按特异性(具体路径优先)
+var systemPathPatterns = []struct {
+	prefix   string
+	subscope string
+}{
+	// GCP
+	{"/usr/bin/google_osconfig_agent", SubscopeCloudAgent},
+	{"/usr/bin/google_guest_agent", SubscopeCloudAgent},
+	{"/usr/bin/google_metadata_script_runner", SubscopeCloudAgent},
+	{"/usr/sbin/google_metadata_script_runner", SubscopeCloudAgent},
+	{"/usr/bin/google_network_daemon", SubscopeCloudAgent},
+	{"/usr/bin/google_accounts_daemon", SubscopeCloudAgent},
+	{"/usr/bin/google-fluentd", SubscopeCloudAgent},
+	{"/usr/bin/google-fluentbit", SubscopeCloudAgent},
+	// AWS
+	{"/usr/bin/amazon-ssm-agent", SubscopeCloudAgent},
+	{"/snap/amazon-ssm-agent/", SubscopeCloudAgent},
+	{"/usr/sbin/aws-cli", SubscopeCloudAgent},
+	// Azure
+	{"/usr/sbin/waagent", SubscopeCloudAgent},
+	{"/var/lib/waagent/", SubscopeCloudAgent},
+	// Aliyun / Tencent
+	{"/usr/local/share/aliyun-assist/", SubscopeCloudAgent},
+	{"/usr/local/cloudmonitor/", SubscopeCloudAgent},
+	{"/usr/local/qcloud/", SubscopeCloudAgent},
+
+	// 监控探针
+	{"/opt/skywalking-agent/", SubscopeMonitoringAgent},
+	{"/opt/datadog-agent/", SubscopeMonitoringAgent},
+	{"/opt/newrelic/", SubscopeMonitoringAgent},
+	{"/opt/dynatrace/", SubscopeMonitoringAgent},
+	{"/opt/appdynamics/", SubscopeMonitoringAgent},
+	{"/usr/local/bin/node_exporter", SubscopeMonitoringAgent},
+	{"/usr/local/bin/promtail", SubscopeMonitoringAgent},
+	{"/usr/bin/node_exporter", SubscopeMonitoringAgent},
+	{"/usr/sbin/filebeat", SubscopeMonitoringAgent},
+	{"/usr/share/filebeat/", SubscopeMonitoringAgent},
+	{"/opt/td-agent/", SubscopeMonitoringAgent},
+	{"/usr/sbin/telegraf", SubscopeMonitoringAgent},
+
+	// 安全平台
+	{"/usr/bin/mxsec-agent", SubscopeSecurityAgent},
+	{"/var/lib/mxsec-agent/", SubscopeSecurityAgent},
+	{"/var/lib/mxsec/", SubscopeSecurityAgent},
+	{"/usr/sbin/clamd", SubscopeSecurityAgent},
+	{"/usr/bin/clamav", SubscopeSecurityAgent},
+	{"/usr/bin/freshclam", SubscopeSecurityAgent},
+	{"/opt/wazuh-agent/", SubscopeSecurityAgent},
+	{"/opt/falcon-sensor/", SubscopeSecurityAgent},
+
+	// OS 自带 system tool (RPM 装的 Go binary,无业务责任)
+	{"/usr/bin/buildah", SubscopeSystemTool},
+	{"/usr/bin/podman", SubscopeSystemTool},
+	{"/usr/bin/skopeo", SubscopeSystemTool},
+	{"/usr/bin/runc", SubscopeSystemTool},
+	{"/usr/sbin/runc", SubscopeSystemTool},
+	{"/usr/bin/crun", SubscopeSystemTool},
+	{"/usr/libexec/podman/", SubscopeSystemTool},
+	{"/usr/bin/conmon", SubscopeSystemTool},
+	{"/usr/bin/git", SubscopeSystemTool},
+	{"/usr/bin/git-remote-helper", SubscopeSystemTool},
+	{"/usr/bin/helm", SubscopeSystemTool},
+	{"/usr/bin/kubectl", SubscopeSystemTool},
+	{"/usr/bin/etcdctl", SubscopeSystemTool},
+	{"/usr/sbin/etcd", SubscopeSystemTool},
+	{"/usr/local/go/", SubscopeSystemTool},
+	{"/usr/bin/cri-tools", SubscopeSystemTool},
+	{"/usr/bin/cilium", SubscopeSystemTool},
+	{"/usr/bin/hubble", SubscopeSystemTool},
+}
+
+// DeriveSubscope 按 software 的 host_binary_path + scope/handler/component 推导细分
+//   - hostBinaryPath: 嵌入式依赖的宿主 binary 路径(scope=embedded 时存在)
+//   - scope: software.scope (system/embedded/container)
+//   - sourceHandler: collector 模块 (rpm/dpkg/jar_scanner/go_buildinfo/...)
+//   - component: 包名(可用于识别 system_lib)
+func DeriveSubscope(hostBinaryPath, scope, sourceHandler, component string) string {
+	bp := strings.TrimSpace(hostBinaryPath)
+	if bp != "" {
+		for _, p := range systemPathPatterns {
+			if strings.HasPrefix(bp, p.prefix) {
+				return p.subscope
+			}
+		}
+	}
+	s := strings.ToLower(strings.TrimSpace(scope))
+	h := strings.ToLower(strings.TrimSpace(sourceHandler))
+	comp := strings.ToLower(strings.TrimSpace(component))
+
+	// jar 路径不匹配系统目录 → 业务 jar
+	if h == "jar_scanner" {
+		return SubscopeBusinessJar
+	}
+	// 系统库
+	if isCriticalSharedLib(comp) || isSharedLib(comp) {
+		return SubscopeSystemLib
+	}
+	// OS 包管理
+	switch h {
+	case "rpm", "dpkg", "apk", "pacman", "portage":
+		return SubscopeOSPackage
+	}
+	// embedded 路径不匹配系统 → 业务 binary
+	if s == "embedded" {
+		return SubscopeBusinessBinary
+	}
+	// system + handler 空 → 兜底 OS
+	if s == "system" || s == "" {
+		return SubscopeOSPackage
+	}
+	return SubscopeUnknown
+}
+
+// DeriveAssetType 根据 software.scope + source_handler 推导资产类型
+// scope=embedded 必然是 app(静态依赖,无论 handler);
+// scope=container 必然是 container;
+// scope=system 按 handler 区分 os(RPM/DEB/APK)和 middleware(jar/binary_probe)
+func DeriveAssetType(scope, sourceHandler string) string {
+	scope = strings.ToLower(strings.TrimSpace(scope))
+	h := strings.ToLower(strings.TrimSpace(sourceHandler))
+	switch scope {
+	case "embedded":
+		return AssetTypeApp
+	case "container":
+		return AssetTypeContainer
+	case "system", "":
+		// OS 包管理器
+		switch h {
+		case "rpm", "dpkg", "apk", "pacman", "portage":
+			return AssetTypeOS
+		case "jar_scanner", "binary_probe":
+			return AssetTypeMiddleware
+		case "go_buildinfo", "python", "node", "ruby", "php":
+			// system scope + 语言运行时 → 主机本体的 Go/Python 服务（中间件层）
+			return AssetTypeMiddleware
+		case "container_sbom":
+			return AssetTypeContainer
+		}
+	}
+	if scope == "" && h == "" {
+		return AssetTypeUnknown
+	}
+	return AssetTypeOS // 兜底:scope=system 但 handler 缺失,大概率 OS 包
+}
+
+// DeriveFixOwner 根据 subscope(优先)+ asset_type + vuln_category 推导修复责任方
+// subscope 是更精确的源,如果命中云厂商/监控/安全平台/系统工具,直接定 owner,不再走 asset_type 兜底
+func DeriveFixOwner(assetType, vulnCategory, subscope string) string {
+	switch subscope {
+	case SubscopeCloudAgent:
+		return FixOwnerCloudProvider
+	case SubscopeMonitoringAgent:
+		return FixOwnerAPMVendor
+	case SubscopeSecurityAgent:
+		return FixOwnerPlatformTeam
+	case SubscopeSystemTool:
+		return FixOwnerOps // OS 自带工具(buildah/podman),运维 dnf update 处理
+	}
+	switch assetType {
+	case AssetTypeApp:
+		return FixOwnerDev
+	case AssetTypeContainer, AssetTypeImage:
+		return FixOwnerImageMaintainer
+	case AssetTypeOS:
+		switch vulnCategory {
+		case VulnCategoryDBService:
+			return FixOwnerDBA
+		case VulnCategoryWebService, VulnCategoryContainerRuntime, VulnCategoryVirtualization:
+			return FixOwnerSRE
+		}
+		return FixOwnerOps
+	case AssetTypeMiddleware:
+		switch vulnCategory {
+		case VulnCategoryDBService:
+			return FixOwnerDBA
+		case VulnCategoryWebService, VulnCategoryContainerRuntime:
+			return FixOwnerSRE
+		case VulnCategoryLanguageDep:
+			return FixOwnerDev
+		}
+		return FixOwnerSRE
+	}
+	return FixOwnerUnknown
+}
+
 // CategorizeVuln 根据 component + purl 推导分类 + 重启动作。
 // 优先级（高→低）：language_dep（PURL 优先） > kernel > critical_shared_lib >
 //

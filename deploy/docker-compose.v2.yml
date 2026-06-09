@@ -1,0 +1,214 @@
+name: mxsec-platform-v2
+
+# v2.0 完整 6 微服务架构 docker-compose (P3-17)
+#
+# 服务清单:
+#   基础设施: mysql + redis + kafka (KRaft) + clickhouse + prometheus + grafana
+#   mxsec:    manager + agentcenter + consumer + engine + vulnsync + llmproxy + ui
+#
+# 启动: docker compose -f deploy/docker-compose.v2.yml up -d
+#
+# 环境变量从 .env 读 (复制 deploy/env.example → .env 修改).
+
+services:
+  # ==================== 基础设施 ====================
+
+  mysql:
+    image: mysql:8.0
+    container_name: mxsec-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: mxsec
+      MYSQL_USER: mxsec
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [mxsec]
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: mxsec-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+    networks: [mxsec]
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: mxsec-kafka
+    restart: always
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks: [mxsec]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: mxsec-clickhouse
+    restart: always
+    environment:
+      CLICKHOUSE_DB: mxsec
+      CLICKHOUSE_USER: mxsec
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks: [mxsec]
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: mxsec-prometheus
+    restart: always
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-remote-write-receiver'
+    networks: [mxsec]
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: mxsec-grafana
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [mxsec]
+
+  # ==================== 6 微服务 ====================
+
+  manager:
+    image: ${REGISTRY:-mxsec}/manager:${VERSION:-2.0.0}
+    container_name: mxsec-manager
+    restart: always
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      MXSEC_MANAGER_JWT_SECRET: ${JWT_SECRET}
+      MXSEC_MANAGER_DATABASE_DSN: mxsec:${MYSQL_PASSWORD}@tcp(mysql:3306)/mxsec?parseTime=true
+      MXSEC_MANAGER_REDIS_ADDR: redis:6379
+      MXSEC_MANAGER_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MXSEC_MANAGER_CLICKHOUSE_ADDR: clickhouse:9000
+      MXSEC_MANAGER_KAFKA_BROKERS: kafka:9092
+      MXSEC_KMS_KEK_V1: ${KMS_KEK_V1}
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [mxsec]
+
+  agentcenter:
+    image: ${REGISTRY:-mxsec}/agentcenter:${VERSION:-2.0.0}
+    container_name: mxsec-agentcenter
+    restart: always
+    depends_on: [manager, redis, kafka]
+    environment:
+      MXSEC_AC_MANAGER_ENDPOINT: http://manager:8080
+      MXSEC_AC_DATABASE_DSN: mxsec:${MYSQL_PASSWORD}@tcp(mysql:3306)/mxsec?parseTime=true
+      MXSEC_AC_REDIS_ADDR: redis:6379
+      MXSEC_AC_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MXSEC_AC_KAFKA_BROKERS: kafka:9092
+      MXSEC_AC_INTERNAL_SECRET: ${INTERNAL_SECRET}
+    ports:
+      - "6751:6751"   # gRPC for Agents (公网暴露)
+      - "127.0.0.1:6752:6752"
+    networks: [mxsec]
+
+  consumer:
+    image: ${REGISTRY:-mxsec}/consumer:${VERSION:-2.0.0}
+    container_name: mxsec-consumer
+    restart: always
+    depends_on: [kafka, clickhouse, mysql]
+    environment:
+      MXSEC_CONSUMER_KAFKA_BROKERS: kafka:9092
+      MXSEC_CONSUMER_DATABASE_DSN: mxsec:${MYSQL_PASSWORD}@tcp(mysql:3306)/mxsec?parseTime=true
+      MXSEC_CONSUMER_CLICKHOUSE_ADDR: clickhouse:9000
+      MXSEC_CONSUMER_ANALYSIS_ENABLED: "false"
+    networks: [mxsec]
+
+  engine:
+    image: ${REGISTRY:-mxsec}/engine:${VERSION:-2.0.0}
+    container_name: mxsec-engine
+    restart: always
+    depends_on: [kafka, mysql]
+    environment:
+      MXSEC_ENGINE_KAFKA_BROKERS: kafka:9092
+      MXSEC_ENGINE_DATABASE_DSN: mxsec:${MYSQL_PASSWORD}@tcp(mysql:3306)/mxsec?parseTime=true
+      MXSEC_ENGINE_ALERT_TOPIC: mxsec.engine.alert
+      MXSEC_ENGINE_DEFAULT_MODE: observe
+    networks: [mxsec]
+
+  vulnsync:
+    image: ${REGISTRY:-mxsec}/vulnsync:${VERSION:-2.0.0}
+    container_name: mxsec-vulnsync
+    restart: always
+    depends_on: [mysql, kafka]
+    environment:
+      MXSEC_VULNSYNC_DATABASE_DSN: mxsec:${MYSQL_PASSWORD}@tcp(mysql:3306)/mxsec?parseTime=true
+      MXSEC_VULNSYNC_KAFKA_BROKERS: kafka:9092
+      MXSEC_VULNSYNC_NVD_API_KEY: ${NVD_API_KEY:-}
+    networks: [mxsec]
+
+  llmproxy:
+    image: ${REGISTRY:-mxsec}/llmproxy:${VERSION:-2.0.0}
+    container_name: mxsec-llmproxy
+    restart: always
+    depends_on: [redis]
+    environment:
+      MXSEC_LLMPROXY_REDIS_ADDR: redis:6379
+      MXSEC_LLMPROXY_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MXSEC_LLMPROXY_PROVIDERS_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MXSEC_LLMPROXY_PROVIDERS_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    networks: [mxsec]
+
+  ui:
+    image: ${REGISTRY:-mxsec}/ui:${VERSION:-2.0.0}
+    container_name: mxsec-ui
+    restart: always
+    depends_on: [manager]
+    environment:
+      MANAGER_URL: http://manager:8080
+    ports:
+      - "80:80"
+    networks: [mxsec]
+
+volumes:
+  mysql-data:
+  redis-data:
+  kafka-data:
+  clickhouse-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  mxsec:
+    name: mxsec
+    driver: bridge

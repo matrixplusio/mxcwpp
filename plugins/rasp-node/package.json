@@ -1,0 +1,17 @@
+{
+  "name": "@mxsec/rasp",
+  "version": "0.1.0",
+  "description": "mxsec Node.js RASP agent — observe-only runtime hook",
+  "main": "lib/index.js",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node test/smoke.js"
+  },
+  "license": "Commercial"
+}

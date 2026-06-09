@@ -259,6 +259,8 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       GO_ENV: development
+      # v2 拆分: Consumer 仅 writer 路径, CEL 检测全部交 Engine 服务
+      MXSEC_CONSUMER_ANALYSIS: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: >
@@ -403,6 +405,98 @@ services:
       retries: 3
     networks:
       - mxsec-net
+
+  # ==================== Engine (检测引擎独立服务) ====================
+  engine:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.consumer.dev
+    image: mxsec-consumer:dev
+    container_name: mxsec-engine-dev
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+      # v2 拆分: engine 接管 CEL 检测, consumer 仅 writer 路径 (MXSEC_CONSUMER_ANALYSIS=false)
+      MXSEC_ENGINE_DATABASE_DSN: "mxsec_user:123456@tcp(mysql:3306)/mxsec?charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
+      MXSEC_ENGINE_KAFKA_BROKERS: "kafka:9092"
+    networks: [mxsec-net]
+    command: >
+      sh -c "
+        cd /workspace && mkdir -p tmp && go mod tidy &&
+        echo '启动 Engine...' &&
+        go run ./cmd/server/engine -config /etc/mxsec-platform/server.yaml
+      "
+
+  # ==================== VulnSync (漏洞情报融合) ====================
+  vulnsync:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.consumer.dev
+    image: mxsec-consumer:dev
+    container_name: mxsec-vulnsync-dev
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+    networks: [mxsec-net]
+    command: >
+      sh -c "
+        cd /workspace && mkdir -p tmp && go mod tidy &&
+        echo '启动 VulnSync...' &&
+        go run ./cmd/server/vulnsync -config /etc/mxsec-platform/server.yaml
+      "
+
+  # ==================== LLMProxy (LLM 网关) ====================
+  llmproxy:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.consumer.dev
+    image: mxsec-consumer:dev
+    container_name: mxsec-llmproxy-dev
+    restart: unless-stopped
+    depends_on:
+      redis: { condition: service_healthy }
+    volumes:
+      - ../:/workspace:rw
+      - /workspace/deploy/data
+      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    working_dir: /workspace
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      GO_ENV: development
+    networks: [mxsec-net]
+    command: >
+      sh -c "
+        cd /workspace && mkdir -p tmp && go mod tidy &&
+        echo '启动 LLMProxy...' &&
+        go run ./cmd/server/llmproxy -config /etc/mxsec-platform/server.yaml
+      "
 
 networks:
   mxsec-net:

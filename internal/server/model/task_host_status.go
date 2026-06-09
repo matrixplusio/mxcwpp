@@ -7,6 +7,7 @@ import (
 
 // TaskHostStatus 任务主机执行状态
 type TaskHostStatus struct {
+	TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	TaskID   string `gorm:"type:varchar(64);not null;index:idx_task_host,priority:1" json:"task_id"`
 	HostID   string `gorm:"type:varchar(64);not null;index:idx_task_host,priority:2" json:"host_id"`

@@ -2,6 +2,7 @@ package model
 
 // CommandAckRecord 命令执行回包记录
 type CommandAckRecord struct {
+	TenantID       string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID             uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	CommandID      string    `gorm:"column:command_id;type:varchar(64);uniqueIndex;not null" json:"command_id"`
 	CommandType    string    `gorm:"column:command_type;type:varchar(50);not null" json:"command_type"`

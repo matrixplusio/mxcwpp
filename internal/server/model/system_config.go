@@ -3,6 +3,7 @@ package model
 
 // SystemConfig 系统配置模型
 type SystemConfig struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Key         string    `gorm:"column:key;type:varchar(100);not null;uniqueIndex:idx_key_category" json:"key"`                            // 配置键
 	Value       string    `gorm:"column:value;type:text" json:"value"`                                                                      // 配置值（JSON 格式）

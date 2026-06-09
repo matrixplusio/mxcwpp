@@ -10,6 +10,7 @@ const (
 
 // KubeWhitelist 容器告警白名单
 type KubeWhitelist struct {
+	TenantID    string              `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint                `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name        string              `gorm:"column:name;type:varchar(255);not null" json:"name"`
 	ClusterID   *uint               `gorm:"column:cluster_id;index" json:"clusterId"`

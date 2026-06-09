@@ -2,6 +2,7 @@ package model
 
 // ScanSchedule 漏洞扫描调度配置
 type ScanSchedule struct {
+	TenantID  string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID        uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name      string     `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	ScanType  string     `gorm:"column:scan_type;type:varchar(20);not null" json:"scanType"` // full_scan / incremental_scan / sync_only
@@ -21,6 +22,7 @@ func (ScanSchedule) TableName() string {
 
 // ScanScheduleExecution 扫描计划执行记录
 type ScanScheduleExecution struct {
+	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ScheduleID uint       `gorm:"column:schedule_id;not null;index" json:"scheduleId"`
 	ScanType   string     `gorm:"column:scan_type;type:varchar(20);not null" json:"scanType"`            // full_scan / incremental_scan / sync_only

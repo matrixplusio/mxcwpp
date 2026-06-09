@@ -1,0 +1,99 @@
+{{/*
+ValidatingWebhookConfiguration + cert-manager Certificate + Issuer (P3-16).
+
+mxsec Admission Webhook 拦截 Pod/Deployment 等 workload 创建,
+应用 12 条策略 (PR120: PRIVILEGED / HOST_* / RUN_AS_ROOT / DANGEROUS_CAPS / ...).
+
+依赖:
+  - cert-manager 已安装 (kubectl apply -f https://github.com/cert-manager/cert-manager)
+  - manager Service 暴露 /api/v2/admission/validate
+
+启用: helm install ... --set admissionWebhook.enabled=true
+*/}}
+{{- if .Values.admissionWebhook }}
+{{- if .Values.admissionWebhook.enabled }}
+---
+{{- if .Values.admissionWebhook.useCertManager }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-webhook-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-webhook-cert
+spec:
+  secretName: {{ .Release.Name }}-webhook-tls
+  duration: 8760h
+  renewBefore: 720h
+  issuerRef:
+    name: {{ .Release.Name }}-webhook-issuer
+    kind: Issuer
+  commonName: {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}.{{ .Release.Namespace }}.svc
+  dnsNames:
+    - {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}
+    - {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}.{{ .Release.Namespace }}
+    - {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}.{{ .Release.Namespace }}.svc
+    - {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}.{{ .Release.Namespace }}.svc.cluster.local
+---
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ .Release.Name }}-mxsec-validating
+  {{- if .Values.admissionWebhook.useCertManager }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Release.Name }}-webhook-cert
+  {{- end }}
+webhooks:
+  - name: workload.mxsec.io
+    clientConfig:
+      service:
+        name: {{ include "mxsec.serviceName" (dict "Release" .Release "component" "manager") }}
+        namespace: {{ .Release.Namespace }}
+        path: /api/v2/admission/validate
+        port: {{ .Values.manager.service.port | default 8080 }}
+      {{- if not .Values.admissionWebhook.useCertManager }}
+      caBundle: {{ .Values.admissionWebhook.caBundleBase64 | quote }}
+      {{- end }}
+    rules:
+      - apiGroups: ["", "apps", "batch"]
+        apiVersions: ["v1"]
+        resources:
+          - pods
+          - deployments
+          - statefulsets
+          - daemonsets
+          - jobs
+          - cronjobs
+          - replicasets
+        operations: ["CREATE", "UPDATE"]
+        scope: "Namespaced"
+    failurePolicy: {{ .Values.admissionWebhook.failurePolicy | default "Ignore" }}
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    namespaceSelector:
+      {{- if .Values.admissionWebhook.excludeNamespaces }}
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            {{- range .Values.admissionWebhook.excludeNamespaces }}
+            - {{ . | quote }}
+            {{- end }}
+      {{- else }}
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system
+            - kube-public
+            - cert-manager
+            - {{ .Release.Namespace }}
+      {{- end }}
+    timeoutSeconds: {{ .Values.admissionWebhook.timeoutSeconds | default 5 }}
+{{- end }}
+{{- end }}

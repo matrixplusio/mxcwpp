@@ -8,7 +8,7 @@ import (
 
 	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
 	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 

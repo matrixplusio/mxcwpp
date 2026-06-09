@@ -1,0 +1,33 @@
+# mxsec Engine 配置 (PR67: viper 统一加载)
+#
+# 优先级: env (MXSEC_ENGINE_*) > 本文件 > 内置默认
+# 示例:
+#   MXSEC_ENGINE_HTTP_ADDR=:9082
+#   MXSEC_ENGINE_KAFKA_BROKERS=kafka-1:9092,kafka-2:9092
+
+http_addr: ":8082"
+default_mode: observe        # observe (默认) | protect (需 6 闸门 admission)
+alert_topic: mxsec.engine.alert
+
+kafka:
+  brokers: []                # 空 → 跳过 Kafka 检测链路 (开发自检模式)
+  sasl_enabled: false
+  sasl_user: ""
+  sasl_pass: ""
+  tls_enabled: false
+
+database:
+  dsn: ""                    # MySQL DSN; 空 → 跳过 CEL/Sequence/Storyline 等需 DB 的 stage
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+
+otel:
+  enabled: false
+  endpoint: localhost:4318
+  insecure: true
+  sample_rate: 0.1
+
+pipeline:
+  enabled_stages: []         # 空 → 按 db 可用情况自动启用; 否则按列表加载
+  workers: 4

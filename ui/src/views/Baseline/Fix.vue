@@ -112,51 +112,13 @@
       </a-form>
     </a-card>
 
-    <!-- 统计信息 -->
-    <a-card :bordered="false" style="margin-bottom: 16px" v-if="fixableItems.length > 0">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-statistic title="可修复项总数" :value="fixableItems.length">
-            <template #prefix>
-              <UnorderedListOutlined />
-            </template>
-          </a-statistic>
-        </a-col>
-        <a-col :span="6">
-          <a-statistic
-            title="严重"
-            :value="fixableItems.filter(i => i.severity === 'critical').length"
-            :value-style="{ color: '#DC2626' }"
-          >
-            <template #prefix>
-              <ExclamationCircleOutlined />
-            </template>
-          </a-statistic>
-        </a-col>
-        <a-col :span="6">
-          <a-statistic
-            title="高危"
-            :value="fixableItems.filter(i => i.severity === 'high').length"
-            :value-style="{ color: '#fa541c' }"
-          >
-            <template #prefix>
-              <WarningOutlined />
-            </template>
-          </a-statistic>
-        </a-col>
-        <a-col :span="6">
-          <a-statistic
-            title="有自动修复方案"
-            :value="fixableItems.filter(i => i.has_fix).length"
-            :value-style="{ color: '#22C55E' }"
-          >
-            <template #prefix>
-              <CheckCircleOutlined />
-            </template>
-          </a-statistic>
-        </a-col>
-      </a-row>
-    </a-card>
+    <!-- 统计信息 (统一 StatCard) -->
+    <a-row :gutter="16" style="margin-bottom: 16px" v-if="fixableItems.length > 0">
+      <a-col :span="6"><StatCard title="可修复项总数" :value="fixableItems.length" color="#3B82F6" /></a-col>
+      <a-col :span="6"><StatCard title="严重" :value="fixableItems.filter(i => i.severity === 'critical').length" color="#DC2626" /></a-col>
+      <a-col :span="6"><StatCard title="高危" :value="fixableItems.filter(i => i.severity === 'high').length" color="#F59E0B" /></a-col>
+      <a-col :span="6"><StatCard title="有自动修复方案" :value="fixableItems.filter(i => i.has_fix).length" color="#22C55E" /></a-col>
+    </a-row>
 
     <!-- 可修复项列表 -->
     <a-table
@@ -355,6 +317,7 @@ import {
   SyncOutlined,
 } from '@ant-design/icons-vue'
 import { fixApi } from '@/api/fix'
+import StatCard from '@/components/StatCard.vue'
 import { hostsApi } from '@/api/hosts'
 import { useAuthStore } from '@/stores/auth'
 import type { FixableItem, Host, FixResult, FixTaskHostStatus } from '@/api/types'

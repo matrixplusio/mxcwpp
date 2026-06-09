@@ -41,6 +41,15 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // 路径前缀分流: 默认 baseURL=/api/v1.
+    // 调用方传 /v2/... 或 /api/v2/... 时改 baseURL 为 /api, 避免 /api/v1 + /v2/... 错拼.
+    if (config.url) {
+      if (config.url.startsWith('/api/v2/')) {
+        config.baseURL = ''
+      } else if (config.url.startsWith('/v2/')) {
+        config.baseURL = '/api'
+      }
+    }
     return config
   },
   (error) => {

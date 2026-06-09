@@ -179,6 +179,8 @@ docs/superpowers/
 # ======================
 docs/*test*.md
 docs/*evaluation*.md
+docs/functional-test*/
+docs/*-test-report*.md
 ruletest/
 /ruletest
 

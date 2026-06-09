@@ -1,0 +1,47 @@
+# mxsec LLMProxy 配置 (P1-5)
+
+http_addr: ":8085"
+
+providers:
+  openai:
+    enabled: true
+    api_key: ""                # 通过 env MXSEC_LLMPROXY_PROVIDERS_OPENAI_API_KEY 注入
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o-mini"
+  anthropic:
+    enabled: true
+    api_key: ""
+    base_url: "https://api.anthropic.com"
+    model: "claude-haiku-4-5"
+  gemini:
+    enabled: false
+    api_key: ""
+    base_url: "https://generativelanguage.googleapis.com"
+    model: "gemini-2.0-flash-exp"
+  qwen:
+    enabled: false
+    api_key: ""
+    base_url: "https://dashscope.aliyuncs.com/api/v1"
+    model: "qwen-plus"
+  ollama:
+    enabled: false
+    base_url: "http://localhost:11434"
+    model: "qwen2.5:7b"
+
+quota:
+  daily_tokens_per_tenant: 1000000
+  rps_per_tenant: 10
+
+database:
+  dsn: ""
+
+redis:
+  addr: "localhost:6379"
+
+kafka:
+  brokers: []
+  # 用于落 LLM 审计 (mxsec.llm.audit topic)
+
+otel:
+  enabled: false
+  sample_rate: 0.1

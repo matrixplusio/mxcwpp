@@ -15,6 +15,7 @@ const (
 // ComponentPushRecord 组件推送记录表
 // 记录每次推送更新的操作
 type ComponentPushRecord struct {
+	TenantID      string              `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID            uint                `gorm:"primaryKey" json:"id"`
 	ComponentID   uint                `gorm:"index;not null" json:"component_id"`     // 组件 ID
 	ComponentName string              `gorm:"size:64;not null" json:"component_name"` // 组件名称（冗余字段，方便查询）

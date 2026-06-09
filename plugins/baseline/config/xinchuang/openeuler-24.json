@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_OPENEULER_24",
+  "name": "openEuler 24.03 LTS 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "openEuler 24.03 LTS / 22.03 / 20.03 安全基线",
+  "os_family": ["openeuler"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "OPENEULER24_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90"}},
+    {"rule_id": "OPENEULER24_002", "category": "身份鉴别", "title": "口令复杂度 pwquality", "description": "minlen 12 + 多类符号", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/security/pwquality.conf", "minlen\\s*=\\s*(1[2-9]|[2-9][0-9])", "match"]}]}, "fix": {"suggestion": "minlen=12 + minclass=3"}},
+    {"rule_id": "OPENEULER24_003", "category": "访问控制", "title": "禁用 root SSH 登录", "description": "等保 8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "^PermitRootLogin\\s+no", "match"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
+    {"rule_id": "OPENEULER24_004", "category": "审计", "title": "auditd 启用", "description": "等保审计要求", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
+    {"rule_id": "OPENEULER24_005", "category": "审计", "title": "openEuler dnf 历史审计", "description": "包变更审计", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["test -f /var/log/dnf.log && echo ok || echo missing", "ok"]}]}, "fix": {"suggestion": "默认存在; 确认 /etc/dnf/dnf.conf 没 logdir=/dev/null"}},
+    {"rule_id": "OPENEULER24_006", "category": "网络", "title": "iptables/nftables 启用", "description": "默认拒绝", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["firewalld", "active"]}, {"type": "service_status", "param": ["nftables", "active"]}]}, "fix": {"suggestion": "systemctl enable --now firewalld"}},
+    {"rule_id": "OPENEULER24_007", "category": "运行环境", "title": "openEuler secGear (TEE) 配置", "description": "信创特性: secGear TEE 框架配置存在", "severity": "low", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["test -d /opt/secGear && echo enabled || echo not_installed", "(enabled|not_installed)"]}]}, "fix": {"suggestion": "可选: dnf install secGear-devel"}},
+    {"rule_id": "OPENEULER24_008", "category": "运行环境", "title": "iSulad 容器引擎安全 (CIS-like)", "description": "openEuler 信创容器引擎", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["test -f /etc/isulad/daemon.json && grep -q '\"selinux-enabled\": true' /etc/isulad/daemon.json && echo enabled || echo disabled_or_missing", "(enabled|disabled_or_missing)"]}]}, "fix": {"suggestion": "/etc/isulad/daemon.json: \"selinux-enabled\": true"}},
+    {"rule_id": "OPENEULER24_009", "category": "时间同步", "title": "chronyd 启用", "description": "审计时间一致", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["chronyd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now chronyd"}},
+    {"rule_id": "OPENEULER24_010", "category": "防恶意代码", "title": "AIDE 完整性基线", "description": "防篡改", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "command_exec", "param": ["which aide >/dev/null 2>&1 && test -f /var/lib/aide/aide.db && echo ok || echo missing", "ok"]}]}, "fix": {"suggestion": "dnf install aide && aide --init && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db"}}
+  ]
+}

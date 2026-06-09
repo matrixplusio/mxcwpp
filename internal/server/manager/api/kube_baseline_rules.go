@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
@@ -18,11 +19,11 @@ type KubeBaselineRulesHandler struct {
 	db         *gorm.DB
 	logger     *zap.Logger
 	checker    *biz.KubeBaselineChecker
-	ruleEngine *biz.KubeRuleEngine
+	ruleEngine *kube.KubeRuleEngine
 }
 
 // NewKubeBaselineRulesHandler 创建基线规则管理 Handler
-func NewKubeBaselineRulesHandler(db *gorm.DB, logger *zap.Logger, checker *biz.KubeBaselineChecker, ruleEngine *biz.KubeRuleEngine) *KubeBaselineRulesHandler {
+func NewKubeBaselineRulesHandler(db *gorm.DB, logger *zap.Logger, checker *biz.KubeBaselineChecker, ruleEngine *kube.KubeRuleEngine) *KubeBaselineRulesHandler {
 	return &KubeBaselineRulesHandler{db: db, logger: logger, checker: checker, ruleEngine: ruleEngine}
 }
 

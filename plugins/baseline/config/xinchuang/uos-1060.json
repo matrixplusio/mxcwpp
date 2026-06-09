@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_UOS_1060",
+  "name": "统信 UOS 1060 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "统信 UOS 1060 LTS 安全基线 (基于 Debian 系). 适配 amd64 / arm64 / loong64.",
+  "os_family": ["uos"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "UOS_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90"}},
+    {"rule_id": "UOS_002", "category": "身份鉴别", "title": "uos-anti-virus 启用", "description": "UOS 自带反病毒", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["uos-av", "active"]}, {"type": "package_installed", "param": ["uos-anti-virus"]}]}, "fix": {"suggestion": "apt install uos-anti-virus"}},
+    {"rule_id": "UOS_003", "category": "访问控制", "title": "AppArmor enforce", "description": "UOS 基于 Debian, AppArmor MAC", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["apparmor", "active"]}]}, "fix": {"suggestion": "systemctl enable --now apparmor"}},
+    {"rule_id": "UOS_004", "category": "访问控制", "title": "PermitRootLogin no", "description": "等保 8.1.4.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "^no$"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
+    {"rule_id": "UOS_005", "category": "访问控制", "title": "/etc/shadow 权限 ≤640", "description": "Debian 系默认 640", "severity": "critical", "check": {"condition": "any", "rules": [{"type": "file_permission", "param": ["/etc/shadow", "640"]}, {"type": "file_permission", "param": ["/etc/shadow", "600"]}]}, "fix": {"suggestion": "chmod 640 /etc/shadow"}},
+    {"rule_id": "UOS_006", "category": "安全审计", "title": "auditd 启用", "description": "等保 8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "apt install auditd && systemctl enable --now auditd"}},
+    {"rule_id": "UOS_007", "category": "入侵防范", "title": "ufw 防火墙启用", "description": "UOS 默认 ufw", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["ufw", "active"]}, {"type": "command_exec", "param": ["ufw status 2>/dev/null | head -1", "Status:\\s+active"]}]}, "fix": {"suggestion": "ufw enable"}},
+    {"rule_id": "UOS_008", "category": "入侵防范", "title": "禁用 telnet/rsh", "description": "明文协议", "severity": "high", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["telnetd"]}, {"type": "package_installed", "param": ["rsh-server"]}]}, "fix": {"suggestion": "apt purge telnetd rsh-server"}},
+    {"rule_id": "UOS_009", "category": "国密", "title": "GmSSL 国密库", "description": "信创商用密码", "severity": "low", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["gmssl"]}, {"type": "command_exec", "param": ["which gmssl 2>/dev/null", ".+"]}]}, "fix": {"suggestion": "apt install gmssl"}},
+    {"rule_id": "UOS_010", "category": "数据完整性", "title": "AIDE 已配置", "description": "数据完整性校验", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["aide"]}, {"type": "file_exists", "param": ["/var/lib/aide/aide.db"]}]}, "fix": {"suggestion": "apt install aide && aideinit"}}
+  ]
+}

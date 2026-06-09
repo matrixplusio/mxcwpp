@@ -3,7 +3,7 @@
     <!-- 主机状态分布和风险分布 -->
     <a-row :gutter="16" style="margin-bottom: 16px" class="distribution-row">
       <!-- 主机状态分布 -->
-      <a-col :span="12" class="distribution-col">
+      <a-col :span="8" class="distribution-col">
         <a-card title="主机状态分布" :bordered="false" class="distribution-card">
           <div class="status-distribution-container">
             <div class="chart-container" @click="handleStatusChartClick">
@@ -47,8 +47,8 @@
         </a-card>
       </a-col>
 
-      <!-- 主机基线风险分布 -->
-      <a-col :span="12" class="distribution-col">
+      <!-- 主机基线风险分布 (1/3 宽) -->
+      <a-col :span="8" class="distribution-col">
         <a-card title="主机基线风险分布" :bordered="false" class="distribution-card">
           <div class="risk-distribution-container">
             <div class="risk-card">
@@ -85,6 +85,31 @@
               <div class="risk-content">
                 <div class="risk-label">低危</div>
                 <div class="risk-value" style="color: #3B82F6">{{ riskDistribution.low }}</div>
+              </div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+
+      <!-- 操作系统分布 -->
+      <a-col :span="8" class="distribution-col">
+        <a-card title="操作系统分布" :bordered="false" class="distribution-card">
+          <div class="status-distribution-container">
+            <div v-if="osDistributionData.length > 0" class="chart-container">
+              <v-chart class="status-chart" :option="osChartOption" autoresize />
+            </div>
+            <div class="legend-container">
+              <div class="status-legend">
+                <div
+                  v-for="(item, i) in osDistributionData"
+                  :key="item.name"
+                  class="legend-item"
+                >
+                  <span class="legend-color" :style="{ background: OS_COLORS[i % OS_COLORS.length] }"></span>
+                  <span>{{ item.name }}</span>
+                  <span class="legend-value">{{ item.value }}</span>
+                </div>
+                <a-empty v-if="osDistributionData.length === 0" description="暂无主机" :image-style="{ height: '40px' }" />
               </div>
             </div>
           </div>
@@ -264,6 +289,14 @@
           <div class="action-cell">
             <a-button type="link" size="small" class="action-link" @click="$router.push(`/hosts/${record.host_id}`)">详情</a-button>
             <a-divider type="vertical" />
+            <a-button
+              type="link"
+              size="small"
+              class="action-link"
+              :disabled="record.status !== 'online'"
+              @click="handleScanHost(record)"
+            >扫此机</a-button>
+            <a-divider type="vertical" />
             <a-popconfirm
               title="确定重启此主机的 Agent？"
               ok-text="确定"
@@ -388,11 +421,27 @@ import {
 import VChart from 'vue-echarts'
 import { hostsApi, type HostStatusDistribution, type HostRiskDistribution } from '@/api/hosts'
 import { businessLinesApi, type BusinessLine } from '@/api/business-lines'
+import { vulnerabilitiesApi } from '@/api/vulnerabilities'
 import type { Host } from '@/api/types'
 import ScoreDisplay from './components/ScoreDisplay.vue'
 import { message, Modal } from 'ant-design-vue'
 import { formatDateTime } from '@/utils/date'
 import { OS_OPTIONS } from '@/constants/os'
+
+// 单机触发漏洞定向扫描，跳到漏洞中心带 task_id 自动显示进度
+async function handleScanHost(record: Host) {
+  try {
+    const resp = await vulnerabilitiesApi.triggerScopedScan({
+      scope: 'hosts',
+      host_ids: [record.host_id],
+      reconcile_stale: true,
+    })
+    message.success(`扫描已启动: ${resp.data.task_id.slice(0, 8)}...`)
+    router.push({ path: '/vulnerabilities', query: { task_id: resp.data.task_id } })
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || e?.message || '触发扫描失败')
+  }
+}
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent])
@@ -475,6 +524,8 @@ const statusChartOption = computed(() => {
   return {
     tooltip: {
       trigger: 'item',
+      confine: true,
+      appendToBody: true,
       formatter: (params: any) => {
         if (!hasData) {
           return `${params.name}: 0`
@@ -494,21 +545,12 @@ const statusChartOption = computed(() => {
           borderColor: '#fff',
           borderWidth: 2,
         },
-        label: {
-          show: hasData,
-          formatter: '{b}: {c}',
-          fontSize: 12,
-        },
+        label: { show: false },
         emphasis: {
-          label: {
-            show: true,
-            fontSize: 14,
-            fontWeight: 'bold',
-          },
+          label: { show: false },
+          itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.18)' },
         },
-        labelLine: {
-          show: hasData,
-        },
+        labelLine: { show: false },
         // 即使没有数据也显示所有分类的饼图
         data: hasData
           ? data.filter((item) => item.value > 0)
@@ -524,6 +566,42 @@ const statusChartOption = computed(() => {
     ],
   }
 })
+
+// 操作系统分布 (从 hosts 列表本地 group)
+const OS_COLORS = ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA']
+const osDistributionData = computed(() => {
+  const m = new Map<string, number>()
+  for (const h of hosts.value) {
+    const os = h.os_family || h.osFamily || h.os || '未知'
+    m.set(os, (m.get(os) || 0) + 1)
+  }
+  return Array.from(m.entries()).map(([name, value], i) => ({
+    name, value, itemStyle: { color: OS_COLORS[i % OS_COLORS.length] },
+  }))
+})
+const osChartOption = computed(() => ({
+  tooltip: {
+    trigger: 'item',
+    formatter: '{b}: {c} ({d}%)',
+    confine: true,
+    appendToBody: true,
+  },
+  series: [{
+    name: '操作系统',
+    type: 'pie',
+    radius: ['40%', '70%'],
+    center: ['50%', '50%'],
+    avoidLabelOverlap: false,
+    itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+    label: { show: false },
+    labelLine: { show: false },
+    emphasis: {
+      label: { show: false },
+      itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.18)' },
+    },
+    data: osDistributionData.value,
+  }],
+}))
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
@@ -985,57 +1063,69 @@ onMounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
+  height: 200px;
 }
 
 .distribution-card :deep(.ant-card-body) {
   flex: 1;
   display: flex;
   flex-direction: column;
+  padding: 8px 14px;
+  overflow: hidden;
+}
+
+.distribution-card :deep(.ant-card-head) {
+  min-height: 36px;
+  padding: 0 16px;
+}
+.distribution-card :deep(.ant-card-head-title) {
+  font-size: 13px;
+  padding: 8px 0;
 }
 
 .status-distribution-container {
   display: flex;
-  align-items: flex-start;
-  gap: 24px;
+  align-items: center;
+  gap: 12px;
   flex: 1;
-  min-height: 280px;
+  min-height: unset;
+  overflow: hidden;
 }
 
 .chart-container {
-  flex: 1;
+  flex: 0 0 110px;
   position: relative;
   cursor: pointer;
 }
 
 .status-chart {
-  width: 100%;
-  height: 200px;
+  width: 110px;
+  height: 110px;
 }
 
 .chart-hint {
-  text-align: center;
-  margin-top: 8px;
-  color: var(--mxsec-text-3);
-  font-size: 12px;
+  display: none;
 }
 
 .legend-container {
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
 }
 
 .status-legend {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 2px;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  gap: 6px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
   transition: background 0.2s;
 }
 
@@ -1059,21 +1149,33 @@ onMounted(() => {
 .risk-distribution-container {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 8px;
   flex: 1;
-  align-content: start;
+  align-content: center;
 }
 
 .risk-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 6px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--mxsec-fill-1);
-  min-height: 70px;
+  min-height: 44px;
   transition: all 0.3s ease;
+}
+
+.os-distribution-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.os-chart {
+  width: 100%;
+  height: 140px;
 }
 
 .risk-card:hover {
@@ -1083,34 +1185,37 @@ onMounted(() => {
 }
 
 .risk-icon {
-  width: 44px;
-  height: 44px;
+  width: 30px;
+  height: 30px;
   border: 2px solid;
-  border-radius: 12px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
 .risk-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .risk-label {
   font-size: 12px;
   color: var(--mxsec-text-2);
-  margin-bottom: 4px;
-  line-height: 1.4;
-  word-break: break-word;
+  margin-bottom: 0;
+  line-height: 1.2;
 }
 
 .risk-value {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--mxsec-text-1);
+  line-height: 1;
 }
 
 .action-bar {

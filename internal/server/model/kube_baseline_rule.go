@@ -19,6 +19,7 @@ func (c *KubeCheckConfig) Scan(value any) error { return JSONScan(c, value) }
 
 // KubeBaselineRule 容器基线检查规则定义
 type KubeBaselineRule struct {
+	TenantID    string           `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint             `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	CheckID     string           `gorm:"column:check_id;type:varchar(50);uniqueIndex;not null" json:"checkId"`
 	CheckName   string           `gorm:"column:check_name;type:varchar(255);not null" json:"checkName"`
@@ -40,6 +41,7 @@ func (KubeBaselineRule) TableName() string {
 
 // KubeExpressionTemplate CEL 表达式模板
 type KubeExpressionTemplate struct {
+	TenantID     string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name         string    `gorm:"column:name;type:varchar(100);not null" json:"name"`
 	Description  string    `gorm:"column:description;type:varchar(500)" json:"description"`

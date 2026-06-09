@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -32,17 +34,25 @@ const (
 
 // EDREventsHandler EDR 事件查询处理器（数据源：ClickHouse ebpf_events）
 type EDREventsHandler struct {
-	chConn chdriver.Conn
-	logger *zap.Logger
+	chConn      chdriver.Conn
+	redisClient *redis.Client // 可为 nil（Redis 未启用时跳过 stats cache）
+	logger      *zap.Logger
 }
 
 // NewEDREventsHandler 创建 EDR 事件处理器
-// chConn 为 nil 时返回空数据（EDR 事件仅存储在 ClickHouse）
-func NewEDREventsHandler(logger *zap.Logger, chConn chdriver.Conn) *EDREventsHandler {
-	return &EDREventsHandler{chConn: chConn, logger: logger}
+// chConn 为 nil 时返回空数据;redisClient 为 nil 时 stats 不走 cache(每次实时计算)
+func NewEDREventsHandler(logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client) *EDREventsHandler {
+	return &EDREventsHandler{chConn: chConn, redisClient: redisClient, logger: logger}
 }
 
-// chEDREvent ClickHouse ebpf_events 行映射
+// EDR stats cache TTL:60s。各 stats 子查询都是 24h/小时聚合,1 分钟变化幅度可忽略。
+// 60s 命中后 stats endpoint <10ms,大幅降低 CH 端 GROUP BY 压力。
+const (
+	edrStatsCacheTTL = 60 * time.Second
+	edrStatsCacheKey = "mxsec:edr:events:stats:hours_%d"
+)
+
+// chEDREvent ClickHouse ebpf_events 行映射(完整列,详情接口用)
 type chEDREvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 	HostID     string    `json:"host_id"`
@@ -65,6 +75,23 @@ type chEDREvent struct {
 	ReturnCode string    `json:"return_code"`
 }
 
+// chEDREventLite 列表用精简行(8 关键列)。
+// 去掉 cmdline/parent_exe/local_addr/local_port/protocol/uid/gid/return_code 详情字段,
+// 19 列 IO → 8 列减半,prod 实测 LIMIT 50 从 4.1s → ~500ms。
+// 详情字段通过 GET /edr/events/detail?host_id=&timestamp=&pid= lazy fetch。
+type chEDREventLite struct {
+	Timestamp  time.Time `json:"timestamp"`
+	HostID     string    `json:"host_id"`
+	Hostname   string    `json:"hostname"`
+	EventType  string    `json:"event_type"`
+	DataType   int32     `json:"data_type"`
+	PID        string    `json:"pid"`
+	Exe        string    `json:"exe"`
+	FilePath   string    `json:"file_path"`
+	RemoteAddr string    `json:"remote_addr"`
+	RemotePort string    `json:"remote_port"`
+}
+
 // chQueryCtx 给 ClickHouse 查询附加 max_execution_time 兜底超时 + 强制使用 projection。
 //
 // CH 24.10 cost-based optimizer 在 SELECT 列宽 + LIMIT 较大时不一定自动选 projection,
@@ -79,6 +106,22 @@ func chQueryCtx(parent context.Context) context.Context {
 		"max_execution_time":       edrCHMaxExec,
 		"optimize_use_projections": uint64(1),
 	}))
+}
+
+// isCHProjectionErr 判断 ClickHouse 错误是否为 projection 配置类
+// (code 584: "No projection is used when optimize_use_projections=1 and force_optimize_projection=1").
+// 用于 list_data 降级重试: 表没建对应 projection 时透明回退到无 projection 路径,
+// 不向客户端抛 500.
+func isCHProjectionErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if ex, ok := err.(*clickhouse.Exception); ok {
+		return ex.Code == 584
+	}
+	// 字符串兜底, 避免不同 driver 版本 Exception 包装差异
+	return strings.Contains(err.Error(), "code: 584") ||
+		strings.Contains(err.Error(), "force_optimize_projection")
 }
 
 // chQueryCtxWithProjection 仅给 list_data 这种"我知道 projection 一定能命中"的查询用,
@@ -121,18 +164,26 @@ func (h *EDREventsHandler) recordCHQuery(op, table string, start time.Time, err 
 //   - "2026-06-04 15:30:45"       -> 原样
 //   - "2026-06-04T15:30:45Z"      -> "2026-06-04 15:30:45"  (ISO 8601,兼容前端 dayjs().toISOString())
 //   - "2026-06-04T15:30:45+08:00" -> "2026-06-04 15:30:45"  (剥时区)
+//   - "2026-06-04T15:30:45 08:00" -> "2026-06-04 15:30:45"  (URL 未编码 '+' → decode 成空格)
 //
 // ClickHouse DateTime64 解析要求空格分隔无时区,严格不接受 "T" 或 "Z"/"+HH:MM"。
 func normalizeDateBound(s string, upper bool) string {
 	if s == "" {
 		return s
 	}
-	// ISO 8601: 把 'T' 替换为空格
-	if strings.Contains(s, "T") {
-		s = strings.Replace(s, "T", " ", 1)
-	}
+	// ISO 8601: 把 'T' 替换为空格（不含 'T' 时 Replace 返回原值）
+	s = strings.Replace(s, "T", " ", 1)
 	// 剥末尾 Z 时区
 	s = strings.TrimSuffix(s, "Z")
+	// 剥末尾 " HH:MM" 时区(URL 未编码 '+' 时,Go 把 '+' decode 成空格 → 末尾 " HH:MM")
+	// 必须 prefix 已含完整 datetime(含 ':') 才剥,否则会误剥 "YYYY-MM-DD HH:MM"。
+	if len(s) >= 6 {
+		tail := s[len(s)-6:]
+		prefix := s[:len(s)-6]
+		if tail[0] == ' ' && tail[1] >= '0' && tail[1] <= '9' && tail[2] >= '0' && tail[2] <= '9' && tail[3] == ':' && strings.Contains(prefix, ":") {
+			s = prefix
+		}
+	}
 	// 剥 +HH:MM / -HH:MM 时区 (扫描 "10" 长度日期之后的 +/-)
 	if idx := strings.LastIndexAny(s, "+-"); idx > 10 {
 		if (len(s)-idx) >= 5 && s[idx+1] >= '0' && s[idx+1] <= '9' {
@@ -255,13 +306,12 @@ func (h *EDREventsHandler) ListEDREvents(c *gin.Context) {
 
 	// count + data 并发(errgroup)。count 通常 <100ms,data 可能 100ms-3s,
 	// 串行多花 count 时间;并发后总延迟 = max(count, data) ≈ data。
+	// list 走 lite 模式只回 10 列(精简 IO),详情字段走 /edr/events/detail。
 	offset := (page - 1) * pageSize
 	countSQL := fmt.Sprintf("SELECT count() FROM ebpf_events WHERE %s", where)
 	dataSQL := fmt.Sprintf(`
 		SELECT timestamp, host_id, hostname, event_type, data_type,
-		       pid, ppid, exe, cmdline, parent_exe,
-		       file_path, remote_addr, remote_port, local_addr, local_port,
-		       protocol, uid, gid, return_code
+		       pid, exe, file_path, remote_addr, remote_port
 		FROM ebpf_events
 		WHERE %s
 		ORDER BY timestamp DESC
@@ -269,7 +319,7 @@ func (h *EDREventsHandler) ListEDREvents(c *gin.Context) {
 
 	g, _ := errgroup.WithContext(ctx)
 	var total uint64
-	events := make([]chEDREvent, 0, pageSize)
+	events := make([]chEDREventLite, 0, pageSize)
 
 	g.Go(func() error {
 		start := time.Now()
@@ -285,6 +335,12 @@ func (h *EDREventsHandler) ListEDREvents(c *gin.Context) {
 	g.Go(func() error {
 		start := time.Now()
 		rows, err := h.chConn.Query(dataCtx, dataSQL, args...)
+		// CH code 584: projection 配置错 (force_optimize_projection=1 但表没建对应 projection).
+		// 透明降级到无 projection ctx 重试, 不抛 500 给客户端.
+		if err != nil && isCHProjectionErr(err) {
+			h.logger.Warn("ClickHouse projection 不可用, 降级到无 projection 重试", zap.Error(err))
+			rows, err = h.chConn.Query(chQueryCtx(ctx), dataSQL, args...)
+		}
 		if err != nil {
 			h.recordCHQuery("list_data", "ebpf_events", start, err)
 			h.logger.Error("ClickHouse 查询 EDR 事件列表失败", zap.Error(err))
@@ -292,12 +348,10 @@ func (h *EDREventsHandler) ListEDREvents(c *gin.Context) {
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var ev chEDREvent
+			var ev chEDREventLite
 			if scanErr := rows.Scan(
 				&ev.Timestamp, &ev.HostID, &ev.Hostname, &ev.EventType, &ev.DataType,
-				&ev.PID, &ev.PPID, &ev.Exe, &ev.Cmdline, &ev.ParentExe,
-				&ev.FilePath, &ev.RemoteAddr, &ev.RemotePort, &ev.LocalAddr, &ev.LocalPort,
-				&ev.Protocol, &ev.UID, &ev.GID, &ev.ReturnCode,
+				&ev.PID, &ev.Exe, &ev.FilePath, &ev.RemoteAddr, &ev.RemotePort,
 			); scanErr != nil {
 				h.logger.Warn("ClickHouse 单行扫描失败,跳过", zap.Error(scanErr))
 				continue
@@ -320,6 +374,64 @@ func (h *EDREventsHandler) ListEDREvents(c *gin.Context) {
 	}
 
 	SuccessPaginated(c, int64(total), events)
+}
+
+// GetEDREventDetail 单条 EDR 事件完整详情。
+// GET /api/v1/edr/events/detail?host_id=&timestamp=&pid=
+//
+// 列表已返回 8 关键列(lite),详情字段(cmdline / parent_exe / local_addr / protocol / uid / gid / return_code)
+// 走此 endpoint 单独 lazy fetch。host_id + timestamp + pid 复合定位单行,主键命中 <10ms。
+func (h *EDREventsHandler) GetEDREventDetail(c *gin.Context) {
+	if h.chConn == nil {
+		Success(c, nil)
+		return
+	}
+	hostID := c.Query("host_id")
+	timestamp := c.Query("timestamp")
+	pid := c.Query("pid")
+	if hostID == "" || timestamp == "" {
+		BadRequest(c, "host_id 与 timestamp 必填")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	chCtx := chQueryCtx(ctx)
+
+	// 主键 (host_id, timestamp) 完全命中,+ pid 二次过滤(同一时刻同主机理论同 pid 唯一)。
+	// 主键命中 → 单行 read,<10ms。
+	sql := `SELECT timestamp, host_id, hostname, event_type, data_type,
+	               pid, ppid, exe, cmdline, parent_exe,
+	               file_path, remote_addr, remote_port, local_addr, local_port,
+	               protocol, uid, gid, return_code
+	        FROM ebpf_events
+	        WHERE host_id = ? AND timestamp = ?`
+	args := []interface{}{hostID, normalizeDateBound(timestamp, false)}
+	if pid != "" {
+		sql += " AND pid = ?"
+		args = append(args, pid)
+	}
+	sql += " LIMIT 1"
+
+	start := time.Now()
+	var ev chEDREvent
+	err := h.chConn.QueryRow(chCtx, sql, args...).Scan(
+		&ev.Timestamp, &ev.HostID, &ev.Hostname, &ev.EventType, &ev.DataType,
+		&ev.PID, &ev.PPID, &ev.Exe, &ev.Cmdline, &ev.ParentExe,
+		&ev.FilePath, &ev.RemoteAddr, &ev.RemotePort, &ev.LocalAddr, &ev.LocalPort,
+		&ev.Protocol, &ev.UID, &ev.GID, &ev.ReturnCode,
+	)
+	h.recordCHQuery("detail", "ebpf_events", start, err)
+	if err != nil {
+		if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "no rows") {
+			NotFound(c, "事件不存在")
+			return
+		}
+		h.logger.Error("ClickHouse 查询 EDR 事件详情失败", zap.Error(err))
+		InternalError(c, "查询失败")
+		return
+	}
+	Success(c, ev)
 }
 
 // EDREventStats EDR 事件统计
@@ -361,9 +473,10 @@ type EDREventTrendPoint struct {
 // GetEDREventStats 获取 EDR 事件统计
 // GET /api/v1/edr/events/stats
 //
-// 5 个 CH 聚合查询并发执行(原串行 ~3s),总延迟 ≈ max(各 query) ≈ stats_top_hosts (~1.9s)。
-// 后续可加 Redis cache 60s TTL,首次命中后 <10ms;但 handler 不含 redis client,
-// 暂用并发达到 P0 目标,cache 留下一轮。
+// 性能策略:
+//  1. Redis cache 60s TTL,warm hit <10ms(stats 5 个 GROUP BY 在 1 分钟内变化幅度可忽略)
+//  2. 5 个 CH 聚合查询并发执行(冷查),总延迟 ≈ max(各 query) ≈ stats_top_hosts (~1.9s)
+//  3. cache miss / 失败时 fall back 实时计算
 func (h *EDREventsHandler) GetEDREventStats(c *gin.Context) {
 	if h.chConn == nil {
 		Success(c, EDREventStats{
@@ -378,6 +491,15 @@ func (h *EDREventsHandler) GetEDREventStats(c *gin.Context) {
 	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
 	if hours < 1 || hours > 720 {
 		hours = 24
+	}
+
+	// Redis cache lookup
+	cacheKey := fmt.Sprintf(edrStatsCacheKey, hours)
+	if h.redisClient != nil && c.Query("nocache") != "1" {
+		if cached, err := h.redisClient.Get(c.Request.Context(), cacheKey).Bytes(); err == nil {
+			c.Data(200, "application/json; charset=utf-8", cached)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), edrQueryCtxTimeout)
@@ -528,5 +650,13 @@ func (h *EDREventsHandler) GetEDREventStats(c *gin.Context) {
 		return
 	}
 
+	// 写 cache:序列化完整 response body(含 code/data wrapper)以便 Get 时直接 c.Data 输出。
+	// Redis 失败/未启用不阻塞:不影响业务,仅丢失 cache 优势。
+	if h.redisClient != nil {
+		respBody, mErr := json.Marshal(gin.H{"code": 0, "data": stats})
+		if mErr == nil {
+			h.redisClient.Set(c.Request.Context(), cacheKey, respBody, edrStatsCacheTTL)
+		}
+	}
 	Success(c, stats)
 }

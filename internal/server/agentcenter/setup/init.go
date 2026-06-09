@@ -16,6 +16,7 @@ import (
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/commandsub"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/httptrans"
 	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
 	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/scheduler"
@@ -136,6 +137,26 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 		}
 	}
 
+	// 6.2 启动 Engine→AC 命令订阅消费者 (Sprint 2 PR37)
+	// 订阅 mxsec.engine.command Topic, 把 Engine 产出的命令推到 Agent gRPC stream。
+	// transferService 满足 commandsub.AgentPusher interface (PR36 加 PushToAgent/PushToAgents)。
+	if cfg.Kafka.Enabled && len(cfg.Kafka.Brokers) > 0 {
+		csConsumer, err := commandsub.NewConsumer(cfg.Kafka.Brokers, transferService, logger)
+		if err != nil {
+			logger.Warn("AC commandsub 初始化失败,Engine→AC 命令链路降级",
+				zap.Error(err))
+		} else {
+			ctxCS, cancelCS := context.WithCancel(context.Background())
+			csConsumer.Start(ctxCS)
+			// 注: cancelCS / csConsumer.Close 由 setup 的 cleanup 路径接管 (后续 PR 完善优雅退出)
+			_ = cancelCS
+			logger.Info("AC commandsub 已启动",
+				zap.Strings("brokers", cfg.Kafka.Brokers),
+				zap.String("topic", "mxsec.engine.command"),
+			)
+		}
+	}
+
 	// 7. 创建任务服务
 	taskService := service.NewTaskService(db, logger)
 
@@ -168,15 +189,39 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 			advertiseGRPCAddr = fmt.Sprintf("%s:%d", advertiseIP, cfg.Server.GRPC.Port)
 		}
 
-		sdClient = sdclient.NewClient(
+		mtlsCfg := sdclient.MTLSConfig{
+			Enabled:    cfg.Server.InternalMTLS.Enabled,
+			CACertPath: cfg.Server.InternalMTLS.CACertPath,
+			ClientCert: cfg.Server.InternalMTLS.ClientCert,
+			ClientKey:  cfg.Server.InternalMTLS.ClientKey,
+			ServerName: cfg.Server.InternalMTLS.ServerName,
+		}
+		var sdErr error
+		sdClient, sdErr = sdclient.NewClientWithTLS(
 			cfg.Server.ManagerAddr,
 			cfg.Server.InstanceID,
 			advertiseGRPCAddr,
 			advertiseHTTPAddr,
 			cfg.Server.InternalSecret,
+			mtlsCfg,
 			transferService.GetOnlineAgentCount,
 			logger,
 		)
+		if sdErr != nil {
+			logger.Warn("AC SD 客户端 mTLS 初始化失败,降级走 HTTP+Secret",
+				zap.Error(sdErr),
+				zap.Bool("mtls_enabled", mtlsCfg.Enabled),
+			)
+			sdClient = sdclient.NewClient(
+				cfg.Server.ManagerAddr,
+				cfg.Server.InstanceID,
+				advertiseGRPCAddr,
+				advertiseHTTPAddr,
+				cfg.Server.InternalSecret,
+				transferService.GetOnlineAgentCount,
+				logger,
+			)
+		}
 	}
 
 	// 12. 创建网络监听器
@@ -244,8 +289,9 @@ func (s *AgentCenterServices) StartBackgroundServices() {
 	// 启动任务超时调度器（检查超时任务）
 	go scheduler.StartTaskTimeoutScheduler(s.DB, s.Logger)
 
-	// 启动定期告警调度器（按配置间隔发送告警通知）
-	go scheduler.StartAlertScheduler(s.DB, s.Logger)
+	// Sprint 2 PR16: 定期告警调度器已迁到 Manager 进程
+	// (manager/scheduler.StartAlertScheduler),AC 不再启动。
+	// 见 internal/server/engine/scheduler/README.md §3 PR3
 
 	// 启动漏洞通报升级调度器（SLA 检查、升级通知、自动关闭）
 	go scheduler.StartBulletinEscalationScheduler(s.DB, s.Logger)

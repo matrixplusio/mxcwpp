@@ -26,21 +26,90 @@ const (
 	// scanInterval controls how often the /proc scan runs.
 	scanInterval = 30 * time.Second
 
-	// dedupWindow prevents duplicate alerts for the same PID + threat type.
-	dedupWindow = 10 * time.Minute
+	// dedupWindow prevents duplicate alerts for the same exe + threat type.
+	// 2026-06-04 调整 10min → 24h:prod 实测同 exe 长跑进程每 10min 重发一次,7d 累积 34w 个 alert,
+	// 几乎全是误报(systemd/sshd/node_exporter 等系统进程升级后的 deleted_exe)。
+	// dedup key 也从 (pid, threat_type) → (exe, threat_type),避免进程重启又触发。
+	dedupWindow = 24 * time.Hour
+
+	// deletedExeGracePeriod:exe 被删后等多久才报。OS 包升级会 unlink 旧 binary 但旧进程仍在跑,
+	// 给一段窗口让管理员重启相关服务(如 systemctl restart sshd)。
+	deletedExeGracePeriod = 30 * time.Minute
 )
 
-// whitelistedExes are processes that legitimately use memfd or deleted exe patterns.
+// whitelistedExes 白名单:这些进程合法使用 memfd / 经常出现 deleted_exe(包升级)。
+// 2026-06-04 扩充:加入 prod 实测 top 误报源(dbus-broker-launch / sshd / node_exporter /
+// systemd 系列 / NetworkManager / cron / chronyd)。系统服务进程升级是常态,告警价值低。
 var whitelistedExes = map[string]bool{
-	"runc":       true, // container runtime uses memfd for seccomp
-	"memfd_test": true, // kernel self-test
-	"pulseaudio": true, // uses memfd for shared memory
-	"pipewire":   true, // same as pulseaudio
-	"Xwayland":   true, // uses memfd for buffer sharing
+	// 容器/沙箱 runtime — 用 memfd 传 seccomp / OCI spec
+	"runc":            true,
+	"crun":            true,
+	"containerd":      true,
+	"dockerd":         true,
+	"docker-init":     true,
+	"containerd-shim": true,
+
+	// 桌面 / 音频 / 显示 — 用 memfd 共享缓冲
+	"pulseaudio": true,
+	"pipewire":   true,
+	"Xwayland":   true,
+
+	// 内核自测
+	"memfd_test": true,
+
+	// dbus 系列 — 现代 dbus-broker 用 memfd 跨进程通信
+	"dbus-broker":        true,
+	"dbus-broker-launch": true,
+	"dbus-daemon":        true,
+
+	// systemd 系列 — yum/dnf/apt 升级 systemd 后旧实例继续跑,常报 deleted_exe
+	"systemd":           true,
+	"systemd-logind":    true,
+	"systemd-resolved":  true,
+	"systemd-networkd":  true,
+	"systemd-udevd":     true,
+	"systemd-journald":  true,
+	"systemd-machined":  true,
+	"systemd-timesyncd": true,
+	"systemd-hostnamed": true,
+
+	// 网络 / 时间 — 同样升级常态
+	"NetworkManager": true,
+	"chronyd":        true,
+	"ntpd":           true,
+	"sshd":           true,
+	"cron":           true,
+	"crond":          true,
+	"rsyslogd":       true,
+
+	// 监控 agent — node_exporter 升级后 deleted_exe
+	"node_exporter":         true,
+	"prometheus":            true,
+	"google-osconfig-agent": true,
+	"google_guest_agent":    true,
+	"google_compat_agent":   true,
 }
 
+// systemBinDirs:可信系统目录。deleted_exe 落在这些目录大概率是包升级,confidence 低。
+// 非这些目录的 deleted_exe(如 /tmp/foo / /dev/shm/x)更可疑。
+var systemBinDirs = []string{
+	"/usr/bin/",
+	"/usr/sbin/",
+	"/usr/lib/",
+	"/usr/libexec/",
+	"/usr/local/bin/",
+	"/usr/local/sbin/",
+	"/bin/",
+	"/sbin/",
+	"/lib/",
+	"/lib64/",
+	"/opt/",
+}
+
+// dedupKey 以 exe + threat_type 为粒度:同 binary 即便重启 pid 变化仍 dedup,
+// 与 prod 长跑系统进程的反复触发抗衡。
 type dedupKey struct {
-	pid        int
+	exe        string
 	threatType string
 }
 
@@ -49,8 +118,9 @@ type Scanner struct {
 	logger  *zap.Logger
 	eventCh chan<- *event.Event
 
-	mu   sync.Mutex
-	seen map[dedupKey]time.Time // dedup map
+	mu             sync.Mutex
+	seen           map[dedupKey]time.Time // dedup (exe, threat_type) -> last_seen
+	deletedExeSeen map[int]time.Time      // pid -> first_seen for grace period
 
 	// Counters.
 	scansTotal   atomic.Uint64
@@ -60,9 +130,10 @@ type Scanner struct {
 // NewScanner creates a memory threat scanner.
 func NewScanner(logger *zap.Logger, eventCh chan<- *event.Event) *Scanner {
 	return &Scanner{
-		logger:  logger,
-		eventCh: eventCh,
-		seen:    make(map[dedupKey]time.Time),
+		logger:         logger,
+		eventCh:        eventCh,
+		seen:           make(map[dedupKey]time.Time),
+		deletedExeSeen: make(map[int]time.Time),
 	}
 }
 
@@ -106,7 +177,8 @@ func (s *Scanner) scanLoop(ctx context.Context, wg *sync.WaitGroup) {
 func (s *Scanner) cleanupLoop(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(dedupWindow)
+	// 每小时跑一次 cleanup,过滤 24h 内的 entry。
+	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for {
@@ -119,6 +191,12 @@ func (s *Scanner) cleanupLoop(ctx context.Context, wg *sync.WaitGroup) {
 			for k, t := range s.seen {
 				if now.Sub(t) > dedupWindow {
 					delete(s.seen, k)
+				}
+			}
+			// deletedExeSeen 同样按 dedupWindow 清
+			for pid, t := range s.deletedExeSeen {
+				if now.Sub(t) > dedupWindow {
+					delete(s.deletedExeSeen, pid)
 				}
 			}
 			s.mu.Unlock()
@@ -169,9 +247,9 @@ func (s *Scanner) checkProcess(pid int) {
 		return
 	}
 
-	// Check 1: deleted executable.
+	// Check 1: deleted executable(加 grace period + 系统目录降级)
 	if strings.HasSuffix(exeLink, " (deleted)") {
-		s.emitIfNew(pid, "deleted_exe", exeLink, baseName, procDir)
+		s.handleDeletedExe(pid, exeLink, baseName, procDir)
 	}
 
 	// Check 2: memfd-backed file descriptors.
@@ -179,6 +257,35 @@ func (s *Scanner) checkProcess(pid int) {
 
 	// Check 3: anonymous executable memory regions (suspicious rwx).
 	s.checkAnonExec(pid, baseName, procDir)
+}
+
+// handleDeletedExe 处理 deleted_exe 告警:加 grace period(30min) + 系统目录 demotion。
+func (s *Scanner) handleDeletedExe(pid int, exeLink, baseName, procDir string) {
+	// 1. Grace period:首次看到 exe 删除时不立即告警,等 30min 给 OS 升级/手动 restart 窗口。
+	s.mu.Lock()
+	if firstSeen, ok := s.deletedExeSeen[pid]; ok {
+		if time.Since(firstSeen) < deletedExeGracePeriod {
+			s.mu.Unlock()
+			return
+		}
+	} else {
+		s.deletedExeSeen[pid] = time.Now()
+		s.mu.Unlock()
+		return // 首次见 — 记录但不告警
+	}
+	s.mu.Unlock()
+
+	// 2. 系统目录降级:/usr/bin /usr/sbin 等路径下的 deleted_exe 大概率是包升级,confidence 极低,
+	// 直接不告警(只有非系统目录的 deleted_exe 才告警)。
+	// strip " (deleted)" 后比对路径前缀。
+	cleanPath := strings.TrimSuffix(exeLink, " (deleted)")
+	for _, dir := range systemBinDirs {
+		if strings.HasPrefix(cleanPath, dir) {
+			return // 系统包升级,不告警
+		}
+	}
+
+	s.emitIfNew(pid, "deleted_exe", exeLink, baseName, procDir)
 }
 
 // checkMemfd scans /proc/[pid]/fd for memfd: links.
@@ -240,9 +347,9 @@ func (s *Scanner) checkAnonExec(pid int, baseName, procDir string) {
 	}
 }
 
-// emitIfNew emits a memory threat event if not seen recently (dedup).
+// emitIfNew emits a memory threat event if not seen recently (dedup by exe, not pid).
 func (s *Scanner) emitIfNew(pid int, threatType, detail, exeName, procDir string) {
-	key := dedupKey{pid: pid, threatType: threatType}
+	key := dedupKey{exe: exeName, threatType: threatType}
 	s.mu.Lock()
 	if t, ok := s.seen[key]; ok && time.Since(t) < dedupWindow {
 		s.mu.Unlock()

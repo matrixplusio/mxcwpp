@@ -3,6 +3,7 @@ package model
 
 // Service 系统服务资产模型（注意：与 Service 服务模型区分开，这里指 systemd 服务）
 type Service struct {
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          string    `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
 	HostID      string    `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	ServiceName string    `gorm:"column:service_name;type:varchar(255);not null" json:"service_name"`

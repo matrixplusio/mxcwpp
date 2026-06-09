@@ -32,6 +32,9 @@ func TestNormalizeDateBound(t *testing.T) {
 		{"ISO 8601 with -tz", "2026-06-04T15:30:45-05:00", false, "2026-06-04 15:30:45"},
 		{"ISO 8601 with fractional", "2026-06-04T15:30:45.123Z", false, "2026-06-04 15:30:45.123"},
 		{"datetime with T no tz", "2026-06-04T15:30:45", false, "2026-06-04 15:30:45"},
+		// URL '+' 未编码 → Go decode 成空格(回归 fix: detail endpoint 500)
+		{"ISO 8601 +tz with URL-decoded space", "2026-06-04T15:30:45 08:00", false, "2026-06-04 15:30:45"},
+		{"ISO 8601 -tz with URL-decoded space", "2026-06-04T15:30:45 05:00", false, "2026-06-04 15:30:45"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

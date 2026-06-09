@@ -1,0 +1,20 @@
+{{/*
+PodDisruptionBudget — 节点维护时确保 minAvailable 副本可用.
+}}*/}}
+{{- range $name, $cfg := dict "manager" .Values.manager "agentcenter" .Values.agentcenter "consumer" .Values.consumer "engine" .Values.engine }}
+{{- if and $cfg.enabled $cfg.podDisruptionBudget }}
+{{- if $cfg.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mxsec.serviceName" (dict "Release" $.Release "component" $name) }}
+spec:
+  minAvailable: {{ $cfg.podDisruptionBudget.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+{{- end }}
+{{- end }}
+{{- end }}

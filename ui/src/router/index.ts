@@ -355,6 +355,27 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Anomaly/index.vue'),
         meta: { title: 'ML 异常检测' },
       },
+      // Sprint 4 PR69: 运行模式 (observe/protect) + 6 闸门 admission
+      {
+        path: 'mode',
+        name: 'ModePanel',
+        component: () => import('@/views/Mode/ModePanel.vue'),
+        meta: { title: '运行模式' },
+      },
+      // P1-6: 配置变更审批
+      {
+        path: 'config-changes',
+        name: 'ConfigChange',
+        component: () => import('@/views/ConfigChange/index.vue'),
+        meta: { title: '配置变更审批' },
+      },
+      // P4-11: MSSP 控制台 (NOC 视图)
+      {
+        path: 'mssp',
+        name: 'MSSPConsole',
+        component: () => import('@/views/MSSP/MSSPConsole.vue'),
+        meta: { title: 'MSSP 控制台' },
+      },
       // M4: 行为基线引擎
       {
         path: 'bde',

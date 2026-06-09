@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -16,15 +16,15 @@ import (
 type KubeAuditHandler struct {
 	db        *gorm.DB
 	logger    *zap.Logger
-	processor *biz.KubeAuditProcessor
+	processor *kube.KubeAuditProcessor
 }
 
 // NewKubeAuditHandler 创建 Audit Webhook Handler
-func NewKubeAuditHandler(db *gorm.DB, logger *zap.Logger, alarmService *biz.KubeAlarmService) *KubeAuditHandler {
+func NewKubeAuditHandler(db *gorm.DB, logger *zap.Logger, alarmService *kube.KubeAlarmService) *KubeAuditHandler {
 	return &KubeAuditHandler{
 		db:        db,
 		logger:    logger,
-		processor: biz.NewKubeAuditProcessor(db, logger, alarmService),
+		processor: kube.NewKubeAuditProcessor(db, logger, alarmService),
 	}
 }
 

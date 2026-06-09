@@ -15,18 +15,18 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
 	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/anomaly"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/baseline"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/celengine"
 	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/rulesync"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/siem"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/storyline"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
 	"github.com/imkerbos/mxsec-platform/internal/server/database"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/anomaly"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/baseline"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/rulesync"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/storyline"
 	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 	"gorm.io/gorm"
@@ -82,6 +82,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = logger.Sync() }()
+
+	// P3-B: GC 调优
+	gctune.Apply("consumer", gctune.ProfileServer, logger)
 
 	// 3. 检查 Kafka 是否启用
 	if !cfg.Kafka.Enabled {
@@ -146,45 +149,11 @@ func main() {
 
 	dlqHandler := consumer.NewDLQHandler(dlqProducer, logger)
 
-	// 6.1 初始化 CEL 规则引擎（可选，失败不阻塞启动）
-	var celEng *celengine.Engine
-	var alertGen *celengine.AlertGenerator
-	if eng, err := celengine.New(db, logger); err != nil {
-		logger.Warn("CEL 引擎初始化失败，跳过实时检测", zap.Error(err))
-	} else {
-		celEng = eng
-		alertGen = celengine.NewAlertGenerator(db, logger)
-		logger.Info("CEL 引擎已启动", zap.Int("rules", celEng.RuleCount()))
-	}
+	// Sprint 2 PR48: 分析模块可选启用 (默认 true 兼容 v1; v2 部署应设 false 由 Engine 服务承担)。
+	// 详见 docs/architecture.md §2.3 Consumer 职责: 只做 Kafka -> 存储幂等写入。
+	logger.Info("Consumer 仅 writer 路径 (v2 拆分: 检测由 Engine 服务承担)")
 
-	// 6.2 初始化自动响应执行器（依赖 CEL + Redis，可选）
-	var autoResponder *celengine.AutoResponder
-	if celEng != nil && redisClient != nil {
-		autoResponder = celengine.NewAutoResponder(db, logger)
-		forwarder := celengine.NewCommandForwarder(redisClient, logger)
-		autoResponder.SetDispatcher(forwarder)
-		logger.Info("自动响应执行器已启动")
-	}
-
-	// 6.3 初始化端口扫描检测器（依赖 Redis，可选）
-	// 白名单后台 reload 在 ctx 创建后启动（见 ctx 定义点）
-	scanDetector := celengine.NewScanDetector(redisClient, db, logger)
-	if scanDetector != nil {
-		logger.Info("端口扫描检测器已启动")
-	}
-
-	// 6.4 初始化序列检测器（依赖 CEL 引擎 + Redis，可选）
-	var seqDetector *celengine.SequenceDetector
-	if celEng != nil {
-		seqDetector = celengine.NewSequenceDetector(celEng, db, redisClient, logger)
-		if err := seqDetector.ReloadRules(); err != nil {
-			logger.Warn("序列规则加载失败", zap.Error(err))
-		} else {
-			logger.Info("序列检测器已启动", zap.Int("rules", seqDetector.RuleCount()))
-		}
-	}
-
-	// 6.5 初始化 SIEM 转发器（可选，未配置时 forwarder 为 nil）
+	// 6.1 SIEM 转发器 (可选)
 	siemForwarder := siem.NewForwarder(logger, siem.Config{
 		Enabled:  cfg.SIEM.Enabled,
 		Protocol: cfg.SIEM.Protocol,
@@ -196,22 +165,13 @@ func main() {
 		logger.Info("SIEM 转发器已启动",
 			zap.String("address", cfg.SIEM.Address),
 			zap.String("protocol", cfg.SIEM.Protocol))
-		// 将 SIEM 转发器注入 AlertGenerator
-		if alertGen != nil {
-			alertGen.SetSIEMForwarder(siemForwarder)
-		}
 	}
 
-	// 6.6 上下文（后续多个组件需要 ctx 控制生命周期）
+	// 6.2 上下文 (后续多个组件需要 ctx 控制生命周期)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// ScanDetector 后台 reload 白名单（依赖 ctx）
-	if scanDetector != nil {
-		scanDetector.StartWhitelistReload(ctx)
-	}
-
-	// 6.7 初始化 BDE 基线引擎（行为检测，支持持久化和冷启动）
+	// 6.3 初始化 BDE 基线引擎（行为检测，支持持久化和冷启动）
 	bdeEngine := baseline.NewEngine(db, logger.Named("bde"))
 	bdeEngine.StartCheckpoint(ctx.Done())
 	logger.Info("BDE 基线引擎已启动")
@@ -243,11 +203,6 @@ func main() {
 		chWriter,
 		dlqHandler,
 		redisClient,
-		celEng,
-		alertGen,
-		autoResponder,
-		scanDetector,
-		seqDetector,
 		logger,
 	)
 	if err != nil {
@@ -279,12 +234,7 @@ func main() {
 		}
 	}()
 
-	// 8. 启动消费
-	// 启动进程树清理协程
-	if celEng != nil {
-		celEng.StartCleanup(ctx)
-	}
-
+	// 8. 启动消费 (v2 拆分: cel 进程树清理由 Engine 服务管理)
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("Consumer 启动",

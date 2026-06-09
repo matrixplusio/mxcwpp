@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>io.mxsec</groupId>
+    <artifactId>mxsec-sdk</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+    <name>mxsec Java SDK</name>
+
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <!-- 纯 java.net.http, 无第三方 -->
+    <dependencies></dependencies>
+</project>

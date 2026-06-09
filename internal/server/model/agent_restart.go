@@ -13,6 +13,7 @@ const (
 
 // AgentRestartRecord Agent 重启记录
 type AgentRestartRecord struct {
+	TenantID     string             `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint               `gorm:"primaryKey" json:"id"`
 	TargetType   string             `gorm:"size:32;not null" json:"target_type"` // all / selected
 	TargetHosts  StringArray        `gorm:"type:json" json:"target_hosts"`

@@ -25,6 +25,7 @@ func (r *ReportJSON) Scan(value any) error { return JSONScan(r, value) }
 
 // GeneratedReport 已生成的报告记录
 type GeneratedReport struct {
+	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ReportType ReportType `gorm:"column:report_type;type:varchar(20);not null;index:idx_report_type" json:"report_type"`
 	Title      string     `gorm:"column:title;type:varchar(200);not null" json:"title"`

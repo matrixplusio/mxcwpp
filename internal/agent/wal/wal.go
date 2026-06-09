@@ -22,6 +22,38 @@ import (
 	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
 )
 
+// P2-1: WAL record buffer pool 减 per-record make([]byte) GC 压力.
+//
+// 高 EPS 场景 (10k events/s) 累计每秒 10k 个 []byte alloc → GC 压力大.
+// 用 sync.Pool 复用 4KB 起步 buffer, 大 record (>4KB) 走原路径 (不还池).
+var walBufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 4096)
+		return &buf
+	},
+}
+
+// getWALBuf 取池化 buffer (cap >= want), 不够 cap 直接 make.
+func getWALBuf(want int) []byte {
+	if want > 64*1024 {
+		// 大 record 不走池, 防 oversized buffer 滞留池
+		return make([]byte, want)
+	}
+	p := walBufPool.Get().(*[]byte)
+	if cap(*p) < want {
+		*p = make([]byte, want)
+	}
+	return (*p)[:want]
+}
+
+// putWALBuf 还池 (仅小 buffer).
+func putWALBuf(buf []byte) {
+	if cap(buf) > 64*1024 {
+		return
+	}
+	walBufPool.Put(&buf)
+}
+
 const (
 	// DefaultMaxSize is the maximum WAL file size (200MB).
 	DefaultMaxSize int64 = 200 * 1024 * 1024
@@ -169,9 +201,10 @@ func (w *WAL) Replay(batchSize int, handler func([]*grpcProto.EncodedRecord) err
 			break
 		}
 
-		// Read record data.
-		data := make([]byte, dataLen)
+		// Read record data (P2-1: 池化 buffer).
+		data := getWALBuf(int(dataLen))
 		if _, err := io.ReadFull(w.file, data); err != nil {
+			putWALBuf(data)
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				break
 			}
@@ -181,9 +214,11 @@ func (w *WAL) Replay(batchSize int, handler func([]*grpcProto.EncodedRecord) err
 		// Unmarshal record.
 		record := &grpcProto.EncodedRecord{}
 		if err := proto.Unmarshal(data, record); err != nil {
+			putWALBuf(data)
 			w.logger.Warn("WAL: corrupt record, skipping", zap.Error(err))
 			continue
 		}
+		putWALBuf(data)
 
 		batch = append(batch, record)
 

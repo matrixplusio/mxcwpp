@@ -13,62 +13,14 @@
       </a-space>
     </div>
 
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 (统一 StatCard) -->
     <a-row :gutter="16" class="stat-cards">
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="总变更事件" :value="stats.total" :value-style="{ fontSize: '28px' }">
-            <template #prefix>
-              <FileSearchOutlined style="color: #3B82F6" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="待确认事件" :value="stats.pending" :value-style="{ color: '#F59E0B', fontSize: '28px' }">
-            <template #prefix>
-              <ClockCircleOutlined style="color: #F59E0B" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="待审批基线" :value="pendingBaselines" :value-style="{ color: '#722ED1', fontSize: '28px' }">
-            <template #prefix>
-              <AuditOutlined style="color: #722ED1" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="严重/高危" :value="stats.critical + stats.high" :value-style="{ color: '#DC2626', fontSize: '28px' }">
-            <template #prefix>
-              <WarningOutlined style="color: #DC2626" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="新增文件" :value="stats.added" :value-style="{ color: '#22C55E', fontSize: '28px' }">
-            <template #prefix>
-              <PlusCircleOutlined style="color: #22C55E" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :span="4">
-        <a-card>
-          <a-statistic title="删除文件" :value="stats.removed" :value-style="{ color: '#EF4444', fontSize: '28px' }">
-            <template #prefix>
-              <MinusCircleOutlined style="color: #EF4444" />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
+      <a-col :span="4"><StatCard title="总变更事件" :value="stats.total" color="#3B82F6" /></a-col>
+      <a-col :span="4"><StatCard title="待确认事件" :value="stats.pending" color="#F59E0B" /></a-col>
+      <a-col :span="4"><StatCard title="待审批基线" :value="pendingBaselines" color="#722ED1" /></a-col>
+      <a-col :span="4"><StatCard title="严重/高危" :value="stats.critical + stats.high" color="#DC2626" /></a-col>
+      <a-col :span="4"><StatCard title="新增文件" :value="stats.added" color="#22C55E" /></a-col>
+      <a-col :span="4"><StatCard title="删除文件" :value="stats.removed" color="#EF4444" /></a-col>
     </a-row>
 
     <!-- 图表区 -->
@@ -134,6 +86,7 @@ import {
 } from '@ant-design/icons-vue'
 import { fimApi } from '@/api/fim'
 import type { FIMEventStats } from '@/api/types'
+import StatCard from '@/components/StatCard.vue'
 
 const days = ref(7)
 

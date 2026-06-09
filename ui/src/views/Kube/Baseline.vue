@@ -8,28 +8,22 @@
     <!-- 合规概览 -->
     <a-row :gutter="[16, 16]" class="section-row">
       <a-col :span="6">
-        <div class="baseline-stat-card">
-          <a-progress type="circle" :percent="stats.passRate" :size="80" :stroke-color="stats.passRate >= 80 ? '#22C55E' : stats.passRate >= 60 ? '#F59E0B' : '#EF4444'" />
-          <div class="baseline-stat-label" style="margin-top: 8px">整体合规率</div>
-        </div>
+        <StatCard
+          title="整体合规率"
+          :value="stats.passRate || 0"
+          suffix="%"
+          :color="stats.passRate >= 80 ? '#22C55E' : stats.passRate >= 60 ? '#F59E0B' : '#EF4444'"
+          :progress="stats.passRate || 0"
+        />
       </a-col>
       <a-col :span="6">
-        <div class="baseline-stat-card">
-          <div class="baseline-stat-value">{{ stats.totalChecks }}</div>
-          <div class="baseline-stat-label">检查项总数</div>
-        </div>
+        <StatCard title="检查项总数" :value="stats.totalChecks || 0" color="#3B82F6" />
       </a-col>
       <a-col :span="6">
-        <div class="baseline-stat-card">
-          <div class="baseline-stat-value" style="color: #22C55E">{{ stats.passed }}</div>
-          <div class="baseline-stat-label">通过</div>
-        </div>
+        <StatCard title="通过" :value="stats.passed || 0" color="#22C55E" />
       </a-col>
       <a-col :span="6">
-        <div class="baseline-stat-card">
-          <div class="baseline-stat-value" style="color: #EF4444">{{ stats.failed }}</div>
-          <div class="baseline-stat-label">未通过</div>
-        </div>
+        <StatCard title="未通过" :value="stats.failed || 0" color="#EF4444" />
       </a-col>
     </a-row>
 
@@ -119,6 +113,7 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import apiClient from '@/api/client'
+import StatCard from '@/components/StatCard.vue'
 
 const searchText = ref('')
 const filterCluster = ref<string>()

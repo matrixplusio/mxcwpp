@@ -56,6 +56,7 @@ func (a *StringArray) Scan(value interface{}) error {
 
 // Host 主机信息模型
 type Host struct {
+	TenantID      string      `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	HostID        string      `gorm:"primaryKey;column:host_id;type:varchar(64);not null" json:"host_id"`
 	Hostname      string      `gorm:"column:hostname;type:varchar(255)" json:"hostname"`
 	OSFamily      string      `gorm:"column:os_family;type:varchar(50)" json:"os_family"`

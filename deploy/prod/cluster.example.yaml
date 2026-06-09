@@ -79,6 +79,9 @@ control_plane:
   manager_replicas: 1
   agentcenter_replicas: 1
   consumer_replicas: 1
+  engine_replicas: 1
+  llmproxy_replicas: 1
+  vulnsync_replicas: 1
 
 nodes:
   - name: node1-control

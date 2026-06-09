@@ -27,6 +27,7 @@ const (
 // UI「漏洞源管理」页面展示并允许 admin 启用/禁用 + 改 base_url + 手动触发同步。
 // Coordinator/Scanner 每次 sync 前查 enabled=true 列表，跳过 disabled。
 type VulnDataSource struct {
+	TenantID     string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name         string     `gorm:"column:name;type:varchar(64);uniqueIndex;not null" json:"name"`     // slug，如 rhsa
 	DisplayName  string     `gorm:"column:display_name;type:varchar(128);not null" json:"displayName"` // UI 展示名

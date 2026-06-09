@@ -10,10 +10,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
+	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/gcppubsub"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/mssp"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/middleware"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
 	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
@@ -83,7 +87,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	router.StaticFS("/uploads", gin.Dir("./uploads", false))
 
 	// K8s Audit Webhook（不需要认证，apiserver 通过 cluster_token 鉴权）
-	alarmService := biz.NewKubeAlarmService(db, logger)
+	alarmService := kube.NewKubeAlarmService(db, logger)
 	auditHandler := api.NewKubeAuditHandler(db, logger, alarmService)
 	router.POST("/api/v1/kube/audit-webhook/:cluster_token", auditHandler.ReceiveAuditWebhook)
 
@@ -145,11 +149,82 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	setupAPIRoutes(apiV1Auth, db, logger, cfg, scoreCache, metricsService, alarmService, acRegistry, acDispatcher, chConn, redisClient, promClient, virusDBUpdater, consumerManager)
 	setupAdminAPIRoutes(apiV1Admin, db, logger, cfg, chConn)
 
+	// v2.0 平台超管路由 /api/v2/admin/*
+	// 鉴权链: Auth (复用 v1) → tenant.AdminMiddleware (强制 IsPlatformAdmin)
+	apiV2 := router.Group("/api/v2")
+	apiV2.Use(authHandler.AuthMiddleware())
+	apiV2Admin := apiV2.Group("/admin")
+	apiV2Admin.Use(tenant.AdminMiddleware())
+	adminTenantsHandler := api.NewAdminTenantsHandler(db, logger)
+	apiV2Admin.GET("/tenants", adminTenantsHandler.ListTenants)
+	apiV2Admin.GET("/tenants/:id", adminTenantsHandler.GetTenant)
+	apiV2Admin.POST("/tenants", adminTenantsHandler.CreateTenant)
+	apiV2Admin.POST("/tenants/:id/suspend", adminTenantsHandler.SuspendTenant)
+	apiV2Admin.POST("/tenants/:id/resume", adminTenantsHandler.ResumeTenant)
+
+	// Sprint 2 PR38: /api/v2/system/mode (用户级查询) + /api/v2/admin/tenants/:id/mode (超管切换)
+	// MemoryResolver 启动时从 tenants 表加载初始 mode (后续 PR 加 Redis Pub/Sub 同步多副本)
+	modeResolver := mode.NewMemoryResolver(mode.Observe)
+	loadTenantModes(db, modeResolver, logger)
+	systemModeHandler := api.NewSystemModeHandler(db, logger, modeResolver)
+
+	apiV2.GET("/system/mode", systemModeHandler.GetCurrentMode)
+	apiV2Admin.POST("/tenants/:id/mode", systemModeHandler.SetTenantMode)
+	apiV2Admin.GET("/tenants/modes", systemModeHandler.ListTenantModes)
+
+	// P1-1: 配置中心变更审批 /api/v2/config/change-requests/*
+	configChangeHandler := api.NewConfigChangeRequestHandler(db, logger)
+	configChangeGroup := apiV2.Group("/config/change-requests")
+	configChangeGroup.POST("", configChangeHandler.Create)
+	configChangeGroup.GET("", configChangeHandler.List)
+	configChangeGroup.GET("/sensitivity", configChangeHandler.GetSensitivity)
+	configChangeGroup.GET("/:id", configChangeHandler.Get)
+	configChangeGroup.POST("/:id/approve", configChangeHandler.Approve)
+	configChangeGroup.POST("/:id/reject", configChangeHandler.Reject)
+	configChangeGroup.POST("/:id/cancel", configChangeHandler.Cancel)
+
+	// A3: MSSP 控制台路由 /api/v2/mssp/*
+	msspSvc := mssp.NewService(db, logger)
+	msspHandler := api.NewMSSPHandler(msspSvc, logger)
+	msspGroup := apiV2.Group("/mssp")
+	msspGroup.GET("/dashboard", msspHandler.Dashboard)
+	msspGroup.GET("/child-tenants", msspHandler.ListChildTenants)
+	msspGroup.POST("/child-tenants", msspHandler.CreateChildTenant)
+	msspGroup.GET("/child-tenants/:id", msspHandler.GetChildTenant)
+	msspGroup.POST("/child-tenants/:id/suspend", msspHandler.SuspendChildTenant)
+	msspGroup.POST("/child-tenants/:id/resume", msspHandler.ResumeChildTenant)
+	msspGroup.GET("/alerts", msspHandler.CrossTenantAlerts)
+
 	return router
 }
 
+// loadTenantModes 启动时把 tenants.default_mode 加载到 MemoryResolver。
+func loadTenantModes(db *gorm.DB, resolver *mode.MemoryResolver, logger *zap.Logger) {
+	var tenants []struct {
+		ID          string
+		DefaultMode string
+	}
+	if err := db.Table("tenants").Where("status = ?", "active").Find(&tenants).Error; err != nil {
+		logger.Warn("加载 tenants mode 失败,使用全局默认 observe",
+			zap.Error(err))
+		return
+	}
+	loaded := 0
+	for _, t := range tenants {
+		m := mode.Mode(t.DefaultMode)
+		if !m.IsValid() {
+			continue
+		}
+		if err := resolver.SetTenant(t.ID, m); err == nil {
+			loaded++
+		}
+	}
+	logger.Info("Mode Resolver 初始化完成",
+		zap.Int("tenants_loaded", loaded))
+}
+
 // setupAPIRoutes 注册所有需要认证的 API 路由
-func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.BaselineScoreCache, metricsService *biz.MetricsService, alarmService *biz.KubeAlarmService, acRegistry *sd.Registry, acDispatcher *sd.ACDispatcher, chConn chdriver.Conn, redisClient *redis.Client, promClient *prometheus.Client, virusDBUpdater *biz.VirusDBUpdater, consumerManager *gcppubsub.ConsumerManager) {
+func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.BaselineScoreCache, metricsService *biz.MetricsService, alarmService *kube.KubeAlarmService, acRegistry *sd.Registry, acDispatcher *sd.ACDispatcher, chConn chdriver.Conn, redisClient *redis.Client, promClient *prometheus.Client, virusDBUpdater *biz.VirusDBUpdater, consumerManager *gcppubsub.ConsumerManager) {
 	setupHostsAPI(router, db, logger, scoreCache, metricsService)
 	setupPolicyGroupsAPI(router, db, logger)
 	setupPoliciesAPI(router, db, logger)
@@ -159,7 +234,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupFixAPI(router, db, logger, acDispatcher)
 	setupDashboardAPI(router, db, logger, chConn, redisClient, acRegistry, promClient)
 	setupAssetsAPI(router, db, logger)
-	setupReportsAPI(router, db, logger, chConn, cfg)
+	setupReportsAPI(router, db, logger, chConn, redisClient, cfg)
 	setupBusinessLinesAPI(router, db, logger)
 	setupAlertsAPI(router, db, logger)
 	setupAlertWhitelistAPI(router, db, logger)
@@ -177,10 +252,14 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupThreatIntelAPI(router, db, logger, redisClient)
 	setupNetworkBlockAPI(router, db, logger, acDispatcher)
 	setupDependencyAPI(router, db, logger, acDispatcher)
-	setupEDREventsAPI(router, logger, chConn)
+	setupEDREventsAPI(router, logger, chConn, redisClient)
 	setupBDEBaselineAPI(router, db, logger)
 	setupStorylineAPI(router, db, logger, chConn)
 	setupMemoryThreatAPI(router, db, logger)
+	setupVEXAPI(router, db, logger)
+	setupHoneypotAPI(router, db, logger)
+	setupRootkitAPI(router, db, logger)
+	setupADAuditAPI(router, db, logger)
 	setupHuntingAPI(router, db, logger, chConn)
 	setupHostIsolationAPI(router, db, logger, acDispatcher)
 	setupAnomalyAPI(router, db, logger)
@@ -286,6 +365,40 @@ func setupMemoryThreatAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logg
 	router.GET("/memory-threats", handler.ListMemoryThreats)
 	router.GET("/memory-threats/stats", handler.GetMemoryThreatStats)
 	router.PUT("/memory-threats/:id/resolve", handler.ResolveMemoryThreat)
+}
+
+// setupVEXAPI VEX 漏洞利用性声明 API (B7).
+func setupVEXAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	h := api.NewVEXHandler(db, logger)
+	router.GET("/vex/:product_id", h.GetDocument)
+	router.GET("/vex/:product_id/statements", h.ListStatements)
+	router.GET("/vex/:product_id/cyclonedx", h.ExportCycloneDX)
+	router.GET("/vex/:product_id/csaf", h.ExportCSAF)
+}
+
+// setupHoneypotAPI 蜜罐传感器 API (C1).
+func setupHoneypotAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	h := api.NewHoneypotHandler(db, logger)
+	router.GET("/v2/honeypot/sensors", h.ListSensors)
+	router.POST("/v2/honeypot/sensors", h.CreateSensor)
+	router.POST("/v2/honeypot/sensors/:id/stop", h.StopSensor)
+	router.GET("/v2/honeypot/events", h.ListEvents)
+}
+
+// setupRootkitAPI Rootkit / DKOM 检测 API (C2).
+func setupRootkitAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	h := api.NewRootkitHandler(db, logger)
+	router.GET("/rootkit/findings", h.ListFindings)
+	router.POST("/rootkit/scan", h.TriggerScan)
+	router.POST("/rootkit/findings/:id/resolve", h.Resolve)
+}
+
+// setupADAuditAPI AD / LDAP 域控审计 API (EDR-4).
+func setupADAuditAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	h := api.NewADAuditHandler(db, logger)
+	router.GET("/ad-audit/events", h.ListEvents)
+	router.GET("/ad-audit/alerts", h.ListAlerts)
+	router.GET("/ad-audit/stats", h.Stats)
 }
 
 // setupHostsAPI 设置主机 API 路由
@@ -429,9 +542,10 @@ func setupAssetsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 }
 
 // setupReportsAPI 设置报表 API 路由
-func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, cfg *config.Config) {
+func setupReportsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client, cfg *config.Config) {
 	handler := api.NewReportsHandler(db, logger)
 	handler.SetClickHouse(chConn)
+	handler.SetRedis(redisClient)
 
 	// PDF 导出（Gotenberg sidecar，HTML→PDF 模式）
 	httpPrefix := ""
@@ -595,7 +709,7 @@ func setupInspectionAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger
 }
 
 // setupKubeAPI 设置 Kubernetes 容器安全 API 路由
-func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alarmService *biz.KubeAlarmService, cfg *config.Config, consumerManager *gcppubsub.ConsumerManager) {
+func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alarmService *kube.KubeAlarmService, cfg *config.Config, consumerManager *gcppubsub.ConsumerManager) {
 	kubeClient := biz.NewKubeClientManager(db, logger)
 
 	// 集群管理
@@ -625,7 +739,7 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 	router.POST("/kube/events/:id/handle", eventHandler.HandleEvent)
 
 	// CEL 规则引擎
-	ruleEngine, err := biz.NewKubeRuleEngine(logger)
+	ruleEngine, err := kube.NewKubeRuleEngine(logger)
 	if err != nil {
 		logger.Error("初始化 K8s CEL 规则引擎失败", zap.Error(err))
 	}
@@ -779,6 +893,8 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.GET("/vulnerabilities/scan-status", handler.GetScanStatus)
 	router.GET("/vulnerabilities/scan-history", handler.GetScanHistory)
 	router.GET("/vulnerabilities/scan-history/:id", handler.GetScanHistoryDetail)
+	router.GET("/vulnerabilities/scan-tasks", handler.ListScanTasks)
+	router.GET("/vulnerabilities/scan-tasks/:task_id", handler.GetScanTask)
 
 	router.GET("/vulnerabilities/:id", handler.GetVulnerability)
 
@@ -790,6 +906,8 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.GET("/vulnerabilities/stats/remediation", remHandler.GetRemediationStats)
 	router.GET("/vulnerabilities/stats/trend", remHandler.GetRemediationTrend)
 	router.GET("/vulnerabilities/stats/priority", handler.GetPriorityStats)
+	router.GET("/vulnerabilities/stats/asset-type", handler.GetAssetTypeStats)
+	router.GET("/vulnerabilities/export-by-owner", handler.ExportByOwner)
 
 	// 修复任务管理
 	taskHandler := api.NewRemediationTasksHandler(db, logger)
@@ -937,8 +1055,9 @@ func setupDependencyAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger
 }
 
 // setupEDREventsAPI 设置 EDR 事件查询 API 路由
-func setupEDREventsAPI(router *gin.RouterGroup, logger *zap.Logger, chConn chdriver.Conn) {
-	handler := api.NewEDREventsHandler(logger, chConn)
+func setupEDREventsAPI(router *gin.RouterGroup, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client) {
+	handler := api.NewEDREventsHandler(logger, chConn, redisClient)
 	router.GET("/edr/events", handler.ListEDREvents)
+	router.GET("/edr/events/detail", handler.GetEDREventDetail)
 	router.GET("/edr/events/stats", handler.GetEDREventStats)
 }

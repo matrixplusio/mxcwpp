@@ -1,0 +1,102 @@
+# LLMProxy 服务配置示例 (v2.0 六微服务架构)
+# 详见 docs/llmproxy-design.md / docs/configuration.md
+#
+# 本 PR (PR3) 仅消费 http: 配置,其余字段在后续 PR 接入。
+
+server:
+  http_addr: ":8084"
+  service: "llmproxy"
+
+# Provider 路由 (优先级 + Fallback)
+providers:
+  # OpenAI
+  - name: "openai-gpt-4o-mini"
+    type: "openai"
+    base_url: "https://api.openai.com/v1"
+    api_key_env: "OPENAI_API_KEY"
+    models: ["gpt-4o-mini", "gpt-4o"]
+    priority: 1
+
+  # Anthropic Claude
+  - name: "claude-haiku"
+    type: "anthropic"
+    base_url: "https://api.anthropic.com/v1"
+    api_key_env: "ANTHROPIC_API_KEY"
+    models: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"]
+    priority: 2
+
+  # Google Gemini
+  - name: "gemini-flash"
+    type: "gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+    api_key_env: "GEMINI_API_KEY"
+    models: ["gemini-1.5-flash", "gemini-1.5-pro"]
+    priority: 3
+
+  # 阿里千问 (OpenAI-Compatible)
+  - name: "qwen-turbo"
+    type: "openai_compatible"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    api_key_env: "DASHSCOPE_API_KEY"
+    models: ["qwen-turbo", "qwen-plus", "qwen-max"]
+    priority: 4
+
+  # 本地 Ollama (离网部署默认推荐 Qwen 2.5-7B)
+  - name: "ollama-local"
+    type: "openai_compatible"
+    base_url: "http://ollama:11434/v1"
+    api_key_env: ""
+    models: ["qwen2.5:7b", "deepseek-r1:7b"]
+    priority: 99
+
+# 场景路由 (scene -> provider 列表)
+routing:
+  alert_explain:
+    - "openai-gpt-4o-mini"
+    - "qwen-turbo"
+    - "ollama-local"
+  storyline_summary:
+    - "claude-haiku"
+    - "openai-gpt-4o-mini"
+    - "ollama-local"
+  nl2query:
+    - "openai-gpt-4o-mini"
+    - "qwen-turbo"
+  rule_draft:
+    - "claude-haiku"
+    - "openai-gpt-4o-mini"
+
+# Redis 缓存
+cache:
+  redis_addr: "redis:6379"
+  ttl: "24h"
+  key_prefix: "mxsec:llm:cache:"
+
+# Fallback 黑名单
+fallback:
+  failure_threshold: 3
+  blacklist_ttl: "5m"
+
+# 租户级 quota (默认值; 租户级 override 在 tenants 表)
+quota:
+  default_monthly_usd: 100
+  default_max_tokens_per_request: 100000
+
+# 隐私 (敏感字段脱敏)
+privacy:
+  mask_fields:
+    - "ip"
+    - "hostname"
+    - "path"
+    - "username"
+  enabled: true
+
+# 审计 (写入 Kafka mxsec.llm.audit)
+audit:
+  enabled: true
+  kafka_topic: "mxsec.llm.audit"
+
+otel:
+  endpoint: "http://otel-collector:4318"
+  service_name: "llmproxy"
+  sample_rate: 0.1

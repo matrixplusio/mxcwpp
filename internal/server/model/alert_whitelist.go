@@ -6,6 +6,7 @@ package model
 // SourceIPCIDR 是非告警维度的扩展字段，用于 ScanDetector 等需要按
 // 源 IP 段豁免的检测器（如 k8s/GKE node pool 健康探测）。
 type AlertWhitelist struct {
+	TenantID     string    `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID           uint      `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name         string    `gorm:"column:name;type:varchar(100);not null" json:"name"`           // 白名单描述名称
 	RuleID       string    `gorm:"column:rule_id;type:varchar(64)" json:"rule_id"`               // 空或*表示匹配所有规则

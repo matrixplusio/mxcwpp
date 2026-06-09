@@ -65,9 +65,13 @@ func CreateGRPCServer(cfg *config.Config, logger *zap.Logger) (*grpc.Server, err
 	}
 
 	// 配置 keepalive 参数，允许客户端频繁发送 ping
+	// P2-4: 加 MaxConnectionAge + MaxConnectionAgeGrace 强制长连接定期重置, 防 LB 倾斜.
 	keepaliveParams := keepalive.ServerParameters{
-		Time:    60 * time.Second, // 服务端每 60 秒发送 ping（如果没有活跃流）
-		Timeout: 10 * time.Second, // ping 超时时间
+		Time:                  60 * time.Second, // 服务端每 60 秒发送 ping（如果没有活跃流）
+		Timeout:               10 * time.Second, // ping 超时时间
+		MaxConnectionAge:      12 * time.Hour,   // P2-4: 连接 12h 强制重连, LB 重均衡
+		MaxConnectionAgeGrace: 5 * time.Minute,  // 给客户端 5min 优雅迁移
+		MaxConnectionIdle:     30 * time.Minute, // 空闲 30min 主动关
 	}
 
 	// 配置 enforcement policy，允许客户端更频繁的 ping
@@ -79,6 +83,9 @@ func CreateGRPCServer(cfg *config.Config, logger *zap.Logger) (*grpc.Server, err
 	opts = append(opts,
 		grpc.KeepaliveParams(keepaliveParams),
 		grpc.KeepaliveEnforcementPolicy(keepaliveEnforcementPolicy),
+		// P2-4: 大消息上限提到 16MB (默认 4MB), 防 SBOM / 漏洞情报 / 包文件传输被截
+		grpc.MaxRecvMsgSize(16*1024*1024),
+		grpc.MaxSendMsgSize(16*1024*1024),
 		// 服务端指标：暴露 mxsec_ac_grpc_handled_total / duration_seconds 给 Prometheus 抓取
 		grpc.UnaryInterceptor(acmetrics.UnaryServerInterceptor()),
 		grpc.StreamInterceptor(acmetrics.StreamServerInterceptor()),

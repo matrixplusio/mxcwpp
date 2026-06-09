@@ -223,11 +223,6 @@ type portTopResult struct {
 	Value    int64  `json:"value"`
 }
 
-type assetSnapshotCountRow struct {
-	CollectedAt model.LocalTime `gorm:"column:collected_at"`
-	Value       int64           `gorm:"column:value"`
-}
-
 // NewAssetsHandler 创建资产处理器
 func NewAssetsHandler(db *gorm.DB, logger *zap.Logger) *AssetsHandler {
 	return &AssetsHandler{
@@ -492,9 +487,16 @@ func (h *AssetsHandler) collectHistory(hostID, businessLine string, days, limit 
 	var pointMu sync.Mutex
 	cutoff := time.Now().AddDate(0, 0, -days)
 
-	// 11 个 GROUP BY 并发查询。每个 model 写入独立点位但通过 pointMap 聚合,需 mutex 保护。
-	// 串行 ~1100ms → 并发 ~150ms (各 query 独立 IO)。
+	// GROUP BY DATE(collected_at) 按日聚合:
+	// agent 每秒上报 snapshot → collected_at 含每秒一个 distinct value,
+	// 7d 累积 ~60w 个 distinct value,MySQL GROUP BY 完全精度在大表上 1.5s+;
+	// DATE 聚合后 7d 仅 7 行 → <50ms。UI 历史 chart 用 daily 趋势,无需秒级精度。
+	// 11 个 model 并发,各 query 独立 IO 走 collected_at index range scan。
 	g := new(errgroup.Group)
+	type dailyRow struct {
+		Day   string `gorm:"column:day"`
+		Value int64
+	}
 	for _, modelDef := range models {
 		md := modelDef
 		g.Go(func() error {
@@ -502,25 +504,24 @@ func (h *AssetsHandler) collectHistory(hostID, businessLine string, days, limit 
 			if days > 0 {
 				query = query.Where("collected_at >= ?", cutoff)
 			}
-			var rows []assetSnapshotCountRow
+			var rows []dailyRow
 			if err := query.
-				Select("collected_at, COUNT(*) AS value").
-				Group("collected_at").
-				Order("collected_at ASC").
+				Select("DATE(collected_at) AS day, COUNT(*) AS value").
+				Group("DATE(collected_at)").
+				Order("day ASC").
 				Scan(&rows).Error; err != nil {
 				return err
 			}
 			pointMu.Lock()
 			defer pointMu.Unlock()
 			for _, row := range rows {
-				if row.CollectedAt.IsZero() {
+				if row.Day == "" {
 					continue
 				}
-				timestamp := row.CollectedAt.String()
-				point := pointMap[timestamp]
+				point := pointMap[row.Day]
 				if point == nil {
-					point = &AssetHistoryPoint{Timestamp: timestamp}
-					pointMap[timestamp] = point
+					point = &AssetHistoryPoint{Timestamp: row.Day}
+					pointMap[row.Day] = point
 				}
 				md.apply(&point.Statistics, row.Value)
 			}

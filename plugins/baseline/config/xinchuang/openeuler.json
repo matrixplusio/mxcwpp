@@ -1,0 +1,20 @@
+{
+  "id": "XINCHUANG_OPENEULER",
+  "name": "openEuler 等保 2.0 三级基线",
+  "version": "1.0.0",
+  "description": "openEuler 20.03 LTS / 22.03 LTS / 24.03 LTS 安全基线. 适配 amd64 / arm64.",
+  "os_family": ["openeuler"],
+  "enabled": true,
+  "rules": [
+    {"rule_id": "OE_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "等保 8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "PASS_MAX_DAYS 90"}},
+    {"rule_id": "OE_002", "category": "身份鉴别", "title": "secGear 可信执行环境", "description": "openEuler 特有: secGear TEE", "severity": "low", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["secgear"]}, {"type": "command_exec", "param": ["ls /dev/sgx_* 2>/dev/null | wc -l", "^[1-9]"]}]}, "fix": {"suggestion": "dnf install secgear (需 Intel SGX 硬件)"}},
+    {"rule_id": "OE_003", "category": "访问控制", "title": "SELinux Enforcing", "description": "openEuler 兼容 RHEL", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["getenforce 2>/dev/null", "^Enforcing$"]}]}, "fix": {"suggestion": "setenforce 1; sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config"}},
+    {"rule_id": "OE_004", "category": "访问控制", "title": "PermitRootLogin no", "description": "等保 8.1.4.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "^no$"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
+    {"rule_id": "OE_005", "category": "安全审计", "title": "auditd 启用", "description": "等保 8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
+    {"rule_id": "OE_006", "category": "入侵防范", "title": "firewalld 启用", "description": "等保 8.1.4.5", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["firewalld", "active"]}, {"type": "service_status", "param": ["nftables", "active"]}]}, "fix": {"suggestion": "systemctl enable --now firewalld"}},
+    {"rule_id": "OE_007", "category": "入侵防范", "title": "禁用 IP 转发", "description": "8.1.4.5", "severity": "high", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.ip_forward", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.ip_forward=0"}},
+    {"rule_id": "OE_008", "category": "入侵防范", "title": "SSH MaxAuthTries ≤4", "description": "防暴力破解", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "MaxAuthTries", "^[1-4]$"]}]}, "fix": {"suggestion": "MaxAuthTries 4"}},
+    {"rule_id": "OE_009", "category": "恶意代码", "title": "ClamAV 安装", "description": "8.1.4.6", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["clamav"]}, {"type": "service_status", "param": ["clamd@scan", "active"]}]}, "fix": {"suggestion": "dnf install clamav clamav-update && systemctl enable --now clamd@scan"}},
+    {"rule_id": "OE_010", "category": "国密", "title": "openssl-pkcs11 + GmSSL", "description": "信创商用密码", "severity": "low", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["openssl-pkcs11"]}, {"type": "command_exec", "param": ["openssl version -a 2>/dev/null | grep -ci sm", "^[1-9]"]}]}, "fix": {"suggestion": "dnf install openssl-pkcs11; 启用 SM2/SM3/SM4"}}
+  ]
+}

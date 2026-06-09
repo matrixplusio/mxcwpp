@@ -13,10 +13,14 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
 	"github.com/imkerbos/mxsec-platform/internal/server/consumer/gcppubsub"
+	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/router"
+	managerscheduler "github.com/imkerbos/mxsec-platform/internal/server/manager/scheduler"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/setup"
+	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
 )
 
 var (
@@ -40,6 +44,9 @@ func main() {
 	}
 	defer services.Cleanup()
 
+	// P3-B: GC + 内存上限调优
+	gctune.Apply("manager", gctune.ProfileServer, services.Logger)
+
 	// 根 context，用于控制后台 goroutine 生命周期
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -53,8 +60,15 @@ func main() {
 	// 启动病毒库自动更新器
 	go services.VirusDBUpdater.Start(ctx)
 
+	// P1-1: 启动配置变更审批 Worker (30s 周期扫 approved → apply)
+	configChangeWorker := biz.NewConfigChangeWorker(services.DB, services.Logger, 0)
+	go configChangeWorker.Start(ctx)
+
 	// 启动 pre-check 周期巡检（每 6h 对 unpatched + 未检/过期的 host_vuln 自动 pre-check）
 	go services.PreCheckCron.Run(ctx)
+
+	// Sprint 2 PR16: 启动定期告警调度器 (从 AC 迁过来,业务调度归 Manager)
+	go managerscheduler.StartAlertScheduler(services.DB, services.Logger)
 
 	// 启动漏洞扫描定时调度器
 	vulnScanner := biz.NewVulnScanner(services.DB, services.Logger)
@@ -66,8 +80,18 @@ func main() {
 	}()
 	defer scanScheduler.Stop()
 
+	// 启动 NVD enrich cron:对 cvss_score=0 / severity=none 的 vulnerability(主要 RHSA/OSV
+	// 不提供 NVD CVSS),按 cve_id 单查 NVD JSON 2.0 API 补 score/severity/description。
+	// 每 24h 跑一次,启动立即 backfill。
+	// API key 取自 server.yaml 的 vuln.nvd_api_key(可空,空时走 6s 间隔限速)。
+	nvdEnricher := advisory.NewNVDEnricher(services.DB, services.Config.Vuln.NVDAPIKey, services.Logger.Named("nvd-enrich"))
+	nvdEnricher.StartCron(ctx.Done())
+	services.Logger.Info("NVD enrich cron 已启动")
+
 	// 启动 GCP Pub/Sub 消费者管理器（GKE 审计日志接入，per-cluster 配置）
-	alarmService := biz.NewKubeAlarmService(services.DB, services.Logger)
+	alarmService := kube.NewKubeAlarmService(services.DB, services.Logger)
+	// 注入 notification 派发器,解耦 engine/kube 反向依赖 manager/biz
+	alarmService.SetNotifier(biz.NewKubeAlarmNotifier(services.DB, services.Logger))
 	consumerManager := gcppubsub.NewConsumerManager(services.DB, services.Logger, alarmService)
 	consumerManager.Start(ctx)
 

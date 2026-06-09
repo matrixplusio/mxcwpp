@@ -1,0 +1,14 @@
+[Unit]
+Description=mxsec MySQL backup (xtrabackup)
+After=mysql.service
+Wants=mysql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mxsec/backup.env
+ExecStart=/usr/local/bin/mxsec-mysql-xtrabackup.sh full
+StandardOutput=append:/var/log/mxsec-backup/mysql-systemd.log
+StandardError=append:/var/log/mxsec-backup/mysql-systemd.log
+TimeoutStartSec=4h
+Nice=10
+IOSchedulingClass=idle

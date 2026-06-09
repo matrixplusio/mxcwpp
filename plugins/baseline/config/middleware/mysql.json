@@ -1,0 +1,164 @@
+{
+  "id": "LINUX_MW_MYSQL",
+  "name": "MySQL 中间件基线 (CIS Benchmark + 等保 2.0)",
+  "version": "1.0.0",
+  "description": "MySQL 5.7 / 8.0 安全配置基线. 参考 CIS MySQL Benchmark.",
+  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "MYSQL_001",
+      "category": "权限管理",
+      "title": "运行用户必须为 mysql",
+      "description": "my.cnf [mysqld] user = mysql.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "user", "^mysql$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] user = mysql"}
+    },
+    {
+      "rule_id": "MYSQL_002",
+      "category": "权限管理",
+      "title": "数据目录权限 = 700",
+      "description": "datadir 仅 mysql 用户访问.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_permission", "param": ["/var/lib/mysql", "700"]}
+      ]},
+      "fix": {"suggestion": "chmod 700 /var/lib/mysql && chown -R mysql:mysql /var/lib/mysql"}
+    },
+    {
+      "rule_id": "MYSQL_003",
+      "category": "权限管理",
+      "title": "配置文件权限 ≤ 640",
+      "description": "my.cnf 含 default password / SSL 路径.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_permission", "param": ["/etc/my.cnf", "640"]}
+      ]},
+      "fix": {"suggestion": "chmod 640 /etc/my.cnf && chown root:mysql"}
+    },
+    {
+      "rule_id": "MYSQL_004",
+      "category": "默认账号",
+      "title": "禁用 anonymous 用户",
+      "description": "user='' 必须不存在.",
+      "severity": "critical",
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["mysql -uroot -BNe 'SELECT COUNT(*) FROM mysql.user WHERE user=\"\"' 2>/dev/null", "^0$"]}
+      ]},
+      "fix": {"suggestion": "DELETE FROM mysql.user WHERE user=''; FLUSH PRIVILEGES;"}
+    },
+    {
+      "rule_id": "MYSQL_005",
+      "category": "默认账号",
+      "title": "禁用 test 数据库",
+      "description": "默认 test schema 必须删除.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["mysql -uroot -BNe 'SHOW DATABASES LIKE \"test\"' 2>/dev/null | wc -l", "^0$"]}
+      ]},
+      "fix": {"suggestion": "DROP DATABASE test;"}
+    },
+    {
+      "rule_id": "MYSQL_006",
+      "category": "网络访问",
+      "title": "禁止远程 root",
+      "description": "root 账号 host 必须为 localhost / 127.0.0.1, 不允许 %.",
+      "severity": "critical",
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["mysql -uroot -BNe 'SELECT COUNT(*) FROM mysql.user WHERE user=\"root\" AND host NOT IN (\"localhost\",\"127.0.0.1\",\"::1\")' 2>/dev/null", "^0$"]}
+      ]},
+      "fix": {"suggestion": "DROP USER 'root'@'%'; CREATE USER 'admin'@'10.%' IDENTIFIED BY '...'; GRANT ...;"}
+    },
+    {
+      "rule_id": "MYSQL_007",
+      "category": "网络访问",
+      "title": "bind-address 仅本地 (或内网)",
+      "description": "生产应 bind 内网 IP, 默认 0.0.0.0 暴露公网风险.",
+      "severity": "high",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "bind-address", "^0\\.0\\.0\\.0$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] bind-address = 127.0.0.1 或内网 IP"}
+    },
+    {
+      "rule_id": "MYSQL_008",
+      "category": "TLS 配置",
+      "title": "强制 SSL 连接",
+      "description": "[mysqld] require_secure_transport=ON.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "require_secure_transport", "^(ON|on|1)$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] require_secure_transport=ON; 配 ssl-ca / ssl-cert / ssl-key"}
+    },
+    {
+      "rule_id": "MYSQL_009",
+      "category": "日志",
+      "title": "general_log 关闭",
+      "description": "general_log 含明文 SQL, 生产关闭.",
+      "severity": "medium",
+      "check": {"condition": "none", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "general_log", "^(ON|on|1)$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] general_log=OFF"}
+    },
+    {
+      "rule_id": "MYSQL_010",
+      "category": "日志",
+      "title": "log_error 配置",
+      "description": "错误日志路径必填.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_line_match", "param": ["/etc/my.cnf", "^\\s*log[-_]error\\s*=", "match"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] log-error=/var/log/mysql/error.log"}
+    },
+    {
+      "rule_id": "MYSQL_011",
+      "category": "日志",
+      "title": "binlog_format=ROW",
+      "description": "STATEMENT 模式存在 SQL 注入审计盲点.",
+      "severity": "low",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "binlog_format", "^ROW$|^row$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] binlog_format=ROW"}
+    },
+    {
+      "rule_id": "MYSQL_012",
+      "category": "文件操作",
+      "title": "禁用 LOAD DATA LOCAL INFILE",
+      "description": "local_infile=OFF 防客户端任意读文件.",
+      "severity": "high",
+      "check": {"condition": "all", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "local_infile", "^(OFF|off|0)$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] local_infile=0"}
+    },
+    {
+      "rule_id": "MYSQL_013",
+      "category": "文件操作",
+      "title": "secure_file_priv 限制",
+      "description": "SELECT INTO OUTFILE 路径限制.",
+      "severity": "high",
+      "check": {"condition": "any", "rules": [
+        {"type": "file_kv", "param": ["/etc/my.cnf", "secure_file_priv", "^/.+|^NULL$"]}
+      ]},
+      "fix": {"suggestion": "[mysqld] secure_file_priv=/var/lib/mysql-files/ 或 NULL 禁用"}
+    },
+    {
+      "rule_id": "MYSQL_014",
+      "category": "密码策略",
+      "title": "密码插件 validate_password",
+      "description": "强制密码复杂度.",
+      "severity": "medium",
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["mysql -uroot -BNe 'SHOW PLUGINS' 2>/dev/null | grep -c validate_password", "^[1-9]"]}
+      ]},
+      "fix": {"suggestion": "INSTALL PLUGIN validate_password SONAME 'validate_password.so'; SET GLOBAL validate_password.policy=STRONG;"}
+    }
+  ]
+}
