@@ -349,8 +349,8 @@ const handleCreate = async () => {
     createModalVisible.value = false
     resetForm()
     loadPolicies()
-  } catch {
-    message.error('创建失败')
+  } catch (error) {
+    console.error('创建策略失败:', error)
   } finally {
     submitting.value = false
   }
@@ -364,8 +364,8 @@ const handlePreview = async (record: RemediationPolicy) => {
     previewResult.vulnCount = result.vulnCount
     previewResult.taskCount = result.taskCount
     previewModalVisible.value = true
-  } catch {
-    message.error('预览失败')
+  } catch (error) {
+    console.error('预览策略失败:', error)
   } finally {
     previewLoadingId.value = null
   }
@@ -377,8 +377,8 @@ const handleExecute = async (record: RemediationPolicy) => {
     await remediationPoliciesApi.execute(record.id)
     message.success('策略已执行，修复任务生成中')
     loadPolicies()
-  } catch {
-    message.error('执行失败')
+  } catch (error) {
+    console.error('执行策略失败:', error)
   } finally {
     executeLoadingId.value = null
   }
@@ -389,8 +389,8 @@ const handleDelete = async (record: RemediationPolicy) => {
     await remediationPoliciesApi.delete(record.id)
     message.success('修复策略已删除')
     loadPolicies()
-  } catch {
-    message.error('删除失败')
+  } catch (error) {
+    console.error('删除策略失败:', error)
   }
 }
 

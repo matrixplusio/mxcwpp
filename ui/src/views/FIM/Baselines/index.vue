@@ -260,8 +260,8 @@ const handleApprove = (record: FIMBaseline) => {
         await fimApi.approveBaseline(record.id)
         message.success('基线已审批')
         fetchBaselines()
-      } catch {
-        message.error('审批失败')
+      } catch (error) {
+        console.error('审批基线失败:', error)
       }
     },
   })
@@ -277,8 +277,8 @@ const handleReject = (record: FIMBaseline) => {
         await fimApi.rejectBaseline(record.id)
         message.success('基线已拒绝')
         fetchBaselines()
-      } catch {
-        message.error('操作失败')
+      } catch (error) {
+        console.error('拒绝基线失败:', error)
       }
     },
   })
@@ -295,8 +295,8 @@ const handleBatchApprove = async () => {
     message.success(`已审批 ${res.approved} 个基线`)
     selectedRowKeys.value = []
     fetchBaselines()
-  } catch {
-    message.error('批量审批失败')
+  } catch (error) {
+    console.error('批量审批基线失败:', error)
   } finally {
     batchApproveLoading.value = false
   }

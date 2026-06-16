@@ -15,7 +15,11 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "user", "^mysql$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] user = mysql"}
+      "fix": {
+        "suggestion": "[mysqld] user = mysql",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*user[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*user[[:space:]]*=.*|user = mysql|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nuser = mysql|' \"$F\" || printf '[mysqld]\\nuser = mysql\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_002",
@@ -26,7 +30,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_permission", "param": ["/var/lib/mysql", "700"]}
       ]},
-      "fix": {"suggestion": "chmod 700 /var/lib/mysql && chown -R mysql:mysql /var/lib/mysql"}
+      "fix": {
+        "suggestion": "chmod 700 /var/lib/mysql && chown -R mysql:mysql /var/lib/mysql",
+        "command": "set -e; [ -d /var/lib/mysql ] || { echo 'datadir /var/lib/mysql not found'; exit 1; }; chown -R mysql:mysql /var/lib/mysql; chmod 700 /var/lib/mysql"
+      }
     },
     {
       "rule_id": "MYSQL_003",
@@ -37,7 +44,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_permission", "param": ["/etc/my.cnf", "640"]}
       ]},
-      "fix": {"suggestion": "chmod 640 /etc/my.cnf && chown root:mysql"}
+      "fix": {
+        "suggestion": "chmod 640 /etc/my.cnf && chown root:mysql",
+        "command": "set -e; [ -f /etc/my.cnf ] || { echo '/etc/my.cnf not found'; exit 1; }; chown root:mysql /etc/my.cnf; chmod 640 /etc/my.cnf"
+      }
     },
     {
       "rule_id": "MYSQL_004",
@@ -48,7 +58,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "command_exec", "param": ["mysql -uroot -BNe 'SELECT COUNT(*) FROM mysql.user WHERE user=\"\"' 2>/dev/null", "^0$"]}
       ]},
-      "fix": {"suggestion": "DELETE FROM mysql.user WHERE user=''; FLUSH PRIVILEGES;"}
+      "fix": {
+        "suggestion": "DELETE FROM mysql.user WHERE user=''; FLUSH PRIVILEGES;",
+        "command": "mysql -uroot -e \"DELETE FROM mysql.user WHERE User=''; FLUSH PRIVILEGES;\""
+      }
     },
     {
       "rule_id": "MYSQL_005",
@@ -59,7 +72,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "command_exec", "param": ["mysql -uroot -BNe 'SHOW DATABASES LIKE \"test\"' 2>/dev/null | wc -l", "^0$"]}
       ]},
-      "fix": {"suggestion": "DROP DATABASE test;"}
+      "fix": {
+        "suggestion": "DROP DATABASE test;",
+        "command": ""
+      }
     },
     {
       "rule_id": "MYSQL_006",
@@ -70,7 +86,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "command_exec", "param": ["mysql -uroot -BNe 'SELECT COUNT(*) FROM mysql.user WHERE user=\"root\" AND host NOT IN (\"localhost\",\"127.0.0.1\",\"::1\")' 2>/dev/null", "^0$"]}
       ]},
-      "fix": {"suggestion": "DROP USER 'root'@'%'; CREATE USER 'admin'@'10.%' IDENTIFIED BY '...'; GRANT ...;"}
+      "fix": {
+        "suggestion": "DROP USER 'root'@'%'; CREATE USER 'admin'@'10.%' IDENTIFIED BY '...'; GRANT ...;",
+        "command": ""
+      }
     },
     {
       "rule_id": "MYSQL_007",
@@ -81,7 +100,11 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "bind-address", "^0\\.0\\.0\\.0$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] bind-address = 127.0.0.1 或内网 IP"}
+      "fix": {
+        "suggestion": "[mysqld] bind-address = 127.0.0.1 或内网 IP",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*bind-address[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*bind-address[[:space:]]*=.*|bind-address = 127.0.0.1|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nbind-address = 127.0.0.1|' \"$F\" || printf '[mysqld]\\nbind-address = 127.0.0.1\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_008",
@@ -92,7 +115,10 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "require_secure_transport", "^(ON|on|1)$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] require_secure_transport=ON; 配 ssl-ca / ssl-cert / ssl-key"}
+      "fix": {
+        "suggestion": "[mysqld] require_secure_transport=ON; 配 ssl-ca / ssl-cert / ssl-key",
+        "command": ""
+      }
     },
     {
       "rule_id": "MYSQL_009",
@@ -103,7 +129,11 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "general_log", "^(ON|on|1)$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] general_log=OFF"}
+      "fix": {
+        "suggestion": "[mysqld] general_log=OFF",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*general_log[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*general_log[[:space:]]*=.*|general_log=OFF|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\ngeneral_log=OFF|' \"$F\" || printf '[mysqld]\\ngeneral_log=OFF\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_010",
@@ -114,7 +144,11 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/my.cnf", "^\\s*log[-_]error\\s*=", "match"]}
       ]},
-      "fix": {"suggestion": "[mysqld] log-error=/var/log/mysql/error.log"}
+      "fix": {
+        "suggestion": "[mysqld] log-error=/var/log/mysql/error.log",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; install -d -o mysql -g mysql -m 750 /var/log/mysql; if grep -Eq '^[[:space:]]*log[-_]error[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*log[-_]error[[:space:]]*=.*|log-error=/var/log/mysql/error.log|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nlog-error=/var/log/mysql/error.log|' \"$F\" || printf '[mysqld]\\nlog-error=/var/log/mysql/error.log\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_011",
@@ -125,7 +159,11 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "binlog_format", "^ROW$|^row$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] binlog_format=ROW"}
+      "fix": {
+        "suggestion": "[mysqld] binlog_format=ROW",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*binlog_format[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*binlog_format[[:space:]]*=.*|binlog_format=ROW|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nbinlog_format=ROW|' \"$F\" || printf '[mysqld]\\nbinlog_format=ROW\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_012",
@@ -136,7 +174,11 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "local_infile", "^(OFF|off|0)$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] local_infile=0"}
+      "fix": {
+        "suggestion": "[mysqld] local_infile=0",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*local_infile[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*local_infile[[:space:]]*=.*|local_infile=0|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nlocal_infile=0|' \"$F\" || printf '[mysqld]\\nlocal_infile=0\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_013",
@@ -147,7 +189,11 @@
       "check": {"condition": "any", "rules": [
         {"type": "file_kv", "param": ["/etc/my.cnf", "secure_file_priv", "^/.+|^NULL$"]}
       ]},
-      "fix": {"suggestion": "[mysqld] secure_file_priv=/var/lib/mysql-files/ 或 NULL 禁用"}
+      "fix": {
+        "suggestion": "[mysqld] secure_file_priv=/var/lib/mysql-files/ 或 NULL 禁用",
+        "command": "set -e; F=/etc/my.cnf; [ -f \"$F\" ] || { printf '[mysqld]\\n' > \"$F\"; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; install -d -o mysql -g mysql -m 750 /var/lib/mysql-files; if grep -Eq '^[[:space:]]*secure_file_priv[[:space:]]*=' \"$F\"; then sed -ri 's|^[[:space:]]*secure_file_priv[[:space:]]*=.*|secure_file_priv=/var/lib/mysql-files/|' \"$F\"; else grep -Eq '^[[:space:]]*\\[mysqld\\]' \"$F\" && sed -ri '0,/^[[:space:]]*\\[mysqld\\]/s||[mysqld]\\nsecure_file_priv=/var/lib/mysql-files/|' \"$F\" || printf '[mysqld]\\nsecure_file_priv=/var/lib/mysql-files/\\n' >> \"$F\"; fi; mysqld --user=mysql --help --verbose >/dev/null 2>&1 || { mv \"$F.mxbak\" \"$F\"; echo 'config validate failed, rolled back'; exit 1; }",
+        "restart_services": ["mariadb"]
+      }
     },
     {
       "rule_id": "MYSQL_014",
@@ -156,9 +202,12 @@
       "description": "强制密码复杂度.",
       "severity": "medium",
       "check": {"condition": "all", "rules": [
-        {"type": "command_exec", "param": ["mysql -uroot -BNe 'SHOW PLUGINS' 2>/dev/null | grep -c validate_password", "^[1-9]"]}
+        {"type": "command_exec", "param": ["mysql -uroot -BNe \"SHOW PLUGINS\" 2>/dev/null | grep -ciE \"validate_password|simple_password_check|cracklib_password_check\"", "^[1-9]"]}
       ]},
-      "fix": {"suggestion": "INSTALL PLUGIN validate_password SONAME 'validate_password.so'; SET GLOBAL validate_password.policy=STRONG;"}
+      "fix": {
+        "suggestion": "MariaDB: INSTALL SONAME 'simple_password_check'; MySQL: INSTALL PLUGIN validate_password SONAME 'validate_password.so'; SET GLOBAL validate_password.policy=STRONG;",
+        "command": "if mysql -uroot -BNe \"SHOW PLUGINS\" 2>/dev/null | grep -qiE \"validate_password|simple_password_check|cracklib_password_check\"; then echo 'password plugin already installed, skip'; else mysql -uroot -e \"INSTALL SONAME 'simple_password_check'\" 2>/dev/null || true; fi"
+      }
     }
   ]
 }

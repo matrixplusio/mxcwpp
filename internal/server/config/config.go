@@ -69,6 +69,12 @@ type LLMConfig struct {
 	APIURL string `mapstructure:"api_url"` // LLM API 地址
 	APIKey string `mapstructure:"api_key"` // API Key
 	Model  string `mapstructure:"model"`   // 模型名称
+
+	// 批4 合规：数据出境管控。AllowDataEgress 默认 false——安全运营数据默认不出境，
+	// 仅允许本地/内网模型（ollama 等）；外发第三方需显式置 true（国内合规要求）。
+	AllowDataEgress       bool     `mapstructure:"allow_data_egress"`       // 默认 false：禁止外发第三方 LLM
+	Desensitize           bool     `mapstructure:"desensitize"`             // 外发前脱敏 IP/主机名，默认建议 true
+	SensitiveHostSuffixes []string `mapstructure:"sensitive_host_suffixes"` // 追加的内网域名后缀（如自建集群域名）
 }
 
 // PluginsConfig 是插件配置
@@ -96,6 +102,34 @@ type ServerConfig struct {
 	CORSOrigins    []string           `mapstructure:"cors_origins"`    // CORS 允许的 Origin 列表（为空时默认仅允许同源访问）
 	InternalSecret string             `mapstructure:"internal_secret"` // AC 内部通信共享密钥（为空时不验证）
 	InternalMTLS   InternalMTLSConfig `mapstructure:"internal_mtls"`   // v2.0: AC↔Manager 内部通信 mTLS 配置
+	Security       SecurityConfig     `mapstructure:"security"`        // 批4: Manager HTTP 安全加固（全部默认关，灰度逐项开）
+}
+
+// SecurityConfig 是 Manager HTTP 安全加固配置（批4）。
+// 全部默认关闭，生产先观察再按租户/集群灰度开启，避免误伤存量流量。
+type SecurityConfig struct {
+	Headers        SecurityHeadersConfig `mapstructure:"headers"`          // 安全响应头
+	LoginRateLimit RateLimitRuleConfig   `mapstructure:"login_rate_limit"` // 登录接口 IP 限流（防爆破）
+	JWTBlacklist   JWTBlacklistConfig    `mapstructure:"jwt_blacklist"`    // 登出 JWT 黑名单（需 Redis）
+}
+
+// SecurityHeadersConfig 控制安全响应头中间件。
+type SecurityHeadersConfig struct {
+	Enabled bool   `mapstructure:"enabled"` // 默认 false
+	HSTS    bool   `mapstructure:"hsts"`    // 默认 false：仅全站 HTTPS 时开，否则会锁死 http 访问
+	CSP     string `mapstructure:"csp"`     // 留空用内置默认策略
+}
+
+// RateLimitRuleConfig 控制单条路由限流规则。
+type RateLimitRuleConfig struct {
+	Enabled bool `mapstructure:"enabled"` // 默认 false
+	RPS     int  `mapstructure:"rps"`     // 默认 10
+	Burst   int  `mapstructure:"burst"`   // 默认 5
+}
+
+// JWTBlacklistConfig 控制登出 JWT 黑名单。
+type JWTBlacklistConfig struct {
+	Enabled bool `mapstructure:"enabled"` // 默认 false；启用需配置 Redis
 }
 
 // InternalMTLSConfig 是 AC↔Manager 内部通信 mTLS 配置。
@@ -114,8 +148,18 @@ type InternalMTLSConfig struct {
 
 // GRPCConfig 是 gRPC 服务配置
 type GRPCConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Host    string        `mapstructure:"host"`
+	Port    int           `mapstructure:"port"`
+	AntiDoS AntiDoSConfig `mapstructure:"anti_dos"` // 批4: AC gRPC 抗 DoS（全部默认 0=不限，灰度开）
+}
+
+// AntiDoSConfig 是 AC gRPC 服务抗 DoS 配置（批4）。
+// 各项默认 0 表示不限制；panic recovery 拦截器始终启用，无需配置。
+type AntiDoSConfig struct {
+	MaxConcurrentStreams uint32 `mapstructure:"max_concurrent_streams"` // 每连接最大并发流，0=用 gRPC 默认
+	MaxConns             int    `mapstructure:"max_conns"`              // 全局最大并发连接，0=不限
+	PerIPRPS             int    `mapstructure:"per_ip_rps"`             // 单 IP 每秒新 RPC 上限，0=不限
+	PerIPBurst           int    `mapstructure:"per_ip_burst"`           // 单 IP 突发额度，<=0 时取 PerIPRPS
 }
 
 // Address 返回 gRPC 服务地址
@@ -255,6 +299,21 @@ type MTLSConfig struct {
 	CACert     string `mapstructure:"ca_cert"`
 	ServerCert string `mapstructure:"server_cert"`
 	ServerKey  string `mapstructure:"server_key"`
+
+	// --- Agent↔AC 信任链改造（默认全关，兼容现网；逐步灰度开启）---
+
+	// CAKey 是 CA 私钥路径。开启 PerAgentCert 后，AC 用它按 AgentID 在线签发单机证书。
+	CAKey string `mapstructure:"ca_key"`
+	// EnrollToken 是 agent enroll 引导令牌。非空时，agent 必须经 gRPC metadata 上报匹配的令牌才会被签发单机证书。
+	// 空表示迁移期不校验令牌（仅适用于受控内网）。
+	EnrollToken string `mapstructure:"enroll_token"`
+	// PerAgentCert 开启后，AC 在 agent 首连时签发一机一证（CN=AgentID），取代下发全网共享证书。
+	PerAgentCert bool `mapstructure:"per_agent_cert"`
+	// EnforceAgentID 是步骤 6 强制开关：开启后 Transfer 要求客户端证书已验证且 CN==上报 AgentID，
+	// 无证书连接仅允许完成 enroll（签发后即断开，要求带证书重连）。关闭时为观察模式（只告警不拒绝）。
+	EnforceAgentID bool `mapstructure:"enforce_agent_id"`
+	// RevokedSerials 是已吊销的证书序列号（十进制字符串）列表，握手期拒绝。
+	RevokedSerials []string `mapstructure:"revoked_serials"`
 }
 
 // LogConfig 是日志配置

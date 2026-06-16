@@ -248,8 +248,8 @@ const handleResolve = async (record: Alert) => {
     await alertsApi.resolve(record.id)
     message.success('已标记为解决')
     loadAlerts()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('解决告警失败:', error)
   }
 }
 

@@ -20,13 +20,10 @@ type AlpineDriver struct {
 	Client  *http.Client
 }
 
-// NewAlpineDriver 构造 Alpine driver。
-func NewAlpineDriver(branch string, timeout time.Duration) *AlpineDriver {
+// NewAlpineDriver 构造 Alpine driver。HTTP 走共享连接池（SharedHTTPClient）。
+func NewAlpineDriver(branch string) *AlpineDriver {
 	if branch == "" {
 		branch = "v3.19"
-	}
-	if timeout <= 0 {
-		timeout = 60 * time.Second
 	}
 	return &AlpineDriver{
 		BaseURL: "https://secdb.alpinelinux.org",

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	grpcLib "google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
@@ -21,6 +22,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/agent/dependency"
 	"github.com/imkerbos/mxsec-platform/internal/agent/updater"
 	"github.com/imkerbos/mxsec-platform/internal/agent/wal"
+	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
 	_ "github.com/imkerbos/mxsec-platform/internal/common/compressor" // 注册 Snappy 压缩器
 )
 
@@ -169,7 +171,12 @@ func StartupWithManager(ctx context.Context, wg *sync.WaitGroup, mgr *Manager) {
 			// 创建 gRPC 客户端（启用 Snappy 流压缩）
 			mgr.logger.Debug("creating gRPC Transfer client with snappy compression")
 			client := grpc.NewTransferClient(conn)
-			stream, err := client.Transfer(ctx, grpcLib.UseCompressor("snappy"))
+			// enroll 引导令牌经 metadata 上报 AC（首连签发单机证书时鉴权），不放进 proto 消息体
+			streamCtx := ctx
+			if tok := mgr.cfg.Local.TLS.EnrollToken; tok != "" {
+				streamCtx = metadata.AppendToOutgoingContext(ctx, certissue.EnrollTokenMetaKey, tok)
+			}
+			stream, err := client.Transfer(streamCtx, grpcLib.UseCompressor("snappy"))
 			if err != nil {
 				mgr.setConnected(false)
 				retryCount++

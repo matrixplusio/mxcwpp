@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/common/ssrf"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 )
 
@@ -97,12 +98,17 @@ func (h *VulnDataSourcesHandler) TestConnection(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// 防 SSRF：校验地址 + 用 dial 期 IP 复查的安全客户端
+	if err := ssrf.ValidateURL(src.BaseURL); err != nil {
+		Success(c, gin.H{"reachable": false, "error": "地址不合法（疑似内网/元数据）"})
+		return
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, src.BaseURL, nil)
 	if err != nil {
 		InternalError(c, "构造 HTTP 请求失败")
 		return
 	}
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := ssrf.NewSafeClient(30 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		Success(c, gin.H{

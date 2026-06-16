@@ -51,7 +51,7 @@
               class="login-input"
             />
           </a-form-item>
-          <a-form-item name="captcha_code">
+          <a-form-item v-if="needCaptcha" name="captcha_code">
             <div class="captcha-row">
               <a-input
                 v-model:value="form.captcha_code"
@@ -88,10 +88,6 @@
           </a-form-item>
         </a-form>
 
-        <div v-if="error" class="error-message">
-          <a-alert :message="error" type="error" show-icon />
-        </div>
-
         <!-- 强制修改密码弹窗 -->
         <a-modal
           v-model:open="showChangePassword"
@@ -101,7 +97,7 @@
           :footer="null"
         >
           <p style="color: var(--mxsec-text-3); margin-bottom: 16px;">为确保账户安全，请设置新密码（至少 8 位）</p>
-          <a-form layout="vertical" @finish="handleChangePassword">
+          <a-form layout="vertical">
             <a-form-item label="新密码" required>
               <a-input-password
                 v-model:value="changePasswordForm.new_password"
@@ -115,7 +111,13 @@
               />
             </a-form-item>
             <a-form-item>
-              <a-button type="primary" html-type="submit" block :loading="changePwdLoading">
+              <a-button
+                type="primary"
+                html-type="button"
+                block
+                :loading="changePwdLoading"
+                @click="handleChangePassword"
+              >
                 确认修改
               </a-button>
             </a-form-item>
@@ -134,6 +136,7 @@
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteConfigStore } from '@/stores/site-config'
@@ -146,6 +149,21 @@ const siteConfigStore = useSiteConfigStore()
 
 const captchaId = ref('')
 const captchaImage = ref('')
+const needCaptcha = ref(false) // 风控：仅在需要时显示验证码
+
+// 设备标识：浏览器本地生成并持久化，用于可信设备判定
+const getDeviceId = (): string => {
+  let id = localStorage.getItem('mxsec_device_id')
+  if (!id) {
+    id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+    localStorage.setItem('mxsec_device_id', id)
+  }
+  return id
+}
+const deviceId = getDeviceId()
 
 const refreshCaptcha = async () => {
   try {
@@ -157,13 +175,25 @@ const refreshCaptcha = async () => {
   }
 }
 
+// 风控预检：决定是否需要验证码；需要则加载验证码
+const ensureCaptchaIfNeeded = async (): Promise<boolean> => {
+  try {
+    const res = await authApi.loginPrecheck({ username: form.username, device_id: deviceId })
+    if (res.need_captcha && !needCaptcha.value) {
+      needCaptcha.value = true
+      await refreshCaptcha()
+    }
+    return needCaptcha.value
+  } catch {
+    return needCaptcha.value
+  }
+}
+
 onMounted(() => {
   siteConfigStore.init()
-  refreshCaptcha()
 })
 
 const loading = ref(false)
-const error = ref('')
 
 const form = reactive({
   username: '',
@@ -186,14 +216,22 @@ const changePasswordForm = reactive({
 const changePwdLoading = ref(false)
 
 const handleLogin = async () => {
-  error.value = ''
+  // 风控预检：未显示验证码时先判定。可信设备/近期无失败 → 免验证码；否则显示验证码让用户填写后再提交。
+  if (!needCaptcha.value) {
+    await ensureCaptchaIfNeeded()
+    if (needCaptcha.value && !form.captcha_code) {
+      message.warning('请输入验证码')
+      return
+    }
+  }
   loading.value = true
   try {
     const response = await authStore.login({
       username: form.username,
       password: form.password,
-      captcha_id: captchaId.value,
-      captcha_code: form.captcha_code,
+      captcha_id: needCaptcha.value ? captchaId.value : undefined,
+      captcha_code: needCaptcha.value ? form.captcha_code : undefined,
+      device_id: deviceId,
     })
     if (response.need_change_password) {
       showChangePassword.value = true
@@ -201,35 +239,37 @@ const handleLogin = async () => {
     } else {
       router.push('/')
     }
-  } catch (err: any) {
-    error.value = err.message || '登录失败，请检查用户名和密码'
+  } catch {
+    // 具体错误已由全局拦截器统一弹窗提示，这里只做失败后的验证码刷新
     form.captcha_code = ''
-    refreshCaptcha()
+    await ensureCaptchaIfNeeded()
+    if (needCaptcha.value) await refreshCaptcha()
   } finally {
     loading.value = false
   }
 }
 
 const handleChangePassword = async () => {
+  if (changePwdLoading.value) return
   if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {
-    error.value = '两次输入的密码不一致'
+    message.error('两次输入的密码不一致')
     return
   }
   if (changePasswordForm.new_password.length < 8) {
-    error.value = '新密码长度至少 8 位'
+    message.error('新密码长度至少 8 位')
     return
   }
   changePwdLoading.value = true
-  error.value = ''
   try {
     await authApi.changePassword({
       old_password: changePasswordForm.old_password,
       new_password: changePasswordForm.new_password,
     })
+    message.success('密码修改成功')
     showChangePassword.value = false
     router.push('/')
-  } catch (err: any) {
-    error.value = err.message || '修改密码失败'
+  } catch {
+    // 错误由全局拦截器统一弹窗提示
   } finally {
     changePwdLoading.value = false
   }
@@ -522,10 +562,6 @@ const handleChangePassword = async () => {
   font-size: 13px;
   cursor: pointer;
   flex-shrink: 0;
-}
-
-.error-message {
-  margin-top: 16px;
 }
 
 /* ===== 页脚 ===== */

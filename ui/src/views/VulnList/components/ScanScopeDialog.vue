@@ -5,7 +5,7 @@
     :confirm-loading="submitting"
     ok-text="开始扫描"
     cancel-text="取消"
-    @update:open="(v) => $emit('update:open', v)"
+    @update:open="(v: boolean) => $emit('update:open', v)"
     @ok="handleSubmit"
     @cancel="$emit('update:open', false)"
   >
@@ -91,7 +91,7 @@ onMounted(async () => {
   loadingBL.value = true
   try {
     const resp = await businessLinesApi.list({ page_size: 200, enabled: 'true' })
-    businessLineOptions.value = (resp.data?.items || []).map((l) => ({
+    businessLineOptions.value = (resp.items || []).map((l) => ({
       label: l.name,
       value: l.name,
     }))
@@ -112,7 +112,7 @@ function handleHostSearch(keyword: string) {
     loadingHosts.value = true
     try {
       const resp = await hostsApi.list({ page_size: 50, search: keyword })
-      hostOptions.value = (resp.data?.items || []).map((h: any) => ({
+      hostOptions.value = (resp.items || []).map((h: any) => ({
         label: `${h.hostname} (${h.host_id?.slice(0, 8)})`,
         value: h.host_id,
       }))
@@ -145,13 +145,12 @@ async function handleSubmit() {
     if (form.scope === 'hosts') params.host_ids = form.host_ids
     if (form.scope === 'global') params.sync_db = form.sync_db
 
-    const resp = await vulnerabilitiesApi.triggerScopedScan(params)
-    const data = resp.data
+    const data = await vulnerabilitiesApi.triggerScopedScan(params)
     message.success(`扫描已启动，任务 ID: ${data.task_id.slice(0, 8)}...，预计 ${data.estimated_seconds}s`)
     emit('success', data.task_id)
     emit('update:open', false)
-  } catch (e: any) {
-    message.error(e?.response?.data?.message || e?.message || '触发失败')
+  } catch (error) {
+    console.error('触发扫描失败:', error)
   } finally {
     submitting.value = false
   }

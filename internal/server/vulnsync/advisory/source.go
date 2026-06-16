@@ -70,6 +70,11 @@ type PkgFix struct {
 	Arch         string // amd64 / arm64 / noarch / src，空表示通用
 	FixedVersion string // 已修复版本号（OS 实际 erratum 版本，如 "1:3.5.5-1.el9_4"）
 	Module       string // RHEL Module Stream（如 "perl:5.32"），通常空
+
+	// 修复包的上游摘要（批4 完整性校验）：仅当源给出且格式合法时填充。
+	// 供下游在应用修复时校验 RPM，防被投毒的包冒充已修复版本。
+	Checksum     string // 十六进制摘要，空表示源未提供或格式非法
+	ChecksumType string // sha256 / sha512 / sha1
 }
 
 // Source 单一漏洞数据源契约。

@@ -231,7 +231,7 @@ const handleSubmit = async () => {
     emit('success')
   } catch (error: any) {
     if (!error?.errorFields) {
-      message.error('操作失败')
+      console.error('保存 FIM 策略失败:', error)
     }
   } finally {
     loading.value = false

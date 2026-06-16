@@ -131,8 +131,8 @@ const loadData = async () => {
     ])
     permissions.value = permsRes as Permission[]
     roles.value = rolesRes as Role[]
-  } catch (error: any) {
-    message.error('加载权限数据失败: ' + (error.message || '未知错误'))
+  } catch (error) {
+    console.error('加载权限数据失败:', error)
   } finally {
     loading.value = false
   }
@@ -165,8 +165,8 @@ const handleSave = async () => {
       role.permissions = [...checkedPermissions.value]
     }
     message.success('权限更新成功')
-  } catch (error: any) {
-    message.error('更新失败: ' + (error.message || '未知错误'))
+  } catch (error) {
+    console.error('更新角色权限失败:', error)
   } finally {
     saving.value = false
   }

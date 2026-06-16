@@ -1,408 +1,452 @@
 {
   "id": "LINUX_CIS_DEBIAN",
-  "name": "Debian 基线 (CIS + 等保 2.0, 借鉴 Elkeid)",
-  "version": "1.0",
-  "description": "字节跳动最佳实践-debian基线检查 / bytedance Standard-debian Security Baseline Check\n借鉴 Elkeid baseline (Apache 2.0, https://github.com/bytedance/Elkeid).",
+  "name": "Debian 安全基线 (CIS Benchmark + 等保 2.0)",
+  "version": "2.0.0",
+  "description": "面向 Debian/Ubuntu 服务器的 CIS Level 1 主机加固基线，覆盖文件系统、服务、SSH、认证、网络、审计与权限维度，并兼顾等保 2.0 三级要求。",
   "os_family": [
     "debian"
   ],
   "enabled": true,
   "rules": [
     {
-      "rule_id": "LINUX_CIS_DEBIAN_0001",
-      "category": "身份鉴别",
-      "title": "设置密码失效时间\u003c=90天 / Ensure password expiration is 180 days or less",
-      "description": "请设置密码失效时间，定期修改密码策略，减少密码被泄漏和猜测风险，使用非密码登陆方式(如密钥对)请忽略此项。",
+      "rule_id": "CIS_DEBIAN_001",
+      "category": "文件系统",
+      "title": "禁止加载 cramfs 内核模块",
+      "description": "cramfs 为压缩只读文件系统，服务器通常无需挂载，禁用可缩小内核攻击面。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/cramfs.conf",
+              "install\\s+cramfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/modprobe.d/cramfs.conf 中写入 'install cramfs /bin/true' 禁止该模块按需加载。",
+        "command": "F=/etc/modprobe.d/cramfs.conf; [ -f \"$F\" ] || touch \"$F\"; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qE '^\\s*install\\s+cramfs' \"$F\"; then sed -ri 's|^\\s*install\\s+cramfs.*|install cramfs /bin/true|' \"$F\"; else echo 'install cramfs /bin/true' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_002",
+      "category": "文件系统",
+      "title": "禁止加载 squashfs 内核模块",
+      "description": "squashfs 多用于只读镜像，常规服务器无需挂载，禁用以减少可被滥用的文件系统类型。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/squashfs.conf",
+              "install\\s+squashfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/modprobe.d/squashfs.conf 中写入 'install squashfs /bin/true'。",
+        "command": "F=/etc/modprobe.d/squashfs.conf; [ -f \"$F\" ] || touch \"$F\"; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qE '^\\s*install\\s+squashfs' \"$F\"; then sed -ri 's|^\\s*install\\s+squashfs.*|install squashfs /bin/true|' \"$F\"; else echo 'install squashfs /bin/true' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_004",
+      "category": "文件系统",
+      "title": "为 /tmp 配置独立分区",
+      "description": "将 /tmp 独立挂载并配合 nodev/nosuid/noexec 可隔离临时目录风险。该项涉及分区规划，需结合主机实际情况手工评估。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "findmnt -n /tmp 2>/dev/null | wc -l",
+              "^[1-9]"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "为 /tmp 划分独立分区或使用 tmpfs，并在 /etc/fstab 中添加 nodev,nosuid,noexec 挂载选项。涉及分区调整，需人工规划，不提供自动修复。",
+        "command": ""
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_005",
+      "category": "服务",
+      "title": "确保未安装 telnet 服务端",
+      "description": "telnet 以明文传输凭证，存在严重窃听风险，应使用 SSH 替代并移除其服务端组件。",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "telnetd"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 telnetd 软件包，统一改用 SSH 远程登录。",
+        "command": "DEBIAN_FRONTEND=noninteractive apt-get remove -y telnetd 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_006",
+      "category": "服务",
+      "title": "确保未安装 rsh 相关服务",
+      "description": "rsh/rlogin 系列以明文传输且依赖弱信任机制，应彻底移除。",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "rsh-server"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 rsh-server 软件包。",
+        "command": "DEBIAN_FRONTEND=noninteractive apt-get remove -y rsh-server 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_008",
+      "category": "服务",
+      "title": "确保 Avahi 服务未启用",
+      "description": "Avahi 提供 mDNS/zeroconf 服务发现，会向局域网广播主机信息，服务器环境应禁用。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "avahi-daemon",
+              "inactive"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "停止并禁用 avahi-daemon 服务。",
+        "command": "systemctl disable --now avahi-daemon 2>/dev/null; systemctl mask avahi-daemon 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_010",
+      "category": "SSH",
+      "title": "禁止 root 账号直接 SSH 登录",
+      "description": "禁止 root 远程登录可强制运维使用普通账号加 sudo，便于审计并降低凭证爆破风险。",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitRootLogin",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/ssh/sshd_config 中设置 PermitRootLogin no 并重载 sshd。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak.010\" ] || cp \"$F\" \"$F.mxbak.010\"; if grep -qiE '^\\s*#?\\s*PermitRootLogin' \"$F\"; then sed -ri 's|^\\s*#?\\s*PermitRootLogin.*|PermitRootLogin no|I' \"$F\"; else echo 'PermitRootLogin no' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak.010\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_011",
+      "category": "SSH",
+      "title": "限制 SSH 最大认证尝试次数",
+      "description": "将 MaxAuthTries 限制为 4 次以内可显著抬高在线口令爆破成本。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "MaxAuthTries",
+              "^[1-4]$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/ssh/sshd_config 中设置 MaxAuthTries 4 并重载 sshd。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak.011\" ] || cp \"$F\" \"$F.mxbak.011\"; if grep -qiE '^\\s*#?\\s*MaxAuthTries' \"$F\"; then sed -ri 's|^\\s*#?\\s*MaxAuthTries.*|MaxAuthTries 4|I' \"$F\"; else echo 'MaxAuthTries 4' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak.011\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_012",
+      "category": "SSH",
+      "title": "禁用 SSH X11 转发",
+      "description": "服务器无图形需求时关闭 X11Forwarding 可避免 X11 通道被用于侧向攻击。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "X11Forwarding",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/ssh/sshd_config 中设置 X11Forwarding no 并重载 sshd。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak.012\" ] || cp \"$F\" \"$F.mxbak.012\"; if grep -qiE '^\\s*#?\\s*X11Forwarding' \"$F\"; then sed -ri 's|^\\s*#?\\s*X11Forwarding.*|X11Forwarding no|I' \"$F\"; else echo 'X11Forwarding no' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak.012\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_014",
+      "category": "SSH",
+      "title": "配置 SSH 登录告警 Banner",
+      "description": "登录前展示授权使用声明 (Banner) 是合规与法律取证的常见要求。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "Banner",
+              "^/etc/issue\\.net$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/ssh/sshd_config 中设置 Banner /etc/issue.net 并确保该文件包含授权声明。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak.014\" ] || cp \"$F\" \"$F.mxbak.014\"; [ -s /etc/issue.net ] || echo 'Authorized access only. All activity may be monitored and reported.' > /etc/issue.net; if grep -qiE '^\\s*#?\\s*Banner' \"$F\"; then sed -ri 's|^\\s*#?\\s*Banner.*|Banner /etc/issue.net|I' \"$F\"; else echo 'Banner /etc/issue.net' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak.014\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_016",
+      "category": "权限",
+      "title": "确保 sshd_config 文件权限收敛",
+      "description": "sshd_config 应仅 root 可读写，避免低权限用户篡改 SSH 守护配置。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 与 chown root:root 收敛 /etc/ssh/sshd_config 权限。",
+        "command": "chmod 600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_017",
+      "category": "认证",
+      "title": "确保 /etc/sudoers 文件权限正确",
+      "description": "sudoers 文件应为 0440 且属主 root，防止被篡改而提权。",
       "severity": "high",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "file_permission",
+            "param": [
+              "/etc/sudoers",
+              "440"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 440 与 chown root:root 收敛 /etc/sudoers 权限。",
+        "command": "chmod 440 /etc/sudoers && chown root:root /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_018",
+      "category": "认证",
+      "title": "确保 sudo 启用命令日志",
+      "description": "为 sudo 配置 logfile 可完整留存提权命令记录，满足操作审计要求。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^\\s*Defaults\\s+logfile\\s*=",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/sudoers 中添加 'Defaults logfile=\"/var/log/sudo.log\"'，使用 visudo -cf 校验。",
+        "command": "F=/etc/sudoers; [ -f \"$F.mxbak.018\" ] || cp \"$F\" \"$F.mxbak.018\"; grep -qE '^\\s*Defaults\\s+logfile\\s*=' \"$F\" || echo 'Defaults logfile=\"/var/log/sudo.log\"' >> \"$F\"; visudo -cf \"$F\" || { mv \"$F.mxbak.018\" \"$F\"; exit 1; }"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_019",
+      "category": "认证",
+      "title": "限制口令最长使用期限",
+      "description": "在 login.defs 中将 PASS_MAX_DAYS 限制为不超过 90 天，强制周期性更换口令。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
             "param": [
               "/etc/login.defs",
-              "\\s*\\t*PASS_MAX_DAYS\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)90"
+              "PASS_MAX_DAYS",
+              "^([1-9]|[1-8][0-9]|90)$"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "使用非密码登陆方式如密钥对，请忽略此项。\n采用root权限登录系统;\n输入:\n在 /etc/login.defs;\n将 PASS_MAX_DAYS 参数设置\u003c=90"
+        "suggestion": "在 /etc/login.defs 中设置 PASS_MAX_DAYS 90。",
+        "command": "F=/etc/login.defs; [ -f \"$F.mxbak.019\" ] || cp \"$F\" \"$F.mxbak.019\"; if grep -qE '^\\s*PASS_MAX_DAYS' \"$F\"; then sed -ri 's|^\\s*PASS_MAX_DAYS.*|PASS_MAX_DAYS\\t90|' \"$F\"; else printf 'PASS_MAX_DAYS\\t90\\n' >> \"$F\"; fi"
       }
     },
     {
-      "rule_id": "LINUX_CIS_DEBIAN_0002",
-      "category": "身份鉴别",
-      "title": "密码修改最短周期\u003e=2天 / Ensure minimum days between password changes is 2 or more",
-      "description": "设置密码修改最小间隔时间，限制密码更改过于频繁。",
+      "rule_id": "CIS_DEBIAN_020",
+      "category": "认证",
+      "title": "启用口令复杂度策略",
+      "description": "通过 pam_pwquality 设置最小长度 minlen=14，提升账户口令抗猜解能力。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "minlen",
+              "^\\s*1[4-9]|^\\s*[2-9][0-9]"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "先安装 libpam-pwquality，再在 /etc/security/pwquality.conf 中设置 minlen=14。",
+        "command": "dpkg -s libpam-pwquality >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y libpam-pwquality; F=/etc/security/pwquality.conf; [ -f \"$F\" ] || touch \"$F\"; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*minlen' \"$F\"; then sed -ri 's|^\\s*#?\\s*minlen.*|minlen = 14|I' \"$F\"; else echo 'minlen = 14' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_021",
+      "category": "网络",
+      "title": "禁用 IP 转发",
+      "description": "非路由/网关主机应关闭 net.ipv4.ip_forward，避免主机被用作流量中转。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.ip_forward",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.ip_forward=0 并持久化到 sysctl 配置。",
+        "command": "sysctl -w net.ipv4.ip_forward=0 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.ip_forward' \"$F\"; then sed -ri 's|^\\s*net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\"; else echo 'net.ipv4.ip_forward = 0' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_023",
+      "category": "网络",
+      "title": "拒绝接受 ICMP 重定向报文",
+      "description": "关闭 accept_redirects 防止攻击者通过伪造重定向篡改本机路由表。",
       "severity": "high",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "sysctl",
             "param": [
-              "/etc/login.defs",
-              "\\s*\\t*PASS_MIN_DAYS\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003e=)2"
+              "net.ipv4.conf.all.accept_redirects",
+              "0"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "在 /etc/login.defs 中将 PASS_MIN_DAYS 参数设置为 \u003e=2。"
+        "suggestion": "设置 net.ipv4.conf.all.accept_redirects=0 并持久化。",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.conf.all.accept_redirects' \"$F\"; then sed -ri 's|^\\s*net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\"; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; fi"
       }
     },
     {
-      "rule_id": "LINUX_CIS_DEBIAN_0003",
-      "category": "身份鉴别",
-      "title": "密码到期时间警告\u003e=7天 / Ensure password expiration warning days is 7 or more",
-      "description": "确保密码到期警告天数为7或更多。",
-      "severity": "high",
+      "rule_id": "CIS_DEBIAN_025",
+      "category": "网络",
+      "title": "启用 TCP SYN Cookies",
+      "description": "开启 tcp_syncookies 可在半连接队列耗尽时仍维持服务，缓解 SYN Flood。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "sysctl",
             "param": [
-              "/etc/login.defs",
-              "\\s*\\t*PASS_WARN_AGE\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003e=)7"
+              "net.ipv4.tcp_syncookies",
+              "1"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "在 /etc/login.defs 中将 PASS_WARN_AGE 参数设置为 \u003e=7。"
+        "suggestion": "设置 net.ipv4.tcp_syncookies=1 并持久化。",
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.tcp_syncookies' \"$F\"; then sed -ri 's|^\\s*net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\"; else echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; fi"
       }
     },
     {
-      "rule_id": "LINUX_CIS_DEBIAN_0004",
-      "category": "身份鉴别",
-      "title": "密码复杂性检查 / Ensure password creation requirements are configured",
-      "description": "检查密码长度和密码是否使用多种字符类型。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "dpkg -s libpam-cracklib"
-            ],
-            "result": "install ok installed"
-          },
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minlen=8"
-          },
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minclass=3"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "1.安装libpam-cracklib: apt-get update \u0026\u0026 apt-get install libpam-cracklib。\n2.编辑/etc/pam.d/common-password，在password requisite pam_cracklib.so开头的这一行配置:minclass=3(至少包含小写字母、大写字母、数字、特殊字符等4类字符中的3类)以及minlen=8(长度八位以上)。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0005",
-      "category": "身份鉴别",
-      "title": "确保root是唯一UID为0的用户 / Ensure root is the only UID 0 account",
-      "description": "除root以外其他UID为0的用户都应该删除，或者为其分配新的UID。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/passwd"
-            ],
-            "result": "$(not)^root:$(\u0026\u0026)^\\w+:\\w+:0:"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "除root以外其他UID为0的用户(查看命令cat /etc/passwd | awk -F: '($3 == 0) { print $1 }'|grep -v '^root$' )都应该删除，或者为其分配新的UID。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0006",
-      "category": "身份鉴别",
-      "title": "检查是否限制密码重用 / Ensure password reuse is limited",
-      "description": "应限制用户之间重用密码的行为，降低密码泄漏的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/pam.d/common-password",
-              "remember\\s*\\t*=\\s*\\t*(\\d+)"
-            ],
-            "result": "password.*pam_unix.so$(\u0026\u0026)$(\u003c)5"
-          },
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "password.*pam_unix.so$(\u0026\u0026)$(not)remember"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑/etc/pam.d/common-password，在password [success=1 default=ignore] pam_unix.so开头的行插入配置remember\u003e=5的值，建议为5，即在行末尾加上参数remember=5。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0007",
-      "category": "身份鉴别",
-      "title": "空口令账户检测 / Ensure password fields are not empty",
-      "description": "检查系统空密码账户。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/shadow"
-            ],
-            "result": "^\\w+::"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "为空口令的用户设置安全密码，或者执行passwd -l \u003cusername\u003e锁定用户。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0008",
-      "category": "SSH检测",
-      "title": "SSH空密码检测 / Ensure SSH PermitEmptyPasswords is disabled",
-      "description": "禁止SSH空密码用户登录。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "^\\s*PermitEmptyPasswords\\s+(.*)"
-            ],
-            "result": "no"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑文件/etc/ssh/sshd_config，将PermitEmptyPasswords配置为no。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0009",
-      "category": "SSH检测",
-      "title": "SSH失败尝试次数\u003c5 / Ensure SSH MaxAuthTries is set to 5 or less",
-      "description": "设置较低的Max AuthTrimes参数将降低SSH服务器被暴力攻击成功的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "^\\s*MaxAuthTries\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c)5"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "在/etc/ssh/sshd_config中取消MaxAuthTries注释符号#，设置最大密码尝试失败次数小于5。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0010",
-      "category": "安全审计",
-      "title": "确保开启日志守护进程(auditd) / Ensure auditd Service is enabled",
-      "description": "确保auditd服务已启用，记录日志用于审计。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl is-enabled auditd"
-            ],
-            "result": "enabled"
-          },
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl status auditd"
-            ],
-            "result": "active \\(running\\)"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "运行以下命令启用auditd服务：\nservice auditd start"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0011",
-      "category": "SSH检测",
-      "title": "减少空闲超时退出时间 / Ensure SSH Idle Timeout Interval is configured",
-      "description": "设置SSH空闲超时退出时间,可降低未授权用户访问其他用户ssh会话的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "ClientAliveInterval\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)900"
-          },
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "ClientAliveCountMax\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)3"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑/etc/ssh/sshd_config，将ClientAliveInterval 设置为\u003c=900(15分钟)，将ClientAliveCountMax设置为0-3之间。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0012",
-      "category": "SSH检测",
-      "title": "确保log level为info / Ensure SSH LogLevel is set to INFO",
-      "description": "确保SSH LogLevel设置为INFO,记录登录和注销活动。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "^\\s*LogLevel\\s+(.*)"
-            ],
-            "result": "INFO"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数(取消注释):\nLogLevel INFO"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0013",
-      "category": "SSH检测",
-      "title": "确保ssh协议设置为2 / Ensure SSH Protocol is set to 2",
-      "description": "SSH 支持两种不同且不兼容的协议：SSH1 和 SSH2。SSH1 是原始协议，存在安全问题。SSH2 更先进、更安全。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "Protocol\\s*\\t*(.*)"
-            ],
-            "result": "2"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数:\nProtocol 2"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0014",
-      "category": "安全审计",
-      "title": "确保开启日志守护进程(rsyslog) / Ensure rsyslog Service is enabled",
-      "description": "确保rsyslog服务已启用，记录日志用于审计。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl is-enabled rsyslog"
-            ],
-            "result": "enabled"
-          },
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl status rsyslog"
-            ],
-            "result": "active \\(running\\)"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "运行以下命令启用rsyslog服务：\nservice rsyslog start"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0015",
-      "category": "入侵防范",
-      "title": "开启地址随机化(ASLR) / Ensure address space layout randomization (ASLR) is enabled",
-      "description": "它将进程的内存空间地址随机化来增大入侵者预测目的地址难度，从而降低进程被成功入侵的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "grep -Rh ^kernel\\.randomize_va_space /etc/sysctl.conf /etc/sysctl.d"
-            ],
-            "result": "\\s*\\t*2"
-          },
-          {
-            "type": "command_exec",
-            "param": [
-              "sysctl kernel.randomize_va_space"
-            ],
-            "result": "^kernel.randomize_va_space\\s*\\t*=\\s*\\t*2"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "在/etc/sysctl.conf或/etc/sysctl.d/*文件中设置以下参数： \nkernel.randomize_va_space = 2 \n执行命令： \nsysctl -w kernel.randomize_va_space=2"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_DEBIAN_0016",
-      "category": "文件权限",
-      "title": "确保配置文件的安全性 / Ensure permissions on files",
-      "description": "为了保证系统的安全性，请确保配置文件的安全性和唯一性，限制未授权用户对配置文件的一切操作，包括访问、读写、删除等。",
-      "severity": "high",
+      "rule_id": "CIS_DEBIAN_026",
+      "category": "权限",
+      "title": "确保 /etc/passwd 权限正确",
+      "description": "/etc/passwd 应为 0644，属主 root，保证全局可读但仅 root 可写。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
@@ -412,61 +456,153 @@
               "/etc/passwd",
               "644"
             ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 与 chown root:root /etc/passwd。",
+        "command": "chmod 644 /etc/passwd && chown root:root /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_027",
+      "category": "权限",
+      "title": "确保 /etc/shadow 权限收敛",
+      "description": "/etc/shadow 含口令哈希，应为 0640 且属主 root、属组 shadow，禁止普通用户读取。",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "640"
+            ]
           },
           {
             "type": "file_permission",
             "param": [
               "/etc/shadow",
-              "400"
+              "600"
             ]
           },
           {
             "type": "file_permission",
             "param": [
-              "/etc/group",
-              "644"
-            ]
-          },
-          {
-            "type": "file_permission",
-            "param": [
-              "/etc/gshadow",
-              "400"
+              "/etc/shadow",
+              "000"
             ]
           }
         ]
       },
       "fix": {
-        "suggestion": "执行以下5条命令\nchown root:root /etc/passwd /etc/shadow /etc/group /etc/gshadow\nchmod 0644 /etc/group\nchmod 0644 /etc/passwd\nchmod 0400 /etc/shadow\nchmod 0400 /etc/gshadow"
+        "suggestion": "执行 chown root:shadow 与 chmod 640 /etc/shadow。",
+        "command": "chown root:shadow /etc/shadow 2>/dev/null || chown root:root /etc/shadow; chmod 640 /etc/shadow"
       }
     },
     {
-      "rule_id": "LINUX_CIS_DEBIAN_0017",
-      "category": "设置用户访问配置文件的权限",
-      "title": "设置用户访问配置文件的权限 / Verify permissions on files",
-      "description": "设置用户访问配置文件的权限。",
+      "rule_id": "CIS_DEBIAN_029",
+      "category": "审计",
+      "title": "确保已安装 auditd",
+      "description": "auditd 是 Linux 内核审计的用户态守护进程，是满足等保审计要求的基础组件。",
       "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "auditd"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "通过 apt 安装 auditd 软件包。",
+        "command": "dpkg -s auditd >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y auditd"
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_030",
+      "category": "审计",
+      "title": "确保 auditd 服务已启用并运行",
+      "description": "auditd 需开机自启且处于运行状态，否则审计规则不会生效。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "auditd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "若未安装先 apt 装包，再 systemctl enable --now auditd。",
+        "command": "dpkg -s auditd >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y auditd; systemctl enable --now auditd",
+        "restart_services": [
+          "auditd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_031",
+      "category": "服务",
+      "title": "确保时间同步服务运行",
+      "description": "准确的系统时间是日志关联与证书校验的前提，需启用 chrony 或 systemd-timesyncd。",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "chrony",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "systemd-timesyncd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装并启用 chrony 作为时间同步服务。",
+        "command": "dpkg -s chrony >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y chrony; systemctl enable --now chrony",
+        "restart_services": [
+          "chrony"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_DEBIAN_033",
+      "category": "权限",
+      "title": "确保 /etc/crontab 权限收敛",
+      "description": "/etc/crontab 应为 0600 且属主 root，防止普通用户植入定时提权任务。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
           {
             "type": "file_permission",
             "param": [
-              "/etc/hosts.allow",
-              "644"
-            ]
-          },
-          {
-            "type": "file_permission",
-            "param": [
-              "/etc/hosts.deny",
-              "644"
+              "/etc/crontab",
+              "600"
             ]
           }
         ]
       },
       "fix": {
-        "suggestion": "运行以下4条命令：\nchown root:root /etc/hosts.allow\nchown root:root /etc/hosts.deny\nchmod 644 /etc/hosts.allow\nchmod 644 /etc/hosts.deny"
+        "suggestion": "执行 chmod 600 与 chown root:root /etc/crontab。",
+        "command": "[ -f /etc/crontab ] && chmod 600 /etc/crontab && chown root:root /etc/crontab"
       }
     }
   ]

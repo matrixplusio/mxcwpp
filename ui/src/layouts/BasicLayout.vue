@@ -319,12 +319,8 @@ const handleChangePassword = async () => {
     showChangePasswordModal.value = false
     resetChangePasswordForm()
   } catch (error: any) {
-    if (error?.response?.data?.message) {
-      message.error(error.response.data.message)
-    } else if (error?.errorFields) {
-      // 表单验证错误, 不处理
-    } else {
-      message.error('密码修改失败')
+    if (!error?.errorFields) {
+      console.error('修改密码失败:', error)
     }
   } finally {
     changePasswordLoading.value = false

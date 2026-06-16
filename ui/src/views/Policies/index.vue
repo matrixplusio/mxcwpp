@@ -1028,7 +1028,6 @@ const loadPolicies = async () => {
     await loadPolicyStats()
   } catch (error) {
     console.error('加载策略列表失败:', error)
-    message.error('加载策略列表失败')
   } finally {
     loading.value = false
   }
@@ -1422,7 +1421,6 @@ const handleConfirmCheckNow = async () => {
     await loadPolicyStats()
   } catch (error) {
     console.error('创建检查任务失败:', error)
-    message.error('创建检查任务失败')
   } finally {
     checkNowLoading.value = false
   }
@@ -1509,7 +1507,6 @@ const loadScheduledTasks = async () => {
     scheduledTasks.value = response.items.filter((task) => task.type === 'scheduled')
   } catch (error) {
     console.error('加载定时任务列表失败:', error)
-    message.error('加载定时任务列表失败')
   } finally {
     tasksLoading.value = false
   }
@@ -1617,7 +1614,6 @@ const handleSaveTask = async () => {
       return
     }
     console.error('保存任务失败:', error)
-    message.error('保存任务失败')
   }
 }
 
@@ -1811,7 +1807,6 @@ const handleConfirmRecheck = async () => {
     await loadPolicyStats()
   } catch (error) {
     console.error('创建重新检查任务失败:', error)
-    message.error('创建重新检查任务失败')
   } finally {
     recheckLoading.value = false
   }

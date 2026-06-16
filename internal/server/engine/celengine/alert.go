@@ -3,6 +3,7 @@ package celengine
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -107,43 +108,9 @@ func (g *AlertGenerator) upsertAlert(hostID string, rule *model.DetectionRule, f
 	// 尝试查找已有告警
 	var existing model.Alert
 	err = g.db.Where("result_id = ?", resultID).First(&existing).Error
-
 	if err == nil {
-		// 已存在 → 更新 LastSeenAt, HitCount++, 更新最新 Actual
-		updates := map[string]any{
-			"last_seen_at": now,
-			"hit_count":    gorm.Expr("hit_count + 1"),
-			"actual":       string(detail),
-		}
-
-		// 如果已解决/忽略，重新激活
-		if existing.Status != model.AlertStatusActive {
-			updates["status"] = model.AlertStatusActive
-			g.log.Info("CEL 告警重新激活",
-				zap.String("result_id", resultID),
-				zap.String("prev_status", string(existing.Status)),
-			)
-		}
-
-		if err := g.db.Model(&existing).Updates(updates).Error; err != nil {
-			return fmt.Errorf("更新告警失败: %w", err)
-		}
-
-		// 节流通知：距上次通知超过窗口才再次发送
-		if g.shouldNotify(&existing) {
-			g.db.Model(&existing).Updates(map[string]any{
-				"last_notified_at": now,
-				"notify_count":     gorm.Expr("notify_count + 1"),
-			})
-			g.sendNotification(&existing)
-		}
-
-		// SIEM 转发每次告警命中都发送（SIEM 需要实时事件流）
-		g.forwardToSIEM(&existing, masked)
-
-		return nil
+		return g.refreshExistingAlert(&existing, now, string(detail), masked)
 	}
-
 	if err != gorm.ErrRecordNotFound {
 		return fmt.Errorf("查询告警失败: %w", err)
 	}
@@ -166,6 +133,14 @@ func (g *AlertGenerator) upsertAlert(hostID string, rule *model.DetectionRule, f
 	}
 
 	if err := g.db.Create(&alert).Error; err != nil {
+		// 并发竞争：另一 worker 已插入同 result_id（SELECT 与 INSERT 之间的 TOCTOU）。
+		// 转为更新路径，避免丢失命中计数并消除 duplicate key 报错。
+		if isDuplicateKeyErr(err) {
+			var raced model.Alert
+			if e := g.db.Where("result_id = ?", resultID).First(&raced).Error; e == nil {
+				return g.refreshExistingAlert(&raced, now, string(detail), masked)
+			}
+		}
 		return fmt.Errorf("写入 alerts 表失败: %w", err)
 	}
 
@@ -180,6 +155,40 @@ func (g *AlertGenerator) upsertAlert(hostID string, rule *model.DetectionRule, f
 	g.forwardToSIEM(&alert, masked)
 
 	return nil
+}
+
+// refreshExistingAlert 对已存在告警做命中更新：last_seen/hit_count/actual，必要时重新激活，
+// 并按节流发送通知 + SIEM 转发。首次命中查到已存在、以及并发 INSERT 冲突回退两条路径复用。
+func (g *AlertGenerator) refreshExistingAlert(existing *model.Alert, now model.LocalTime, detail string, masked map[string]string) error {
+	updates := map[string]any{
+		"last_seen_at": now,
+		"hit_count":    gorm.Expr("hit_count + 1"),
+		"actual":       detail,
+	}
+	if existing.Status != model.AlertStatusActive {
+		updates["status"] = model.AlertStatusActive
+		g.log.Info("CEL 告警重新激活",
+			zap.String("result_id", existing.ResultID),
+			zap.String("prev_status", string(existing.Status)),
+		)
+	}
+	if err := g.db.Model(existing).Updates(updates).Error; err != nil {
+		return fmt.Errorf("更新告警失败: %w", err)
+	}
+	if g.shouldNotify(existing) {
+		g.db.Model(existing).Updates(map[string]any{
+			"last_notified_at": now,
+			"notify_count":     gorm.Expr("notify_count + 1"),
+		})
+		g.sendNotification(existing)
+	}
+	g.forwardToSIEM(existing, masked)
+	return nil
+}
+
+// isDuplicateKeyErr 判断是否 MySQL 唯一键冲突 (errno 1062)。
+func isDuplicateKeyErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Duplicate entry")
 }
 
 // shouldNotify 判断是否应发送通知（节流）

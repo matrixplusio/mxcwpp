@@ -174,8 +174,8 @@ async function loadList() {
     if (filterTable.value) params.target_table = filterTable.value
     const res = await ConfigChangeAPI.list(params)
     items.value = res.data?.items || []
-  } catch (e: any) {
-    message.error('加载失败: ' + (e.message || e))
+  } catch (error) {
+    console.error('加载配置变更列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -210,8 +210,8 @@ async function onCreateSubmit() {
     message.success('变更请求已提交, 等待审批')
     createVisible.value = false
     await loadList()
-  } catch (e: any) {
-    message.error('提交失败: ' + (e.message || e))
+  } catch (error) {
+    console.error('提交配置变更失败:', error)
   }
 }
 
@@ -229,8 +229,8 @@ function onApprove(r: ConfigChangeRequest) {
         await ConfigChangeAPI.approve(r.id)
         message.success('已批准')
         await loadList()
-      } catch (e: any) {
-        message.error('批准失败: ' + (e.message || e))
+      } catch (error) {
+        console.error('批准配置变更失败:', error)
       }
     },
   })
@@ -252,8 +252,8 @@ async function onRejectSubmit() {
     message.success('已拒绝')
     rejectVisible.value = false
     await loadList()
-  } catch (e: any) {
-    message.error('拒绝失败: ' + (e.message || e))
+  } catch (error) {
+    console.error('拒绝配置变更失败:', error)
   }
 }
 
@@ -265,8 +265,8 @@ function onCancel(r: ConfigChangeRequest) {
         await ConfigChangeAPI.cancel(r.id)
         message.success('已取消')
         await loadList()
-      } catch (e: any) {
-        message.error('取消失败: ' + (e.message || e))
+      } catch (error) {
+        console.error('取消配置变更失败:', error)
       }
     },
   })

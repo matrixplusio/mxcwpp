@@ -152,6 +152,7 @@ export const menuConfig: MenuItem[] = [
     icon: SettingOutlined,
     children: [
       { key: 'users', title: '用户管理', route: '/users', adminOnly: true },
+      { key: 'rbac', title: '角色权限', route: '/rbac', adminOnly: true },
       { key: 'system-notification', title: '通知管理', route: '/system/notification', adminOnly: true },
       { key: 'system-settings', title: '基本设置', route: '/system/settings', adminOnly: true },
       { key: 'system-data-retention', title: '数据保留策略', route: '/system/data-retention', adminOnly: true },

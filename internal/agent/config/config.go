@@ -74,6 +74,13 @@ type TLSConfig struct {
 	CAFile   string `mapstructure:"ca_file"`
 	CertFile string `mapstructure:"cert_file"`
 	KeyFile  string `mapstructure:"key_file"`
+
+	// CAFingerprint 是 AC CA 证书的 SHA256 指纹（hex，可含冒号）。
+	// 随安装包下发。本地尚无 CA 文件时，agent 首连用它 pin 住 AC，杜绝中间人冒充 AC 下发恶意证书。
+	// 为空时回退到旧的 InsecureSkipVerify 首连（仅兼容期，受控内网）。
+	CAFingerprint string `mapstructure:"ca_fingerprint"`
+	// EnrollToken 是 enroll 引导令牌，经 gRPC metadata 上报 AC，换取单机证书。
+	EnrollToken string `mapstructure:"enroll_token"`
 }
 
 // LogConfig 是日志配置（已简化，不再需要，保留用于兼容）

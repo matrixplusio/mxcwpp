@@ -141,7 +141,7 @@ const handleRestore = async (record: any) => {
     await apiClient.post(`/virus/quarantine/${record.id}/restore`)
     message.success('文件已恢复')
     loadFiles()
-  } catch { message.error('恢复失败') }
+  } catch (error) { console.error('恢复文件失败:', error) }
 }
 
 const handleDelete = async (record: any) => {
@@ -149,7 +149,7 @@ const handleDelete = async (record: any) => {
     await apiClient.delete(`/virus/quarantine/${record.id}`)
     message.success('已永久删除')
     loadFiles()
-  } catch { message.error('删除失败') }
+  } catch (error) { console.error('删除文件失败:', error) }
 }
 
 const handleClearAll = async () => {
@@ -157,7 +157,7 @@ const handleClearAll = async () => {
     await apiClient.delete('/virus/quarantine/all')
     message.success('隔离箱已清空')
     loadFiles()
-  } catch { message.error('清空失败') }
+  } catch (error) { console.error('清空隔离箱失败:', error) }
 }
 
 onMounted(() => { loadFiles() })

@@ -91,6 +91,8 @@ export interface DashboardStats {
   anomalyCount?: number
   criticalAlerts?: number
   highAlerts?: number
+  mediumAlerts?: number
+  lowAlerts?: number
 }
 
 export const dashboardApi = {

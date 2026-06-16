@@ -12,7 +12,7 @@ import (
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	d := NewNVDDriver("", "", 0)
+	d := NewNVDDriver("", "")
 	if err := r.Register(d); err != nil {
 		t.Fatalf("register: %v", err)
 	}
@@ -28,8 +28,8 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 func TestRegistry_RejectDuplicate(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	_ = r.Register(NewNVDDriver("", "", 0))
-	if err := r.Register(NewNVDDriver("", "", 0)); err == nil {
+	_ = r.Register(NewNVDDriver("", ""))
+	if err := r.Register(NewNVDDriver("", "")); err == nil {
 		t.Fatal("expected duplicate error")
 	}
 }
@@ -73,7 +73,7 @@ func TestNVDDriver_Fetch_MockServer(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewNVDDriver(srv.URL, "", time.Second*5)
+	d := NewNVDDriver(srv.URL, "")
 	res, err := d.Fetch(context.Background(), time.Time{})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)

@@ -713,17 +713,17 @@
         "condition": "all",
         "rules": [
           {
-            "type": "package_installed",
+            "type": "command_exec",
             "param": [
-              "prelink",
-              "not_installed"
+              "if rpm -q prelink >/dev/null 2>&1 || dpkg -s prelink >/dev/null 2>&1; then echo installed; else echo absent; fi",
+              "^absent$"
             ]
           }
         ]
       },
       "fix": {
-        "suggestion": "卸载 prelink：yum remove prelink 或 apt remove prelink",
-        "command": "rpm -e prelink 2>/dev/null || apt-get remove -y prelink 2>/dev/null; true"
+        "suggestion": "先还原已 prelink 的二进制再卸载：prelink -ua && yum remove prelink（或 apt purge prelink）",
+        "command": "command -v prelink >/dev/null 2>&1 && prelink -ua 2>/dev/null; yum remove -y prelink 2>/dev/null || apt-get purge -y prelink 2>/dev/null; true"
       }
     }
   ]

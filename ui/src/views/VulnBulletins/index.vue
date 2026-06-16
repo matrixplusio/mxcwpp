@@ -471,8 +471,8 @@ const handleAcknowledge = async (record: VulnBulletin) => {
     message.success('通报已确认')
     loadBulletins()
     loadStatistics()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('确认通报失败:', error)
   }
 }
 
@@ -486,8 +486,8 @@ const handleResolve = async (record: VulnBulletin) => {
         message.success('通报已标记为修复')
         loadBulletins()
         loadStatistics()
-      } catch {
-        message.error('操作失败')
+      } catch (error) {
+        console.error('标记修复失败:', error)
       }
     },
   })
@@ -511,8 +511,8 @@ const handleBatchAction = async (action: string) => {
         selectedRowKeys.value = []
         loadBulletins()
         loadStatistics()
-      } catch {
-        message.error('批量操作失败')
+      } catch (error) {
+        console.error('批量操作失败:', error)
       } finally {
         batchLoading.value = false
       }
@@ -576,8 +576,8 @@ const showConfigDrawer = async () => {
   try {
     const cfg = await vulnBulletinsApi.getConfig()
     configForm.value = cfg
-  } catch {
-    message.error('获取配置失败')
+  } catch (error) {
+    console.error('获取配置失败:', error)
   } finally {
     configLoading.value = false
   }
@@ -589,8 +589,8 @@ const handleSaveConfig = async () => {
     await vulnBulletinsApi.updateConfig(configForm.value)
     message.success('配置已保存')
     configVisible.value = false
-  } catch {
-    message.error('保存配置失败')
+  } catch (error) {
+    console.error('保存配置失败:', error)
   } finally {
     configSaving.value = false
   }

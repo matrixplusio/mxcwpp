@@ -17,11 +17,8 @@ type CISAKEVDriver struct {
 	Client *http.Client
 }
 
-// NewCISAKEVDriver 构造 KEV driver。
-func NewCISAKEVDriver(timeout time.Duration) *CISAKEVDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+// NewCISAKEVDriver 构造 KEV driver。HTTP 走共享连接池（SharedHTTPClient）。
+func NewCISAKEVDriver() *CISAKEVDriver {
 	return &CISAKEVDriver{
 		URL:    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
 		Client: SharedHTTPClient(),

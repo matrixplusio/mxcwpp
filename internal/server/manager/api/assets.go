@@ -1801,6 +1801,12 @@ func (h *AssetsHandler) ExportAssets(c *gin.Context) {
 
 	const maxRows = 10000
 
+	// 先校验格式再设下载头：否则非法格式的 BadRequest（JSON 错误体）会错误带上附件下载头。
+	if format != "csv" && format != "json" {
+		BadRequest(c, "不支持的导出格式，请使用 csv 或 json")
+		return
+	}
+
 	filename := fmt.Sprintf("assets_%s_%s.%s", assetType, time.Now().Format("20060102150405"), format)
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 
@@ -1810,8 +1816,6 @@ func (h *AssetsHandler) ExportAssets(c *gin.Context) {
 	case "csv":
 		c.Header("Content-Type", "text/csv; charset=utf-8")
 		h.exportCSV(c, assetType, hostID, businessLine, maxRows)
-	default:
-		BadRequest(c, "不支持的导出格式，请使用 csv 或 json")
 	}
 }
 

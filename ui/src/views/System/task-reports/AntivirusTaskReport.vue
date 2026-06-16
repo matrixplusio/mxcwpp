@@ -393,8 +393,8 @@ const loadCompletedTasks = async () => {
   try {
     const res = await antivirusApi.listTasks({ status: 'completed', page_size: 100 }) as any
     completedTasks.value = res.items || []
-  } catch (error: any) {
-    message.error(error.message || '加载任务列表失败')
+  } catch (error) {
+    console.error('加载任务列表失败:', error)
   } finally {
     loadingTasks.value = false
   }
@@ -421,8 +421,8 @@ const handleViewSaved = async (record: GeneratedReportItem) => {
   loading.value = true
   try {
     report.value = await reportsApi.getGeneratedReport(record.id)
-  } catch (error: any) {
-    message.error(error.message || '加载报告失败')
+  } catch (error) {
+    console.error('加载报告失败:', error)
   } finally {
     loading.value = false
   }
@@ -433,16 +433,16 @@ const handleDeleteSaved = async (id: number) => {
     await reportsApi.deleteGeneratedReport(id)
     message.success('删除成功')
     await loadSavedReports()
-  } catch (error: any) {
-    message.error(error.message || '删除失败')
+  } catch (error) {
+    console.error('删除报告失败:', error)
   }
 }
 
 const handleViewReport = async (task: any) => {
   try {
     report.value = await reportsApi.getAntivirusExecutiveReport(task.id)
-  } catch (error: any) {
-    message.error(error.message || '生成报告失败')
+  } catch (error) {
+    console.error('生成报告失败:', error)
   }
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/imkerbos/mxsec-platform/internal/server/config"
 	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy"
+	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
 )
 
 // AlertAnalysisHandler LLM 告警分析 API 处理器 (P1-10: 异步队列模式).
@@ -111,7 +112,12 @@ func (h *AlertAnalysisHandler) runAnalysis(task *analysisTask, apiURL, apiKey, m
 				zap.Any("panic", r))
 		}
 	}()
-	assist := llmproxy.NewLLMAssist(h.db, h.logger, apiURL, apiKey, model)
+	// 批4 合规：按配置构造数据出境策略——默认不出境（仅本地模型），外发前脱敏 IP/主机名。
+	policy := llmproxy.EgressPolicy{AllowDataEgress: h.cfg.LLM.AllowDataEgress}
+	if h.cfg.LLM.Desensitize {
+		policy.Desensitizer = redact.New(h.cfg.LLM.SensitiveHostSuffixes)
+	}
+	assist := llmproxy.NewLLMAssist(h.db, h.logger, apiURL, apiKey, model, policy)
 	result, err := assist.AnalyzeAlert(uint(task.AlertID))
 	h.mu.Lock()
 	defer h.mu.Unlock()

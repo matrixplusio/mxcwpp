@@ -63,11 +63,12 @@ func TestMiddleware_BlocksMissingTenant(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x", nil)
 	r.ServeHTTP(w, req)
 
-	if w.Code != 401 {
-		t.Fatalf("expected 401 missing_tenant, got %d body=%s", w.Code, w.Body.String())
+	// 统一响应：缺租户 → HTTP 200 + body code 40100。
+	if w.Code != 200 {
+		t.Fatalf("expected 200 unified response, got %d body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "missing_tenant") {
-		t.Fatalf("expected missing_tenant code in body, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "40100") {
+		t.Fatalf("expected code 40100 missing_tenant in body, got %s", w.Body.String())
 	}
 }
 
@@ -118,8 +119,9 @@ func TestMiddleware_BlocksPlatformAdminFromBusinessPath(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x", nil)
 	r.ServeHTTP(w, req)
 
-	if w.Code != 401 {
-		t.Fatalf("expected 401 missing_tenant for platform admin without X-Tenant-ID, got %d", w.Code)
+	// 统一响应：平台超管无当前租户 → HTTP 200 + body code 40100（成功也是 200，故必须校验 code）。
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "40100") {
+		t.Fatalf("expected 200 + code 40100 missing_tenant for platform admin without X-Tenant-ID, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -158,8 +160,9 @@ func TestAdminMiddleware_BlocksNormalUser(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x", nil)
 	r.ServeHTTP(w, req)
 
-	if w.Code != 403 {
-		t.Fatalf("expected 403 platform_admin_required, got %d body=%s", w.Code, w.Body.String())
+	// 统一响应：非超管访问 admin → HTTP 200 + body code 40300（成功也是 200，故必须校验 code）。
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "40300") {
+		t.Fatalf("expected 200 + code 40300 platform_admin_required, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -207,11 +210,12 @@ func TestHeaderOverride_NormalUserCannotSpoof(t *testing.T) {
 	req.Header.Set("X-Tenant-ID", "t-bank-b") // 假冒别的租户
 	r.ServeHTTP(w, req)
 
-	if w.Code != 403 {
-		t.Fatalf("expected 403 cross_tenant_denied, got %d body=%s", w.Code, w.Body.String())
+	// 统一响应：普通用户冒充别的租户 → HTTP 200 + body code 40300。
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "cross_tenant_denied") {
-		t.Fatalf("expected cross_tenant_denied in body, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "40300") {
+		t.Fatalf("expected code 40300 cross_tenant_denied in body, got %s", w.Body.String())
 	}
 }
 

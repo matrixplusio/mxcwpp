@@ -440,8 +440,8 @@ const regenerateToken = async () => {
     cluster.value.auditToken = res.auditToken
     cluster.value.webhookURL = res.webhookURL
     message.success('Audit Token 已重新生成')
-  } catch {
-    message.error('重新生成失败')
+  } catch (error) {
+    console.error('重新生成 Token 失败:', error)
   }
 }
 
@@ -463,8 +463,8 @@ const saveGCPConfig = async () => {
     cluster.value.gcpHasCredentials = res.gcpHasCredentials
     gcpForm.value.credentialsJson = ''
     message.success('GCP Pub/Sub 配置已保存')
-  } catch {
-    message.error('保存 GCP 配置失败')
+  } catch (error) {
+    console.error('保存 GCP 配置失败:', error)
   } finally {
     gcpSaving.value = false
   }
@@ -480,8 +480,8 @@ const deleteGCPConfig = async () => {
     cluster.value.gcpHasCredentials = false
     gcpForm.value = { enabled: false, projectId: '', subscription: '', credentialsJson: '' }
     message.success('GCP Pub/Sub 配置已清除')
-  } catch {
-    message.error('清除 GCP 配置失败')
+  } catch (error) {
+    console.error('清除 GCP 配置失败:', error)
   } finally {
     gcpSaving.value = false
   }

@@ -187,8 +187,8 @@ async function handleCheck() {
   try {
     const res = await threatIntelApi.checkIOC(iocType.value, checkValue.value)
     if (res) checkResult.value = res
-  } catch {
-    message.error('查询失败')
+  } catch (error) {
+    console.error('IOC 碰撞查询失败:', error)
   }
 }
 
@@ -198,8 +198,8 @@ async function handleSync() {
     await threatIntelApi.triggerSync()
     message.success('IOC 同步已触发')
     setTimeout(() => { loadSyncStatus(); fetchStats(); fetchIOCs() }, 3000)
-  } catch {
-    message.error('同步失败')
+  } catch (error) {
+    console.error('触发 IOC 同步失败:', error)
   } finally {
     syncing.value = false
   }

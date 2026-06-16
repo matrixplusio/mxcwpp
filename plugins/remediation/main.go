@@ -169,6 +169,15 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 		return sendResult(client, payload.TaskID, 1, "", fmt.Sprintf("命令安全校验失败: %v", err), logger)
 	}
 
+	// Component 会被拼入仓库查询命令(checkPkgInstalled/checkPkgAvailable 的 sh -c)，
+	// 严格白名单防命令注入（与 precheck 一致），杜绝 "pkg; rm -rf /" 之类。
+	if payload.Component != "" && !validPkgName.MatchString(payload.Component) {
+		logger.Warn("component rejected by safety check",
+			zap.Uint("task_id", payload.TaskID),
+			zap.String("component", payload.Component))
+		return sendResult(client, payload.TaskID, 1, "", fmt.Sprintf("组件名非法（含危险字符）: %s", payload.Component), logger)
+	}
+
 	// 审计日志（独立于常规日志，便于安全审计）
 	logger.Info("[AUDIT] remediation command accepted",
 		zap.Uint("task_id", payload.TaskID),

@@ -117,7 +117,7 @@ const loadWhitelist = async () => {
 }
 
 const handleTableChange = (pag: any) => { pagination.value.current = pag.current; pagination.value.pageSize = pag.pageSize; loadWhitelist() }
-const handleToggle = async (record: any, checked: boolean) => { try { await apiClient.put(`/kube/whitelist/${record.id}`, { status: checked ? 'enabled' : 'disabled' }); message.success('状态已更新'); loadWhitelist() } catch { message.error('操作失败') } }
+const handleToggle = async (record: any, checked: boolean) => { try { await apiClient.put(`/kube/whitelist/${record.id}`, { status: checked ? 'enabled' : 'disabled' }); message.success('状态已更新'); loadWhitelist() } catch (error) { console.error('更新白名单状态失败:', error) } }
 
 const handleEdit = (record: any) => {
   editingId.value = record.id
@@ -136,7 +136,7 @@ const handleSubmit = async () => {
   finally { submitLoading.value = false }
 }
 
-const handleDelete = async (id: string) => { try { await apiClient.delete(`/kube/whitelist/${id}`); message.success('已删除'); loadWhitelist() } catch { message.error('删除失败') } }
+const handleDelete = async (id: string) => { try { await apiClient.delete(`/kube/whitelist/${id}`); message.success('已删除'); loadWhitelist() } catch (error) { console.error('删除白名单失败:', error) } }
 
 const resetForm = () => { editingId.value = undefined; form.value = { name: '', clusterId: undefined, alarmTypes: [], namespace: '', podPattern: '', remark: '' }; formRef.value?.resetFields() }
 

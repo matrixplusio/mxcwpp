@@ -252,7 +252,7 @@ const handleSubmit = async () => {
 
 const handleDelete = async (id: string) => {
   try { await apiClient.delete(`/kube/clusters/${id}`); message.success('集群已移除'); loadClusters() }
-  catch { message.error('移除失败') }
+  catch (error) { console.error('移除集群失败:', error) }
 }
 
 const resetForm = () => {

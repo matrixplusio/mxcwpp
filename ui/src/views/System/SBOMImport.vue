@@ -144,8 +144,8 @@ const handleImport = async () => {
     message.success('SBOM 导入成功')
     fileList.value = []
     loadProjects()
-  } catch {
-    message.error('SBOM 导入失败')
+  } catch (error) {
+    console.error('SBOM 导入失败:', error)
   } finally {
     importing.value = false
   }

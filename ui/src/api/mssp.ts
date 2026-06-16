@@ -76,7 +76,7 @@ export const MSSPApi = {
     page?: number
     page_size?: number
   }): Promise<ApiResponse<{ items: ChildTenant[]; total: number }>> {
-    return get('/mssp/child-tenants', params)
+    return get('/mssp/child-tenants', { params })
   },
 
   /** 子租户详情. */
@@ -127,7 +127,7 @@ export const MSSPApi = {
     page?: number
     page_size?: number
   }): Promise<ApiResponse<{ items: CrossTenantAlert[]; total: number }>> {
-    return get('/mssp/alerts', params)
+    return get('/mssp/alerts', { params })
   },
 
   /** 一键代客户响应 (代客户 ack/close alert). */

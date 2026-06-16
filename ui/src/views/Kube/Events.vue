@@ -151,7 +151,7 @@ const loadEvents = async () => {
 
 const handleTableChange = (pag: any) => { pagination.value.current = pag.current; pagination.value.pageSize = pag.pageSize; loadEvents() }
 const showEventDetail = (record: any) => { detailRecord.value = record; showDetail.value = true }
-const handleEvent = async (record: any) => { try { await apiClient.post(`/kube/events/${record.id}/handle`); message.success('已处理'); loadEvents() } catch { message.error('操作失败') } }
+const handleEvent = async (record: any) => { try { await apiClient.post(`/kube/events/${record.id}/handle`); message.success('已处理'); loadEvents() } catch (error) { console.error('处理事件失败:', error) } }
 
 const loadClusters = async () => {
   try {

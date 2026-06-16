@@ -551,8 +551,8 @@ const handlePreCheckAllOnline = () => {
         message.success(
           `已下发：${r.hosts_dispatched}/${r.hosts_total} 主机，共 ${r.scheduled} 条任务（失败 ${r.failed}），结果数十分钟内陆续回报`,
         )
-      } catch (err: any) {
-        message.error('全集群 Pre-check 失败: ' + (err?.message || err))
+      } catch (error) {
+        console.error('全集群 Pre-check 失败:', error)
       } finally {
         preCheckAllOnlineLoading.value = false
       }
@@ -930,8 +930,8 @@ const handleIgnore = async (record: Vulnerability) => {
     await vulnerabilitiesApi.ignore(record.id)
     message.success('已忽略该漏洞')
     loadVulns()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('忽略漏洞失败:', error)
   }
 }
 
@@ -940,8 +940,8 @@ const handleUnignore = async (record: Vulnerability) => {
     await vulnerabilitiesApi.unignore(record.id)
     message.success('已取消忽略')
     loadVulns()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('取消忽略失败:', error)
   }
 }
 
@@ -960,8 +960,8 @@ const handleBatchRemediate = async () => {
     msg += '，请前往修复任务页面确认执行'
     message.success(msg)
     selectedRowKeys.value = []
-  } catch {
-    message.error('批量创建修复任务失败')
+  } catch (error) {
+    console.error('批量创建修复任务失败:', error)
   } finally {
     batchLoading.value = false
   }
@@ -976,8 +976,8 @@ const handleSync = async () => {
     await vulnerabilitiesApi.triggerSync()
     message.success('漏洞库同步任务已启动（NVD + Red Hat）')
     setTimeout(() => loadScanStatus(), 2000)
-  } catch {
-    message.error('启动漏洞库同步失败')
+  } catch (error) {
+    console.error('启动漏洞库同步失败:', error)
   }
 }
 
@@ -988,8 +988,8 @@ const handleScanMenu = async ({ key }: { key: string }) => {
     await vulnerabilitiesApi.triggerScan(scanType)
     message.success(`${label}任务已启动`)
     setTimeout(() => loadScanStatus(), 2000)
-  } catch {
-    message.error(`${label}任务启动失败`)
+  } catch (error) {
+    console.error(`${label}任务启动失败:`, error)
   }
 }
 

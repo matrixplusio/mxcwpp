@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    :open="visible"
+    :open="open"
     :title="user ? '编辑用户' : '新建用户'"
     :confirm-loading="loading"
     @ok="handleSubmit"
@@ -53,14 +53,14 @@ import type { FormInstance } from 'ant-design-vue/es/form'
 import { usersApi, type User, type CreateUserRequest, type UpdateUserRequest } from '@/api/users'
 
 interface Props {
-  visible: boolean
+  open: boolean
   user?: User | null
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean]
+  'update:open': [value: boolean]
   success: []
 }>()
 
@@ -108,7 +108,7 @@ const rules = {
 }
 
 watch(
-  () => props.visible,
+  () => props.open,
   (visible) => {
     if (visible) {
       if (props.user) {
@@ -167,13 +167,13 @@ const handleSubmit = async () => {
       // 表单验证错误
       return
     }
-    message.error('操作失败: ' + (error.message || '未知错误'))
+    console.error('保存用户失败:', error)
   } finally {
     loading.value = false
   }
 }
 
 const handleCancel = () => {
-  emit('update:visible', false)
+  emit('update:open', false)
 }
 </script>

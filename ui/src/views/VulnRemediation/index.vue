@@ -183,7 +183,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { message } from 'ant-design-vue'
 import { BugOutlined, CheckCircleOutlined, WarningOutlined, BarChartOutlined } from '@ant-design/icons-vue'
 import { vulnerabilitiesApi } from '@/api/vulnerabilities'
 import type { RemediationStats, DailyTrend } from '@/api/vulnerabilities'
@@ -271,8 +270,8 @@ const barHeight = (value: number) => {
 const loadStats = async () => {
   try {
     stats.value = await vulnerabilitiesApi.getRemediationStats()
-  } catch {
-    message.error('加载修复统计失败')
+  } catch (error) {
+    console.error('加载修复统计失败:', error)
   }
 }
 

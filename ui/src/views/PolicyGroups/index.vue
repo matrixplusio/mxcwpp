@@ -491,7 +491,6 @@ const loadPolicyGroups = async () => {
     policyGroups.value = response.data?.items || response.items || []
   } catch (error) {
     console.error('加载策略组失败:', error)
-    message.error('加载策略组失败')
   } finally {
     loading.value = false
   }
@@ -507,7 +506,6 @@ const loadGroupPolicies = async () => {
     groupPolicies.value = response.items || []
   } catch (error) {
     console.error('加载策略列表失败:', error)
-    message.error('加载策略列表失败')
   } finally {
     policiesLoading.value = false
   }
@@ -583,7 +581,6 @@ const handleToggleGroup = async (group: PolicyGroup) => {
     loadPolicyGroups()
   } catch (error) {
     console.error('更新策略组失败:', error)
-    message.error('更新策略组失败')
   }
 }
 
@@ -600,13 +597,8 @@ const handleDeleteGroup = (group: PolicyGroup) => {
         await policyGroupsApi.delete(group.id)
         message.success('删除成功')
         loadPolicyGroups()
-      } catch (error: any) {
+      } catch (error) {
         console.error('删除策略组失败:', error)
-        if (error.response?.status === 409) {
-          message.error('策略组下存在策略，无法删除')
-        } else {
-          message.error('删除策略组失败')
-        }
       }
     },
   })
@@ -660,11 +652,6 @@ const handleGroupModalOk = async () => {
       return
     }
     console.error('保存策略组失败:', error)
-    if (error.response?.status === 409) {
-      message.error('策略组 ID 已存在')
-    } else {
-      message.error('保存策略组失败')
-    }
   } finally {
     groupModalLoading.value = false
   }
@@ -715,7 +702,6 @@ const handleTogglePolicy = async (policy: Policy, checked: boolean) => {
     loadGroupPolicies()
   } catch (error) {
     console.error('更新策略失败:', error)
-    message.error('更新策略失败')
   }
 }
 
@@ -727,7 +713,6 @@ const handleDeletePolicy = async (policy: Policy) => {
     loadGroupPolicies()
   } catch (error) {
     console.error('删除策略失败:', error)
-    message.error('删除策略失败')
   }
 }
 
@@ -750,7 +735,6 @@ const handleBatchEnable = async (enabled: boolean) => {
     loadGroupPolicies()
   } catch (error) {
     console.error('批量操作失败:', error)
-    message.error('批量操作失败')
   }
 }
 
@@ -763,7 +747,6 @@ const handleBatchDelete = async () => {
     loadGroupPolicies()
   } catch (error) {
     console.error('批量删除失败:', error)
-    message.error('批量删除失败')
   }
 }
 
@@ -775,7 +758,6 @@ const handleBatchExport = async () => {
     message.success(`已导出 ${selectedPolicyIds.value.length} 个策略`)
   } catch (error) {
     console.error('批量导出失败:', error)
-    message.error('批量导出失败')
   }
 }
 
@@ -809,7 +791,6 @@ const handleExportMenuClick = async ({ key }: { key: string }) => {
     }
   } catch (error) {
     console.error('导出失败:', error)
-    message.error('导出失败')
   }
 }
 
@@ -855,9 +836,8 @@ const handleImportFile = async (file: File) => {
             loadGroupPolicies()
           }
           loadPolicyGroups()
-        } catch (error: any) {
+        } catch (error) {
           console.error('导入失败:', error)
-          message.error(error.response?.data?.message || '导入失败')
         }
       },
     })

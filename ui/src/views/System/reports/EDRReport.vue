@@ -522,7 +522,6 @@ const loadData = async () => {
     report.value = data
   } catch (e) {
     console.error('加载 EDR 报告失败:', e)
-    message.error('加载 EDR 报告失败')
   } finally {
     loading.value = false
   }
@@ -544,13 +543,7 @@ const exportPDF = async () => {
     URL.revokeObjectURL(url)
     message.success('PDF 已生成')
   } catch (e: any) {
-    console.error('PDF 导出失败', e)
-    const status = e?.response?.status
-    if (status === 400) {
-      message.warning('PDF 服务未启用：请联系管理员部署 Gotenberg sidecar 后重试。当前可用浏览器打印 (Ctrl/Cmd + P)')
-    } else {
-      message.error(`PDF 导出失败: ${e?.response?.data?.message || e?.message || e}`)
-    }
+    console.error('PDF 导出失败:', e)
   } finally {
     exporting.value = false
   }

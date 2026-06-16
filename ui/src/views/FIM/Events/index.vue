@@ -459,8 +459,8 @@ const doConfirm = async () => {
     confirmModalVisible.value = false
     fetchEvents()
     fetchStats()
-  } catch {
-    message.error('确认失败')
+  } catch (error) {
+    console.error('确认事件失败:', error)
   } finally {
     confirmLoading.value = false
   }
@@ -478,8 +478,8 @@ const handleBatchConfirm = async () => {
     selectedRowKeys.value = []
     fetchEvents()
     fetchStats()
-  } catch {
-    message.error('批量确认失败')
+  } catch (error) {
+    console.error('批量确认事件失败:', error)
   } finally {
     batchConfirmLoading.value = false
   }

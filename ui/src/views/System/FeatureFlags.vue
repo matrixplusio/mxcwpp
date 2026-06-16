@@ -125,7 +125,6 @@ const loadList = async () => {
     items.value = res.items ?? []
   } catch (e) {
     console.error('加载功能开关失败', e)
-    message.error('加载功能开关失败')
   } finally {
     loading.value = false
   }
@@ -146,10 +145,8 @@ const handleSubmit = async () => {
     message.success(`${editing.value.key} 已更新为 ${form.value}，请重启相关服务生效`)
     modalVisible.value = false
     loadList()
-  } catch (e: any) {
-    if (!e?.errorFields) {
-      message.error(`更新失败: ${e?.message || e}`)
-    }
+  } catch (e) {
+    console.error('更新功能开关失败:', e)
   } finally {
     submitLoading.value = false
   }

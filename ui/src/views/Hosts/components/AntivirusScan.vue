@@ -248,8 +248,8 @@ const handleQuarantine = async (record: AntivirusScanResult) => {
     await antivirusApi.quarantineResult(record.id)
     message.success('已隔离该文件')
     loadResults()
-  } catch {
-    message.error('隔离操作失败')
+  } catch (error) {
+    console.error('隔离文件失败:', error)
   }
 }
 

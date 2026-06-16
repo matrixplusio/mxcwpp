@@ -22,10 +22,7 @@ type SUSEDriver struct {
 }
 
 // NewSUSEDriver 构造 SUSE driver。
-func NewSUSEDriver(timeout time.Duration) *SUSEDriver {
-	if timeout <= 0 {
-		timeout = 90 * time.Second
-	}
+func NewSUSEDriver() *SUSEDriver {
 	return &SUSEDriver{
 		URL:    "https://ftp.suse.com/pub/projects/security/json/suse-cvrf-cve-master.json",
 		Client: SharedHTTPClient(),

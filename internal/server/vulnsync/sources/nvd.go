@@ -19,12 +19,9 @@ type NVDDriver struct {
 }
 
 // NewNVDDriver 构造 NVD driver。
-func NewNVDDriver(baseURL, apiKey string, timeout time.Duration) *NVDDriver {
+func NewNVDDriver(baseURL, apiKey string) *NVDDriver {
 	if baseURL == "" {
 		baseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-	}
-	if timeout <= 0 {
-		timeout = 60 * time.Second
 	}
 	return &NVDDriver{
 		BaseURL: baseURL,

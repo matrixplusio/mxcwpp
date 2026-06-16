@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -61,6 +62,8 @@ var (
 	buildVersion  string // 构建版本（构建时嵌入）
 	buildTime     string // 构建时间（构建时嵌入）
 	signPublicKey string // Plugin 签名验证公钥（base64，构建时嵌入）
+	caFingerprint string // AC CA 证书 SHA256 指纹（构建时嵌入，首连 pin AC 防中间人）
+	enrollToken   string // enroll 引导令牌（构建时嵌入，换取单机证书）
 )
 
 func main() {
@@ -158,6 +161,19 @@ func main() {
 	}
 	// 设置构建时嵌入的插件签名公钥
 	cfg.SignPublicKey = signPublicKey
+
+	// Agent↔AC 信任链：CA 指纹 + enroll 令牌。
+	// 环境变量优先（便于安装脚本按机注入），其次构建时嵌入。
+	if v := os.Getenv("MXSEC_CA_FINGERPRINT"); v != "" {
+		cfg.Local.TLS.CAFingerprint = v
+	} else if caFingerprint != "" {
+		cfg.Local.TLS.CAFingerprint = caFingerprint
+	}
+	if v := os.Getenv("MXSEC_ENROLL_TOKEN"); v != "" {
+		cfg.Local.TLS.EnrollToken = v
+	} else if enrollToken != "" {
+		cfg.Local.TLS.EnrollToken = enrollToken
+	}
 
 	// 3. 初始化日志（默认配置：按天轮转，保留7天）
 	log, err := logger.Init(logger.LogConfig{
@@ -263,16 +279,20 @@ func main() {
 		// 处理证书包更新
 		if certBundle != nil {
 			certDir := "/var/lib/mxsec-agent/certs"
+			// 记录同步前是否已有客户端证书：无则本次为首次签发(enroll)，完成后主动重连切到单机证书 mTLS。
+			_, statErr := os.Stat(filepath.Join(certDir, "client.crt"))
+			wasEnrollment := os.IsNotExist(statErr)
 			if err := cfg.SyncCertificatesFromServer(certBundle, certDir); err != nil {
 				log.Error("failed to sync certificates from server", zap.Error(err))
 			} else {
 				log.Info("certificates updated from server",
 					zap.String("cert_dir", certDir),
-					zap.String("hint", "证书已保存，后续连接将使用正式证书"),
 				)
-				// 证书更新后，需要重新建立连接（使用新证书）
-				// 注意：当前连接会继续使用，下次重连时会自动使用新证书
-				log.Info("certificates saved successfully, will use them for next connection")
+				if wasEnrollment {
+					// 首次签发完成：关闭当前(首连/无证书)连接，下次重连即用单机证书走完整 mTLS。
+					log.Info("首次签发单机证书完成，主动重连以启用单机证书 mTLS")
+					_ = connMgr.Close()
+				}
 			}
 		}
 

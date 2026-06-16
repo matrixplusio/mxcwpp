@@ -3,7 +3,13 @@
   "name": "强制访问控制安全基线",
   "version": "1.0.0",
   "description": "SELinux/MAC 强制访问控制安全配置检查（参考 CIS Benchmark）",
-  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel"],
+  "os_family": [
+    "rocky",
+    "centos",
+    "oracle",
+    "almalinux",
+    "rhel"
+  ],
   "os_version": ">=7",
   "enabled": true,
   "rules": [
@@ -18,7 +24,9 @@
         "rules": [
           {
             "type": "package_installed",
-            "param": ["libselinux"]
+            "param": [
+              "libselinux"
+            ]
           }
         ]
       },
@@ -38,11 +46,19 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/default/grub", "selinux=0", "not_match"]
+            "param": [
+              "/etc/default/grub",
+              "selinux=0",
+              "not_match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/default/grub", "enforcing=0", "not_match"]
+            "param": [
+              "/etc/default/grub",
+              "enforcing=0",
+              "not_match"
+            ]
           }
         ]
       },
@@ -62,11 +78,17 @@
         "rules": [
           {
             "type": "file_exists",
-            "param": ["/etc/selinux/config"]
+            "param": [
+              "/etc/selinux/config"
+            ]
           },
           {
             "type": "file_kv",
-            "param": ["/etc/selinux/config", "SELINUXTYPE", "^(targeted|mls)$"]
+            "param": [
+              "/etc/selinux/config",
+              "SELINUXTYPE",
+              "^(targeted|mls)$"
+            ]
           }
         ]
       },
@@ -86,11 +108,17 @@
         "rules": [
           {
             "type": "file_exists",
-            "param": ["/etc/selinux/config"]
+            "param": [
+              "/etc/selinux/config"
+            ]
           },
           {
             "type": "file_kv",
-            "param": ["/etc/selinux/config", "SELINUX", "^enforcing$"]
+            "param": [
+              "/etc/selinux/config",
+              "SELINUX",
+              "^enforcing$"
+            ]
           }
         ]
       },
@@ -110,7 +138,10 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["getenforce", "Enforcing"]
+            "param": [
+              "getenforce",
+              "Enforcing"
+            ]
           }
         ]
       },
@@ -130,13 +161,16 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["ps -eZ 2>/dev/null | grep -c unconfined_service_t || echo 0", "^0$"]
+            "param": [
+              "ps -eZ 2>/dev/null | grep -c unconfined_service_t || echo 0",
+              "^0$"
+            ]
           }
         ]
       },
       "fix": {
         "suggestion": "检查以 unconfined_service_t 域运行的服务，并为其配置正确的 SELinux 策略",
-        "command": "ps -eZ | grep unconfined_service_t"
+        "command": ""
       }
     },
     {
@@ -150,13 +184,16 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["ausearch -m avc --start today 2>/dev/null | wc -l || echo 0", "^[0-9]{1,2}$"]
+            "param": [
+              "systemctl is-active auditd 2>/dev/null || echo inactive",
+              "^active$"
+            ]
           }
         ]
       },
       "fix": {
         "suggestion": "检查 SELinux 拒绝日志并解决相关问题",
-        "command": "ausearch -m avc --start today | audit2why"
+        "command": "rpm -q audit >/dev/null 2>&1 || { dnf install -y audit >/dev/null 2>&1 || yum install -y audit; }; systemctl enable auditd >/dev/null 2>&1; service auditd restart >/dev/null 2>&1 || systemctl restart auditd >/dev/null 2>&1; systemctl is-active auditd >/dev/null 2>&1"
       }
     }
   ]

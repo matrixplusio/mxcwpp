@@ -37,6 +37,7 @@ type Rule struct {
 	Description  string      `gorm:"column:description;type:text" json:"description"`
 	Severity     string      `gorm:"column:severity;type:varchar(20)" json:"severity"`
 	Enabled      bool        `gorm:"column:enabled;type:boolean;default:true" json:"enabled"`
+	Builtin      bool        `gorm:"column:builtin;type:boolean;default:false;index" json:"builtin"`       // 内置规则(文件同步管理)；false=用户导入/自建，启动同步永不覆盖
 	TargetType   string      `gorm:"column:target_type;type:varchar(20);default:'all'" json:"target_type"` // 废弃，保留向后兼容
 	RuntimeTypes StringArray `gorm:"column:runtime_types;type:json" json:"runtime_types"`                  // 适用的运行时类型：["vm", "docker", "k8s"]，空表示全部
 	CheckConfig  CheckConfig `gorm:"column:check_config;type:json" json:"check_config"`

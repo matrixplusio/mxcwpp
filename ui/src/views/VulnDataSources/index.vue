@@ -222,8 +222,8 @@ const loadSources = async () => {
   loading.value = true
   try {
     sources.value = await vulnDataSourcesApi.list()
-  } catch (err: any) {
-    message.error('加载失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('加载数据源失败:', error)
   } finally {
     loading.value = false
   }
@@ -236,8 +236,8 @@ const handleToggle = async (record: VulnDataSource, enabled: boolean) => {
     const idx = sources.value.findIndex(s => s.id === record.id)
     if (idx >= 0) sources.value[idx] = updated
     message.success(`${record.displayName} 已${enabled ? '启用' : '禁用'}`)
-  } catch (err: any) {
-    message.error('切换失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('切换数据源状态失败:', error)
   } finally {
     updatingId.value = null
   }
@@ -252,8 +252,8 @@ const handleTest = async (record: VulnDataSource) => {
     } else {
       message.error(`${record.displayName} 不可达: ${r.error || 'HTTP ' + r.http_status}`)
     }
-  } catch (err: any) {
-    message.error('测试失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('测试连接失败:', error)
   } finally {
     testingId.value = null
   }
@@ -265,8 +265,8 @@ const handleSync = async (record: VulnDataSource) => {
     const r = await vulnDataSourcesApi.triggerSync(record.id)
     message.success(r?.message || '同步已触发')
     setTimeout(loadSources, 3000)
-  } catch (err: any) {
-    message.error('触发失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('触发同步失败:', error)
   } finally {
     syncingId.value = null
   }

@@ -166,8 +166,8 @@ const handleAck = async (record: any) => {
     await apiClient.post(`/monitor/service-alerts/${record.id}/ack`)
     message.success('已确认告警')
     loadAlerts()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('确认服务告警失败:', error)
   }
 }
 

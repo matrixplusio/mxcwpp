@@ -37,10 +37,7 @@ type CompleteRequest struct {
 func (h *CompleteAPIHandler) Complete(c *gin.Context) {
 	var req CompleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request",
-			"hint":  err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"code": http.StatusBadRequest, "message": "请求参数无效"})
 		return
 	}
 
@@ -64,20 +61,17 @@ func (h *CompleteAPIHandler) Complete(c *gin.Context) {
 			zap.String("model", req.Model),
 			zap.String("tenant_id", req.TenantID),
 			zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": "complete failed",
-			"hint":  err.Error(),
-		})
+		c.JSON(http.StatusBadGateway, gin.H{"code": http.StatusBadGateway, "message": "模型补全失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{
 		"content":       resp.Content,
 		"model":         resp.Model,
 		"finish_reason": resp.FinishReason,
 		"tokens_in":     resp.TokensIn,
 		"tokens_out":    resp.TokensOut,
 		"provider":      resp.Provider,
-	})
+	}})
 }
 
 // EmbedRequest /embed 请求体。
@@ -91,7 +85,7 @@ type EmbedRequest struct {
 func (h *CompleteAPIHandler) Embed(c *gin.Context) {
 	var req EmbedRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "hint": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": http.StatusBadRequest, "message": "请求参数无效"})
 		return
 	}
 	emb, err := h.router.Embed(c.Request.Context(), req.Text, req.Model)
@@ -100,14 +94,14 @@ func (h *CompleteAPIHandler) Embed(c *gin.Context) {
 			zap.String("model", req.Model),
 			zap.String("tenant_id", req.TenantID),
 			zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"error": "embed failed", "hint": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"code": http.StatusBadGateway, "message": "向量化失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{
 		"model":     req.Model,
 		"dimension": len(emb),
 		"embedding": emb,
-	})
+	}})
 }
 
 // ServerSetup 把 handler 挂到 NewHTTPHandler。

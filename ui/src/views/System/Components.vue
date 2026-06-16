@@ -852,8 +852,8 @@ const loadComponents = async () => {
   try {
     const data = await componentsApi.list()
     components.value = data || []
-  } catch (error: any) {
-    message.error(error.message || '加载组件列表失败')
+  } catch (error) {
+    console.error('加载组件列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -886,8 +886,8 @@ const handleBroadcastPluginConfigs = async () => {
 
     // 提示用户可以查看推送记录
     message.info('推送记录已保存，可点击"推送记录"按钮查看详情和进度', 5)
-  } catch (error: any) {
-    message.error(error.message || '推送失败')
+  } catch (error) {
+    console.error('推送插件配置失败:', error)
   } finally {
     broadcasting.value = false
   }
@@ -913,8 +913,8 @@ const handlePushAgentUpdate = async () => {
 
     // 提示用户可以查看推送记录
     message.info('推送记录已保存，可点击"推送记录"按钮查看详情和进度', 5)
-  } catch (error: any) {
-    message.error(error.message || '推送 Agent 更新失败')
+  } catch (error) {
+    console.error('推送 Agent 更新失败:', error)
   } finally {
     pushingAgentUpdate.value = false
   }
@@ -938,8 +938,8 @@ const handleCreate = async () => {
     showCreateModal.value = false
     resetCreateForm()
     loadComponents()
-  } catch (error: any) {
-    message.error(error.message || '创建失败')
+  } catch (error) {
+    console.error('创建组件失败:', error)
   } finally {
     creating.value = false
   }
@@ -1018,8 +1018,8 @@ const handleRelease = async () => {
     resetReleaseForm()
     loadComponents()
     loadPluginStatus()
-  } catch (error: any) {
-    message.error(error.message || '发布失败')
+  } catch (error) {
+    console.error('发布版本失败:', error)
   } finally {
     releasing.value = false
   }
@@ -1052,8 +1052,8 @@ const openVersionsModal = async (component: Component) => {
   try {
     const data = await componentsApi.listVersions(component.id)
     versions.value = data.versions || []
-  } catch (error: any) {
-    message.error(error.message || '加载版本列表失败')
+  } catch (error) {
+    console.error('加载版本列表失败:', error)
   } finally {
     loadingVersions.value = false
   }
@@ -1069,8 +1069,8 @@ const setLatestVersion = async (version: ComponentVersion) => {
     openVersionsModal(selectedComponent.value)
     loadComponents()
     loadPluginStatus()
-  } catch (error: any) {
-    message.error(error.message || '设置失败')
+  } catch (error) {
+    console.error('设置最新版本失败:', error)
   }
 }
 
@@ -1082,8 +1082,8 @@ const deleteVersion = async (version: ComponentVersion) => {
     message.success('删除成功')
     openVersionsModal(selectedComponent.value)
     loadComponents()
-  } catch (error: any) {
-    message.error(error.message || '删除失败')
+  } catch (error) {
+    console.error('删除版本失败:', error)
   }
 }
 
@@ -1093,8 +1093,8 @@ const deleteComponent = async (component: Component) => {
     await componentsApi.delete(component.id)
     message.success('删除成功')
     loadComponents()
-  } catch (error: any) {
-    message.error(error.message || '删除失败')
+  } catch (error) {
+    console.error('删除组件失败:', error)
   }
 }
 
@@ -1191,8 +1191,8 @@ const loadPushRecords = async () => {
     })
     pushRecords.value = response.items || []
     pushRecordPagination.total = response.total || 0
-  } catch (error: any) {
-    message.error(error.message || '加载推送记录失败')
+  } catch (error) {
+    console.error('加载推送记录失败:', error)
   } finally {
     loadingPushRecords.value = false
   }
@@ -1213,8 +1213,8 @@ const viewPushRecordDetail = async (record: ComponentPushRecord) => {
   try {
     const detail = await componentsApi.getPushRecord(record.id)
     selectedPushRecord.value = detail
-  } catch (error: any) {
-    message.error(error.message || '加载推送记录详情失败')
+  } catch (error) {
+    console.error('加载推送记录详情失败:', error)
   } finally {
     loadingPushRecordDetail.value = false
   }

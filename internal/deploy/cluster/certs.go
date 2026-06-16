@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
 )
 
 // LoadCertificatesFromDir 从目录加载已有证书。
@@ -176,24 +178,20 @@ func GenerateCertificates(cfg *Config) (*CertificateBundle, error) {
 	return bundle, nil
 }
 
+// SignAgentCert 用 bundle 中现有的 CA 给单台 agent 签发独立客户端证书。
+// CommonName 设为 agentID，供 AC 在应用层校验 TLS peer 证书 CN 与上报 AgentID 一致（一机一证）。
+// 与全网共享的 agent.crt 不同：每台 agent 一张，失陷可单独吊销，私钥泄露不影响他机。
+// 返回新签发的 certPEM 与 keyPEM；CA 与 bundle 内其他证书不变。
+func SignAgentCert(bundle *CertificateBundle, agentID string) (certPEM []byte, keyPEM []byte, err error) {
+	if bundle == nil {
+		return nil, nil, fmt.Errorf("bundle 为空")
+	}
+	return certissue.SignAgentCert(bundle.CACert, bundle.CAKey, agentID, 0)
+}
+
 // parseRSAPrivateKey 解析 PEM 编码的 RSA 私钥，兼容 PKCS#1 与 PKCS#8 格式。
 func parseRSAPrivateKey(pemData []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(pemData)
-	if block == nil {
-		return nil, fmt.Errorf("私钥不是有效 PEM")
-	}
-	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-		return key, nil
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("PKCS1 与 PKCS8 解析均失败: %w", err)
-	}
-	rsaKey, ok := parsed.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("私钥不是 RSA 类型: %T", parsed)
-	}
-	return rsaKey, nil
+	return certissue.ParseRSAPrivateKey(pemData)
 }
 
 // ServerCertNeedsReissue 校验 bundle 中 server.crt 的 SAN 是否覆盖 cfg.SANValues()。

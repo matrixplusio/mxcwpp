@@ -26,6 +26,7 @@ import (
 	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
 	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy"
 	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/provider"
+	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
 	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/router"
 )
 
@@ -37,6 +38,8 @@ func main() {
 	geminiKey := flag.String("gemini-key", "", "Google Gemini API key (env GEMINI_API_KEY)")
 	dashscopeKey := flag.String("dashscope-key", "", "阿里千问 DashScope API key")
 	ollamaURL := flag.String("ollama-url", "", "Ollama 本地端点 (如 http://localhost:11434/v1)")
+	internalSecret := flag.String("internal-secret", "", "内部接口共享密钥 (env LLMPROXY_INTERNAL_SECRET)")
+	allowEgress := flag.Bool("allow-data-egress", false, "允许把数据外发第三方 LLM (默认关，仅本地模型)")
 	flag.Parse()
 
 	logger, err := zap.NewProduction()
@@ -66,8 +69,14 @@ func main() {
 	}, logger)
 
 	// 2. 场景路由配置 (从 config 加载,本 PR 用硬编码默认)
+	// 批4 合规：数据出境默认关（仅本地模型），外发前脱敏 IP/主机名。
+	egress := *allowEgress || pickEnv("LLMPROXY_ALLOW_DATA_EGRESS", "") == "true"
 	routes := defaultScenes(reg.Names())
-	rt := router.NewRouter(reg, routes, router.Config{}, logger)
+	rt := router.NewRouter(reg, routes, router.Config{
+		AllowDataEgress: egress,
+		Desensitizer:    redact.New(nil),
+	}, logger)
+	logger.Info("LLMProxy 数据出境策略", zap.Bool("allow_data_egress", egress), zap.Bool("desensitize", true))
 
 	// 3. HTTP API
 	apiHandler := llmproxy.NewCompleteAPIHandler(rt, logger)
@@ -86,7 +95,18 @@ func main() {
 	engineHTTP.GET("/metrics", func(c *gin.Context) {
 		c.String(http.StatusOK, "# llmproxy metrics placeholder\n")
 	})
-	llmproxy.AttachAPI(engineHTTP, apiHandler)
+
+	// 内部接口（/complete /embed）加 X-Internal-Secret 鉴权，防未授权直接消费 LLM 配额 / 注入。
+	secret := pickEnv("LLMPROXY_INTERNAL_SECRET", *internalSecret)
+	apiGroup := engineHTTP.Group("")
+	if secret != "" {
+		apiGroup.Use(llmproxy.InternalAuth(secret))
+		logger.Info("LLMProxy 内部认证已启用 (X-Internal-Secret)")
+	} else {
+		logger.Warn("LLMProxy 内部认证未启用：未配置 LLMPROXY_INTERNAL_SECRET，/complete /embed 无鉴权")
+	}
+	apiGroup.POST("/complete", apiHandler.Complete)
+	apiGroup.POST("/embed", apiHandler.Embed)
 
 	server := &http.Server{
 		Addr:              *httpAddr,

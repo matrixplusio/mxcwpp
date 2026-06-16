@@ -70,7 +70,8 @@ func (e *KubeRuleEngine) EvaluateRule(ctx context.Context, clientset *kubernetes
 		e.logger.Error("CEL 表达式编译失败", zap.String("expression", config.Expression), zap.Error(issues.Err()))
 		return "error", nil
 	}
-	program, err := e.env.Program(ast)
+	// CostLimit 限制单次求值成本，防资源耗尽型规则表达式（DoS）。
+	program, err := e.env.Program(ast, cel.CostLimit(1_000_000))
 	if err != nil {
 		e.logger.Error("CEL Program 创建失败", zap.Error(err))
 		return "error", nil

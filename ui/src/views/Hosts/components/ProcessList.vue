@@ -39,7 +39,6 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { assetsApi } from '@/api/assets'
 import type { Process } from '@/api/types'
-import { message } from 'ant-design-vue'
 
 const props = defineProps<{
   hostId: string
@@ -132,7 +131,6 @@ const loadProcesses = async () => {
     pagination.total = response.total
   } catch (error) {
     console.error('加载进程列表失败:', error)
-    message.error('加载进程列表失败')
   } finally {
     loading.value = false
   }

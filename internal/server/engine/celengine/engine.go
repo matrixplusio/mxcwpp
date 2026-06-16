@@ -283,7 +283,8 @@ func (e *Engine) compile(expression string) (cel.Program, error) {
 		return nil, fmt.Errorf("表达式返回类型必须为 bool，实际为 %s", ast.OutputType())
 	}
 
-	program, err := e.env.Program(ast)
+	// CostLimit 限制单次求值成本，防规则作者提交资源耗尽型表达式拖垮 engine（DoS）。
+	program, err := e.env.Program(ast, cel.CostLimit(1_000_000))
 	if err != nil {
 		return nil, fmt.Errorf("创建 Program 失败: %w", err)
 	}

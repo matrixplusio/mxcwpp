@@ -192,8 +192,10 @@ func AddPerformanceIndexes(db *gorm.DB, logger *zap.Logger) error {
 		{
 			// host_vulnerabilities 联合三字段 (P1-9 强补强)
 			table: "host_vulnerabilities",
-			name:  "idx_hv_tenant_status_severity",
-			sql:   "ALTER TABLE host_vulnerabilities ADD INDEX idx_hv_tenant_status_severity (tenant_id, status, severity)",
+			// host_vulnerabilities 无 severity 列（severity 在 vulnerabilities 表），
+			// 复合索引只能覆盖本表实际存在的列：tenant_id + status。
+			name: "idx_hv_tenant_status",
+			sql:  "ALTER TABLE host_vulnerabilities ADD INDEX idx_hv_tenant_status (tenant_id, status)",
 		},
 		{
 			// fim_events 主机 + 时间倒序

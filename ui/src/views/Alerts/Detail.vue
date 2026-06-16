@@ -367,9 +367,8 @@ const loadAlert = async () => {
     if (isFIMAlert.value) {
       loadFIMEventDetail()
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('加载告警详情失败:', error)
-    message.error(error?.message || '加载告警详情失败')
   } finally {
     loading.value = false
   }
@@ -436,8 +435,8 @@ const handleResolveConfirm = async () => {
     message.success('告警已解决')
     resolveModalVisible.value = false
     loadAlert()
-  } catch (error: any) {
-    message.error(error?.message || '解决告警失败')
+  } catch (error) {
+    console.error('解决告警失败:', error)
   }
 }
 
@@ -453,8 +452,8 @@ const handleIgnoreConfirm = async () => {
     message.success('告警已忽略')
     ignoreModalVisible.value = false
     loadAlert()
-  } catch (error: any) {
-    message.error(error?.message || '忽略告警失败')
+  } catch (error) {
+    console.error('忽略告警失败:', error)
   }
 }
 

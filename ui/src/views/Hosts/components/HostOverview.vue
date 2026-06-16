@@ -1124,9 +1124,8 @@ const handleSaveBusinessLine = async () => {
     
     message.success('业务线保存成功')
     showBusinessLineModal.value = false
-  } catch (error: any) {
+  } catch (error) {
     console.error('保存业务线失败:', error)
-    message.error(error?.message || '保存业务线失败，请重试')
   }
 }
 
@@ -1324,9 +1323,8 @@ const handleSaveTags = async () => {
     
     message.success('标签保存成功')
     showTagModal.value = false
-  } catch (error: any) {
+  } catch (error) {
     console.error('保存标签失败:', error)
-    message.error(error?.message || '保存标签失败，请重试')
   }
 }
 

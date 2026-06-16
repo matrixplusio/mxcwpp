@@ -318,31 +318,6 @@ func (r *reporter) stop() {
 	close(r.stopCh)
 }
 
-func (r *reporter) writeFrame(ev Event) bool {
-	r.connMu.Lock()
-	defer r.connMu.Unlock()
-	if r.conn == nil {
-		return false
-	}
-	payload, err := json.Marshal(ev)
-	if err != nil {
-		return true
-	}
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := r.conn.Write(header[:]); err != nil {
-		_ = r.conn.Close()
-		r.conn = nil
-		return false
-	}
-	if _, err := r.conn.Write(payload); err != nil {
-		_ = r.conn.Close()
-		r.conn = nil
-		return false
-	}
-	return true
-}
-
 func (r *reporter) reconnect(ctx context.Context) {
 	r.connMu.Lock()
 	defer r.connMu.Unlock()

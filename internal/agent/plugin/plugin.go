@@ -460,6 +460,11 @@ func (m *Manager) validatePluginConfig(cfg *grpc.Config) error {
 	if cfg.Name == "" {
 		return fmt.Errorf("plugin name is required")
 	}
+	// 插件名会拼入落盘路径 filepath.Join(workDir, "plugins", cfg.Name)，
+	// 必须是纯文件名，禁止路径分隔符/.. 防目录穿越（否则可在 agent 目录外写可执行文件 → RCE）。
+	if strings.ContainsAny(cfg.Name, "/\\") || strings.Contains(cfg.Name, "..") {
+		return fmt.Errorf("plugin name contains illegal path characters: %q", cfg.Name)
+	}
 	if cfg.Version == "" {
 		return fmt.Errorf("plugin version is required")
 	}

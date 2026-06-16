@@ -61,6 +61,18 @@ mtls:
   # Server 私钥路径
   server_key: "certs/server.key"
 
+  # --- Agent↔AC 信任链改造（默认全关，灰度逐步开启，详见 docs/security-remediation-plan.md）---
+  # CA 私钥路径：开启 per_agent_cert 后，AC 用它按 AgentID 在线签发单机证书
+  ca_key: ""
+  # enroll 引导令牌：非空时 agent 必须经 metadata 上报匹配令牌才会被签发单机证书（空=迁移期不校验）
+  enroll_token: ""
+  # 一机一证：agent 首连时签发独立证书（CN=AgentID），取代下发全网共享证书
+  per_agent_cert: false
+  # 强制开关（步骤6）：要求客户端证书已验证且 CN==AgentID，全网迁移完成后再开启
+  enforce_agent_id: false
+  # 已吊销证书序列号（十进制字符串）
+  revoked_serials: []
+
 # 日志配置
 log:
   level: "info"  # debug, info, warn, error

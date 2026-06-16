@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -112,7 +113,11 @@ func TestDownloadPluginPackage_NotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// 统一响应：插件不存在时 handler 走 NotFound()，HTTP 200 + body code=40400
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(CodeNotFound), resp["code"])
 }
 
 // TestDownloadPluginPackage_FileMissing 验证数据库有记录但文件已删除时返回 404
@@ -135,7 +140,11 @@ func TestDownloadPluginPackage_FileMissing(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// 统一响应：文件丢失时 handler 走 NotFound()，HTTP 200 + body code=40400
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(CodeNotFound), resp["code"])
 }
 
 // TestDownloadPluginPackage_ContentLengthMatchesActualFile 验证 Content-Length 使用实际文件大小

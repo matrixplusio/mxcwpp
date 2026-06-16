@@ -37,37 +37,38 @@ func TestUploadPackage_ArchParsing(t *testing.T) {
 		logger: zap.NewNop(),
 	}
 
+	// 统一 API 响应：业务端点一律 HTTP 200，业务结果由 body code 区分
 	tests := []struct {
 		name        string
 		arch        string
 		pkgType     string
-		wantStatus  int
+		wantCode    int
 		wantMessage string
 	}{
 		{
-			name:       "valid amd64 binary",
-			arch:       "amd64",
-			pkgType:    "binary",
-			wantStatus: http.StatusNotFound, // 组件不存在，但说明 arch 解析通过了
+			name:     "valid amd64 binary",
+			arch:     "amd64",
+			pkgType:  "binary",
+			wantCode: CodeNotFound, // 组件不存在，但说明 arch 解析通过了
 		},
 		{
-			name:       "valid arm64 binary",
-			arch:       "arm64",
-			pkgType:    "binary",
-			wantStatus: http.StatusNotFound,
+			name:     "valid arm64 binary",
+			arch:     "arm64",
+			pkgType:  "binary",
+			wantCode: CodeNotFound,
 		},
 		{
 			name:        "empty arch",
 			arch:        "",
 			pkgType:     "binary",
-			wantStatus:  http.StatusBadRequest,
+			wantCode:    CodeInvalidParam,
 			wantMessage: "无效的架构",
 		},
 		{
 			name:        "invalid arch",
 			arch:        "x86_64",
 			pkgType:     "binary",
-			wantStatus:  http.StatusBadRequest,
+			wantCode:    CodeInvalidParam,
 			wantMessage: "无效的架构",
 		},
 	}
@@ -99,10 +100,12 @@ func TestUploadPackage_ArchParsing(t *testing.T) {
 
 			handler.UploadPackage(c)
 
-			assert.Equal(t, tt.wantStatus, w.Code)
+			// 统一响应：HTTP 始终 200，业务结果看 body code
+			assert.Equal(t, http.StatusOK, w.Code)
+			var resp map[string]any
+			_ = json.Unmarshal(w.Body.Bytes(), &resp)
+			assert.EqualValues(t, tt.wantCode, resp["code"])
 			if tt.wantMessage != "" {
-				var resp map[string]any
-				_ = json.Unmarshal(w.Body.Bytes(), &resp)
 				assert.Contains(t, resp["message"], tt.wantMessage)
 			}
 		})
@@ -151,9 +154,11 @@ func TestUploadPackage_NoBoundary(t *testing.T) {
 
 	handler.UploadPackage(c)
 
-	// 没有 boundary 时，Gin 无法解析 PostForm，arch 为空，返回 400
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	// 没有 boundary 时，Gin 无法解析 PostForm，arch 为空。
+	// 统一响应：HTTP 200，body code 为参数错误。
+	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.EqualValues(t, CodeInvalidParam, resp["code"])
 	assert.Contains(t, resp["message"], "无效的架构")
 }

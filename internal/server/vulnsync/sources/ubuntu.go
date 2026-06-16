@@ -17,10 +17,7 @@ type UbuntuDriver struct {
 }
 
 // NewUbuntuDriver 构造 Ubuntu USN driver。
-func NewUbuntuDriver(timeout time.Duration) *UbuntuDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewUbuntuDriver() *UbuntuDriver {
 	return &UbuntuDriver{
 		BaseURL: "https://ubuntu.com/security/notices.json",
 		Client:  SharedHTTPClient(),

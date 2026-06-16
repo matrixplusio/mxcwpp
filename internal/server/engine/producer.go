@@ -73,6 +73,8 @@ func NewAlertProducer(brokers []string, topic string, logger *zap.Logger) (*Aler
 	cfg.Producer.Flush.Bytes = 200 * 1024
 	cfg.Producer.Flush.Messages = 500
 	cfg.Producer.MaxMessageBytes = 4 * 1024 * 1024
+	// 加大输入缓冲（默认 256），吸收检测突发（如重启后消费 Kafka 积压），避免告警因瞬时满队列被丢。
+	cfg.ChannelBufferSize = 4096
 
 	p, err := sarama.NewAsyncProducer(brokers, cfg)
 	if err != nil {
@@ -167,14 +169,15 @@ func (p *AlertProducer) Publish(ctx context.Context, env AlertEnvelope) error {
 		},
 	}
 
+	// 安全告警不容随手丢：队列满时阻塞回压（拖慢消费而非丢事件），
+	// 仅在持续 5s 仍无法入队（producer 真卡死）才返错，避免无限阻塞流水线。
 	select {
 	case p.producer.Input() <- msg:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
-		// 队列满 — 不阻塞, 立刻返错 (调用方走 fallback)
-		return fmt.Errorf("engine alert: producer input full")
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("engine alert: producer input blocked >5s (kafka backpressure)")
 	}
 }
 

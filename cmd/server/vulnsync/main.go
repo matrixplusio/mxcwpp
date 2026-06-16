@@ -165,49 +165,49 @@ func main() {
 func registerAll(reg *sources.Registry, nvdAPIKey, cnnvdEndpoint, cnnvdAPIKey string, enabled map[string]bool, logger *zap.Logger) {
 	allEnabled := len(enabled) == 0
 	if allEnabled || enabled["nvd"] {
-		_ = reg.Register(sources.NewNVDDriver("", nvdAPIKey, 0))
+		_ = reg.Register(sources.NewNVDDriver("", nvdAPIKey))
 	}
 	if allEnabled || enabled["osv"] {
-		_ = reg.Register(sources.NewOSVDriver("", 0))
+		_ = reg.Register(sources.NewOSVDriver(""))
 	}
 	if allEnabled || enabled["cisa_kev"] {
-		_ = reg.Register(sources.NewCISAKEVDriver(0))
+		_ = reg.Register(sources.NewCISAKEVDriver())
 	}
 	if allEnabled || enabled["exploitdb"] {
-		_ = reg.Register(sources.NewExploitDBDriver(0))
+		_ = reg.Register(sources.NewExploitDBDriver())
 	}
 	if allEnabled || enabled["epss"] {
-		_ = reg.Register(sources.NewEPSSDriver(0))
+		_ = reg.Register(sources.NewEPSSDriver())
 	}
 	if allEnabled || enabled["openeuler"] {
-		_ = reg.Register(sources.NewOpenEulerDriver(0))
+		_ = reg.Register(sources.NewOpenEulerDriver())
 	}
 	if allEnabled || enabled["anolis"] {
-		_ = reg.Register(sources.NewAnolisDriver(0))
+		_ = reg.Register(sources.NewAnolisDriver())
 	}
 	if allEnabled || enabled["kylin"] {
-		_ = reg.Register(sources.NewKylinDriver(0))
+		_ = reg.Register(sources.NewKylinDriver())
 	}
 	if allEnabled || enabled["uos"] {
-		_ = reg.Register(sources.NewUOSDriver(0))
+		_ = reg.Register(sources.NewUOSDriver())
 	}
 	if allEnabled || enabled["redhat"] {
-		_ = reg.Register(sources.NewRedHatDriver(0))
+		_ = reg.Register(sources.NewRedHatDriver())
 	}
 	if allEnabled || enabled["ubuntu"] {
-		_ = reg.Register(sources.NewUbuntuDriver(0))
+		_ = reg.Register(sources.NewUbuntuDriver())
 	}
 	if allEnabled || enabled["debian"] {
-		_ = reg.Register(sources.NewDebianDriver(0))
+		_ = reg.Register(sources.NewDebianDriver())
 	}
 	if allEnabled || enabled["alpine"] {
-		_ = reg.Register(sources.NewAlpineDriver("", 0))
+		_ = reg.Register(sources.NewAlpineDriver(""))
 	}
 	if allEnabled || enabled["suse"] {
-		_ = reg.Register(sources.NewSUSEDriver(0))
+		_ = reg.Register(sources.NewSUSEDriver())
 	}
 	if allEnabled || enabled["cnnvd"] {
-		_ = reg.Register(sources.NewCNNVDDriver(cnnvdEndpoint, cnnvdAPIKey, 0))
+		_ = reg.Register(sources.NewCNNVDDriver(cnnvdEndpoint, cnnvdAPIKey))
 	}
 	logger.Info("VulnSync sources 注册完成",
 		zap.Strings("names", reg.Names()),

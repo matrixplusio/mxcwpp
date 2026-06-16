@@ -71,8 +71,8 @@ async function poll() {
   if (!props.taskId) return
   try {
     const resp = await vulnerabilitiesApi.getScanTask(props.taskId)
-    task.value = resp.data
-    if (task.value.status === 'success' || task.value.status === 'failed') {
+    task.value = resp
+    if (task.value?.status === 'success' || task.value?.status === 'failed') {
       stopPoll()
       emit('done')
     }

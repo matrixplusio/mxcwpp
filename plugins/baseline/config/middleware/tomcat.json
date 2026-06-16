@@ -15,7 +15,7 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/tomcat-users.xml", "<user.*password=\"tomcat\"|<user.*password=\"admin\"|<user.*password=\"manager\"", "match"]}
       ]},
-      "fix": {"suggestion": "清空 tomcat-users.xml 默认账号, 仅保留必要管理用户用强密码"}
+      "fix": {"suggestion": "清空 tomcat-users.xml 默认账号, 仅保留必要管理用户用强密码", "command": "F=/opt/tomcat/conf/tomcat-users.xml; [ -f \"$F\" ] || exit 0; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; sed -i -E 's|^([[:space:]]*)(<user[^>]*password=\"(tomcat|admin|manager)\"[^>]*/?>)|\\1<!-- mxsec disabled: \\2 -->|g' \"$F\"; grep -qE '^[[:space:]]*<user[^>]*password=\"(tomcat|admin|manager)\"' \"$F\" && { cp -p \"$F.mxbak\" \"$F\"; exit 1; }; systemctl restart tomcat"}
     },
     {
       "rule_id": "TOMCAT_002",
@@ -26,7 +26,7 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_exists", "param": ["/opt/tomcat/webapps/examples"]}
       ]},
-      "fix": {"suggestion": "rm -rf /opt/tomcat/webapps/{docs,examples,manager,host-manager}"}
+      "fix": {"suggestion": "rm -rf /opt/tomcat/webapps/{docs,examples,manager,host-manager}", "command": "rm -rf /opt/tomcat/webapps/examples /opt/tomcat/webapps/docs /opt/tomcat/webapps/manager /opt/tomcat/webapps/host-manager"}
     },
     {
       "rule_id": "TOMCAT_003",
@@ -37,7 +37,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "command_exec", "param": ["ps -o user= -p $(pgrep -f 'org.apache.catalina')", "^tomcat$|^www-data$"]}
       ]},
-      "fix": {"suggestion": "systemd 启动 service 加 User=tomcat; chown -R tomcat:tomcat /opt/tomcat"}
+      "fix": {"suggestion": "systemd 启动 service 加 User=tomcat; chown -R tomcat:tomcat /opt/tomcat", "command": ""}
     },
     {
       "rule_id": "TOMCAT_004",
@@ -48,7 +48,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "server=\"\"|server=\"Apache\"", "match"]}
       ]},
-      "fix": {"suggestion": "<Connector port=\"8080\" ... server=\"\" />"}
+      "fix": {"suggestion": "<Connector port=\"8080\" ... server=\"\" />", "command": "F=/opt/tomcat/conf/server.xml; [ -f \"$F\" ] || exit 1; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; grep -qE 'server=\"\"|server=\"Apache\"' \"$F\" || sed -i -E 's|(<Connector[[:space:]]+port=\"8080\")([^>]*)|\\1 server=\"\"\\2|' \"$F\"; grep -qE 'server=\"\"|server=\"Apache\"' \"$F\" && systemctl restart tomcat || { cp -p \"$F.mxbak\" \"$F\"; exit 1; }"}
     },
     {
       "rule_id": "TOMCAT_005",
@@ -59,7 +59,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/web.xml", "<error-page>", "match"]}
       ]},
-      "fix": {"suggestion": "web.xml 加 <error-page><error-code>500</error-code><location>/error/500.html</location></error-page>"}
+      "fix": {"suggestion": "web.xml 加 <error-page><error-code>500</error-code><location>/error/500.html</location></error-page>", "command": "F=/opt/tomcat/conf/web.xml; [ -f \"$F\" ] || exit 1; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; grep -q '<error-page>' \"$F\" || sed -i 's|</web-app>|  <error-page><error-code>500</error-code><location>/error/500.html</location></error-page>\\n</web-app>|' \"$F\"; grep -q '<error-page>' \"$F\" && systemctl restart tomcat || { cp -p \"$F.mxbak\" \"$F\"; exit 1; }"}
     },
     {
       "rule_id": "TOMCAT_006",
@@ -67,10 +67,10 @@
       "title": "禁用 DefaultServlet listings",
       "description": "web.xml DefaultServlet 的 listings 必须为 false.",
       "severity": "high",
-      "check": {"condition": "none", "rules": [
-        {"type": "file_line_match", "param": ["/opt/tomcat/conf/web.xml", "<param-name>listings</param-name>\\s*<param-value>true</param-value>", "match"]}
+      "check": {"condition": "any", "rules": [
+        {"type": "command_exec", "param": ["F=/opt/tomcat/conf/web.xml; [ -f \"$F\" ] || { echo COMPLIANT; exit 0; }; perl -0ne 'exit(/<param-name>listings<\\/param-name>\\s*<param-value>true<\\/param-value>/s ? 1 : 0)' \"$F\" && echo COMPLIANT || echo VULN", "^COMPLIANT$"]}
       ]},
-      "fix": {"suggestion": "web.xml DefaultServlet 设 listings = false"}
+      "fix": {"suggestion": "web.xml DefaultServlet 设 listings = false", "command": "F=/opt/tomcat/conf/web.xml; [ -f \"$F\" ] || exit 1; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; perl -0pi -e 's{(<param-name>listings</param-name>\\s*<param-value>)true(</param-value>)}{${1}false${2}}gs' \"$F\"; ! grep -Pzo '<param-name>listings</param-name>\\s*<param-value>true</param-value>' \"$F\" >/dev/null && systemctl restart tomcat || { cp -p \"$F.mxbak\" \"$F\"; exit 1; }"}
     },
     {
       "rule_id": "TOMCAT_007",
@@ -81,7 +81,7 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Connector\\s+port=\"8080\"[^>]*scheme=\"http\"", "match"]}
       ]},
-      "fix": {"suggestion": "8080 connector 加 redirectPort=8443 或注释掉, 仅保留 8443 SSL"}
+      "fix": {"suggestion": "8080 connector 加 redirectPort=8443 或注释掉, 仅保留 8443 SSL", "command": ""}
     },
     {
       "rule_id": "TOMCAT_008",
@@ -92,7 +92,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "sslEnabledProtocols=\"TLSv1\\.2(\\+TLSv1\\.3)?\"|sslEnabledProtocols=\"TLSv1\\.3\"", "match"]}
       ]},
-      "fix": {"suggestion": "Connector SSL 段 sslEnabledProtocols=\"TLSv1.2+TLSv1.3\""}
+      "fix": {"suggestion": "Connector SSL 段 sslEnabledProtocols=\"TLSv1.2+TLSv1.3\"", "command": ""}
     },
     {
       "rule_id": "TOMCAT_009",
@@ -103,7 +103,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_permission", "param": ["/opt/tomcat/conf/tomcat-users.xml", "600"]}
       ]},
-      "fix": {"suggestion": "chmod 600 /opt/tomcat/conf/tomcat-users.xml && chown tomcat:tomcat"}
+      "fix": {"suggestion": "chmod 600 /opt/tomcat/conf/tomcat-users.xml && chown tomcat:tomcat", "command": "F=/opt/tomcat/conf/tomcat-users.xml; [ -f \"$F\" ] || exit 1; id tomcat >/dev/null 2>&1 && chown tomcat:tomcat \"$F\"; chmod 600 \"$F\""}
     },
     {
       "rule_id": "TOMCAT_010",
@@ -114,7 +114,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Server\\s+port=\"-1\"", "match"]}
       ]},
-      "fix": {"suggestion": "<Server port=\"-1\" shutdown=\"...\">"}
+      "fix": {"suggestion": "<Server port=\"-1\" shutdown=\"...\">", "command": "F=/opt/tomcat/conf/server.xml; [ -f \"$F\" ] || exit 1; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; sed -i -E 's|(<Server[[:space:]]+port=\")[0-9]+(\")|\\1-1\\2|' \"$F\"; grep -qE '<Server[[:space:]]+port=\"-1\"' \"$F\" && systemctl restart tomcat || { cp -p \"$F.mxbak\" \"$F\"; exit 1; }"}
     },
     {
       "rule_id": "TOMCAT_011",
@@ -125,7 +125,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/server.xml", "<Valve\\s+className=\"org\\.apache\\.catalina\\.valves\\.AccessLogValve\"", "match"]}
       ]},
-      "fix": {"suggestion": "Host 段加 AccessLogValve"}
+      "fix": {"suggestion": "Host 段加 AccessLogValve", "command": "F=/opt/tomcat/conf/server.xml; [ -f \"$F\" ] || exit 1; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; grep -q 'org.apache.catalina.valves.AccessLogValve' \"$F\" || sed -i '0,#</Host>#s##  <Valve className=\"org.apache.catalina.valves.AccessLogValve\" directory=\"logs\" prefix=\"localhost_access_log\" suffix=\".txt\" pattern=\"common\" />\\n      </Host>#' \"$F\"; grep -q 'org.apache.catalina.valves.AccessLogValve' \"$F\" && systemctl restart tomcat || { cp -p \"$F.mxbak\" \"$F\"; exit 1; }"}
     },
     {
       "rule_id": "TOMCAT_012",
@@ -133,10 +133,10 @@
       "title": "JMX 远程默认不应开放",
       "description": "JAVA_OPTS 不应含 -Dcom.sun.management.jmxremote 暴露公网.",
       "severity": "critical",
-      "check": {"condition": "none", "rules": [
-        {"type": "file_line_match", "param": ["/opt/tomcat/bin/setenv.sh", "-Dcom\\.sun\\.management\\.jmxremote(?!\\.authenticate=true)", "match"]}
+      "check": {"condition": "any", "rules": [
+        {"type": "command_exec", "param": ["F=/opt/tomcat/bin/setenv.sh; [ -f \"$F\" ] || { echo COMPLIANT; exit 0; }; if grep -E -- '-Dcom\\.sun\\.management\\.jmxremote' \"$F\" | grep -q '\\.port'; then grep -E -- '-Dcom\\.sun\\.management\\.jmxremote' \"$F\" | grep -q 'authenticate=true' && echo COMPLIANT || echo EXPOSED; else echo COMPLIANT; fi", "^COMPLIANT$"]}
       ]},
-      "fix": {"suggestion": "JMX 远程必加 -Dcom.sun.management.jmxremote.authenticate=true 与 ssl=true; 推荐仅本地访问"}
+      "fix": {"suggestion": "JMX 远程必加 -Dcom.sun.management.jmxremote.authenticate=true 与 ssl=true; 推荐仅本地访问", "command": ""}
     }
   ]
 }

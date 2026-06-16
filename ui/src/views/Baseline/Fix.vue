@@ -308,9 +308,6 @@ import {
   ToolOutlined,
   ReloadOutlined,
   SearchOutlined,
-  UnorderedListOutlined,
-  ExclamationCircleOutlined,
-  WarningOutlined,
   CheckCircleOutlined,
   InfoCircleOutlined,
   CopyOutlined,
@@ -501,7 +498,6 @@ const loadFixableItems = async () => {
     pagination.total = response.total || 0
   } catch (error) {
     console.error('加载可修复项失败:', error)
-    message.error('加载可修复项失败')
   } finally {
     loading.value = false
   }
@@ -608,9 +604,8 @@ const handleSingleFix = async (record: FixableItem) => {
       message.error('修复任务失败，请检查主机是否在线')
     }
     loadFixableItems()
-  } catch (error: any) {
+  } catch (error) {
     console.error('修复失败:', error)
-    message.error('修复失败: ' + (error.response?.data?.message || error.message))
   } finally {
     fixingItems[key] = false
   }
@@ -652,9 +647,8 @@ const handleBatchFix = async () => {
       selectAllFiltered.value = false
       selectedRowKeys.value = []
       loadFixableItems()
-    } catch (error: any) {
+    } catch (error) {
       console.error('批量修复失败:', error)
-      message.error('批量修复失败: ' + (error.response?.data?.message || error.message))
     } finally {
       fixing.value = false
     }

@@ -1,6 +1,6 @@
-# Baseline Plugin 示例规则
+# 通用 Linux 基线规则
 
-本目录包含 Baseline Plugin 的示例规则文件，用于演示和测试基线检查功能。
+本目录包含按**安全主题**组织的通用 Linux 主机基线规则（SSH / 口令策略 / 内核 sysctl / 审计 / 文件权限 / 服务 / cron / 登录横幅 / SELinux 等），适用于所有支持的 Linux 发行版（CentOS/RHEL/Ubuntu/Rocky）。
 
 ## 规则文件列表
 

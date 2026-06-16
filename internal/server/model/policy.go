@@ -31,7 +31,8 @@ type Policy struct {
 	TargetType     string         `gorm:"column:target_type;type:varchar(20);default:'all'" json:"target_type"` // 废弃，保留向后兼容
 	RuntimeTypes   StringArray    `gorm:"column:runtime_types;type:json" json:"runtime_types"`                  // 适用的运行时类型：["vm", "docker", "k8s"]，空表示全部
 	Enabled        bool           `gorm:"column:enabled;type:boolean;default:true" json:"enabled"`
-	GroupID        string         `gorm:"column:group_id;type:varchar(64);index" json:"group_id"` // 所属策略组ID
+	Builtin        bool           `gorm:"column:builtin;type:boolean;default:false;index" json:"builtin"` // 内置策略(文件同步管理)；false=用户导入/自建，启动同步永不覆盖
+	GroupID        string         `gorm:"column:group_id;type:varchar(64);index" json:"group_id"`         // 所属策略组ID
 	CreatedAt      LocalTime      `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt      LocalTime      `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
 

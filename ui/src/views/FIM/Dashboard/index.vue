@@ -77,12 +77,6 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
   ReloadOutlined,
-  FileSearchOutlined,
-  WarningOutlined,
-  PlusCircleOutlined,
-  MinusCircleOutlined,
-  ClockCircleOutlined,
-  AuditOutlined,
 } from '@ant-design/icons-vue'
 import { fimApi } from '@/api/fim'
 import type { FIMEventStats } from '@/api/types'

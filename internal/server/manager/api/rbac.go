@@ -108,6 +108,9 @@ func (h *RBACHandler) UpdateRolePermissions(c *gin.Context) {
 		return
 	}
 
+	// 失效刷新权限缓存，使新授权立即对写操作放行判定生效。
+	ReloadGlobalResolver()
+
 	h.logger.Info("角色权限已更新", zap.String("role", roleCode), zap.Strings("permissions", req.Permissions))
 	SuccessMessage(c, "权限更新成功")
 }

@@ -601,7 +601,6 @@ const handleExport = async () => {
     message.success('导出成功')
   } catch (error) {
     console.error('导出资产失败:', error)
-    message.error('导出失败')
   } finally {
     exportLoading.value = false
   }

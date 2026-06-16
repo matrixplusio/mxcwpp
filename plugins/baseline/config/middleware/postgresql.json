@@ -3,18 +3,257 @@
   "name": "PostgreSQL 中间件基线 (CIS + 等保 2.0)",
   "version": "1.0.0",
   "description": "PostgreSQL 13/14/15/16 安全基线. 参考 CIS PostgreSQL 16 Benchmark.",
-  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "os_family": [
+    "centos",
+    "rocky",
+    "almalinux",
+    "rhel",
+    "ubuntu",
+    "debian",
+    "openeuler",
+    "kylin",
+    "uos"
+  ],
   "enabled": true,
   "rules": [
-    {"rule_id": "PG_001", "category": "认证", "title": "pg_hba.conf 禁 trust 远程", "description": "trust 等于无认证, 远程仅允 md5/scram-sha-256/cert", "severity": "critical", "check": {"condition": "none", "rules": [{"type": "command_exec", "param": ["grep -v '^#' /var/lib/pgsql/data/pg_hba.conf /etc/postgresql/*/main/pg_hba.conf 2>/dev/null | awk '$1 == \"host\" && $4 != \"127.0.0.1/32\" && $4 != \"::1/128\" && $5 == \"trust\"' | wc -l", "^0$"]}]}, "fix": {"suggestion": "pg_hba.conf 远程行改 md5 或 scram-sha-256"}},
-    {"rule_id": "PG_002", "category": "认证", "title": "密码加密算法 scram-sha-256", "description": "弃用 md5 (彩虹表)", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW password_encryption'\" 2>/dev/null | xargs", "scram-sha-256"]}]}, "fix": {"suggestion": "postgresql.conf: password_encryption = scram-sha-256"}},
-    {"rule_id": "PG_003", "category": "网络", "title": "listen_addresses 仅内网", "description": "默认 localhost, 远程仅内网 IP", "severity": "high", "check": {"condition": "none", "rules": [{"type": "command_exec", "param": ["grep -E '^\\s*listen_addresses' /var/lib/pgsql/data/postgresql.conf /etc/postgresql/*/main/postgresql.conf 2>/dev/null | grep -c '\\*'", "^0$"]}]}, "fix": {"suggestion": "postgresql.conf: listen_addresses = 'localhost,10.0.0.5' (不用 *)"}},
-    {"rule_id": "PG_004", "category": "网络", "title": "SSL 启用", "description": "ssl = on 强制 TLS", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW ssl'\" 2>/dev/null | xargs", "^on$"]}]}, "fix": {"suggestion": "postgresql.conf: ssl=on + ssl_cert_file/ssl_key_file"}},
-    {"rule_id": "PG_005", "category": "权限", "title": "数据目录权限 700", "description": "PG_DATA 仅 postgres 用户", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_permission", "param": ["/var/lib/pgsql/data", "700"]}, {"type": "file_permission", "param": ["/var/lib/postgresql/14/main", "700"]}]}, "fix": {"suggestion": "chmod 700 PGDATA && chown -R postgres:postgres"}},
-    {"rule_id": "PG_006", "category": "日志", "title": "log_connections = on", "description": "审计连接", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW log_connections'\" 2>/dev/null | xargs", "^on$"]}]}, "fix": {"suggestion": "log_connections = on"}},
-    {"rule_id": "PG_007", "category": "日志", "title": "log_disconnections = on", "description": "审计断开", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW log_disconnections'\" 2>/dev/null | xargs", "^on$"]}]}, "fix": {"suggestion": "log_disconnections = on"}},
-    {"rule_id": "PG_008", "category": "日志", "title": "log_statement = ddl 或 all", "description": "DDL 操作审计", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW log_statement'\" 2>/dev/null | xargs", "ddl|mod|all"]}]}, "fix": {"suggestion": "log_statement = ddl"}},
-    {"rule_id": "PG_009", "category": "用户管理", "title": "无 superuser 非系统账户", "description": "限制 superuser 数量", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c \\\"SELECT count(*) FROM pg_user WHERE usesuper = true AND usename NOT IN ('postgres')\\\"\" 2>/dev/null | xargs", "^[0-1]$"]}]}, "fix": {"suggestion": "REVOKE SUPERUSER FROM <user>"}},
-    {"rule_id": "PG_010", "category": "扩展", "title": "禁止 untrusted extension 加载", "description": "防加载恶意 C 扩展", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["su - postgres -c \"psql -t -c 'SHOW shared_preload_libraries'\" 2>/dev/null | xargs | wc -w", ">= 0"]}]}, "fix": {"suggestion": "运维白名单 shared_preload_libraries; CREATE EXTENSION 需 superuser"}}
+    {
+      "rule_id": "PG_001",
+      "category": "认证",
+      "title": "pg_hba.conf 禁 trust 远程",
+      "description": "trust 等于无认证, 远程仅允 md5/scram-sha-256/cert",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "grep -v '^#' /var/lib/pgsql/data/pg_hba.conf /etc/postgresql/*/main/pg_hba.conf 2>/dev/null | awk '$1 == \"host\" && $4 != \"127.0.0.1/32\" && $4 != \"::1/128\" && $5 == \"trust\"' | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/pg_hba.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; sed -ri 's/^(host[[:space:]].*[[:space:]])trust$/\\1scram-sha-256/' \"$F\"; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1",
+        "suggestion": "pg_hba.conf 远程行改 md5 或 scram-sha-256"
+      }
+    },
+    {
+      "rule_id": "PG_002",
+      "category": "认证",
+      "title": "密码加密算法 scram-sha-256",
+      "description": "弃用 md5 (彩虹表)",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c 'SHOW password_encryption'\" 2>/dev/null | xargs",
+              "scram-sha-256"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*password_encryption[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*password_encryption[[:space:]]*=.*|password_encryption = scram-sha-256|\" \"$F\"; else echo \"password_encryption = scram-sha-256\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "postgresql.conf: password_encryption = scram-sha-256"
+      }
+    },
+    {
+      "rule_id": "PG_003",
+      "category": "网络",
+      "title": "listen_addresses 仅内网",
+      "description": "默认 localhost, 远程仅内网 IP",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "grep -E '^\\s*listen_addresses' /var/lib/pgsql/data/postgresql.conf /etc/postgresql/*/main/postgresql.conf 2>/dev/null | grep -c '\\*'",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*listen_addresses[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*listen_addresses[[:space:]]*=.*|listen_addresses = 'localhost'|\" \"$F\"; else echo \"listen_addresses = 'localhost'\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "postgresql.conf: listen_addresses = 'localhost,10.0.0.5' (不用 *)"
+      }
+    },
+    {
+      "rule_id": "PG_004",
+      "category": "网络",
+      "title": "SSL 启用",
+      "description": "ssl = on 强制 TLS",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c 'SHOW ssl'\" 2>/dev/null | xargs",
+              "^on$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "command -v openssl >/dev/null 2>&1 || { echo 'openssl missing, manual'; exit 1; }; D=/var/lib/pgsql/data; F=$D/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if [ ! -f \"$D/server.crt\" ] || [ ! -f \"$D/server.key\" ]; then openssl req -x509 -newkey rsa:2048 -nodes -keyout \"$D/server.key\" -out \"$D/server.crt\" -days 3650 -subj /CN=localhost || exit 1; fi; chown postgres:postgres \"$D/server.key\" \"$D/server.crt\"; chmod 600 \"$D/server.key\"; if grep -Eq '^[[:space:]]*ssl[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*ssl[[:space:]]*=.*|ssl = on|\" \"$F\"; else echo \"ssl = on\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "postgresql.conf: ssl=on + ssl_cert_file/ssl_key_file"
+      }
+    },
+    {
+      "rule_id": "PG_005",
+      "category": "权限",
+      "title": "数据目录权限 700",
+      "description": "PG_DATA 仅 postgres 用户",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/var/lib/pgsql/data",
+              "700"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/var/lib/postgresql/14/main",
+              "700"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "for D in /var/lib/pgsql/data /var/lib/postgresql/14/main; do [ -d \"$D\" ] || continue; chown -R postgres:postgres \"$D\" && chmod 700 \"$D\"; done",
+        "suggestion": "chmod 700 PGDATA && chown -R postgres:postgres"
+      }
+    },
+    {
+      "rule_id": "PG_006",
+      "category": "日志",
+      "title": "log_connections = on",
+      "description": "审计连接",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c 'SHOW log_connections'\" 2>/dev/null | xargs",
+              "^on$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*log_connections[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*log_connections[[:space:]]*=.*|log_connections = on|\" \"$F\"; else echo \"log_connections = on\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "log_connections = on"
+      }
+    },
+    {
+      "rule_id": "PG_007",
+      "category": "日志",
+      "title": "log_disconnections = on",
+      "description": "审计断开",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c 'SHOW log_disconnections'\" 2>/dev/null | xargs",
+              "^on$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*log_disconnections[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*log_disconnections[[:space:]]*=.*|log_disconnections = on|\" \"$F\"; else echo \"log_disconnections = on\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "log_disconnections = on"
+      }
+    },
+    {
+      "rule_id": "PG_008",
+      "category": "日志",
+      "title": "log_statement = ddl 或 all",
+      "description": "DDL 操作审计",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c 'SHOW log_statement'\" 2>/dev/null | xargs",
+              "ddl|mod|all"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/var/lib/pgsql/data/postgresql.conf; [ -f \"$F\" ] || { echo \"config not found: $F\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*log_statement[[:space:]]*=' \"$F\"; then sed -ri \"s|^[[:space:]]*log_statement[[:space:]]*=.*|log_statement = 'ddl'|\" \"$F\"; else echo \"log_statement = 'ddl'\" >> \"$F\"; fi; su - postgres -c \"psql -c 'SELECT pg_reload_conf()'\" >/dev/null 2>&1 || { mv -f \"$F.mxbak\" \"$F\"; echo 'reload failed, rolled back'; exit 1; }",
+        "suggestion": "log_statement = ddl"
+      }
+    },
+    {
+      "rule_id": "PG_009",
+      "category": "用户管理",
+      "title": "无 superuser 非系统账户",
+      "description": "限制 superuser 数量",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -t -c \\\"SELECT count(*) FROM pg_user WHERE usesuper = true AND usename NOT IN ('postgres')\\\"\" 2>/dev/null | xargs",
+              "^[0-1]$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "",
+        "manual": true,
+        "suggestion": "REVOKE SUPERUSER FROM <user>"
+      }
+    },
+    {
+      "rule_id": "PG_010",
+      "category": "扩展",
+      "title": "禁止 untrusted extension 加载",
+      "description": "防加载恶意 C 扩展",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "su - postgres -c \"psql -tAc 'SHOW shared_preload_libraries'\" 2>/dev/null; echo OK",
+              "OK"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "",
+        "manual": true,
+        "suggestion": "运维白名单 shared_preload_libraries; CREATE EXTENSION 需 superuser"
+      }
+    }
   ]
 }

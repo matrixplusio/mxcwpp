@@ -171,7 +171,7 @@ const handleRunCheck = async () => {
   if (!filterCluster.value) { message.warning('请先在筛选栏选择目标集群'); return }
   checkLoading.value = true
   try { await apiClient.post('/kube/baseline/detect', { cluster_id: Number(filterCluster.value) }); message.success('基线检查任务已创建'); loadBaseline() }
-  catch { message.error('创建检查任务失败') }
+  catch (error) { console.error('创建基线检查任务失败:', error) }
   finally { checkLoading.value = false }
 }
 

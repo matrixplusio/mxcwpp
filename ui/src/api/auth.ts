@@ -3,8 +3,9 @@ import apiClient from './client'
 export interface LoginRequest {
   username: string
   password: string
-  captcha_id: string
-  captcha_code: string
+  captcha_id?: string
+  captcha_code?: string
+  device_id?: string
 }
 
 export interface CaptchaResponse {
@@ -33,6 +34,10 @@ export const authApi = {
 
   login: async (data: LoginRequest): Promise<LoginResponse> => {
     return apiClient.post('/auth/login', data)
+  },
+
+  loginPrecheck: async (data: { username: string; device_id?: string }): Promise<{ need_captcha: boolean }> => {
+    return apiClient.post('/auth/login-precheck', data)
   },
 
   logout: async (): Promise<void> => {

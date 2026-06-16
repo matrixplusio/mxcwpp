@@ -114,10 +114,7 @@ func stripHTML(s string) string {
 }
 
 // NewOpenEulerDriver 构造 openEuler CSA RSS driver。
-func NewOpenEulerDriver(timeout time.Duration) *rssDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewOpenEulerDriver() *rssDriver {
 	return &rssDriver{
 		name:   "openeuler",
 		url:    "https://www.openeuler.org/zh/security/cve/rss/",
@@ -126,10 +123,7 @@ func NewOpenEulerDriver(timeout time.Duration) *rssDriver {
 }
 
 // NewAnolisDriver 构造 Anolis ANSA driver (RSS)。
-func NewAnolisDriver(timeout time.Duration) *rssDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewAnolisDriver() *rssDriver {
 	return &rssDriver{
 		name:   "anolis",
 		url:    "https://anas.openanolis.cn/rss",
@@ -138,10 +132,7 @@ func NewAnolisDriver(timeout time.Duration) *rssDriver {
 }
 
 // NewKylinDriver 构造 Kylin KYSA driver。
-func NewKylinDriver(timeout time.Duration) *rssDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewKylinDriver() *rssDriver {
 	return &rssDriver{
 		name:   "kylin",
 		url:    "https://www.kylinos.cn/securityadvisory/rss.xml",
@@ -150,10 +141,7 @@ func NewKylinDriver(timeout time.Duration) *rssDriver {
 }
 
 // NewUOSDriver 构造 UOS (统信) UOSEC driver。
-func NewUOSDriver(timeout time.Duration) *rssDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewUOSDriver() *rssDriver {
 	return &rssDriver{
 		name:   "uos",
 		url:    "https://security.deepin.com/rss.xml",

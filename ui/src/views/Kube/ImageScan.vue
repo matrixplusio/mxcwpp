@@ -330,8 +330,8 @@ const handleScan = async () => {
     message.success('扫描任务已提交')
     imageInput.value = ''
     loadScans()
-  } catch {
-    message.error('扫描提交失败')
+  } catch (error) {
+    console.error('扫描提交失败:', error)
   } finally {
     scanning.value = false
   }
@@ -344,9 +344,9 @@ const showDetail = async (record: ImageScan) => {
   try {
     const data = await imageScansApi.getVulns(record.id)
     vulns.value = data ?? []
-  } catch {
+  } catch (error) {
     vulns.value = []
-    message.error('加载漏洞列表失败')
+    console.error('加载漏洞列表失败:', error)
   } finally {
     loadingVulns.value = false
   }
@@ -392,8 +392,8 @@ const handleCreateRegistry = async () => {
     registryModalVisible.value = false
     registryForm.value = { name: '', url: '', username: '', password: '', insecure: false }
     loadRegistries()
-  } catch {
-    message.error('添加失败')
+  } catch (error) {
+    console.error('添加仓库失败:', error)
   } finally {
     creatingRegistry.value = false
   }
@@ -437,8 +437,8 @@ const handleUpdateRegistry = async () => {
     message.success('仓库更新成功')
     editRegistryModalVisible.value = false
     loadRegistries()
-  } catch {
-    message.error('更新失败')
+  } catch (error) {
+    console.error('更新仓库失败:', error)
   } finally {
     updatingRegistry.value = false
   }
@@ -449,8 +449,8 @@ const handleDeleteRegistry = async (id: number) => {
     await apiClient.delete(`/images/registries/${id}`)
     message.success('已删除')
     loadRegistries()
-  } catch {
-    message.error('删除失败')
+  } catch (error) {
+    console.error('删除仓库失败:', error)
   }
 }
 
@@ -459,8 +459,8 @@ const handleScanRegistry = async (record: any) => {
   try {
     await apiClient.post(`/images/registries/${record.id}/scan`)
     message.success('批量扫描任务已启动')
-  } catch {
-    message.error('扫描启动失败')
+  } catch (error) {
+    console.error('批量扫描启动失败:', error)
   } finally {
     record._scanning = false
   }

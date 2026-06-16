@@ -20,10 +20,7 @@ type EPSSDriver struct {
 }
 
 // NewEPSSDriver 构造 EPSS driver。
-func NewEPSSDriver(timeout time.Duration) *EPSSDriver {
-	if timeout <= 0 {
-		timeout = 120 * time.Second // EPSS CSV 大 (~5MB),给宽松超时
-	}
+func NewEPSSDriver() *EPSSDriver {
 	return &EPSSDriver{
 		URL:    "https://epss.cyentia.com/epss_scores-current.csv",
 		Client: SharedHTTPClient(),

@@ -4,9 +4,9 @@
 |---|---|---|---|
 | `dengbao/dengbao-l3-rhel.json` | GB/T 22239-2019 等保 2.0 三级 | RHEL/CentOS/Rocky/AlmaLinux/Oracle | 40 |
 | `cis-rhel/cis-rhel8-l1.json` | CIS RHEL 8 Benchmark v2.0.0 Level 1 Server | RHEL 8/CentOS Stream 8/Rocky 8/Alma 8 | 40 |
-| `cis/centos.json` | 字节最佳实践 (来自 Elkeid, MVP-2a) | CentOS/Rocky/AlmaLinux | 16 |
-| `cis/debian.json` | 字节最佳实践 (来自 Elkeid) | Debian | 17 |
-| `cis/ubuntu.json` | 字节最佳实践 (来自 Elkeid) | Ubuntu | 17 |
+| `cis/centos.json` | CIS Benchmark (自研) | CentOS/Rocky/AlmaLinux | 16 |
+| `cis/debian.json` | CIS Benchmark (自研) | Debian | 17 |
+| `cis/ubuntu.json` | CIS Benchmark (自研) | Ubuntu | 17 |
 | **合计** | | | **130** |
 
 距 ref/00 目标 200 条还差 70 条。后续 PR 补:

@@ -239,8 +239,8 @@ const loadAlerts = async () => {
     const response = await alertsApi.list(params)
     alerts.value = response.items || []
     pagination.value.total = response.total || 0
-  } catch (error: any) {
-    message.error(error?.message || '加载告警列表失败')
+  } catch (error) {
+    console.error('加载告警列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -289,8 +289,8 @@ const handleResolve = async (alert: Alert, reason?: string) => {
     message.success('告警已解决')
     loadAlerts()
     loadStatistics()
-  } catch (error: any) {
-    message.error(error?.message || '解决告警失败')
+  } catch (error) {
+    console.error('解决告警失败:', error)
   }
 }
 
@@ -300,8 +300,8 @@ const handleIgnore = async (alert: Alert) => {
     message.success('告警已忽略')
     loadAlerts()
     loadStatistics()
-  } catch (error: any) {
-    message.error(error?.message || '忽略告警失败')
+  } catch (error) {
+    console.error('忽略告警失败:', error)
   }
 }
 
@@ -323,8 +323,8 @@ const handleSaveConfig = async () => {
     await systemConfigApi.updateAlertConfig(alertConfig)
     message.success('告警配置保存成功')
     showConfigModal.value = false
-  } catch (error: any) {
-    message.error(error?.message || '保存告警配置失败')
+  } catch (error) {
+    console.error('保存告警配置失败:', error)
   } finally {
     savingConfig.value = false
   }

@@ -296,7 +296,8 @@
         ]
       },
       "fix": {
-        "suggestion": "配置 /etc/logrotate.conf 进行日志轮转"
+        "suggestion": "配置 /etc/logrotate.conf 进行日志轮转",
+        "command": "[ -f /etc/logrotate.conf ] || { printf '%s\\n' 'weekly' 'rotate 4' 'create' 'compress' 'include /etc/logrotate.d' > /etc/logrotate.conf && chmod 644 /etc/logrotate.conf; }"
       }
     },
     {
@@ -319,7 +320,8 @@
         ]
       },
       "fix": {
-        "suggestion": "在 logrotate 配置中设置 rotate 4 或更大（按周轮转时）"
+        "suggestion": "在 logrotate 配置中设置 rotate 4 或更大（按周轮转时）",
+        "command": "touch /etc/logrotate.conf && { [ -f /etc/logrotate.conf.mxbak ] || cp /etc/logrotate.conf /etc/logrotate.conf.mxbak; } && if grep -qE '^[[:space:]]*rotate[[:space:]]+([4-9]|[1-9][0-9]+)' /etc/logrotate.conf; then :; elif grep -qE '^[[:space:]]*rotate[[:space:]]+[0-9]+' /etc/logrotate.conf; then sed -ri 's|^[[:space:]]*rotate[[:space:]]+[0-9]+.*|rotate 4|' /etc/logrotate.conf; else echo 'rotate 4' >> /etc/logrotate.conf; fi"
       }
     },
     {

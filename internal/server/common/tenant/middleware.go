@@ -63,9 +63,10 @@ func middlewareWith(adminPath bool) gin.HandlerFunc {
 
 		if adminPath {
 			if !id.IsPlatformAdmin {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"code":    "platform_admin_required",
-					"message": "platform admin required",
+				// 业务接口统一 HTTP 200 + 业务码（见 manager/api/respcode.go：40300=无权限）
+				c.AbortWithStatusJSON(http.StatusOK, gin.H{
+					"code":    40300,
+					"message": "需要平台管理员权限",
 				})
 				return
 			}
@@ -75,9 +76,9 @@ func middlewareWith(adminPath bool) gin.HandlerFunc {
 
 		// 业务路径：必须有显式 tenant_id（即便平台超管也要带 X-Tenant-ID）
 		if id.ID == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    "missing_tenant",
-				"message": "tenant_id missing in request context",
+			c.AbortWithStatusJSON(http.StatusOK, gin.H{
+				"code":    40100,
+				"message": "缺少租户标识",
 			})
 			return
 		}
@@ -105,9 +106,9 @@ func HeaderOverride() gin.HandlerFunc {
 			return
 		}
 		if id.ID != hdr {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    "cross_tenant_denied",
-				"message": "X-Tenant-ID does not match token tenant",
+			c.AbortWithStatusJSON(http.StatusOK, gin.H{
+				"code":    40300,
+				"message": "租户标识与登录令牌不匹配",
 			})
 			return
 		}

@@ -15,7 +15,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "^\\s*user\\s+(nginx|www-data|nobody);", "match"]}
       ]},
-      "fix": {"suggestion": "/etc/nginx/nginx.conf 第一行 设置: user nginx; 重启 systemctl reload nginx"}
+      "fix": {"suggestion": "/etc/nginx/nginx.conf 第一行 设置: user nginx; 重启 systemctl reload nginx", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^\\s*user\\s+' \"$F\"; then sed -i -E 's|^\\s*user\\s+.*;|user nginx;|' \"$F\"; else sed -i '1i user nginx;' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_002",
@@ -26,7 +26,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "server_tokens\\s+off;", "match"]}
       ]},
-      "fix": {"suggestion": "http {} 段加: server_tokens off;"}
+      "fix": {"suggestion": "http {} 段加: server_tokens off;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^\\s*server_tokens\\s+' \"$F\"; then sed -i -E 's|^(\\s*)server_tokens\\s+.*;|\\1server_tokens off;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    server_tokens off;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_003",
@@ -38,7 +38,7 @@
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_protocols\\s+(TLSv1\\.2|TLSv1\\.3)", "match"]},
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_protocols.*SSLv[23]", "not_match"]}
       ]},
-      "fix": {"suggestion": "server {} 段加: ssl_protocols TLSv1.2 TLSv1.3;"}
+      "fix": {"suggestion": "server {} 段加: ssl_protocols TLSv1.2 TLSv1.3;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^\\s*ssl_protocols\\s+' \"$F\"; then sed -i -E 's|^(\\s*)ssl_protocols\\s+.*;|\\1ssl_protocols TLSv1.2 TLSv1.3;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    ssl_protocols TLSv1.2 TLSv1.3;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_004",
@@ -50,7 +50,7 @@
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_ciphers.*(ECDHE-RSA-AES|ECDHE-ECDSA)", "match"]},
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "ssl_ciphers.*(RC4|DES|MD5|EXPORT)", "not_match"]}
       ]},
-      "fix": {"suggestion": "ssl_ciphers 仅保留 ECDHE-RSA-AES128-GCM-SHA256 等强套件; ssl_prefer_server_ciphers on;"}
+      "fix": {"suggestion": "ssl_ciphers 仅保留 ECDHE-RSA-AES128-GCM-SHA256 等强套件; ssl_prefer_server_ciphers on;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; CIPHERS='ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384'; if grep -Eq '^\\s*ssl_ciphers\\s+' \"$F\"; then sed -i -E \"s|^(\\s*)ssl_ciphers\\s+.*;|\\1ssl_ciphers $CIPHERS;|\" \"$F\"; else sed -i -E \"0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    ssl_ciphers $CIPHERS;/\" \"$F\"; fi; if grep -Eq '^\\s*ssl_prefer_server_ciphers\\s+' \"$F\"; then sed -i -E 's|^(\\s*)ssl_prefer_server_ciphers\\s+.*;|\\1ssl_prefer_server_ciphers on;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    ssl_prefer_server_ciphers on;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_005",
@@ -61,7 +61,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "Strict-Transport-Security.*max-age=", "match"]}
       ]},
-      "fix": {"suggestion": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"}
+      "fix": {"suggestion": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -q 'Strict-Transport-Security' \"$F\"; then sed -i -E 's|^(\\s*)add_header\\s+Strict-Transport-Security.*;|\\1add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_006",
@@ -72,7 +72,7 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "autoindex\\s+on;", "match"]}
       ]},
-      "fix": {"suggestion": "确认所有 server / location 段无 autoindex on;"}
+      "fix": {"suggestion": "确认所有 server / location 段无 autoindex on;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; sed -i -E 's|^(\\s*)autoindex\\s+on;|\\1autoindex off;|' \"$F\"; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_007",
@@ -83,7 +83,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_permission", "param": ["/etc/nginx/nginx.conf", "640"]}
       ]},
-      "fix": {"suggestion": "chmod 640 /etc/nginx/nginx.conf && chown root:nginx /etc/nginx/nginx.conf"}
+      "fix": {"suggestion": "chmod 640 /etc/nginx/nginx.conf && chown root:nginx /etc/nginx/nginx.conf", "command": "set -e; F=/etc/nginx/nginx.conf; chmod 640 \"$F\"; if getent group nginx >/dev/null 2>&1; then chown root:nginx \"$F\"; elif getent group www-data >/dev/null 2>&1; then chown root:www-data \"$F\"; fi"}
     },
     {
       "rule_id": "NGINX_008",
@@ -91,11 +91,10 @@
       "title": "SSL 私钥权限 = 400",
       "description": "私钥仅 owner 可读, 防泄漏.",
       "severity": "critical",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_permission", "param": ["/etc/nginx/ssl/server.key", "400"]},
-        {"type": "file_permission", "param": ["/etc/ssl/private/server.key", "400"]}
+      "check": {"condition": "all", "rules": [
+        {"type": "command_exec", "param": ["for k in /etc/nginx/ssl/server.key /etc/ssl/private/server.key; do [ -f \"$k\" ] && [ \"$(stat -c %a \"$k\")\" != 400 ] && exit 1; done; echo OK", "OK", "match"]}
       ]},
-      "fix": {"suggestion": "chmod 400 /etc/nginx/ssl/server.key"}
+      "fix": {"suggestion": "chmod 400 /etc/nginx/ssl/server.key", "command": "set -e; for K in /etc/nginx/ssl/server.key /etc/ssl/private/server.key; do if [ -f \"$K\" ]; then chmod 400 \"$K\"; fi; done"}
     },
     {
       "rule_id": "NGINX_009",
@@ -106,7 +105,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "X-Frame-Options.*(DENY|SAMEORIGIN)", "match"]}
       ]},
-      "fix": {"suggestion": "add_header X-Frame-Options SAMEORIGIN always;"}
+      "fix": {"suggestion": "add_header X-Frame-Options SAMEORIGIN always;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -q 'X-Frame-Options' \"$F\"; then sed -i -E 's|^(\\s*)add_header\\s+X-Frame-Options.*;|\\1add_header X-Frame-Options SAMEORIGIN always;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    add_header X-Frame-Options SAMEORIGIN always;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_010",
@@ -117,7 +116,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "X-Content-Type-Options.*nosniff", "match"]}
       ]},
-      "fix": {"suggestion": "add_header X-Content-Type-Options nosniff always;"}
+      "fix": {"suggestion": "add_header X-Content-Type-Options nosniff always;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -q 'X-Content-Type-Options' \"$F\"; then sed -i -E 's|^(\\s*)add_header\\s+X-Content-Type-Options.*;|\\1add_header X-Content-Type-Options nosniff always;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    add_header X-Content-Type-Options nosniff always;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_011",
@@ -128,7 +127,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "limit_req_zone\\s+", "match"]}
       ]},
-      "fix": {"suggestion": "http {} 段加 limit_req_zone $binary_remote_addr zone=one:10m rate=10r/s;"}
+      "fix": {"suggestion": "http {} 段加 limit_req_zone $binary_remote_addr zone=one:10m rate=10r/s;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if ! grep -Eq '^\\s*limit_req_zone\\s+' \"$F\"; then sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    limit_req_zone $binary_remote_addr zone=one:10m rate=10r\\/s;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     },
     {
       "rule_id": "NGINX_012",
@@ -139,7 +138,7 @@
       "check": {"condition": "all", "rules": [
         {"type": "file_line_match", "param": ["/etc/nginx/nginx.conf", "client_max_body_size\\s+(1|2|3|4|5|6|7|8|9|10|20|30|40|50)m", "match"]}
       ]},
-      "fix": {"suggestion": "client_max_body_size 50m;"}
+      "fix": {"suggestion": "client_max_body_size 50m;", "command": "set -e; F=/etc/nginx/nginx.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^\\s*client_max_body_size\\s+' \"$F\"; then sed -i -E 's|^(\\s*)client_max_body_size\\s+.*;|\\1client_max_body_size 50m;|' \"$F\"; else sed -i -E '0,/^\\s*http\\s*\\{/s/^(\\s*http\\s*\\{)/\\1\\n    client_max_body_size 50m;/' \"$F\"; fi; if ! nginx -t >/dev/null 2>&1; then mv \"$F.mxbak\" \"$F\"; exit 1; fi", "restart_services": ["nginx"]}
     }
   ]
 }

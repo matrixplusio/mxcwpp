@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/mojocn/base64Captcha"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -25,8 +26,13 @@ const (
 	jwtIssuer = "mxsec-platform"
 
 	// 登录安全策略
-	maxLoginFailCount = 5                // 最大连续失败次数
+	maxLoginFailCount = 5                // 最大连续失败次数（达到即锁定，硬底线）
 	lockDuration      = 15 * time.Minute // 锁定时长
+
+	// 登录风控（自适应验证码 + 可信设备）
+	captchaFailThreshold = 2                   // 连续失败 ≥ 此值且非可信设备才要求验证码
+	deviceTrustThreshold = 3                   // 同设备成功登录 ≥ 此值即视为可信设备
+	deviceTrustTTL       = 30 * 24 * time.Hour // 可信设备有效期
 )
 
 // AuthHandler 是认证 API 处理器
@@ -34,6 +40,11 @@ type AuthHandler struct {
 	db     *gorm.DB
 	logger *zap.Logger
 	secret []byte // JWT 密钥
+
+	// JWT 黑名单（批4，默认关）：登出时把 token jti 写 Redis，AuthMiddleware 校验，
+	// 实现"注销/禁用即失效"。未启用时 token 仍在签发有效期内不可吊销。
+	redis            *redis.Client
+	blacklistEnabled bool
 }
 
 // NewAuthHandler 创建认证处理器
@@ -45,12 +56,38 @@ func NewAuthHandler(db *gorm.DB, logger *zap.Logger, secret []byte) *AuthHandler
 	}
 }
 
+// EnableJWTBlacklist 启用登出 JWT 黑名单（需 Redis）。rdb 为 nil 时不启用。
+func (h *AuthHandler) EnableJWTBlacklist(rdb *redis.Client) {
+	h.redis = rdb
+	h.blacklistEnabled = rdb != nil
+}
+
+// jwtBlacklistKey 返回 jti 在 Redis 黑名单中的 key。
+func jwtBlacklistKey(jti string) string {
+	return "jwt:bl:" + jti
+}
+
+// isTokenBlacklisted 查 token jti 是否已登出。Redis 抖动时 fail-open（放行），避免锁死全站。
+func (h *AuthHandler) isTokenBlacklisted(c *gin.Context, jti string) bool {
+	if !h.blacklistEnabled || h.redis == nil || jti == "" {
+		return false
+	}
+	n, err := h.redis.Exists(c.Request.Context(), jwtBlacklistKey(jti)).Result()
+	if err != nil {
+		h.logger.Warn("查询 JWT 黑名单失败，放行", zap.Error(err))
+		return false
+	}
+	return n > 0
+}
+
 // LoginRequest 登录请求
+// CaptchaID/CaptchaCode 改为可选：仅在风控判定需要验证码时才校验。
 type LoginRequest struct {
 	Username    string `json:"username" binding:"required"`
 	Password    string `json:"password" binding:"required"`
-	CaptchaID   string `json:"captcha_id" binding:"required"`
-	CaptchaCode string `json:"captcha_code" binding:"required"`
+	CaptchaID   string `json:"captcha_id"`
+	CaptchaCode string `json:"captcha_code"`
+	DeviceID    string `json:"device_id"` // 浏览器本地生成的设备标识，用于可信设备判定
 }
 
 // LoginResponse 登录响应
@@ -101,10 +138,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 校验验证码（Verify 内部会自动删除已使用的验证码，防止重放）
-	if !captchaStore.Verify(req.CaptchaID, req.CaptchaCode, true) {
-		BadRequest(c, "验证码错误或已过期")
-		return
+	// 风控：可信设备或近期无失败时免验证码；非可信设备且连续失败达阈值才要求验证码。
+	if h.loginNeedsCaptcha(req.Username, req.DeviceID) {
+		if !captchaStore.Verify(req.CaptchaID, req.CaptchaCode, true) {
+			// 统一响应封装；data.need_captcha 告知前端展示验证码框
+			BadRequestWithData(c, "验证码错误或已过期", gin.H{"need_captcha": true})
+			return
+		}
 	}
 
 	// 从数据库查询用户
@@ -153,6 +193,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		h.logger.Warn("更新登录状态失败", zap.Error(err))
 	}
 
+	// 记录可信设备：累加该设备成功登录次数（达阈值后免验证码）
+	h.recordDeviceSuccess(user.Username, req.DeviceID)
+
 	// 生成 JWT Token
 	now := time.Now()
 	tenantID := user.TenantID
@@ -194,9 +237,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // Logout 用户登出
 // POST /api/v1/auth/logout
+//
+// JWT 无状态，登出本质是客户端删 token。启用黑名单后额外把 token jti 写 Redis
+// （TTL=剩余有效期），令该 token 在到期前即失效，避免登出后 token 仍可用。
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// JWT 是无状态的，登出主要是客户端删除 token
-	// 可以在这里实现 token 黑名单（如果需要）
+	if h.blacklistEnabled && h.redis != nil {
+		if tok, err := extractBearerToken(c); err == nil {
+			if claims, err := h.parseToken(tok); err == nil && claims.ID != "" && claims.ExpiresAt != nil {
+				ttl := time.Until(claims.ExpiresAt.Time)
+				if ttl > 0 {
+					if err := h.redis.Set(c.Request.Context(), jwtBlacklistKey(claims.ID), "1", ttl).Err(); err != nil {
+						h.logger.Warn("写入 JWT 黑名单失败", zap.Error(err))
+					}
+				}
+			}
+		}
+	}
 	SuccessMessage(c, "登出成功")
 }
 
@@ -269,14 +325,21 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := extractBearerToken(c)
 		if err != nil {
-			Unauthorized(c, "未授权")
+			UnauthorizedExpired(c, "未授权，请重新登录")
 			c.Abort()
 			return
 		}
 
 		claims, err := h.parseToken(tokenString)
 		if err != nil {
-			Unauthorized(c, "Token无效")
+			UnauthorizedExpired(c, "登录已过期，请重新登录")
+			c.Abort()
+			return
+		}
+
+		// JWT 黑名单：登出/被禁用的 token 即使未到期也拒绝。
+		if h.isTokenBlacklisted(c, claims.ID) {
+			UnauthorizedExpired(c, "登录已失效，请重新登录")
 			c.Abort()
 			return
 		}

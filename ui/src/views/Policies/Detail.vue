@@ -407,7 +407,6 @@ const loadPolicyDetail = async () => {
     await loadStatistics()
   } catch (error) {
     console.error('加载策略详情失败:', error)
-    message.error('加载策略详情失败')
   } finally {
     loading.value = false
   }
@@ -712,9 +711,8 @@ const handleHostSelectorConfirm = async (data: {
     // 清空待检查规则
     pendingRecheckRuleIds.value = []
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('创建检查任务失败:', error)
-    message.error('创建检查任务失败: ' + (error.response?.data?.message || error.message))
   } finally {
     recheckLoading.value = false
   }

@@ -290,7 +290,6 @@ const loadData = async () => {
     latestPluginVersions.value = data.latest_plugin_versions || {}
   } catch (error) {
     console.error('加载巡检数据失败:', error)
-    message.error('加载巡检数据失败')
   } finally {
     loading.value = false
   }
@@ -300,8 +299,8 @@ const handleRestartAgent = async (record: InspectionHostItem) => {
   try {
     await hostsApi.restartAgent([record.host_id])
     message.success('重启命令已提交')
-  } catch (error: any) {
-    message.error(error?.message || '重启失败')
+  } catch (error) {
+    console.error('重启 Agent 失败:', error)
   }
 }
 
@@ -311,8 +310,8 @@ const handleBatchRestart = async () => {
     await hostsApi.restartAgent(selectedRowKeys.value)
     message.success(`已提交 ${selectedRowKeys.value.length} 台主机的重启命令`)
     selectedRowKeys.value = []
-  } catch (error: any) {
-    message.error(error?.message || '批量重启失败')
+  } catch (error) {
+    console.error('批量重启 Agent 失败:', error)
   }
 }
 

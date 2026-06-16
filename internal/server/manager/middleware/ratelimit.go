@@ -24,18 +24,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+
+	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
 )
 
 // KeyFunc 自定义 rate-limit key (默认按 tenant+route).
 type KeyFunc func(c *gin.Context) string
 
 // KeyByTenant 按 tenant_id + route 作 key.
+// 租户身份由 AuthMiddleware 经 tenant.SetIdentity 写入 gin context (key "tenant.identity"),
+// 不是裸 "tenant_id", 故必须经 tenant.GetIdentity 读取, 否则永远落 anon 桶.
 func KeyByTenant(c *gin.Context) string {
 	tid := "anon"
-	if v, ok := c.Get("tenant_id"); ok {
-		if s, ok2 := v.(string); ok2 && s != "" {
-			tid = s
-		}
+	if id := tenant.GetIdentity(c); id.ID != "" {
+		tid = id.ID
 	}
 	return "rl:t:" + tid + ":" + c.FullPath()
 }
@@ -109,10 +111,10 @@ func RateLimit(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 		if res == 0 {
 			c.Header("Retry-After", strconv.Itoa(1))
 			c.Header("X-RateLimit-Limit", strconv.Itoa(capacity))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"code":    429,
-				"message": "rate limit exceeded",
-				"data":    nil,
+			// 业务接口统一 HTTP 200 + 业务码（42900=请求过于频繁，见 manager/api/respcode.go）
+			c.AbortWithStatusJSON(http.StatusOK, gin.H{
+				"code":    42900,
+				"message": "请求过于频繁，请稍后再试",
 			})
 			return
 		}

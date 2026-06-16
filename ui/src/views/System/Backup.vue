@@ -158,7 +158,7 @@ const handleCreateBackup = async () => {
     message.success('备份任务已创建')
     backupRemark.value = ''
     loadBackups()
-  } catch { message.error('创建备份失败') }
+  } catch (error) { console.error('创建备份失败:', error) }
   finally { backupLoading.value = false }
 }
 
@@ -167,7 +167,7 @@ const saveAutoBackupConfig = async () => {
   try {
     await apiClient.put('/system/backup-config', autoBackup.value)
     message.success('设置已保存')
-  } catch { message.error('保存失败') }
+  } catch (error) { console.error('保存自动备份设置失败:', error) }
   finally { saveLoading.value = false }
 }
 
@@ -179,12 +179,12 @@ const handleRestore = async (record: any) => {
   try {
     await apiClient.post(`/system/backups/${record.id}/restore`)
     message.success('恢复操作已开始')
-  } catch { message.error('恢复失败') }
+  } catch (error) { console.error('恢复备份失败:', error) }
 }
 
 const handleDelete = async (id: string) => {
   try { await apiClient.delete(`/system/backups/${id}`); message.success('已删除'); loadBackups() }
-  catch { message.error('删除失败') }
+  catch (error) { console.error('删除备份失败:', error) }
 }
 
 const loadAutoBackupConfig = async () => {

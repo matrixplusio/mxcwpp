@@ -190,8 +190,8 @@ const loadUsers = async () => {
     const response = await usersApi.list(params)
     users.value = response.items
     pagination.total = response.total
-  } catch (error: any) {
-    message.error('加载用户列表失败: ' + (error.message || '未知错误'))
+  } catch (error) {
+    console.error('加载用户列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -231,8 +231,8 @@ const handleDelete = async (id: number) => {
     await usersApi.delete(id)
     message.success('删除成功')
     loadUsers()
-  } catch (error: any) {
-    message.error('删除失败: ' + (error.message || '未知错误'))
+  } catch (error) {
+    console.error('删除用户失败:', error)
   }
 }
 

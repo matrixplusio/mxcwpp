@@ -2,8 +2,18 @@
   "id": "LINUX_MW_APACHE",
   "name": "Apache HTTP Server 中间件基线 (CIS Benchmark + 等保 2.0)",
   "version": "1.0.0",
-  "description": "Apache 2.4+ 安全配置基线. 参考 CIS Apache HTTP Server 2.4 Benchmark.",
-  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "description": "Apache 2.4+ 安全配置基线. 参考 CIS Apache HTTP Server 2.4 Benchmark. check/fix 自动适配 RHEL(httpd /etc/httpd) 与 Debian(apache2 /etc/apache2) 双路径.",
+  "os_family": [
+    "centos",
+    "rocky",
+    "almalinux",
+    "rhel",
+    "ubuntu",
+    "debian",
+    "openeuler",
+    "kylin",
+    "uos"
+  ],
   "enabled": true,
   "rules": [
     {
@@ -12,11 +22,22 @@
       "title": "运行用户不应为 root",
       "description": "User/Group 必须为非 root (apache/www-data).",
       "severity": "high",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*User\\s+(apache|www-data|nobody|daemon)", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/apache2.conf", "^\\s*User\\s+\\$\\{APACHE_RUN_USER\\}", "match"]}
-      ]},
-      "fix": {"suggestion": "httpd.conf 设置: User apache; Group apache"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*User[[:space:]]+(apache|www-data|nobody|daemon|\\$\\{APACHE_RUN_USER\\})' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "httpd.conf 设置: User apache; Group apache (Debian 用 ${APACHE_RUN_USER})",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; if [ \"$SVC\" = httpd ]; then VAL=apache; else VAL='${APACHE_RUN_USER}'; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*User[[:space:]]+' \"$CONF\"; then sed -i -E \"s|^([[:space:]]*)User[[:space:]]+.*|\\1User $VAL|\" \"$CONF\"; else printf 'User %s\\n' \"$VAL\" >> \"$CONF\"; fi; if [ \"$SVC\" = httpd ]; then if grep -Eq '^[[:space:]]*Group[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)Group[[:space:]]+.*|\\1Group apache|' \"$CONF\"; else printf 'Group apache\\n' >> \"$CONF\"; fi; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_002",
@@ -24,11 +45,22 @@
       "title": "ServerTokens Prod",
       "description": "默认 Full 暴露版本+模块, 必须设 Prod.",
       "severity": "medium",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*ServerTokens\\s+Prod", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "ServerTokens\\s+Prod", "match"]}
-      ]},
-      "fix": {"suggestion": "ServerTokens Prod"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*ServerTokens[[:space:]]+Prod' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "ServerTokens Prod",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*ServerTokens[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)ServerTokens[[:space:]]+.*|\\1ServerTokens Prod|' \"$CONF\"; else printf 'ServerTokens Prod\\n' >> \"$CONF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_003",
@@ -36,10 +68,22 @@
       "title": "ServerSignature Off",
       "description": "错误页面不应附加 server 信息.",
       "severity": "medium",
-      "check": {"condition": "all", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "^\\s*ServerSignature\\s+Off", "match"]}
-      ]},
-      "fix": {"suggestion": "ServerSignature Off"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*ServerSignature[[:space:]]+Off' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "ServerSignature Off",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*ServerSignature[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)ServerSignature[[:space:]]+.*|\\1ServerSignature Off|' \"$CONF\"; else printf 'ServerSignature Off\\n' >> \"$CONF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_004",
@@ -47,11 +91,22 @@
       "title": "禁用 SSLv2/SSLv3/TLSv1.0/TLSv1.1",
       "description": "SSLProtocol 仅 TLSv1.2+.",
       "severity": "critical",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf.d/ssl.conf", "SSLProtocol\\s+.*-SSLv2\\s+-SSLv3\\s+-TLSv1\\s+-TLSv1\\.1", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/mods-enabled/ssl.conf", "SSLProtocol\\s+all\\s+-SSLv3\\s+-TLSv1\\s+-TLSv1\\.1", "match"]}
-      ]},
-      "fix": {"suggestion": "SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "SSLF=$( [ -f /etc/httpd/conf.d/ssl.conf ] && echo /etc/httpd/conf.d/ssl.conf || echo /etc/apache2/mods-enabled/ssl.conf ); [ -f \"$SSLF\" ] || { echo NOSSL; exit 0; }; P=$(grep -hiE '^[[:space:]]*SSLProtocol[[:space:]]+' \"$SSLF\" | tail -1); [ -z \"$P\" ] && { echo FAIL; exit 0; }; if echo \"$P\" | grep -Eiq '(^|[[:space:]])(SSLv2|SSLv3)([[:space:]]|$)' || echo \"$P\" | grep -Eiq '(^|[[:space:]])[+]?TLSv1(\\.[01])?([[:space:]]|$)'; then echo FAIL; else echo OK; fi",
+              "^(OK|NOSSL)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1",
+        "command": "set -e; SSLF=$( [ -f /etc/httpd/conf.d/ssl.conf ] && echo /etc/httpd/conf.d/ssl.conf || echo /etc/apache2/mods-enabled/ssl.conf ); [ -f \"$SSLF\" ] || exit 0; if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$SSLF.mxbak\" ] || cp \"$SSLF\" \"$SSLF.mxbak\"; if grep -Eiq '^[[:space:]]*SSLProtocol[[:space:]]+' \"$SSLF\"; then sed -i -E 's|^([[:space:]]*)SSLProtocol[[:space:]]+.*|\\1SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1|I' \"$SSLF\"; else printf 'SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1\\n' >> \"$SSLF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$SSLF.mxbak\" \"$SSLF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_005",
@@ -59,46 +114,91 @@
       "title": "SSLHonorCipherOrder On",
       "description": "强制服务端密码套件优先级.",
       "severity": "medium",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf.d/ssl.conf", "SSLHonorCipherOrder\\s+On", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/mods-enabled/ssl.conf", "SSLHonorCipherOrder\\s+On", "match"]}
-      ]},
-      "fix": {"suggestion": "SSLHonorCipherOrder On"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "SSLF=$( [ -f /etc/httpd/conf.d/ssl.conf ] && echo /etc/httpd/conf.d/ssl.conf || echo /etc/apache2/mods-enabled/ssl.conf ); [ -f \"$SSLF\" ] || { echo NOSSL; exit 0; }; if grep -Eiq '^[[:space:]]*SSLHonorCipherOrder[[:space:]]+On' \"$SSLF\"; then echo OK; else echo FAIL; fi",
+              "^(OK|NOSSL)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "SSLHonorCipherOrder On",
+        "command": "set -e; SSLF=$( [ -f /etc/httpd/conf.d/ssl.conf ] && echo /etc/httpd/conf.d/ssl.conf || echo /etc/apache2/mods-enabled/ssl.conf ); [ -f \"$SSLF\" ] || exit 0; if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$SSLF.mxbak\" ] || cp \"$SSLF\" \"$SSLF.mxbak\"; if grep -Eiq '^[[:space:]]*SSLHonorCipherOrder[[:space:]]+' \"$SSLF\"; then sed -i -E 's|^([[:space:]]*)SSLHonorCipherOrder[[:space:]]+.*|\\1SSLHonorCipherOrder On|I' \"$SSLF\"; else printf 'SSLHonorCipherOrder On\\n' >> \"$SSLF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$SSLF.mxbak\" \"$SSLF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_006",
       "category": "HSTS",
       "title": "Strict-Transport-Security",
-      "description": "HSTS header.",
+      "description": "HSTS header. 需 mod_headers.",
       "severity": "medium",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Header.*Strict-Transport-Security", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "Header.*Strict-Transport-Security", "match"]}
-      ]},
-      "fix": {"suggestion": "Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\""}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*Header[[:space:]].*Strict-Transport-Security' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\"",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; if [ \"$SVC\" = apache2 ]; then a2enmod headers >/dev/null 2>&1 || true; fi; if [ -f \"$BASE/conf.d/security.conf\" ]; then TGT=\"$BASE/conf.d/security.conf\"; elif [ -f \"$BASE/conf-available/security.conf\" ]; then TGT=\"$BASE/conf-available/security.conf\"; else TGT=\"$CONF\"; fi; [ -f \"$TGT.mxbak\" ] || cp \"$TGT\" \"$TGT.mxbak\"; if grep -Eq '^[[:space:]]*Header[[:space:]].*Strict-Transport-Security' \"$TGT\"; then sed -i -E 's|^([[:space:]]*)Header[[:space:]].*Strict-Transport-Security.*|\\1Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\"|' \"$TGT\"; else printf 'Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains\"\\n' >> \"$TGT\"; fi; if [ \"$SVC\" = apache2 ] && [ -f \"$BASE/conf-available/security.conf\" ]; then a2enconf security >/dev/null 2>&1 || true; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$TGT.mxbak\" \"$TGT\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_007",
       "category": "目录遍历",
       "title": "禁用 Indexes",
-      "description": "Options 不应含 Indexes.",
+      "description": "Options 不应含 Indexes (目录列表).",
       "severity": "high",
-      "check": {"condition": "none", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Options.*\\bIndexes\\b", "match"]}
-      ]},
-      "fix": {"suggestion": "Directory 段去掉 Indexes: Options -Indexes +FollowSymLinks"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; grep -rhE '^[[:space:]]*Options[[:space:]]' $L 2>/dev/null | grep -cE '(^|[[:space:]])[+]?Indexes([[:space:]]|$)'",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "需人工处理: 逐个 Directory/vhost 段评估后去掉目录列表, 改为 Options -Indexes (注意区分 AllowOverride 中的 Indexes, 勿误改). 不可全局自动替换, 否则可能破坏依赖目录列表的业务路径或导致 httpd -t 失败.",
+        "command": ""
+      }
     },
     {
       "rule_id": "APACHE_008",
       "category": "权限管理",
       "title": "配置文件权限 ≤ 640",
-      "description": "httpd.conf 权限.",
+      "description": "httpd.conf/apache2.conf 权限不应世界可读.",
       "severity": "medium",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_permission", "param": ["/etc/httpd/conf/httpd.conf", "640"]},
-        {"type": "file_permission", "param": ["/etc/apache2/apache2.conf", "640"]}
-      ]},
-      "fix": {"suggestion": "chmod 640 httpd.conf && chown root:apache"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); P=$(stat -c %a \"$CONF\" 2>/dev/null); [ -z \"$P\" ] && { echo NOFILE; exit 0; }; [ \"$P\" -le 640 ] && echo OK || echo \"$P\"",
+              "^(OK|NOFILE)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 640 配置文件 && chown root:apache (Debian root:www-data)",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); [ -f \"$CONF\" ] || exit 0; chmod 640 \"$CONF\"; if getent group apache >/dev/null 2>&1; then chown root:apache \"$CONF\"; elif getent group www-data >/dev/null 2>&1; then chown root:www-data \"$CONF\"; fi"
+      }
     },
     {
       "rule_id": "APACHE_009",
@@ -106,10 +206,22 @@
       "title": "TraceEnable Off",
       "description": "防 XST 攻击.",
       "severity": "medium",
-      "check": {"condition": "all", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "TraceEnable\\s+Off", "match"]}
-      ]},
-      "fix": {"suggestion": "TraceEnable Off"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*TraceEnable[[:space:]]+Off' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "TraceEnable Off",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*TraceEnable[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)TraceEnable[[:space:]]+.*|\\1TraceEnable Off|' \"$CONF\"; else printf 'TraceEnable Off\\n' >> \"$CONF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_010",
@@ -117,10 +229,22 @@
       "title": "Timeout 合理值",
       "description": "防 Slowloris, 推荐 ≤ 60s.",
       "severity": "low",
-      "check": {"condition": "all", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "Timeout\\s+(60|[1-5][0-9])", "match"]}
-      ]},
-      "fix": {"suggestion": "Timeout 60"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; V=$(grep -rhE '^[[:space:]]*Timeout[[:space:]]+[0-9]+' $L 2>/dev/null | tail -1 | grep -oE '[0-9]+'); [ -z \"$V\" ] && { echo MISSING; exit 0; }; [ \"$V\" -le 60 ] && echo OK || echo \"$V\"",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "Timeout 60",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*Timeout[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)Timeout[[:space:]]+.*|\\1Timeout 60|' \"$CONF\"; else printf 'Timeout 60\\n' >> \"$CONF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_011",
@@ -128,22 +252,45 @@
       "title": "KeepAliveTimeout 合理值",
       "description": "≤ 15s.",
       "severity": "low",
-      "check": {"condition": "all", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "KeepAliveTimeout\\s+(15|1[0-4]|[5-9])", "match"]}
-      ]},
-      "fix": {"suggestion": "KeepAliveTimeout 15"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; V=$(grep -rhE '^[[:space:]]*KeepAliveTimeout[[:space:]]+[0-9]+' $L 2>/dev/null | tail -1 | grep -oE '[0-9]+'); [ -z \"$V\" ] && { echo MISSING; exit 0; }; [ \"$V\" -le 15 ] && echo OK || echo \"$V\"",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "KeepAliveTimeout 15",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; [ -f \"$CONF.mxbak\" ] || cp \"$CONF\" \"$CONF.mxbak\"; if grep -Eq '^[[:space:]]*KeepAliveTimeout[[:space:]]+' \"$CONF\"; then sed -i -E 's|^([[:space:]]*)KeepAliveTimeout[[:space:]]+.*|\\1KeepAliveTimeout 15|' \"$CONF\"; else printf 'KeepAliveTimeout 15\\n' >> \"$CONF\"; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$CONF.mxbak\" \"$CONF\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     },
     {
       "rule_id": "APACHE_012",
       "category": "HTTP 头",
       "title": "X-Content-Type-Options nosniff",
-      "description": "防 MIME 嗅探.",
+      "description": "防 MIME 嗅探. 需 mod_headers.",
       "severity": "low",
-      "check": {"condition": "any", "rules": [
-        {"type": "file_line_match", "param": ["/etc/httpd/conf/httpd.conf", "X-Content-Type-Options.*nosniff", "match"]},
-        {"type": "file_line_match", "param": ["/etc/apache2/conf-available/security.conf", "X-Content-Type-Options.*nosniff", "match"]}
-      ]},
-      "fix": {"suggestion": "Header always set X-Content-Type-Options nosniff"}
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); L=\"$CONF\"; for d in \"$BASE/conf.d\" \"$BASE/conf-available\" \"$BASE/conf-enabled\" \"$BASE/mods-enabled\"; do [ -d \"$d\" ] && L=\"$L $d\"; done; if grep -rhEq '^[[:space:]]*Header[[:space:]].*X-Content-Type-Options[[:space:]].*nosniff' $L 2>/dev/null; then echo OK; else echo FAIL; fi",
+              "^OK$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "Header always set X-Content-Type-Options nosniff",
+        "command": "set -e; CONF=$( [ -f /etc/httpd/conf/httpd.conf ] && echo /etc/httpd/conf/httpd.conf || echo /etc/apache2/apache2.conf ); BASE=$(dirname \"$(dirname \"$CONF\")\"); if [ -d /etc/httpd ]; then SVC=httpd; CHK=\"httpd -t\"; else SVC=apache2; CHK=\"apachectl -t\"; fi; if [ \"$SVC\" = apache2 ]; then a2enmod headers >/dev/null 2>&1 || true; fi; if [ -f \"$BASE/conf.d/security.conf\" ]; then TGT=\"$BASE/conf.d/security.conf\"; elif [ -f \"$BASE/conf-available/security.conf\" ]; then TGT=\"$BASE/conf-available/security.conf\"; else TGT=\"$CONF\"; fi; [ -f \"$TGT.mxbak\" ] || cp \"$TGT\" \"$TGT.mxbak\"; if grep -Eq '^[[:space:]]*Header[[:space:]].*X-Content-Type-Options' \"$TGT\"; then sed -i -E 's|^([[:space:]]*)Header[[:space:]].*X-Content-Type-Options.*|\\1Header always set X-Content-Type-Options nosniff|' \"$TGT\"; else printf 'Header always set X-Content-Type-Options nosniff\\n' >> \"$TGT\"; fi; if [ \"$SVC\" = apache2 ] && [ -f \"$BASE/conf-available/security.conf\" ]; then a2enconf security >/dev/null 2>&1 || true; fi; if ! eval \"$CHK\" >/dev/null 2>&1; then mv \"$TGT.mxbak\" \"$TGT\"; exit 1; fi; systemctl reload \"$SVC\" 2>/dev/null || systemctl restart \"$SVC\""
+      }
     }
   ]
 }

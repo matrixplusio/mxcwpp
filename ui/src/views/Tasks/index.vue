@@ -768,7 +768,6 @@ const loadTasks = async () => {
     pagination.total = response.total || 0
   } catch (error) {
     console.error('加载任务列表失败:', error)
-    message.error('加载任务列表失败')
   } finally {
     loading.value = false
   }
@@ -944,13 +943,8 @@ const handleRun = async (record: ScanTask) => {
     loadTasks()
     // 开始自动刷新
     startAutoRefresh()
-  } catch (error: any) {
+  } catch (error) {
     console.error('执行任务失败:', error)
-    if (error.response?.status === 409) {
-      message.warning('任务正在执行中，请勿重复执行')
-    } else {
-      message.error('执行任务失败: ' + (error.response?.data?.message || error.message))
-    }
   } finally {
     runningTasks[record.task_id] = false
   }
@@ -963,9 +957,8 @@ const handleCancel = async (record: ScanTask) => {
     await tasksApi.cancel(record.task_id)
     message.success('任务已取消')
     loadTasks()
-  } catch (error: any) {
+  } catch (error) {
     console.error('取消任务失败:', error)
-    message.error('取消任务失败: ' + (error.response?.data?.message || error.message))
   } finally {
     cancelingTasks[record.task_id] = false
   }
@@ -1031,7 +1024,6 @@ const loadHostStatus = async (taskId: string) => {
     hostStatuses.value = response.hosts || []
   } catch (error) {
     console.error('获取主机执行状态失败:', error)
-    message.error('获取主机执行状态失败')
   } finally {
     hostStatusLoading.value = false
   }

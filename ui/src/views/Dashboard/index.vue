@@ -210,26 +210,16 @@ const alertTags = computed(() => {
   return tags
 })
 
-const iocTags = computed(() => {
-  const ioc = stats.value.iocByType
-  if (!ioc) return []
-  return [
-    { label: `IP ${formatCompact(ioc.ip)}`, color: '#3B82F6' },
-    { label: `Hash ${formatCompact(ioc.hash)}`, color: '#06B6D4' },
-    { label: `URL ${formatCompact(ioc.url)}`, color: '#F59E0B' },
-  ]
-})
-
 // Agent 在线率 (替代 IOC 情报)
 const agentOnlinePercent = computed(() => {
-  const total = stats.value.totalAgents || stats.value.totalHosts || 0
+  const total = (stats.value.onlineAgents || 0) + (stats.value.offlineAgents || 0) || stats.value.hosts || 0
   const online = stats.value.onlineAgents || 0
   if (total === 0) return 0
   return Math.round((online / total) * 100)
 })
 const agentTags = computed(() => {
   const online = stats.value.onlineAgents || 0
-  const total = stats.value.totalAgents || stats.value.totalHosts || 0
+  const total = (stats.value.onlineAgents || 0) + (stats.value.offlineAgents || 0) || stats.value.hosts || 0
   const offline = Math.max(0, total - online)
   const tags = [{ label: `在线 ${online}/${total}`, color: '#22C55E' }]
   if (offline > 0) tags.push({ label: `离线 ${offline}`, color: '#EF4444' })

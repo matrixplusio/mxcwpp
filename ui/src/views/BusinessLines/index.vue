@@ -234,8 +234,8 @@ const loadBusinessLines = async () => {
     const response = await businessLinesApi.list(params)
     businessLines.value = response.items
     pagination.total = response.total
-  } catch (error: any) {
-    message.error(error.message || '加载业务线列表失败')
+  } catch (error) {
+    console.error('加载业务线列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -327,7 +327,7 @@ const handleSubmit = async () => {
       // 表单验证错误
       return
     }
-    message.error(error.message || '操作失败')
+    console.error('保存业务线失败:', error)
   }
 }
 

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/integrity"
 )
 
 // RockySource 拉取 Rocky Linux Apollo Errata API。
@@ -193,9 +195,15 @@ func (r *RockySource) parseAdvisory(ra *rockyAdvisory) *Advisory {
 	pkgFixes := make([]PkgFix, 0, len(ra.Packages))
 	for _, p := range ra.Packages {
 		fix := parseNEVRA(p.NEVRA)
-		if fix != nil {
-			pkgFixes = append(pkgFixes, *fix)
+		if fix == nil {
+			continue
 		}
+		// 完整性：仅在上游摘要格式合法时带入下游，畸形摘要丢弃（数据损坏/篡改信号）。
+		if p.Checksum != "" && integrity.ValidateChecksumFormat(p.ChecksumType, p.Checksum) == nil {
+			fix.Checksum = strings.TrimSpace(p.Checksum)
+			fix.ChecksumType = integrity.NormalizeChecksumType(p.ChecksumType)
+		}
+		pkgFixes = append(pkgFixes, *fix)
 	}
 	if len(pkgFixes) == 0 {
 		return nil

@@ -41,6 +41,12 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	router.Use(middleware.Prometheus()) // 记录 HTTP QPS + 延迟到 mxsec_http_requests_total/duration
 	router.Use(middleware.CORS(cfg.Server.CORSOrigins))
 
+	// 批4: 安全响应头（默认关，灰度开）。HSTS 需全站 HTTPS，否则会锁死 http 访问。
+	if cfg.Server.Security.Headers.Enabled {
+		router.Use(middleware.SecurityHeaders(cfg.Server.Security.Headers.HSTS, cfg.Server.Security.Headers.CSP))
+		logger.Info("安全响应头已启用", zap.Bool("hsts", cfg.Server.Security.Headers.HSTS))
+	}
+
 	// 健康检查（支持 GET 和 HEAD 方法，Docker healthcheck 可能使用 HEAD）
 	healthHandler := api.NewHealthHandler(db, logger)
 	router.GET("/health", healthHandler.Health)
@@ -123,8 +129,31 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 		logger.Fatal("JWT 密钥未配置或长度不足: 请在配置文件中设置 server.jwt_secret（至少 32 字符）")
 	}
 	authHandler := api.NewAuthHandler(db, logger, []byte(jwtSecret))
+	// 批4: 登出 JWT 黑名单（默认关，需 Redis）。启用后登出即吊销 token。
+	if cfg.Server.Security.JWTBlacklist.Enabled && redisClient != nil {
+		authHandler.EnableJWTBlacklist(redisClient)
+		logger.Info("JWT 黑名单已启用（登出即吊销）")
+	}
 	apiV1.GET("/auth/captcha", authHandler.GetCaptcha)
-	apiV1.POST("/auth/login", authHandler.Login)
+
+	// 批4: 登录接口 IP 限流（默认关，灰度开），防口令爆破。登录前置无 tenant，按 IP 限流。
+	if cfg.Server.Security.LoginRateLimit.Enabled {
+		rps := cfg.Server.Security.LoginRateLimit.RPS
+		if rps <= 0 {
+			rps = 10
+		}
+		burst := cfg.Server.Security.LoginRateLimit.Burst
+		if burst <= 0 {
+			burst = 5
+		}
+		loginLimiter := middleware.PerRouteRateLimit(redisClient, rps, burst, middleware.KeyByIP, logger)
+		apiV1.POST("/auth/login", loginLimiter, authHandler.Login)
+		apiV1.POST("/auth/login-precheck", loginLimiter, authHandler.LoginPrecheck)
+		logger.Info("登录接口 IP 限流已启用", zap.Int("rps", rps), zap.Int("burst", burst))
+	} else {
+		apiV1.POST("/auth/login", authHandler.Login)
+		apiV1.POST("/auth/login-precheck", authHandler.LoginPrecheck)
+	}
 	apiV1.POST("/auth/logout", authHandler.Logout)
 	apiV1.GET("/auth/me", authHandler.GetCurrentUser)
 	apiV1.POST("/auth/change-password", authHandler.AuthMiddleware(), authHandler.ChangePassword)
@@ -137,6 +166,11 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	apiV1Auth := apiV1.Group("")
 	apiV1Auth.Use(authHandler.AuthMiddleware())
 	apiV1Auth.Use(middleware.AuditLogWithCH(db, chConn, logger))
+	// RBAC：让 role_permissions 表参与放行——对写操作按所属模块校验权限（纵向越权防护）。
+	// 读操作放行；admin 角色恒通过；user 默认无写权。
+	permResolver := api.NewPermissionResolver(db, logger)
+	api.SetGlobalResolver(permResolver)
+	apiV1Auth.Use(permResolver.EnforceWritePermissions())
 
 	// 服务发现查询（需要认证，运维 / 前端监控页面调用）
 	apiV1Auth.GET("/discovery/agentcenter", discoveryHandler.ListACInstances)

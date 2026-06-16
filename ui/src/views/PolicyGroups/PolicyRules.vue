@@ -207,7 +207,6 @@ const loadPolicyDetail = async () => {
     rules.value = data.rules || []
   } catch (error) {
     console.error('加载策略详情失败:', error)
-    message.error('加载策略详情失败')
   } finally {
     loading.value = false
   }
@@ -237,8 +236,8 @@ const handleToggleEnabled = async (rule: Rule, checked: boolean) => {
     await rulesApi.update(rule.rule_id, { enabled: checked })
     rule.enabled = checked
     message.success(checked ? '规则已启用' : '规则已禁用')
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('切换规则状态失败:', error)
   }
 }
 
@@ -249,7 +248,6 @@ const handleDeleteRule = async (rule: Rule) => {
     loadPolicyDetail()
   } catch (error) {
     console.error('删除规则失败:', error)
-    message.error('删除规则失败')
   }
 }
 

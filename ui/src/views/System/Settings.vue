@@ -208,9 +208,8 @@ const handleFileSelect = async (file: File) => {
     fileList.value = []
     // 触发全局配置更新
     window.dispatchEvent(new CustomEvent('site-config-updated'))
-  } catch (error: any) {
+  } catch (error) {
     console.error('上传 Logo 失败:', error)
-    message.error(error.message || '上传 Logo 失败')
     logoPreview.value = ''
   } finally {
     saving.value = false
@@ -267,11 +266,8 @@ const handleSubmit = async () => {
     message.success('设置保存成功')
     // 触发全局配置更新（如果有 store）
     window.dispatchEvent(new CustomEvent('site-config-updated'))
-  } catch (error: any) {
+  } catch (error) {
     console.error('保存设置失败:', error)
-    console.error('错误响应详情:', error.response?.data)
-    const errorMessage = error.response?.data?.message || error.message || '保存设置失败'
-    message.error(errorMessage)
   } finally {
     saving.value = false
   }

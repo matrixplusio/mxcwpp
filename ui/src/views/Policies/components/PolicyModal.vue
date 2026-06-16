@@ -119,13 +119,13 @@ import type { FormInstance } from 'ant-design-vue/es/form'
 import { OS_OPTIONS, getOSFamilyLabel } from '@/constants/os'
 
 const props = defineProps<{
-  visible: boolean
+  open: boolean
   policy?: Policy | null
   defaultGroupId?: string
 }>()
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean]
+  'update:open': [value: boolean]
   success: []
 }>()
 
@@ -197,7 +197,7 @@ const loadPolicyGroups = async () => {
 }
 
 watch(
-  () => props.visible,
+  () => props.open,
   (visible) => {
     if (visible) {
       // 加载策略组列表
@@ -247,8 +247,8 @@ watch(
 )
 
 const visible = computed({
-  get: () => props.visible,
-  set: (value) => emit('update:visible', value),
+  get: () => props.open,
+  set: (value) => emit('update:open', value),
 })
 
 const handleSubmit = async () => {

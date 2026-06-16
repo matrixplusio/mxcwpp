@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/common/ssrf"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
 
@@ -140,6 +141,12 @@ func (s *VulnDataSourceService) SetEnabled(id uint, enabled bool) error {
 
 // SetBaseURL 更新 base_url（允许 admin 改镜像源）。
 func (s *VulnDataSourceService) SetBaseURL(id uint, baseURL string) error {
+	// 防 SSRF：base_url 会被服务端用于发起请求（同步/连通性测试），拒绝内网/回环/元数据地址
+	if baseURL != "" {
+		if err := ssrf.ValidateURL(baseURL); err != nil {
+			return fmt.Errorf("base_url 不合法: %w", err)
+		}
+	}
 	result := s.db.Model(&model.VulnDataSource{}).
 		Where("id = ?", id).
 		Update("base_url", baseURL)

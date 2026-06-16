@@ -17,10 +17,7 @@ type RedHatDriver struct {
 }
 
 // NewRedHatDriver 构造 RedHat driver。
-func NewRedHatDriver(timeout time.Duration) *RedHatDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+func NewRedHatDriver() *RedHatDriver {
 	return &RedHatDriver{
 		BaseURL: "https://access.redhat.com/hydra/rest/securitydata",
 		Client:  SharedHTTPClient(),

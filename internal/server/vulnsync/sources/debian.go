@@ -18,10 +18,7 @@ type DebianDriver struct {
 }
 
 // NewDebianDriver 构造 Debian driver。
-func NewDebianDriver(timeout time.Duration) *DebianDriver {
-	if timeout <= 0 {
-		timeout = 120 * time.Second // Debian tracker JSON 较大
-	}
+func NewDebianDriver() *DebianDriver {
 	return &DebianDriver{
 		URL:    "https://security-tracker.debian.org/tracker/data/json",
 		Client: SharedHTTPClient(),

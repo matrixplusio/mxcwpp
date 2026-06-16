@@ -39,7 +39,7 @@ func TestRouter_PrimarySucceeds(t *testing.T) {
 	t.Parallel()
 	reg := provider.NewRegistry()
 	_ = reg.Register(&stubProvider{name: "p1", resp: "ok"})
-	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1"}}}, Config{}, zap.NewNop())
+	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1"}}}, Config{AllowDataEgress: true}, zap.NewNop())
 	resp, err := r.Complete(context.Background(), SceneAlertExplain, provider.CompletionRequest{Model: "any"})
 	if err != nil {
 		t.Fatalf("complete: %v", err)
@@ -54,7 +54,7 @@ func TestRouter_FallbackToBackup(t *testing.T) {
 	reg := provider.NewRegistry()
 	_ = reg.Register(&stubProvider{name: "p1", failN: 100, resp: "primary"})
 	_ = reg.Register(&stubProvider{name: "p2", resp: "backup"})
-	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1", "p2"}}}, Config{FailureThreshold: 10}, zap.NewNop())
+	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1", "p2"}}}, Config{FailureThreshold: 10, AllowDataEgress: true}, zap.NewNop())
 	resp, err := r.Complete(context.Background(), SceneAlertExplain, provider.CompletionRequest{Model: "any"})
 	if err != nil {
 		t.Fatalf("complete: %v", err)
@@ -68,7 +68,7 @@ func TestRouter_AllFail(t *testing.T) {
 	t.Parallel()
 	reg := provider.NewRegistry()
 	_ = reg.Register(&stubProvider{name: "p1", failN: 100})
-	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1"}}}, Config{FailureThreshold: 10}, zap.NewNop())
+	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1"}}}, Config{FailureThreshold: 10, AllowDataEgress: true}, zap.NewNop())
 	_, err := r.Complete(context.Background(), SceneAlertExplain, provider.CompletionRequest{Model: "any"})
 	if !errors.Is(err, ErrNoAvailableProvider) {
 		t.Fatalf("expected ErrNoAvailableProvider, got %v", err)
@@ -81,7 +81,7 @@ func TestRouter_BlacklistAfterFailures(t *testing.T) {
 	p1 := &stubProvider{name: "p1", failN: 100}
 	_ = reg.Register(p1)
 	_ = reg.Register(&stubProvider{name: "p2", resp: "backup"})
-	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1", "p2"}}}, Config{FailureThreshold: 2}, zap.NewNop())
+	r := NewRouter(reg, []SceneRoute{{Scene: SceneAlertExplain, Providers: []string{"p1", "p2"}}}, Config{FailureThreshold: 2, AllowDataEgress: true}, zap.NewNop())
 
 	// 触发 3 次让 p1 进黑名单
 	for i := 0; i < 3; i++ {

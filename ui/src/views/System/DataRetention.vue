@@ -123,7 +123,6 @@ const loadList = async () => {
     items.value = res.items ?? []
   } catch (e) {
     console.error('加载保留策略失败', e)
-    message.error('加载保留策略失败')
   } finally {
     loading.value = false
   }
@@ -144,10 +143,8 @@ const handleSubmit = async () => {
     message.success(`${editing.value.display_name} 保留天数已更新为 ${form.retention_days} 天`)
     modalVisible.value = false
     loadList()
-  } catch (e: any) {
-    if (!e?.errorFields) {
-      message.error(`更新失败: ${e?.message || e}`)
-    }
+  } catch (e) {
+    console.error('更新保留策略失败:', e)
   } finally {
     submitLoading.value = false
   }

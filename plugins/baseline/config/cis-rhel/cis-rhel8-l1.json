@@ -3,49 +3,997 @@
   "name": "CIS RHEL 8 Benchmark Level 1 Server",
   "version": "2.0.0",
   "description": "CIS Red Hat Enterprise Linux 8 Benchmark v2.0.0 - Level 1 Server profile.",
-  "os_family": ["centos", "rocky", "almalinux", "rhel", "oracle"],
+  "os_family": [
+    "centos",
+    "rocky",
+    "almalinux",
+    "rhel",
+    "oracle"
+  ],
   "os_version": ">=8",
   "enabled": true,
   "rules": [
-    {"rule_id": "CIS_RHEL8_1_1_1_1", "category": "Filesystem", "title": "Ensure mounting of cramfs filesystems is disabled", "description": "1.1.1.1 cramfs 文件系统挂载禁用", "severity": "low", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/modprobe.d/cramfs.conf", "install\\s+cramfs\\s+/bin/(true|false)", "match"]}]}, "fix": {"suggestion": "echo 'install cramfs /bin/true' > /etc/modprobe.d/cramfs.conf"}},
-    {"rule_id": "CIS_RHEL8_1_1_1_2", "category": "Filesystem", "title": "Ensure mounting of squashfs filesystems is disabled", "description": "1.1.1.2", "severity": "low", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/modprobe.d/squashfs.conf", "install\\s+squashfs\\s+/bin/(true|false)", "match"]}]}, "fix": {"suggestion": "echo 'install squashfs /bin/true' > /etc/modprobe.d/squashfs.conf"}},
-    {"rule_id": "CIS_RHEL8_1_1_1_3", "category": "Filesystem", "title": "Ensure mounting of udf filesystems is disabled", "description": "1.1.1.3", "severity": "low", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/modprobe.d/udf.conf", "install\\s+udf\\s+/bin/(true|false)", "match"]}]}, "fix": {"suggestion": "echo 'install udf /bin/true' > /etc/modprobe.d/udf.conf"}},
-    {"rule_id": "CIS_RHEL8_1_2_1", "category": "Configure Repos", "title": "Ensure GPG keys are configured", "description": "1.2.1", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["rpm -q gpg-pubkey | wc -l", "^[1-9]"]}]}, "fix": {"suggestion": "rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-*"}},
-    {"rule_id": "CIS_RHEL8_1_2_2", "category": "Configure Repos", "title": "Ensure gpgcheck is globally activated", "description": "1.2.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/dnf/dnf.conf", "gpgcheck", "^1$"]}]}, "fix": {"suggestion": "/etc/dnf/dnf.conf set gpgcheck=1"}},
-    {"rule_id": "CIS_RHEL8_1_4_1", "category": "Bootloader", "title": "Ensure bootloader password is set", "description": "1.4.1", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/boot/grub2/user.cfg", "GRUB2_PASSWORD", "match"]}]}, "fix": {"suggestion": "grub2-setpassword"}},
-    {"rule_id": "CIS_RHEL8_1_4_2", "category": "Bootloader", "title": "Ensure permissions on bootloader config are configured", "description": "1.4.2", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/boot/grub2/grub.cfg", "600"]}]}, "fix": {"suggestion": "chmod 600 /boot/grub2/grub.cfg"}},
-    {"rule_id": "CIS_RHEL8_1_5_1", "category": "Additional Process Hardening", "title": "Ensure core dumps are restricted", "description": "1.5.1 防 coredump 泄信息", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/security/limits.conf", "\\*\\s+hard\\s+core\\s+0", "match"]}]}, "fix": {"suggestion": "* hard core 0 in /etc/security/limits.conf"}},
-    {"rule_id": "CIS_RHEL8_1_5_2", "category": "Additional Process Hardening", "title": "Ensure address space layout randomization (ASLR) is enabled", "description": "1.5.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["kernel.randomize_va_space", "2"]}]}, "fix": {"suggestion": "sysctl -w kernel.randomize_va_space=2"}},
-    {"rule_id": "CIS_RHEL8_1_6_1_1", "category": "Mandatory Access Control", "title": "Ensure SELinux is installed", "description": "1.6.1.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "package_installed", "param": ["libselinux"]}]}, "fix": {"suggestion": "yum install libselinux"}},
-    {"rule_id": "CIS_RHEL8_1_6_1_2", "category": "Mandatory Access Control", "title": "Ensure SELinux is not disabled in bootloader configuration", "description": "1.6.1.2", "severity": "high", "check": {"condition": "none", "rules": [{"type": "file_line_match", "param": ["/etc/default/grub", "selinux=0|enforcing=0", "match"]}]}, "fix": {"suggestion": "remove selinux=0/enforcing=0 from GRUB_CMDLINE_LINUX"}},
-    {"rule_id": "CIS_RHEL8_1_6_1_3", "category": "Mandatory Access Control", "title": "Ensure SELinux policy is configured to enforcing or targeted", "description": "1.6.1.3", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/selinux/config", "SELINUXTYPE", "^(targeted|mls)$"]}]}, "fix": {"suggestion": "SELINUXTYPE=targeted"}},
-    {"rule_id": "CIS_RHEL8_1_6_1_4", "category": "Mandatory Access Control", "title": "Ensure SELinux mode is enforcing", "description": "1.6.1.4", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["getenforce", "^Enforcing$"]}]}, "fix": {"suggestion": "setenforce 1 + /etc/selinux/config SELINUX=enforcing"}},
-    {"rule_id": "CIS_RHEL8_2_1_1", "category": "Inetd Services", "title": "Ensure xinetd is not installed", "description": "2.1.1", "severity": "medium", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["xinetd"]}]}, "fix": {"suggestion": "yum remove xinetd"}},
-    {"rule_id": "CIS_RHEL8_2_2_1_1", "category": "Time Sync", "title": "Ensure time synchronization is in use", "description": "2.2.1.1 NTP/chrony", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["chronyd", "active"]}, {"type": "service_status", "param": ["ntpd", "active"]}, {"type": "service_status", "param": ["systemd-timesyncd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now chronyd"}},
-    {"rule_id": "CIS_RHEL8_2_2_2", "category": "Special Purpose Services", "title": "Ensure X Window System is not installed", "description": "2.2.2 服务器无 GUI", "severity": "low", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["xorg-x11-server-common"]}]}, "fix": {"suggestion": "yum group remove 'Server with GUI'"}},
-    {"rule_id": "CIS_RHEL8_2_2_3", "category": "Special Purpose Services", "title": "Ensure rsync service is not enabled", "description": "2.2.3", "severity": "low", "check": {"condition": "none", "rules": [{"type": "service_status", "param": ["rsyncd", "active"]}]}, "fix": {"suggestion": "systemctl disable --now rsyncd"}},
-    {"rule_id": "CIS_RHEL8_3_1_1", "category": "Network", "title": "Disable IPv6 if not used", "description": "3.1.1 关闭未用 IPv6", "severity": "info", "check": {"condition": "any", "rules": [{"type": "sysctl", "param": ["net.ipv6.conf.all.disable_ipv6", "1"]}]}, "fix": {"suggestion": "sysctl -w net.ipv6.conf.all.disable_ipv6=1"}},
-    {"rule_id": "CIS_RHEL8_3_1_2", "category": "Network", "title": "Ensure wireless interfaces are disabled", "description": "3.1.2 服务器无线", "severity": "low", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["nmcli radio wifi 2>/dev/null", "^disabled$|^(unavailable|missing)$"]}]}, "fix": {"suggestion": "nmcli radio wifi off"}},
-    {"rule_id": "CIS_RHEL8_3_2_1", "category": "Network Parameters", "title": "Ensure source routed packets are not accepted", "description": "3.2.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.conf.all.accept_source_route", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.conf.all.accept_source_route=0"}},
-    {"rule_id": "CIS_RHEL8_3_2_2", "category": "Network Parameters", "title": "Ensure ICMP redirects are not accepted", "description": "3.2.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.conf.all.accept_redirects", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0"}},
-    {"rule_id": "CIS_RHEL8_3_2_3", "category": "Network Parameters", "title": "Ensure secure ICMP redirects are not accepted", "description": "3.2.3", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.conf.all.secure_redirects", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.conf.all.secure_redirects=0"}},
-    {"rule_id": "CIS_RHEL8_3_2_4", "category": "Network Parameters", "title": "Ensure suspicious packets are logged", "description": "3.2.4", "severity": "low", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.conf.all.log_martians", "1"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.conf.all.log_martians=1"}},
-    {"rule_id": "CIS_RHEL8_3_4_1_1", "category": "Firewall", "title": "Ensure firewalld is installed", "description": "3.4.1.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "package_installed", "param": ["firewalld"]}]}, "fix": {"suggestion": "yum install firewalld"}},
-    {"rule_id": "CIS_RHEL8_4_1_1_1", "category": "System Auditing", "title": "Ensure auditd is installed", "description": "4.1.1.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "package_installed", "param": ["audit"]}]}, "fix": {"suggestion": "yum install audit"}},
-    {"rule_id": "CIS_RHEL8_4_1_1_2", "category": "System Auditing", "title": "Ensure auditd service is enabled and running", "description": "4.1.1.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "systemctl enable --now auditd"}},
-    {"rule_id": "CIS_RHEL8_4_2_1_1", "category": "Logging", "title": "Ensure rsyslog is installed", "description": "4.2.1.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "package_installed", "param": ["rsyslog"]}]}, "fix": {"suggestion": "yum install rsyslog"}},
-    {"rule_id": "CIS_RHEL8_4_2_1_2", "category": "Logging", "title": "Ensure rsyslog service is enabled and active", "description": "4.2.1.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["rsyslog", "active"]}]}, "fix": {"suggestion": "systemctl enable --now rsyslog"}},
-    {"rule_id": "CIS_RHEL8_5_1_1", "category": "Cron", "title": "Ensure cron daemon is enabled and running", "description": "5.1.1", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["crond", "active"]}, {"type": "service_status", "param": ["cron", "active"]}]}, "fix": {"suggestion": "systemctl enable --now crond"}},
-    {"rule_id": "CIS_RHEL8_5_1_2", "category": "Cron", "title": "Ensure permissions on /etc/crontab are configured", "description": "5.1.2", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/etc/crontab", "600"]}]}, "fix": {"suggestion": "chmod 600 /etc/crontab && chown root:root /etc/crontab"}},
-    {"rule_id": "CIS_RHEL8_5_2_1", "category": "SSH", "title": "Ensure permissions on /etc/ssh/sshd_config are configured", "description": "5.2.1", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/etc/ssh/sshd_config", "600"]}]}, "fix": {"suggestion": "chmod 600 /etc/ssh/sshd_config && chown root:root"}},
-    {"rule_id": "CIS_RHEL8_5_2_2", "category": "SSH", "title": "Ensure SSH access is limited", "description": "5.2.2 AllowUsers/AllowGroups", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "^\\s*(AllowUsers|AllowGroups|DenyUsers|DenyGroups)\\s+", "match"]}]}, "fix": {"suggestion": "AllowGroups ssh-users in sshd_config"}},
-    {"rule_id": "CIS_RHEL8_5_2_3", "category": "SSH", "title": "Ensure SSH LogLevel is appropriate", "description": "5.2.3", "severity": "low", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "LogLevel", "^(INFO|VERBOSE)$"]}]}, "fix": {"suggestion": "LogLevel INFO"}},
-    {"rule_id": "CIS_RHEL8_5_2_4", "category": "SSH", "title": "Ensure SSH PermitRootLogin is disabled", "description": "5.2.4", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "^no$"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
-    {"rule_id": "CIS_RHEL8_5_2_5", "category": "SSH", "title": "Ensure SSH HostbasedAuthentication is disabled", "description": "5.2.5", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "HostbasedAuthentication", "^no$"]}]}, "fix": {"suggestion": "HostbasedAuthentication no"}},
-    {"rule_id": "CIS_RHEL8_5_2_6", "category": "SSH", "title": "Ensure SSH IgnoreRhosts is enabled", "description": "5.2.6", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "IgnoreRhosts", "^yes$"]}]}, "fix": {"suggestion": "IgnoreRhosts yes"}},
-    {"rule_id": "CIS_RHEL8_5_2_7", "category": "SSH", "title": "Ensure SSH PermitEmptyPasswords is disabled", "description": "5.2.7", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitEmptyPasswords", "^no$"]}]}, "fix": {"suggestion": "PermitEmptyPasswords no"}},
-    {"rule_id": "CIS_RHEL8_5_2_8", "category": "SSH", "title": "Ensure SSH PermitUserEnvironment is disabled", "description": "5.2.8", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitUserEnvironment", "^no$"]}]}, "fix": {"suggestion": "PermitUserEnvironment no"}},
-    {"rule_id": "CIS_RHEL8_6_1_2", "category": "System File Permissions", "title": "Ensure permissions on /etc/passwd are configured", "description": "6.1.2", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/etc/passwd", "644"]}]}, "fix": {"suggestion": "chmod 644 /etc/passwd && chown root:root"}},
-    {"rule_id": "CIS_RHEL8_6_1_3", "category": "System File Permissions", "title": "Ensure permissions on /etc/shadow are configured", "description": "6.1.3", "severity": "critical", "check": {"condition": "any", "rules": [{"type": "file_permission", "param": ["/etc/shadow", "000"]}, {"type": "file_permission", "param": ["/etc/shadow", "600"]}]}, "fix": {"suggestion": "chmod 000 /etc/shadow && chown root:root"}}
+    {
+      "rule_id": "CIS_RHEL8_1_1_1_1",
+      "category": "Filesystem",
+      "title": "Ensure mounting of cramfs filesystems is disabled",
+      "description": "1.1.1.1 cramfs 文件系统挂载禁用",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/cramfs.conf",
+              "install\\s+cramfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "echo 'install cramfs /bin/true' > /etc/modprobe.d/cramfs.conf",
+        "command": "cp /etc/modprobe.d/cramfs.conf /etc/modprobe.d/cramfs.conf.mxbak 2>/dev/null; if grep -qE '^\\s*install\\s+cramfs' /etc/modprobe.d/cramfs.conf 2>/dev/null; then sed -ri 's|^\\s*install\\s+cramfs.*|install cramfs /bin/true|' /etc/modprobe.d/cramfs.conf; else echo 'install cramfs /bin/true' >> /etc/modprobe.d/cramfs.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_1_1_2",
+      "category": "Filesystem",
+      "title": "Ensure mounting of squashfs filesystems is disabled",
+      "description": "1.1.1.2",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/squashfs.conf",
+              "install\\s+squashfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "echo 'install squashfs /bin/true' > /etc/modprobe.d/squashfs.conf",
+        "command": "cp /etc/modprobe.d/squashfs.conf /etc/modprobe.d/squashfs.conf.mxbak 2>/dev/null; if grep -qE '^\\s*install\\s+squashfs' /etc/modprobe.d/squashfs.conf 2>/dev/null; then sed -ri 's|^\\s*install\\s+squashfs.*|install squashfs /bin/true|' /etc/modprobe.d/squashfs.conf; else echo 'install squashfs /bin/true' >> /etc/modprobe.d/squashfs.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_1_1_3",
+      "category": "Filesystem",
+      "title": "Ensure mounting of udf filesystems is disabled",
+      "description": "1.1.1.3",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/udf.conf",
+              "install\\s+udf\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "echo 'install udf /bin/true' > /etc/modprobe.d/udf.conf",
+        "command": "cp /etc/modprobe.d/udf.conf /etc/modprobe.d/udf.conf.mxbak 2>/dev/null; if grep -qE '^\\s*install\\s+udf' /etc/modprobe.d/udf.conf 2>/dev/null; then sed -ri 's|^\\s*install\\s+udf.*|install udf /bin/true|' /etc/modprobe.d/udf.conf; else echo 'install udf /bin/true' >> /etc/modprobe.d/udf.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_2_1",
+      "category": "Configure Repos",
+      "title": "Ensure GPG keys are configured",
+      "description": "1.2.1",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "rpm -q gpg-pubkey | wc -l",
+              "^[1-9]"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-*",
+        "command": "for k in /etc/pki/rpm-gpg/RPM-GPG-KEY-*; do [ -f \"$k\" ] && rpm --import \"$k\"; done"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_2_2",
+      "category": "Configure Repos",
+      "title": "Ensure gpgcheck is globally activated",
+      "description": "1.2.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/dnf/dnf.conf",
+              "gpgcheck",
+              "^1$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "/etc/dnf/dnf.conf set gpgcheck=1",
+        "command": "cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.mxbak && (grep -qE '^\\s*gpgcheck' /etc/dnf/dnf.conf && sed -ri 's|^\\s*gpgcheck\\s*=.*|gpgcheck=1|' /etc/dnf/dnf.conf || echo 'gpgcheck=1' >> /etc/dnf/dnf.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_4_1",
+      "category": "Bootloader",
+      "title": "Ensure bootloader password is set",
+      "description": "1.4.1",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/boot/grub2/user.cfg",
+              "GRUB2_PASSWORD",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "grub2-setpassword"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_4_2",
+      "category": "Bootloader",
+      "title": "Ensure permissions on bootloader config are configured",
+      "description": "1.4.2",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 600 /boot/grub2/grub.cfg",
+        "command": "[ -f /boot/grub2/grub.cfg ] && chmod 600 /boot/grub2/grub.cfg"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_5_1",
+      "category": "Additional Process Hardening",
+      "title": "Ensure core dumps are restricted",
+      "description": "1.5.1 防 coredump 泄信息",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/limits.conf",
+              "\\*\\s+hard\\s+core\\s+0",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "* hard core 0 in /etc/security/limits.conf",
+        "command": "cp /etc/security/limits.conf /etc/security/limits.conf.mxbak && (grep -qE '^\\s*\\*\\s+hard\\s+core' /etc/security/limits.conf && sed -ri 's|^\\s*\\*\\s+hard\\s+core.*|* hard core 0|' /etc/security/limits.conf || echo '* hard core 0' >> /etc/security/limits.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_5_2",
+      "category": "Additional Process Hardening",
+      "title": "Ensure address space layout randomization (ASLR) is enabled",
+      "description": "1.5.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "kernel.randomize_va_space",
+              "2"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w kernel.randomize_va_space=2",
+        "command": "sysctl -w kernel.randomize_va_space=2 && (grep -q '^kernel.randomize_va_space' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^kernel.randomize_va_space.*|kernel.randomize_va_space = 2|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'kernel.randomize_va_space = 2' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_6_1_1",
+      "category": "Mandatory Access Control",
+      "title": "Ensure SELinux is installed",
+      "description": "1.6.1.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "libselinux"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum install libselinux",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf install -y libselinux; else yum install -y libselinux; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_6_1_2",
+      "category": "Mandatory Access Control",
+      "title": "Ensure SELinux is not disabled in bootloader configuration",
+      "description": "1.6.1.2",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/default/grub",
+              "selinux=0|enforcing=0",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "remove selinux=0/enforcing=0 from GRUB_CMDLINE_LINUX"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_6_1_3",
+      "category": "Mandatory Access Control",
+      "title": "Ensure SELinux policy is configured to enforcing or targeted",
+      "description": "1.6.1.3",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/selinux/config",
+              "SELINUXTYPE",
+              "^(targeted|mls)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "SELINUXTYPE=targeted",
+        "command": "cp /etc/selinux/config /etc/selinux/config.mxbak.1_6_1_3 && (grep -qE '^\\s*SELINUXTYPE' /etc/selinux/config && sed -ri 's|^\\s*SELINUXTYPE\\s*=.*|SELINUXTYPE=targeted|' /etc/selinux/config || echo 'SELINUXTYPE=targeted' >> /etc/selinux/config)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_1_6_1_4",
+      "category": "Mandatory Access Control",
+      "title": "Ensure SELinux mode is enforcing",
+      "description": "1.6.1.4",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "getenforce",
+              "^Enforcing$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "setenforce 1 + /etc/selinux/config SELINUX=enforcing",
+        "command": "cp /etc/selinux/config /etc/selinux/config.mxbak.1_6_1_4 && (grep -qE '^\\s*SELINUX=' /etc/selinux/config && sed -ri 's|^\\s*SELINUX=.*|SELINUX=enforcing|' /etc/selinux/config || echo 'SELINUX=enforcing' >> /etc/selinux/config) && (setenforce 1 2>/dev/null || true)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_2_1_1",
+      "category": "Inetd Services",
+      "title": "Ensure xinetd is not installed",
+      "description": "2.1.1",
+      "severity": "medium",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "xinetd"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum remove xinetd",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf remove -y xinetd; else yum remove -y xinetd; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_2_2_1_1",
+      "category": "Time Sync",
+      "title": "Ensure time synchronization is in use",
+      "description": "2.2.1.1 NTP/chrony",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "chronyd",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "ntpd",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "systemd-timesyncd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl enable --now chronyd",
+        "command": "if ! rpm -q chrony >/dev/null 2>&1; then if command -v dnf >/dev/null 2>&1; then dnf install -y chrony; else yum install -y chrony; fi; fi; systemctl enable --now chronyd",
+        "restart_services": [
+          "chronyd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_2_2_2",
+      "category": "Special Purpose Services",
+      "title": "Ensure X Window System is not installed",
+      "description": "2.2.2 服务器无 GUI",
+      "severity": "low",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "xorg-x11-server-common"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum group remove 'Server with GUI'",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf remove -y xorg-x11-server-common; else yum remove -y xorg-x11-server-common; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_2_2_3",
+      "category": "Special Purpose Services",
+      "title": "Ensure rsync service is not enabled",
+      "description": "2.2.3",
+      "severity": "low",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "rsyncd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl disable --now rsyncd",
+        "command": "systemctl disable --now rsyncd 2>/dev/null; systemctl mask rsyncd 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_1_1",
+      "category": "Network",
+      "title": "Disable IPv6 if not used",
+      "description": "3.1.1 关闭未用 IPv6",
+      "severity": "info",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv6.conf.all.disable_ipv6",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv6.conf.all.disable_ipv6=1",
+        "command": "sysctl -w net.ipv6.conf.all.disable_ipv6=1 && (grep -q '^net.ipv6.conf.all.disable_ipv6' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv6.conf.all.disable_ipv6.*|net.ipv6.conf.all.disable_ipv6 = 1|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_1_2",
+      "category": "Network",
+      "title": "Ensure wireless interfaces are disabled",
+      "description": "3.1.2 服务器无线",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "nmcli radio wifi 2>/dev/null",
+              "^disabled$|^(unavailable|missing)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "nmcli radio wifi off",
+        "command": "command -v nmcli >/dev/null 2>&1 && nmcli radio wifi off; true"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_2_1",
+      "category": "Network Parameters",
+      "title": "Ensure source routed packets are not accepted",
+      "description": "3.2.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.accept_source_route",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.conf.all.accept_source_route=0",
+        "command": "sysctl -w net.ipv4.conf.all.accept_source_route=0 && (grep -q '^net.ipv4.conf.all.accept_source_route' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_source_route.*|net.ipv4.conf.all.accept_source_route = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.accept_source_route = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_2_2",
+      "category": "Network Parameters",
+      "title": "Ensure ICMP redirects are not accepted",
+      "description": "3.2.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.accept_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && (grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_2_3",
+      "category": "Network Parameters",
+      "title": "Ensure secure ICMP redirects are not accepted",
+      "description": "3.2.3",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.secure_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.conf.all.secure_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.secure_redirects=0 && (grep -q '^net.ipv4.conf.all.secure_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.secure_redirects.*|net.ipv4.conf.all.secure_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.secure_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_2_4",
+      "category": "Network Parameters",
+      "title": "Ensure suspicious packets are logged",
+      "description": "3.2.4",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.log_martians",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.conf.all.log_martians=1",
+        "command": "sysctl -w net.ipv4.conf.all.log_martians=1 && (grep -q '^net.ipv4.conf.all.log_martians' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.log_martians.*|net.ipv4.conf.all.log_martians = 1|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.log_martians = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_3_4_1_1",
+      "category": "Firewall",
+      "title": "Ensure firewalld is installed",
+      "description": "3.4.1.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "firewalld"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum install firewalld",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf install -y firewalld; else yum install -y firewalld; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_4_1_1_1",
+      "category": "System Auditing",
+      "title": "Ensure auditd is installed",
+      "description": "4.1.1.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "audit"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum install audit",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf install -y audit; else yum install -y audit; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_4_1_1_2",
+      "category": "System Auditing",
+      "title": "Ensure auditd service is enabled and running",
+      "description": "4.1.1.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "auditd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl enable --now auditd",
+        "command": "rpm -q audit >/dev/null 2>&1 || { dnf install -y audit >/dev/null 2>&1 || yum install -y audit; }; systemctl enable auditd >/dev/null 2>&1; service auditd restart >/dev/null 2>&1 || systemctl restart auditd >/dev/null 2>&1; systemctl is-active auditd >/dev/null 2>&1",
+        "restart_services": []
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_4_2_1_1",
+      "category": "Logging",
+      "title": "Ensure rsyslog is installed",
+      "description": "4.2.1.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "rsyslog"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "yum install rsyslog",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf install -y rsyslog; else yum install -y rsyslog; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_4_2_1_2",
+      "category": "Logging",
+      "title": "Ensure rsyslog service is enabled and active",
+      "description": "4.2.1.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "rsyslog",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl enable --now rsyslog",
+        "command": "systemctl enable --now rsyslog",
+        "restart_services": [
+          "rsyslog"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_1_1",
+      "category": "Cron",
+      "title": "Ensure cron daemon is enabled and running",
+      "description": "5.1.1",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "crond",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "cron",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl enable --now crond",
+        "command": "systemctl enable --now crond",
+        "restart_services": [
+          "crond"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_1_2",
+      "category": "Cron",
+      "title": "Ensure permissions on /etc/crontab are configured",
+      "description": "5.1.2",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/crontab",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 600 /etc/crontab && chown root:root /etc/crontab",
+        "command": "chmod 600 /etc/crontab && chown root:root /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_1",
+      "category": "SSH",
+      "title": "Ensure permissions on /etc/ssh/sshd_config are configured",
+      "description": "5.2.1",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 600 /etc/ssh/sshd_config && chown root:root",
+        "command": "chmod 600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_2",
+      "category": "SSH",
+      "title": "Ensure SSH access is limited",
+      "description": "5.2.2 AllowUsers/AllowGroups",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "^\\s*(AllowUsers|AllowGroups|DenyUsers|DenyGroups)\\s+",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "AllowGroups ssh-users in sshd_config"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_3",
+      "category": "SSH",
+      "title": "Ensure SSH LogLevel is appropriate",
+      "description": "5.2.3",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "LogLevel",
+              "^(INFO|VERBOSE)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "LogLevel INFO",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_3 && (grep -qiE '^\\s*#?\\s*LogLevel' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*LogLevel.*|LogLevel INFO|I' /etc/ssh/sshd_config || echo 'LogLevel INFO' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_3 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_4",
+      "category": "SSH",
+      "title": "Ensure SSH PermitRootLogin is disabled",
+      "description": "5.2.4",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitRootLogin",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "PermitRootLogin no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_4 && (grep -qiE '^\\s*#?\\s*PermitRootLogin' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*PermitRootLogin.*|PermitRootLogin no|I' /etc/ssh/sshd_config || echo 'PermitRootLogin no' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_4 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_5",
+      "category": "SSH",
+      "title": "Ensure SSH HostbasedAuthentication is disabled",
+      "description": "5.2.5",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "HostbasedAuthentication",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "HostbasedAuthentication no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_5 && (grep -qiE '^\\s*#?\\s*HostbasedAuthentication' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*HostbasedAuthentication.*|HostbasedAuthentication no|I' /etc/ssh/sshd_config || echo 'HostbasedAuthentication no' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_5 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_6",
+      "category": "SSH",
+      "title": "Ensure SSH IgnoreRhosts is enabled",
+      "description": "5.2.6",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "IgnoreRhosts",
+              "^yes$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "IgnoreRhosts yes",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_6 && (grep -qiE '^\\s*#?\\s*IgnoreRhosts' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*IgnoreRhosts.*|IgnoreRhosts yes|I' /etc/ssh/sshd_config || echo 'IgnoreRhosts yes' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_6 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_7",
+      "category": "SSH",
+      "title": "Ensure SSH PermitEmptyPasswords is disabled",
+      "description": "5.2.7",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitEmptyPasswords",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "PermitEmptyPasswords no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_7 && (grep -qiE '^\\s*#?\\s*PermitEmptyPasswords' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*PermitEmptyPasswords.*|PermitEmptyPasswords no|I' /etc/ssh/sshd_config || echo 'PermitEmptyPasswords no' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_7 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_5_2_8",
+      "category": "SSH",
+      "title": "Ensure SSH PermitUserEnvironment is disabled",
+      "description": "5.2.8",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitUserEnvironment",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "PermitUserEnvironment no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.mxbak.5_2_8 && (grep -qiE '^\\s*#?\\s*PermitUserEnvironment' /etc/ssh/sshd_config && sed -ri 's|^\\s*#?\\s*PermitUserEnvironment.*|PermitUserEnvironment no|I' /etc/ssh/sshd_config || echo 'PermitUserEnvironment no' >> /etc/ssh/sshd_config) && (sshd -t || { mv /etc/ssh/sshd_config.mxbak.5_2_8 /etc/ssh/sshd_config; exit 1; })",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_6_1_2",
+      "category": "System File Permissions",
+      "title": "Ensure permissions on /etc/passwd are configured",
+      "description": "6.1.2",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/passwd",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 644 /etc/passwd && chown root:root",
+        "command": "chmod 644 /etc/passwd && chown root:root /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "CIS_RHEL8_6_1_3",
+      "category": "System File Permissions",
+      "title": "Ensure permissions on /etc/shadow are configured",
+      "description": "6.1.3",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "000"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 000 /etc/shadow && chown root:root",
+        "command": "chmod 000 /etc/shadow && chown root:root /etc/shadow"
+      }
+    }
   ]
 }

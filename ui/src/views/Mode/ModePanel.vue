@@ -188,8 +188,8 @@ async function loadGlobal() {
   try {
     const res = await ModeAPI.getGlobal()
     globalMode.value = res.data
-  } catch (e: any) {
-    message.error('加载全局模式失败: ' + (e.message || e))
+  } catch (e) {
+    console.error('加载全局模式失败:', e)
   } finally {
     loadingGlobal.value = false
   }
@@ -200,8 +200,8 @@ async function refreshGates() {
   try {
     const res = await ModeAPI.checkAdmission('protect')
     admission.value = res.data
-  } catch (e: any) {
-    message.error('加载闸门状态失败: ' + (e.message || e))
+  } catch (e) {
+    console.error('加载闸门状态失败:', e)
   } finally {
     loadingGates.value = false
   }
@@ -215,8 +215,8 @@ async function loadOverrides() {
     ])
     labelOverrides.value = labels.data || []
     ruleOverrides.value = rules.data || []
-  } catch (e: any) {
-    message.error('加载覆盖配置失败: ' + (e.message || e))
+  } catch (e) {
+    console.error('加载覆盖配置失败:', e)
   }
 }
 
@@ -243,8 +243,8 @@ async function onConfirmSwitch() {
     message.success('全局模式已切换为 ' + targetMode.value)
     confirmVisible.value = false
     await loadGlobal()
-  } catch (e: any) {
-    message.error('切换失败: ' + (e.message || e))
+  } catch (e) {
+    console.error('切换模式失败:', e)
   }
 }
 

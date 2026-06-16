@@ -74,6 +74,11 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("策略组名称迁移处理", zap.Error(err))
 	}
 
+	// 一次性回填：历史内置基线策略/规则标记 builtin=true（builtin 为本版本新增字段）
+	if err := migrateBaselineBuiltinFlag(db, logger); err != nil {
+		logger.Warn("基线 builtin 回填处理", zap.Error(err))
+	}
+
 	// 执行数据迁移：为通知配置设置 notify_category
 	if err := migrateNotificationCategory(db, logger); err != nil {
 		logger.Warn("通知类别迁移处理", zap.Error(err))
@@ -821,6 +826,65 @@ func migratePolicyGroupName(db *gorm.DB, logger *zap.Logger) error {
 			zap.String("new_name", "主机系统基线组"))
 	}
 
+	return nil
+}
+
+// migrateBaselineBuiltinFlag 一次性回填：将历史内置基线策略/规则标记为 builtin=true。
+// builtin 字段是本版本新增，AutoMigrate 给存量行默认 false。system-baseline 组下的策略/规则
+// 全部来自文件同步，属内置，必须回填——否则启动同步会把它们误判为用户自定义而跳过。
+// 用 system_config 一次性标记保证只跑一次，绝不影响日后用户导入到该组的自定义规则。
+func migrateBaselineBuiltinFlag(db *gorm.DB, logger *zap.Logger) error {
+	const flagKey = "baseline_builtin_backfilled"
+
+	var cfg model.SystemConfig
+	err := db.Where("`key` = ? AND category = ?", flagKey, "system").First(&cfg).Error
+	if err == nil {
+		return nil // 已回填过
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	// 取 system-baseline 组下所有策略 ID
+	var builtinPolicyIDs []string
+	if err := db.Model(&model.Policy{}).
+		Where("group_id = ?", DefaultPolicyGroupID).
+		Pluck("id", &builtinPolicyIDs).Error; err != nil {
+		return err
+	}
+
+	var policiesAffected, rulesAffected int64
+	if len(builtinPolicyIDs) > 0 {
+		pRes := db.Model(&model.Policy{}).
+			Where("group_id = ? AND builtin = ?", DefaultPolicyGroupID, false).
+			Update("builtin", true)
+		if pRes.Error != nil {
+			return pRes.Error
+		}
+		policiesAffected = pRes.RowsAffected
+
+		rRes := db.Model(&model.Rule{}).
+			Where("policy_id IN ? AND builtin = ?", builtinPolicyIDs, false).
+			Update("builtin", true)
+		if rRes.Error != nil {
+			return rRes.Error
+		}
+		rulesAffected = rRes.RowsAffected
+	}
+
+	// 标记已回填（即使 0 行也标记，保证新装 DB 不重复跑）
+	if err := db.Create(&model.SystemConfig{
+		Key:         flagKey,
+		Value:       "true",
+		Category:    "system",
+		Description: "基线 builtin 字段一次性回填完成",
+	}).Error; err != nil {
+		return err
+	}
+
+	logger.Info("基线 builtin 回填完成",
+		zap.Int64("policies", policiesAffected),
+		zap.Int64("rules", rulesAffected))
 	return nil
 }
 

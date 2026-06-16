@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"testing"
@@ -46,6 +47,86 @@ func TestServerCertNeedsReissue(t *testing.T) {
 	need, _ = ServerCertNeedsReissue(nil, cfg)
 	if !need {
 		t.Fatal("nil bundle 应需 reissue")
+	}
+}
+
+func TestSignAgentCert(t *testing.T) {
+	cfg := buildTestConfig([]string{"mxsec-ac.example.com"}, []string{"10.0.0.1"})
+	bundle, err := GenerateCertificates(cfg)
+	if err != nil {
+		t.Fatalf("GenerateCertificates: %v", err)
+	}
+
+	const agentID = "agent-abc123"
+	certPEM, keyPEM, err := SignAgentCert(bundle, agentID)
+	if err != nil {
+		t.Fatalf("SignAgentCert: %v", err)
+	}
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		t.Fatal("签发结果为空")
+	}
+
+	// 解析证书，CN 必须等于 agentID
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		t.Fatal("agent cert PEM 解析失败")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("解析 agent cert: %v", err)
+	}
+	if cert.Subject.CommonName != agentID {
+		t.Fatalf("CN 应为 %q，实际 %q", agentID, cert.Subject.CommonName)
+	}
+
+	// ExtKeyUsage 必须含 ClientAuth
+	hasClientAuth := false
+	for _, u := range cert.ExtKeyUsage {
+		if u == x509.ExtKeyUsageClientAuth {
+			hasClientAuth = true
+		}
+	}
+	if !hasClientAuth {
+		t.Fatal("agent cert 缺 ClientAuth ExtKeyUsage")
+	}
+
+	// 必须由 bundle 的 CA 签发（验签链）
+	caBlock, _ := pem.Decode(bundle.CACert)
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		t.Fatalf("解析 CA: %v", err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(caCert)
+	if _, err := cert.Verify(x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}); err != nil {
+		t.Fatalf("agent cert 应由 bundle CA 签发: %v", err)
+	}
+
+	// cert 与 key 必须配对（能组成 TLS keypair）
+	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
+		t.Fatalf("cert/key 不配对: %v", err)
+	}
+
+	// 两次签发 CN 相同但序列号不同（独立证书）
+	cert2PEM, _, err := SignAgentCert(bundle, agentID)
+	if err != nil {
+		t.Fatalf("SignAgentCert 第二次: %v", err)
+	}
+	block2, _ := pem.Decode(cert2PEM)
+	cert2, _ := x509.ParseCertificate(block2.Bytes)
+	if cert.SerialNumber.Cmp(cert2.SerialNumber) == 0 {
+		t.Fatal("两次签发序列号不应相同")
+	}
+
+	// 空 agentID 必须报错
+	if _, _, err := SignAgentCert(bundle, ""); err == nil {
+		t.Fatal("空 agentID 应报错")
+	}
+	if _, _, err := SignAgentCert(nil, agentID); err == nil {
+		t.Fatal("nil bundle 应报错")
 	}
 }
 

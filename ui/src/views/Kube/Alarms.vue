@@ -363,9 +363,9 @@ const loadAlarms = async () => {
 
 const handleTableChange = (pag: any) => { pagination.value.current = pag.current; pagination.value.pageSize = pag.pageSize; loadAlarms() }
 const showAlarmDetail = (record: any) => { detailRecord.value = record; showDetail.value = true }
-const handleProcess = async (record: any) => { try { await apiClient.post(`/kube/alarms/${record.id}/process`); message.success('已处理'); loadAlarms() } catch { message.error('操作失败') } }
-const handleBatchProcess = async () => { try { await apiClient.post('/kube/alarms/batch-process', { ids: selectedRowKeys.value }); message.success('批量处理成功'); selectedRowKeys.value = []; loadAlarms() } catch { message.error('操作失败') } }
-const handleBatchIgnore = async () => { try { await apiClient.post('/kube/alarms/batch-ignore', { ids: selectedRowKeys.value }); message.success('批量忽略成功'); selectedRowKeys.value = []; loadAlarms() } catch { message.error('操作失败') } }
+const handleProcess = async (record: any) => { try { await apiClient.post(`/kube/alarms/${record.id}/process`); message.success('已处理'); loadAlarms() } catch (error) { console.error('处理告警失败:', error) } }
+const handleBatchProcess = async () => { try { await apiClient.post('/kube/alarms/batch-process', { ids: selectedRowKeys.value }); message.success('批量处理成功'); selectedRowKeys.value = []; loadAlarms() } catch (error) { console.error('批量处理告警失败:', error) } }
+const handleBatchIgnore = async () => { try { await apiClient.post('/kube/alarms/batch-ignore', { ids: selectedRowKeys.value }); message.success('批量忽略成功'); selectedRowKeys.value = []; loadAlarms() } catch (error) { console.error('批量忽略告警失败:', error) } }
 
 const handleTabChange = (key: string) => {
   if (key === 'baseline') loadBaselineAlerts()
@@ -386,8 +386,8 @@ const loadBaselineAlerts = async () => {
 
 const handleBaselineTableChange = (pag: any) => { baselinePagination.value.current = pag.current; baselinePagination.value.pageSize = pag.pageSize; loadBaselineAlerts() }
 const showBaselineDetail = (record: any) => { baselineDetailRecord.value = record; showBaselineDetailDrawer.value = true }
-const handleBaselineIgnore = async (record: any) => { try { await apiClient.post(`/kube/baseline-alerts/${record.id}/ignore`); message.success('已忽略'); loadBaselineAlerts() } catch { message.error('操作失败') } }
-const handleBaselineBatchIgnore = async () => { try { await apiClient.post('/kube/baseline-alerts/batch-ignore', { ids: baselineSelectedKeys.value }); message.success('批量忽略成功'); baselineSelectedKeys.value = []; loadBaselineAlerts() } catch { message.error('操作失败') } }
+const handleBaselineIgnore = async (record: any) => { try { await apiClient.post(`/kube/baseline-alerts/${record.id}/ignore`); message.success('已忽略'); loadBaselineAlerts() } catch (error) { console.error('忽略基线告警失败:', error) } }
+const handleBaselineBatchIgnore = async () => { try { await apiClient.post('/kube/baseline-alerts/batch-ignore', { ids: baselineSelectedKeys.value }); message.success('批量忽略成功'); baselineSelectedKeys.value = []; loadBaselineAlerts() } catch (error) { console.error('批量忽略基线告警失败:', error) } }
 
 const loadClusters = async () => {
   try {

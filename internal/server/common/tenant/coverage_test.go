@@ -75,6 +75,7 @@ func TestTenantIDColumnCoverage(t *testing.T) {
 		"Permission":       true, // RBAC 权限定义全局
 		"RolePermission":   true, // 角色-权限关联全局
 		"CanaryRollout":    true, // Agent 灰度发布全局
+		"LoginDevice":      true, // 登录可信设备：按 username+device_id，非租户隔离
 	}
 
 	missing := []string{}

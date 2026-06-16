@@ -282,6 +282,9 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+	if pageSize > 200 { // 上限防超大 page_size 拖垮 DB
+		pageSize = 200
+	}
 
 	query := h.buildVulnerabilityQuery(filter)
 

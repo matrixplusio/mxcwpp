@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
+	"golang.org/x/net/netutil"
 	"google.golang.org/grpc"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -230,6 +231,12 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 		cancel() // 确保在错误时取消 context
 		logger.Fatal("监听端口失败", zap.Error(err), zap.String("address", cfg.Server.GRPC.Address()))
 		return nil, err
+	}
+	// 批4 抗 DoS：全局并发连接上限（默认 0=不限）。超限的新连接被 Accept 阻塞至有连接释放，
+	// 防恶意/异常 agent 建立海量连接耗尽 fd 与内存。
+	if maxConns := cfg.Server.GRPC.AntiDoS.MaxConns; maxConns > 0 {
+		listener = netutil.LimitListener(listener, maxConns)
+		logger.Info("AC gRPC 全局连接数上限已启用", zap.Int("max_conns", maxConns))
 	}
 
 	// 13. 构建 HTTP 管理服务器（供 Manager SD 健康探测和命令下发）

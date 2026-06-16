@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/imkerbos/mxsec-platform/internal/agent/config"
+	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
 )
 
 // Manager 是连接管理器
@@ -152,39 +153,15 @@ func (m *Manager) loadTLSConfig(serverAddr string) (*tls.Config, error) {
 		zap.String("server_addr", serverAddr),
 		zap.String("server_name", serverName),
 	)
-	// 检查证书文件是否存在
+	// 检查证书文件是否齐全（CA / client cert / client key）。任一缺失即为首次连接（enroll）。
 	if _, err := os.Stat(m.cfg.Local.TLS.CAFile); os.IsNotExist(err) {
-		m.logger.Warn("CA证书文件不存在，使用不安全模式进行首次连接",
-			zap.String("ca_file", m.cfg.Local.TLS.CAFile),
-			zap.String("hint", "首次连接时将跳过证书验证，连接建立后Server会下发证书"),
-		)
-		// 首次连接：跳过证书验证（仅用于获取证书）
-		// 连接建立后，Server会下发证书包，后续连接将使用正式证书
-		return &tls.Config{
-			InsecureSkipVerify: true, // 首次连接跳过验证
-		}, nil
+		return m.firstConnectTLSConfig(serverName, "CA证书文件不存在", m.cfg.Local.TLS.CAFile)
 	}
-
-	// 检查客户端证书文件是否存在
 	if _, err := os.Stat(m.cfg.Local.TLS.CertFile); os.IsNotExist(err) {
-		m.logger.Warn("客户端证书文件不存在，使用不安全模式进行首次连接",
-			zap.String("cert_file", m.cfg.Local.TLS.CertFile),
-			zap.String("hint", "首次连接时将跳过证书验证，连接建立后Server会下发证书"),
-		)
-		return &tls.Config{
-			InsecureSkipVerify: true, // 首次连接跳过验证
-		}, nil
+		return m.firstConnectTLSConfig(serverName, "客户端证书文件不存在", m.cfg.Local.TLS.CertFile)
 	}
-
-	// 检查客户端密钥文件是否存在
 	if _, err := os.Stat(m.cfg.Local.TLS.KeyFile); os.IsNotExist(err) {
-		m.logger.Warn("客户端密钥文件不存在，使用不安全模式进行首次连接",
-			zap.String("key_file", m.cfg.Local.TLS.KeyFile),
-			zap.String("hint", "首次连接时将跳过证书验证，连接建立后Server会下发证书"),
-		)
-		return &tls.Config{
-			InsecureSkipVerify: true, // 首次连接跳过验证
-		}, nil
+		return m.firstConnectTLSConfig(serverName, "客户端密钥文件不存在", m.cfg.Local.TLS.KeyFile)
 	}
 
 	// 证书文件存在，正常加载
@@ -295,6 +272,54 @@ func (m *Manager) loadTLSConfig(serverAddr string) (*tls.Config, error) {
 
 	m.logger.Debug("TLS configuration created successfully")
 	return tlsConfig, nil
+}
+
+// firstConnectTLSConfig 构造首次连接（enroll）的 TLS 配置。
+// 配置了 CA 指纹时用 VerifyConnection pin 住 AC 的 CA，杜绝中间人冒充 AC 下发恶意证书；
+// 未配置指纹时回退到旧的 InsecureSkipVerify（仅兼容期，受控内网）。
+func (m *Manager) firstConnectTLSConfig(serverName, reason, path string) (*tls.Config, error) {
+	// 若本地已有 CA 文件（仅缺客户端证书），直接用 RootCAs 正常校验 AC，无需 pin/insecure。
+	if caBytes, err := os.ReadFile(m.cfg.Local.TLS.CAFile); err == nil {
+		pool := x509.NewCertPool()
+		if pool.AppendCertsFromPEM(caBytes) {
+			m.logger.Info("首次连接(enroll)：本地已有 CA，使用 RootCAs 校验 AC（无客户端证书）",
+				zap.String("reason", reason),
+			)
+			return &tls.Config{
+				ServerName: serverName,
+				RootCAs:    pool,
+			}, nil
+		}
+	}
+
+	fp := m.cfg.Local.TLS.CAFingerprint
+	if fp != "" {
+		m.logger.Warn("首次连接(enroll)：本地证书不完整，使用 CA 指纹 pin 校验 AC 身份",
+			zap.String("reason", reason),
+			zap.String("path", path),
+		)
+		return &tls.Config{
+			ServerName:         serverName,
+			InsecureSkipVerify: true, // 关闭默认链校验，改由 VerifyConnection 做 CA pin
+			VerifyConnection: func(cs tls.ConnectionState) error {
+				raw := make([][]byte, 0, len(cs.PeerCertificates))
+				for _, c := range cs.PeerCertificates {
+					raw = append(raw, c.Raw)
+				}
+				if err := certissue.VerifyChainPinnedCA(raw, fp); err != nil {
+					m.logger.Error("AC CA 指纹 pin 校验失败，疑似中间人，拒绝连接", zap.Error(err))
+					return err
+				}
+				return nil
+			},
+		}, nil
+	}
+	m.logger.Warn("首次连接：未配置 CA 指纹，回退不安全模式（仅兼容期，受控内网）",
+		zap.String("reason", reason),
+		zap.String("path", path),
+		zap.String("hint", "建议安装包下发 ca_fingerprint，pin 住 AC 杜绝中间人"),
+	)
+	return &tls.Config{InsecureSkipVerify: true}, nil
 }
 
 // acInstanceInfo 是 Manager SD 返回的 AC 实例信息（仅解析需要的字段）

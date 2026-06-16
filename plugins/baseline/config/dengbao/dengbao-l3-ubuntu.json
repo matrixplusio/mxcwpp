@@ -3,38 +3,824 @@
   "name": "等保 2.0 三级基线 - Ubuntu/Debian",
   "version": "1.0.0",
   "description": "GB/T 22239-2019 等保 2.0 三级安全基线 (Ubuntu 20.04/22.04 + Debian 11/12).",
-  "os_family": ["ubuntu", "debian"],
+  "os_family": [
+    "ubuntu",
+    "debian"
+  ],
   "enabled": true,
   "rules": [
-    {"rule_id": "DB_UB_001", "category": "身份鉴别", "title": "口令最长有效期 ≤90 天", "description": "8.1.4.1", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/login.defs", "PASS_MAX_DAYS", "^([1-8]?[0-9]|90)$"]}]}, "fix": {"suggestion": "echo 'PASS_MAX_DAYS 90' >> /etc/login.defs"}},
-    {"rule_id": "DB_UB_002", "category": "身份鉴别", "title": "口令最短长度 ≥8", "description": "8.1.4.1", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/pam.d/common-password", "minlen=([89]|[1-9][0-9]+)", "match"]}, {"type": "file_kv", "param": ["/etc/security/pwquality.conf", "minlen", "^([89]|[1-9][0-9]+)$"]}]}, "fix": {"suggestion": "/etc/security/pwquality.conf minlen=8 或 common-password 加 minlen=8"}},
-    {"rule_id": "DB_UB_003", "category": "身份鉴别", "title": "口令包含字符多样性", "description": "8.1.4.1 数字+大小写+特殊", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/security/pwquality.conf", "dcredit=-1.*ucredit=-1.*lcredit=-1.*ocredit=-1", "match"]}]}, "fix": {"suggestion": "pwquality.conf: dcredit=-1 ucredit=-1 lcredit=-1 ocredit=-1"}},
-    {"rule_id": "DB_UB_004", "category": "身份鉴别", "title": "5 次失败锁定 (faillock)", "description": "8.1.4.1", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/pam.d/common-auth", "pam_faillock\\.so.*deny=[1-5]", "match"]}, {"type": "file_line_match", "param": ["/etc/pam.d/common-auth", "pam_tally2\\.so.*deny=[1-5]", "match"]}]}, "fix": {"suggestion": "common-auth: auth required pam_faillock.so preauth deny=5 unlock_time=600"}},
-    {"rule_id": "DB_UB_005", "category": "身份鉴别", "title": "禁止空口令登录 (SSH)", "description": "8.1.4.2", "severity": "critical", "check": {"condition": "none", "rules": [{"type": "file_line_match", "param": ["/etc/ssh/sshd_config", "PermitEmptyPasswords\\s+yes", "match"]}]}, "fix": {"suggestion": "PermitEmptyPasswords no"}},
-    {"rule_id": "DB_UB_006", "category": "访问控制", "title": "root 不允许直接 SSH 登录", "description": "8.1.4.2", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "^no$|^prohibit-password$"]}]}, "fix": {"suggestion": "PermitRootLogin no"}},
-    {"rule_id": "DB_UB_007", "category": "访问控制", "title": "umask 默认 027", "description": "8.1.4.3", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/login.defs", "UMASK\\s+027", "match"]}, {"type": "file_line_match", "param": ["/etc/profile", "umask\\s+027", "match"]}]}, "fix": {"suggestion": "/etc/profile umask 027"}},
-    {"rule_id": "DB_UB_008", "category": "访问控制", "title": "/etc/passwd 权限 644", "description": "8.1.4.3", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/etc/passwd", "644"]}]}, "fix": {"suggestion": "chmod 644 /etc/passwd"}},
-    {"rule_id": "DB_UB_009", "category": "访问控制", "title": "/etc/shadow 权限 ≤640", "description": "8.1.4.3 Ubuntu 默认 640", "severity": "critical", "check": {"condition": "any", "rules": [{"type": "file_permission", "param": ["/etc/shadow", "640"]}, {"type": "file_permission", "param": ["/etc/shadow", "600"]}, {"type": "file_permission", "param": ["/etc/shadow", "000"]}]}, "fix": {"suggestion": "chmod 640 /etc/shadow"}},
-    {"rule_id": "DB_UB_010", "category": "安全审计", "title": "auditd 运行", "description": "8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["auditd", "active"]}]}, "fix": {"suggestion": "apt install auditd && systemctl enable --now auditd"}},
-    {"rule_id": "DB_UB_011", "category": "安全审计", "title": "rsyslog 运行", "description": "8.1.4.4", "severity": "high", "check": {"condition": "all", "rules": [{"type": "service_status", "param": ["rsyslog", "active"]}]}, "fix": {"suggestion": "systemctl enable --now rsyslog"}},
-    {"rule_id": "DB_UB_012", "category": "安全审计", "title": "ufw 防火墙运行", "description": "8.1.4.5 Ubuntu 默认 ufw", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["ufw", "active"]}, {"type": "service_status", "param": ["nftables", "active"]}, {"type": "command_exec", "param": ["ufw status 2>/dev/null | head -1", "Status:\\s+active"]}]}, "fix": {"suggestion": "ufw enable"}},
-    {"rule_id": "DB_UB_013", "category": "入侵防范", "title": "禁用 rsh/rlogin", "description": "8.1.4.5", "severity": "high", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["rsh-client"]}, {"type": "package_installed", "param": ["rsh-server"]}]}, "fix": {"suggestion": "apt purge rsh-client rsh-server"}},
-    {"rule_id": "DB_UB_014", "category": "入侵防范", "title": "禁用 telnet", "description": "8.1.4.5 明文协议", "severity": "high", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["telnetd"]}, {"type": "service_status", "param": ["telnetd.socket", "inactive"]}]}, "fix": {"suggestion": "apt purge telnetd"}},
-    {"rule_id": "DB_UB_015", "category": "入侵防范", "title": "禁用 tftp", "description": "8.1.4.5", "severity": "high", "check": {"condition": "none", "rules": [{"type": "package_installed", "param": ["tftpd"]}, {"type": "service_status", "param": ["tftpd.socket", "inactive"]}]}, "fix": {"suggestion": "apt purge tftpd"}},
-    {"rule_id": "DB_UB_016", "category": "入侵防范", "title": "SSH MaxAuthTries ≤4", "description": "8.1.4.5 防暴力破解", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "MaxAuthTries", "^[1-4]$"]}]}, "fix": {"suggestion": "MaxAuthTries 4"}},
-    {"rule_id": "DB_UB_017", "category": "入侵防范", "title": "SSH X11Forwarding=no", "description": "8.1.4.5", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "X11Forwarding", "^no$"]}]}, "fix": {"suggestion": "X11Forwarding no"}},
-    {"rule_id": "DB_UB_018", "category": "入侵防范", "title": "SSH ClientAliveInterval ≤300", "description": "8.1.4.5", "severity": "low", "check": {"condition": "all", "rules": [{"type": "file_kv", "param": ["/etc/ssh/sshd_config", "ClientAliveInterval", "^([1-9]|[1-9][0-9]|[12][0-9][0-9]|300)$"]}]}, "fix": {"suggestion": "ClientAliveInterval 300"}},
-    {"rule_id": "DB_UB_019", "category": "入侵防范", "title": "禁用 IP 转发", "description": "8.1.4.5", "severity": "high", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.ip_forward", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.ip_forward=0"}},
-    {"rule_id": "DB_UB_020", "category": "入侵防范", "title": "启用 SYN Cookies", "description": "8.1.4.5", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.tcp_syncookies", "1"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.tcp_syncookies=1"}},
-    {"rule_id": "DB_UB_021", "category": "入侵防范", "title": "禁用 ICMP redirect", "description": "8.1.4.5", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "sysctl", "param": ["net.ipv4.conf.all.accept_redirects", "0"]}]}, "fix": {"suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0"}},
-    {"rule_id": "DB_UB_022", "category": "入侵防范", "title": "AppArmor enforce", "description": "8.1.4.5 MAC", "severity": "high", "check": {"condition": "any", "rules": [{"type": "service_status", "param": ["apparmor", "active"]}, {"type": "command_exec", "param": ["aa-status --enabled 2>/dev/null && echo enabled || echo disabled", "^enabled$"]}]}, "fix": {"suggestion": "apt install apparmor && systemctl enable --now apparmor"}},
-    {"rule_id": "DB_UB_023", "category": "入侵防范", "title": "禁用 USB 自动挂载", "description": "8.1.4.5", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/modprobe.d/usb-storage.conf", "install\\s+usb-storage\\s+/bin/(true|false)", "match"]}]}, "fix": {"suggestion": "echo 'install usb-storage /bin/true' > /etc/modprobe.d/usb-storage.conf"}},
-    {"rule_id": "DB_UB_024", "category": "恶意代码", "title": "ClamAV 已安装", "description": "8.1.4.6", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["clamav"]}, {"type": "service_status", "param": ["clamav-daemon", "active"]}]}, "fix": {"suggestion": "apt install clamav clamav-daemon"}},
-    {"rule_id": "DB_UB_025", "category": "数据完整性", "title": "AIDE 已配置", "description": "8.1.4.7", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "package_installed", "param": ["aide"]}, {"type": "file_exists", "param": ["/var/lib/aide/aide.db"]}]}, "fix": {"suggestion": "apt install aide aide-common && aideinit"}},
-    {"rule_id": "DB_UB_026", "category": "数据完整性", "title": "AIDE 周期 cron", "description": "8.1.4.7", "severity": "low", "check": {"condition": "any", "rules": [{"type": "file_exists", "param": ["/etc/cron.daily/aide"]}]}, "fix": {"suggestion": "Ubuntu apt install aide 默认安装 /etc/cron.daily/aide"}},
-    {"rule_id": "DB_UB_027", "category": "访问控制", "title": "无 UID=0 非 root 账户", "description": "8.1.4.2", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["awk -F: '($3==0) {print $1}' /etc/passwd | grep -v '^root$' | wc -l", "^0$"]}]}, "fix": {"suggestion": "userdel <user>"}},
-    {"rule_id": "DB_UB_028", "category": "访问控制", "title": "无空口令账户", "description": "8.1.4.2", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["awk -F: '($2 == \"\") {print}' /etc/shadow 2>/dev/null | wc -l", "^0$"]}]}, "fix": {"suggestion": "passwd -l <user>"}},
-    {"rule_id": "DB_UB_029", "category": "访问控制", "title": "GRUB 配置文件权限 600", "description": "8.1.4.3", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/boot/grub/grub.cfg", "600"]}]}, "fix": {"suggestion": "chmod 600 /boot/grub/grub.cfg"}},
-    {"rule_id": "DB_UB_030", "category": "安全审计", "title": "sudo 操作记录", "description": "8.1.4.4", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/sudoers", "^\\s*Defaults\\s+logfile=", "match"]}]}, "fix": {"suggestion": "visudo: Defaults logfile=/var/log/sudo.log"}}
+    {
+      "rule_id": "DB_UB_001",
+      "category": "身份鉴别",
+      "title": "口令最长有效期 ≤90 天",
+      "description": "8.1.4.1",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/login.defs",
+              "PASS_MAX_DAYS",
+              "^([1-8]?[0-9]|90)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "echo 'PASS_MAX_DAYS 90' >> /etc/login.defs",
+        "command": "F=/etc/login.defs; cp $F $F.mxbak && (grep -qE '^\\s*#?\\s*PASS_MAX_DAYS' $F && sed -ri 's|^\\s*#?\\s*PASS_MAX_DAYS.*|PASS_MAX_DAYS 90|' $F || echo 'PASS_MAX_DAYS 90' >> $F)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_002",
+      "category": "身份鉴别",
+      "title": "口令最短长度 ≥8",
+      "description": "8.1.4.1",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/pam.d/common-password",
+              "minlen=([89]|[1-9][0-9]+)",
+              "match"
+            ]
+          },
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "minlen",
+              "^([89]|[1-9][0-9]+)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "/etc/security/pwquality.conf minlen=8 或 common-password 加 minlen=8",
+        "command": "F=/etc/security/pwquality.conf; cp $F $F.mxbak 2>/dev/null; (grep -qE '^\\s*#?\\s*minlen' $F 2>/dev/null && sed -ri 's|^\\s*#?\\s*minlen.*|minlen = 8|' $F || echo 'minlen = 8' >> $F)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_003",
+      "category": "身份鉴别",
+      "title": "口令包含字符多样性",
+      "description": "8.1.4.1 数字+大小写+特殊",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "^\\s*dcredit\\s*=\\s*-[1-9]",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "^\\s*ucredit\\s*=\\s*-[1-9]",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "^\\s*lcredit\\s*=\\s*-[1-9]",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "^\\s*ocredit\\s*=\\s*-[1-9]",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "pwquality.conf: dcredit=-1 ucredit=-1 lcredit=-1 ocredit=-1",
+        "command": "F=/etc/security/pwquality.conf; cp $F $F.mxbak 2>/dev/null; for kv in dcredit=-1 ucredit=-1 lcredit=-1 ocredit=-1; do k=${kv%%=*}; v=${kv#*=}; (grep -qE \"^\\s*#?\\s*$k\\b\" $F 2>/dev/null && sed -ri \"s|^\\s*#?\\s*$k.*|$k = $v|\" $F || echo \"$k = $v\" >> $F); done"
+      }
+    },
+    {
+      "rule_id": "DB_UB_004",
+      "category": "身份鉴别",
+      "title": "5 次失败锁定 (faillock)",
+      "description": "8.1.4.1",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/pam.d/common-auth",
+              "pam_faillock\\.so.*deny=[1-5]",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/pam.d/common-auth",
+              "pam_tally2\\.so.*deny=[1-5]",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "common-auth: auth required pam_faillock.so preauth deny=5 unlock_time=600",
+        "command": "F=/etc/pam.d/common-auth; cp $F $F.mxbak && (grep -qE 'pam_faillock\\.so.*preauth' $F && sed -ri 's|^.*pam_faillock\\.so.*preauth.*|auth required pam_faillock.so preauth deny=5 unlock_time=600|' $F || sed -ri '1i auth required pam_faillock.so preauth deny=5 unlock_time=600' $F)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_005",
+      "category": "身份鉴别",
+      "title": "禁止空口令登录 (SSH)",
+      "description": "8.1.4.2",
+      "severity": "critical",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitEmptyPasswords\\s+yes",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "PermitEmptyPasswords no",
+        "command": "F=/etc/ssh/sshd_config; cp $F $F.mxbak && (grep -qiE '^\\s*#?\\s*PermitEmptyPasswords' $F && sed -ri 's|^\\s*#?\\s*PermitEmptyPasswords.*|PermitEmptyPasswords no|I' $F || echo 'PermitEmptyPasswords no' >> $F) && (sshd -t || { mv $F.mxbak $F; exit 1; })",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "DB_UB_006",
+      "category": "访问控制",
+      "title": "root 不允许直接 SSH 登录",
+      "description": "8.1.4.2",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitRootLogin",
+              "^no$|^prohibit-password$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "PermitRootLogin no",
+        "command": "F=/etc/ssh/sshd_config; cp $F $F.mxbak; if grep -qiE '^\\s*PermitRootLogin\\b' $F; then sed -ri 's|^\\s*PermitRootLogin\\b.*|PermitRootLogin no|I' $F; else echo 'PermitRootLogin no' >> $F; fi; for d in /etc/ssh/sshd_config.d/*.conf; do [ -f \"$d\" ] && grep -qiE '^\\s*PermitRootLogin\\b' \"$d\" && sed -ri 's|^\\s*PermitRootLogin\\b.*|PermitRootLogin no|I' \"$d\"; done; sshd -t || { mv $F.mxbak $F; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "DB_UB_007",
+      "category": "访问控制",
+      "title": "umask 默认 027",
+      "description": "8.1.4.3",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/login.defs",
+              "UMASK\\s+027",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/profile",
+              "umask\\s+027",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "/etc/profile umask 027",
+        "command": "F=/etc/login.defs; cp $F $F.mxbak && (grep -qE '^\\s*#?\\s*UMASK' $F && sed -ri 's|^\\s*#?\\s*UMASK.*|UMASK 027|' $F || echo 'UMASK 027' >> $F)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_008",
+      "category": "访问控制",
+      "title": "/etc/passwd 权限 644",
+      "description": "8.1.4.3",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/passwd",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 644 /etc/passwd",
+        "command": "chmod 644 /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "DB_UB_009",
+      "category": "访问控制",
+      "title": "/etc/shadow 权限 ≤640",
+      "description": "8.1.4.3 Ubuntu 默认 640",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "640"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "600"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "000"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 640 /etc/shadow",
+        "command": "chmod 640 /etc/shadow"
+      }
+    },
+    {
+      "rule_id": "DB_UB_010",
+      "category": "安全审计",
+      "title": "auditd 运行",
+      "description": "8.1.4.4",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "auditd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt install auditd && systemctl enable --now auditd",
+        "command": "command -v auditctl >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y auditd; }; systemctl enable --now auditd"
+      }
+    },
+    {
+      "rule_id": "DB_UB_011",
+      "category": "安全审计",
+      "title": "rsyslog 运行",
+      "description": "8.1.4.4",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "rsyslog",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "systemctl enable --now rsyslog",
+        "command": "command -v rsyslogd >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y rsyslog; }; systemctl enable --now rsyslog"
+      }
+    },
+    {
+      "rule_id": "DB_UB_012",
+      "category": "安全审计",
+      "title": "ufw 防火墙运行",
+      "description": "8.1.4.5 Ubuntu 默认 ufw",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "ufw",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "nftables",
+              "active"
+            ]
+          },
+          {
+            "type": "command_exec",
+            "param": [
+              "ufw status 2>/dev/null | head -1",
+              "Status:\\s+active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "ufw enable",
+        "command": "command -v ufw >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y ufw; }; ufw allow OpenSSH >/dev/null 2>&1 || ufw allow 22/tcp; ufw --force enable"
+      }
+    },
+    {
+      "rule_id": "DB_UB_013",
+      "category": "入侵防范",
+      "title": "禁用 rsh/rlogin",
+      "description": "8.1.4.5",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "rsh-client"
+            ]
+          },
+          {
+            "type": "package_installed",
+            "param": [
+              "rsh-server"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt purge rsh-client rsh-server",
+        "command": "DEBIAN_FRONTEND=noninteractive apt-get purge -y rsh-client rsh-server 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "DB_UB_014",
+      "category": "入侵防范",
+      "title": "禁用 telnet",
+      "description": "8.1.4.5 明文协议",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "telnetd.socket",
+              "inactive"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt purge telnetd",
+        "command": "systemctl disable --now telnetd.socket 2>/dev/null; systemctl mask telnetd.socket 2>/dev/null; DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y telnetd 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "DB_UB_015",
+      "category": "入侵防范",
+      "title": "禁用 tftp",
+      "description": "8.1.4.5",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "tftpd.socket",
+              "inactive"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt purge tftpd",
+        "command": "systemctl disable --now tftpd.socket 2>/dev/null; systemctl mask tftpd.socket 2>/dev/null; DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y tftpd 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "DB_UB_016",
+      "category": "入侵防范",
+      "title": "SSH MaxAuthTries ≤4",
+      "description": "8.1.4.5 防暴力破解",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "MaxAuthTries",
+              "^[1-4]$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "MaxAuthTries 4",
+        "command": "F=/etc/ssh/sshd_config; cp $F $F.mxbak; if grep -qiE '^\\s*MaxAuthTries\\b' $F; then sed -ri 's|^\\s*MaxAuthTries\\b.*|MaxAuthTries 4|I' $F; else echo 'MaxAuthTries 4' >> $F; fi; for d in /etc/ssh/sshd_config.d/*.conf; do [ -f \"$d\" ] && grep -qiE '^\\s*MaxAuthTries\\b' \"$d\" && sed -ri 's|^\\s*MaxAuthTries\\b.*|MaxAuthTries 4|I' \"$d\"; done; sshd -t || { mv $F.mxbak $F; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "DB_UB_017",
+      "category": "入侵防范",
+      "title": "SSH X11Forwarding=no",
+      "description": "8.1.4.5",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "X11Forwarding",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "X11Forwarding no",
+        "command": "F=/etc/ssh/sshd_config; cp $F $F.mxbak; if grep -qiE '^\\s*X11Forwarding\\b' $F; then sed -ri 's|^\\s*X11Forwarding\\b.*|X11Forwarding no|I' $F; else echo 'X11Forwarding no' >> $F; fi; for d in /etc/ssh/sshd_config.d/*.conf; do [ -f \"$d\" ] && grep -qiE '^\\s*X11Forwarding\\b' \"$d\" && sed -ri 's|^\\s*X11Forwarding\\b.*|X11Forwarding no|I' \"$d\"; done; sshd -t || { mv $F.mxbak $F; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "DB_UB_018",
+      "category": "入侵防范",
+      "title": "SSH ClientAliveInterval ≤300",
+      "description": "8.1.4.5",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "ClientAliveInterval",
+              "^([1-9]|[1-9][0-9]|[12][0-9][0-9]|300)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "ClientAliveInterval 300",
+        "command": "F=/etc/ssh/sshd_config; cp $F $F.mxbak; if grep -qiE '^\\s*ClientAliveInterval\\b' $F; then sed -ri 's|^\\s*ClientAliveInterval\\b.*|ClientAliveInterval 300|I' $F; else echo 'ClientAliveInterval 300' >> $F; fi; for d in /etc/ssh/sshd_config.d/*.conf; do [ -f \"$d\" ] && grep -qiE '^\\s*ClientAliveInterval\\b' \"$d\" && sed -ri 's|^\\s*ClientAliveInterval\\b.*|ClientAliveInterval 300|I' \"$d\"; done; sshd -t || { mv $F.mxbak $F; exit 1; }",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "DB_UB_019",
+      "category": "入侵防范",
+      "title": "禁用 IP 转发",
+      "description": "8.1.4.5",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.ip_forward",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.ip_forward=0",
+        "command": "sysctl -w net.ipv4.ip_forward=0; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.ip_forward' $C && sed -ri 's|^\\s*net\\.ipv4\\.ip_forward.*|net.ipv4.ip_forward = 0|' $C || echo 'net.ipv4.ip_forward = 0' >> $C)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_020",
+      "category": "入侵防范",
+      "title": "启用 SYN Cookies",
+      "description": "8.1.4.5",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.tcp_syncookies",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.tcp_syncookies=1",
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.tcp_syncookies' $C && sed -ri 's|^\\s*net\\.ipv4\\.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' $C || echo 'net.ipv4.tcp_syncookies = 1' >> $C)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_021",
+      "category": "入侵防范",
+      "title": "禁用 ICMP redirect",
+      "description": "8.1.4.5",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.accept_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects' $C && sed -ri 's|^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' $C || echo 'net.ipv4.conf.all.accept_redirects = 0' >> $C)"
+      }
+    },
+    {
+      "rule_id": "DB_UB_022",
+      "category": "入侵防范",
+      "title": "AppArmor enforce",
+      "description": "8.1.4.5 MAC",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "apparmor",
+              "active"
+            ]
+          },
+          {
+            "type": "command_exec",
+            "param": [
+              "aa-status --enabled 2>/dev/null && echo enabled || echo disabled",
+              "^enabled$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt install apparmor && systemctl enable --now apparmor",
+        "command": "command -v apparmor_status >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y apparmor apparmor-utils; }; systemctl enable --now apparmor"
+      }
+    },
+    {
+      "rule_id": "DB_UB_023",
+      "category": "入侵防范",
+      "title": "禁用 USB 自动挂载",
+      "description": "8.1.4.5",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/usb-storage.conf",
+              "install\\s+usb-storage\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "echo 'install usb-storage /bin/true' > /etc/modprobe.d/usb-storage.conf",
+        "command": "F=/etc/modprobe.d/usb-storage.conf; [ -f $F ] && cp $F $F.mxbak; echo 'install usb-storage /bin/true' > $F"
+      }
+    },
+    {
+      "rule_id": "DB_UB_024",
+      "category": "恶意代码",
+      "title": "ClamAV 已安装",
+      "description": "8.1.4.6",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "clamav"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "clamav-daemon",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt install clamav clamav-daemon",
+        "command": "command -v clamscan >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y clamav clamav-daemon; }"
+      }
+    },
+    {
+      "rule_id": "DB_UB_025",
+      "category": "数据完整性",
+      "title": "AIDE 已配置",
+      "description": "8.1.4.7",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "aide"
+            ]
+          },
+          {
+            "type": "file_exists",
+            "param": [
+              "/var/lib/aide/aide.db"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "apt install aide aide-common && aideinit",
+        "command": "command -v aide >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y aide aide-common; }; [ -f /var/lib/aide/aide.db ] || aideinit -y -f 2>/dev/null || aideinit 2>/dev/null; [ -f /var/lib/aide/aide.db.new ] && cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db; true"
+      }
+    },
+    {
+      "rule_id": "DB_UB_026",
+      "category": "数据完整性",
+      "title": "AIDE 周期 cron",
+      "description": "8.1.4.7",
+      "severity": "low",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/cron.daily/aide"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "Ubuntu apt install aide 默认安装 /etc/cron.daily/aide",
+        "command": "dpkg -s aide-common >/dev/null 2>&1 || { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y aide-common; }; [ -f /etc/cron.daily/aide ] || { printf '#!/bin/sh\\n[ -x /usr/bin/aide.wrapper ] && /usr/bin/aide.wrapper --check >/dev/null 2>&1 || /usr/sbin/aide --check >/dev/null 2>&1\\nexit 0\\n' > /etc/cron.daily/aide; chmod 755 /etc/cron.daily/aide; }"
+      }
+    },
+    {
+      "rule_id": "DB_UB_027",
+      "category": "访问控制",
+      "title": "无 UID=0 非 root 账户",
+      "description": "8.1.4.2",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($3==0) {print $1}' /etc/passwd | grep -v '^root$' | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "userdel <user>"
+      }
+    },
+    {
+      "rule_id": "DB_UB_028",
+      "category": "访问控制",
+      "title": "无空口令账户",
+      "description": "8.1.4.2",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "awk -F: '($2 == \"\") {print}' /etc/shadow 2>/dev/null | wc -l",
+              "^0$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "passwd -l <user>"
+      }
+    },
+    {
+      "rule_id": "DB_UB_029",
+      "category": "访问控制",
+      "title": "GRUB 配置文件权限 600",
+      "description": "8.1.4.3",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/boot/grub/grub.cfg",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "chmod 600 /boot/grub/grub.cfg",
+        "command": "chmod 600 /boot/grub/grub.cfg"
+      }
+    },
+    {
+      "rule_id": "DB_UB_030",
+      "category": "安全审计",
+      "title": "sudo 操作记录",
+      "description": "8.1.4.4",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^\\s*Defaults\\s+logfile=",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "visudo: Defaults logfile=/var/log/sudo.log",
+        "command": "F=/etc/sudoers; cp $F $F.mxbak && (grep -qE '^\\s*Defaults\\s+logfile=' $F && sed -ri 's|^\\s*Defaults\\s+logfile=.*|Defaults logfile=/var/log/sudo.log|' $F || echo 'Defaults logfile=/var/log/sudo.log' >> $F) && (visudo -cf $F || { mv $F.mxbak $F; exit 1; })"
+      }
+    }
   ]
 }

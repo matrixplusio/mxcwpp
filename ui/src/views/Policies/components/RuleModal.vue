@@ -266,13 +266,13 @@ import type { Rule, CheckRule, RuntimeType } from '@/api/types'
 import type { FormInstance } from 'ant-design-vue'
 
 const props = defineProps<{
-  visible: boolean
+  open: boolean
   rule?: Rule | null
   policyId: string
 }>()
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean]
+  'update:open': [value: boolean]
   success: []
 }>()
 
@@ -310,13 +310,13 @@ const rules = {
 }
 
 const visible = computed({
-  get: () => props.visible,
-  set: (value) => emit('update:visible', value),
+  get: () => props.open,
+  set: (value) => emit('update:open', value),
 })
 
 // 监听对话框打开，初始化表单数据
 watch(
-  () => props.visible,
+  () => props.open,
   (newVisible) => {
     if (newVisible) {
       if (props.rule) {
@@ -453,11 +453,6 @@ const handleSubmit = async () => {
       return
     }
     console.error('保存规则失败:', error)
-    if (error.response?.status === 409) {
-      message.error('规则 ID 已存在')
-    } else {
-      message.error('保存规则失败')
-    }
   } finally {
     loading.value = false
   }

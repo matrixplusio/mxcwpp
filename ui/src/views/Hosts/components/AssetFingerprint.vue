@@ -66,7 +66,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { assetsApi } from '@/api/assets'
-import { message } from 'ant-design-vue'
 import type { AssetCollectionStatus } from '@/api/types'
 import AssetRecordsTable from '@/components/assets/AssetRecordsTable.vue'
 import AssetRelationsPanel from '@/components/assets/AssetRelationsPanel.vue'
@@ -148,7 +147,6 @@ const loadStatistics = async () => {
     })
   } catch (error) {
     console.error('加载资产统计失败:', error)
-    message.error('加载资产统计失败')
   }
 }
 

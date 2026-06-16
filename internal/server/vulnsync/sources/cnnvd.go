@@ -22,11 +22,8 @@ type CNNVDDriver struct {
 	Client      *http.Client
 }
 
-// NewCNNVDDriver 构造 CNNVD driver (占位)。
-func NewCNNVDDriver(apiEndpoint, apiKey string, timeout time.Duration) *CNNVDDriver {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+// NewCNNVDDriver 构造 CNNVD driver (占位)。HTTP 走共享连接池（SharedHTTPClient）。
+func NewCNNVDDriver(apiEndpoint, apiKey string) *CNNVDDriver {
 	return &CNNVDDriver{
 		APIEndpoint: apiEndpoint,
 		APIKey:      apiKey,

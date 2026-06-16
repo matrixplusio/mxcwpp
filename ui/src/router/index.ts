@@ -115,6 +115,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '用户管理', adminOnly: true },
       },
       {
+        path: 'rbac',
+        name: 'Rbac',
+        component: () => import('@/views/Rbac/index.vue'),
+        meta: { title: '角色权限', adminOnly: true },
+      },
+      {
         path: 'system/settings',
         name: 'SystemSettings',
         component: () => import('@/views/System/Settings.vue'),

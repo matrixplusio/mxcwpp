@@ -352,9 +352,11 @@ func (h *PoliciesHandler) DeletePolicy(c *gin.Context) {
 
 	// 检查是否有活跃任务引用该策略
 	var activeTaskCount int64
+	// policy_ids 是 JSON 数组 TEXT（如 ["pol-004"]），LIKE 模式必须带 JSON 引号精确匹配元素，
+	// 否则裸子串 %pol-004% 会误命中 pol-0040 等，错误阻止删除。
 	h.db.Model(&model.ScanTask{}).
 		Where("(policy_id = ? OR policy_ids LIKE ?) AND status IN ?",
-			policyID, "%"+policyID+"%",
+			policyID, `%"`+policyID+`"%`,
 			[]string{string(model.TaskStatusPending), string(model.TaskStatusRunning)}).
 		Count(&activeTaskCount)
 	if activeTaskCount > 0 {
@@ -530,9 +532,10 @@ func (h *PoliciesHandler) BatchDelete(c *gin.Context) {
 	var activeTaskCount int64
 	for _, pid := range req.PolicyIDs {
 		var cnt int64
+		// policy_ids 是 JSON 数组 TEXT，LIKE 带 JSON 引号精确匹配元素，避免子串误命中（见 DeletePolicy）。
 		h.db.Model(&model.ScanTask{}).
 			Where("(policy_id = ? OR policy_ids LIKE ?) AND status IN ?",
-				pid, "%"+pid+"%",
+				pid, `%"`+pid+`"%`,
 				[]string{string(model.TaskStatusPending), string(model.TaskStatusRunning)}).
 			Count(&cnt)
 		activeTaskCount += cnt

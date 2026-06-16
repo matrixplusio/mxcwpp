@@ -423,7 +423,6 @@ const loadTasks = async () => {
     pagination.total = response.total || 0
   } catch (error) {
     console.error('加载修复任务列表失败:', error)
-    message.error('加载修复任务列表失败')
   } finally {
     loading.value = false
   }
@@ -440,7 +439,6 @@ const loadFixResults = async (taskId: string) => {
     resultPagination.total = response.total || 0
   } catch (error) {
     console.error('加载修复结果失败:', error)
-    message.error('加载修复结果失败')
   } finally {
     resultsLoading.value = false
   }
@@ -457,7 +455,6 @@ const loadHostStatuses = async (taskId: string) => {
     hostStatusPagination.total = response.total || 0
   } catch (error) {
     console.error('加载主机状态失败:', error)
-    message.error('加载主机状态失败')
   } finally {
     hostStatusLoading.value = false
   }
@@ -515,9 +512,8 @@ const handleDelete = async (record: FixTask) => {
     await fixApi.deleteFixTask(record.task_id)
     message.success('删除成功')
     loadTasks()
-  } catch (error: any) {
+  } catch (error) {
     console.error('删除失败:', error)
-    message.error('删除失败: ' + (error.response?.data?.message || error.message))
   }
 }
 

@@ -186,7 +186,7 @@ const handleToggle = async (record: any, checked: boolean) => {
     await apiClient.put(`/system/comp-policies/${record.id}`, { status: checked ? 'enabled' : 'disabled' })
     message.success('状态已更新')
     loadPolicies()
-  } catch { message.error('操作失败') }
+  } catch (error) { console.error('更新组件策略状态失败:', error) }
 }
 
 const handleEdit = (record: any) => {
@@ -209,14 +209,14 @@ const handleSubmit = async () => {
     showCreateModal.value = false
     resetForm()
     loadPolicies()
-  } catch (error: any) {
-    if (!error?.errorFields) message.error('操作失败')
+  } catch (error) {
+    console.error('保存组件策略失败:', error)
   } finally { submitLoading.value = false }
 }
 
 const handleDelete = async (id: string) => {
   try { await apiClient.delete(`/system/comp-policies/${id}`); message.success('已删除'); loadPolicies() }
-  catch { message.error('删除失败') }
+  catch (error) { console.error('删除组件策略失败:', error) }
 }
 
 const resetForm = () => {

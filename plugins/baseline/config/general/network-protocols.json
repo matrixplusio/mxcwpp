@@ -3,7 +3,15 @@
   "name": "网络协议安全基线",
   "version": "1.0.0",
   "description": "禁用不安全的网络协议和模块（参考 CIS Benchmark）",
-  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_family": [
+    "rocky",
+    "centos",
+    "oracle",
+    "almalinux",
+    "rhel",
+    "debian",
+    "ubuntu"
+  ],
   "os_version": ">=7",
   "enabled": true,
   "rules": [
@@ -18,15 +26,26 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/dccp.conf", "install dccp /bin/(true|false)", "match"]
+            "param": [
+              "/etc/modprobe.d/dccp.conf",
+              "install dccp /bin/(true|false)",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/dccp.conf", "blacklist dccp", "match"]
+            "param": [
+              "/etc/modprobe.d/dccp.conf",
+              "blacklist dccp",
+              "match"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["lsmod | grep -c '^dccp' || echo 0", "^0$"]
+            "param": [
+              "lsmod | grep -c '^dccp' || echo 0",
+              "^0$"
+            ]
           }
         ]
       },
@@ -46,15 +65,26 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/sctp.conf", "install sctp /bin/(true|false)", "match"]
+            "param": [
+              "/etc/modprobe.d/sctp.conf",
+              "install sctp /bin/(true|false)",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/sctp.conf", "blacklist sctp", "match"]
+            "param": [
+              "/etc/modprobe.d/sctp.conf",
+              "blacklist sctp",
+              "match"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["lsmod | grep -c '^sctp' || echo 0", "^0$"]
+            "param": [
+              "lsmod | grep -c '^sctp' || echo 0",
+              "^0$"
+            ]
           }
         ]
       },
@@ -74,15 +104,26 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/rds.conf", "install rds /bin/(true|false)", "match"]
+            "param": [
+              "/etc/modprobe.d/rds.conf",
+              "install rds /bin/(true|false)",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/rds.conf", "blacklist rds", "match"]
+            "param": [
+              "/etc/modprobe.d/rds.conf",
+              "blacklist rds",
+              "match"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["lsmod | grep -c '^rds' || echo 0", "^0$"]
+            "param": [
+              "lsmod | grep -c '^rds' || echo 0",
+              "^0$"
+            ]
           }
         ]
       },
@@ -102,15 +143,26 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/tipc.conf", "install tipc /bin/(true|false)", "match"]
+            "param": [
+              "/etc/modprobe.d/tipc.conf",
+              "install tipc /bin/(true|false)",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/tipc.conf", "blacklist tipc", "match"]
+            "param": [
+              "/etc/modprobe.d/tipc.conf",
+              "blacklist tipc",
+              "match"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["lsmod | grep -c '^tipc' || echo 0", "^0$"]
+            "param": [
+              "lsmod | grep -c '^tipc' || echo 0",
+              "^0$"
+            ]
           }
         ]
       },
@@ -130,7 +182,10 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["ip link show 2>/dev/null | grep -cE 'wlan|wl[a-z]' || echo 0", "^0$"]
+            "param": [
+              "ip link show 2>/dev/null | grep -cE 'wlan|wl[a-z0-9]+'",
+              "^0$"
+            ]
           }
         ]
       },
@@ -150,11 +205,17 @@
         "rules": [
           {
             "type": "sysctl",
-            "param": ["net.ipv6.conf.all.disable_ipv6", "1"]
+            "param": [
+              "net.ipv6.conf.all.disable_ipv6",
+              "1"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["ip -6 addr show 2>/dev/null | grep -c 'inet6' || echo 0", "^[0-2]$"]
+            "param": [
+              "ip -6 addr show 2>/dev/null | grep -c 'inet6' || echo 0",
+              "^[0-2]$"
+            ]
           }
         ]
       },
@@ -174,11 +235,17 @@
         "rules": [
           {
             "type": "service_status",
-            "param": ["bluetooth", "inactive"]
+            "param": [
+              "bluetooth",
+              "inactive"
+            ]
           },
           {
             "type": "command_exec",
-            "param": ["systemctl is-enabled bluetooth 2>/dev/null || echo disabled", "^(disabled|masked|not-found)"]
+            "param": [
+              "systemctl is-enabled bluetooth 2>/dev/null || echo disabled",
+              "^(disabled|masked|not-found)"
+            ]
           }
         ]
       },

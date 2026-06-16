@@ -57,7 +57,6 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { assetsApi } from '@/api/assets'
 import type { Port } from '@/api/types'
-import { message } from 'ant-design-vue'
 
 const props = defineProps<{
   hostId: string
@@ -146,7 +145,6 @@ const loadPorts = async () => {
     pagination.total = response.total
   } catch (error) {
     console.error('加载端口列表失败:', error)
-    message.error('加载端口列表失败')
   } finally {
     loading.value = false
   }

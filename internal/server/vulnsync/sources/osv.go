@@ -17,12 +17,9 @@ type OSVDriver struct {
 }
 
 // NewOSVDriver 构造 OSV driver。
-func NewOSVDriver(baseURL string, timeout time.Duration) *OSVDriver {
+func NewOSVDriver(baseURL string) *OSVDriver {
 	if baseURL == "" {
 		baseURL = "https://api.osv.dev"
-	}
-	if timeout <= 0 {
-		timeout = 60 * time.Second
 	}
 	return &OSVDriver{BaseURL: baseURL, Client: SharedHTTPClient()}
 }

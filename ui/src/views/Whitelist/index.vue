@@ -248,7 +248,7 @@ const handleSubmit = async () => {
     loadList()
   } catch (error: any) {
     if (!error?.errorFields) {
-      message.error('操作失败')
+      console.error('保存白名单失败:', error)
     }
   } finally {
     submitLoading.value = false
@@ -260,8 +260,8 @@ const handleDelete = async (id: number) => {
     await alertWhitelistApi.delete(id)
     message.success('已删除')
     loadList()
-  } catch {
-    message.error('删除失败')
+  } catch (error) {
+    console.error('删除白名单失败:', error)
   }
 }
 

@@ -588,8 +588,8 @@ const loadNotifications = async () => {
     const response = await notificationsApi.list(params)
     notifications.value = response.items
     pagination.total = response.total
-  } catch (error: any) {
-    message.error(error?.message || '加载通知列表失败')
+  } catch (error) {
+    console.error('加载通知列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -628,8 +628,8 @@ const handleToggleEnabled = async (record: Notification) => {
   try {
     await notificationsApi.update(record.id, { enabled: record.enabled })
     message.success('更新成功')
-  } catch (error: any) {
-    message.error(error?.message || '更新通知状态失败')
+  } catch (error) {
+    console.error('更新通知状态失败:', error)
     record.enabled = !record.enabled
   }
 }
@@ -639,8 +639,8 @@ const handleViewDetail = async (record: Notification) => {
     const detail = await notificationsApi.get(record.id)
     viewingNotification.value = detail
     detailModalVisible.value = true
-  } catch (error: any) {
-    message.error(error?.message || '加载通知详情失败')
+  } catch (error) {
+    console.error('加载通知详情失败:', error)
   }
 }
 
@@ -688,8 +688,8 @@ const handleEdit = async (record: Notification) => {
     modalVisible.value = true
     loadBusinessLines()
     loadHosts()
-  } catch (error: any) {
-    message.error(error?.message || '加载通知详情失败')
+  } catch (error) {
+    console.error('加载通知详情失败:', error)
   }
 }
 
@@ -698,8 +698,8 @@ const handleDelete = async (record: Notification) => {
     await notificationsApi.delete(record.id)
     message.success('删除成功')
     loadNotifications()
-  } catch (error: any) {
-    message.error(error?.message || '删除通知失败')
+  } catch (error) {
+    console.error('删除通知失败:', error)
   }
 }
 
@@ -754,8 +754,8 @@ const handleSubmit = async () => {
     }
     modalVisible.value = false
     loadNotifications()
-  } catch (error: any) {
-    message.error(error?.message || '保存通知失败')
+  } catch (error) {
+    console.error('保存通知失败:', error)
   } finally {
     submitting.value = false
   }
@@ -789,8 +789,8 @@ const handleTestNotification = async () => {
 
     await notificationsApi.test(testData)
     message.success('测试通知发送成功')
-  } catch (error: any) {
-    message.error(error?.message || '测试通知失败')
+  } catch (error) {
+    console.error('测试通知失败:', error)
   } finally {
     testing.value = false
   }

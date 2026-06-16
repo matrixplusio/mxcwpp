@@ -35,6 +35,12 @@ func setupHeartbeatTestDB(t *testing.T) *gorm.DB {
 	db.Exec(`CREATE TABLE IF NOT EXISTS alerts (
 		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		mode TEXT DEFAULT '',
+		would_action TEXT DEFAULT '',
+		action TEXT DEFAULT '',
+		action_result TEXT DEFAULT '',
+		attck_tactic TEXT DEFAULT '',
+		attck_technique TEXT DEFAULT '',
 		result_id TEXT UNIQUE,
 		host_id TEXT,
 		rule_id TEXT,

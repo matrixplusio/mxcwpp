@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
 )
 
 // SyncFromServer 从 Server 下发的 AgentConfig 同步配置
@@ -64,6 +65,18 @@ func (c *Config) SyncFromServer(agentConfig *grpc.AgentConfig) error {
 func (c *Config) SyncCertificatesFromServer(certBundle *grpc.CertificateBundle, certDir string) error {
 	if certBundle == nil {
 		return nil
+	}
+
+	// 安全校验：若配置了 CA 指纹 pin，下发的 CA 必须与之匹配。
+	// 防止中间人 / 被冒充的 AC 把 CA 换成攻击者自己的，从而永久劫持本 agent。
+	if fp := c.Local.TLS.CAFingerprint; fp != "" {
+		gotFP, err := certissue.CAFingerprint(certBundle.CaCert)
+		if err != nil {
+			return fmt.Errorf("下发证书包的 CA 解析失败: %w", err)
+		}
+		if gotFP != certissue.NormalizeFingerprint(fp) {
+			return fmt.Errorf("下发证书包的 CA 指纹与 pin 不符，拒绝写入（疑似中间人/伪造 AC）")
+		}
 	}
 
 	// 确保证书目录存在

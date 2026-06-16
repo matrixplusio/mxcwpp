@@ -32,7 +32,6 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { assetsApi } from '@/api/assets'
 import type { AssetUser } from '@/api/types'
-import { message } from 'ant-design-vue'
 
 const props = defineProps<{
   hostId: string
@@ -124,7 +123,6 @@ const loadUsers = async () => {
     pagination.total = response.total
   } catch (error) {
     console.error('加载用户列表失败:', error)
-    message.error('加载用户列表失败')
   } finally {
     loading.value = false
   }

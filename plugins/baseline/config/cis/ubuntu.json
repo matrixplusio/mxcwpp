@@ -1,408 +1,422 @@
 {
   "id": "LINUX_CIS_UBUNTU",
-  "name": "Ubuntu 基线 (CIS + 等保 2.0, 借鉴 Elkeid)",
-  "version": "1.0",
-  "description": "字节跳动最佳实践-ubuntu基线检查 / bytedance Standard-ubuntu Security Baseline Check\n借鉴 Elkeid baseline (Apache 2.0, https://github.com/bytedance/Elkeid).",
+  "name": "Ubuntu 安全基线 (CIS Benchmark + 等保 2.0)",
+  "version": "2.0.0",
+  "description": "面向 Ubuntu Server 的 CIS Level 1 安全基线，覆盖文件系统、服务、SSH、认证、网络与权限等核心加固项。",
   "os_family": [
     "ubuntu"
   ],
   "enabled": true,
   "rules": [
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0001",
-      "category": "身份鉴别",
-      "title": "设置密码失效时间\u003c=90天 / Ensure password expiration is 180 days or less",
-      "description": "请设置密码失效时间，定期修改密码策略，减少密码被泄漏和猜测风险，使用非密码登陆方式(如密钥对)请忽略此项。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_001",
+      "category": "文件系统",
+      "title": "禁用 cramfs 文件系统模块",
+      "description": "cramfs 为只读压缩文件系统，服务器场景无需启用，禁止加载可减少内核攻击面。",
+      "severity": "low",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "file_line_match",
             "param": [
-              "/etc/login.defs",
-              "\\s*\\t*PASS_MAX_DAYS\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)90"
+              "/etc/modprobe.d/cramfs.conf",
+              "install\\s+cramfs\\s+/bin/(true|false)",
+              "match"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "使用非密码登陆方式如密钥对，请忽略此项。\n采用root权限登录系统;\n输入:\n在 /etc/login.defs;\n将 PASS_MAX_DAYS 参数设置\u003c=90"
+        "suggestion": "在 /etc/modprobe.d/cramfs.conf 中写入 install cramfs /bin/true 禁止加载该模块。",
+        "command": "F=/etc/modprobe.d/cramfs.conf; mkdir -p \"$(dirname \"$F\")\"; if grep -qsE '^\\s*install\\s+cramfs\\b' \"$F\"; then sed -ri 's|^\\s*install\\s+cramfs\\b.*|install cramfs /bin/false|' \"$F\"; else echo 'install cramfs /bin/false' >> \"$F\"; fi; grep -qsF 'blacklist cramfs' \"$F\" || echo 'blacklist cramfs' >> \"$F\"; rmmod cramfs 2>/dev/null; true"
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0002",
-      "category": "身份鉴别",
-      "title": "密码修改最短周期\u003e=2天 / Ensure minimum days between password changes is 2 or more",
-      "description": "设置密码修改最小间隔时间，限制密码更改过于频繁。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_002",
+      "category": "文件系统",
+      "title": "禁用 squashfs 文件系统模块",
+      "description": "squashfs 常被用于挂载可疑镜像，非必要时应禁止加载以收敛攻击面。",
+      "severity": "low",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "file_line_match",
             "param": [
-              "/etc/login.defs",
-              "\\s*\\t*PASS_MIN_DAYS\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003e=)2"
+              "/etc/modprobe.d/squashfs.conf",
+              "install\\s+squashfs\\s+/bin/(true|false)",
+              "match"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "在 /etc/login.defs 中将 PASS_MIN_DAYS 参数设置为 \u003e=2。"
+        "suggestion": "在 /etc/modprobe.d/squashfs.conf 中写入 install squashfs /bin/true。注意若使用 snap 则需保留该模块。",
+        "command": "F=/etc/modprobe.d/squashfs.conf; mkdir -p \"$(dirname \"$F\")\"; if grep -qsE '^\\s*install\\s+squashfs\\b' \"$F\"; then sed -ri 's|^\\s*install\\s+squashfs\\b.*|install squashfs /bin/false|' \"$F\"; else echo 'install squashfs /bin/false' >> \"$F\"; fi; rmmod squashfs 2>/dev/null; true"
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0003",
-      "category": "身份鉴别",
-      "title": "密码到期时间警告\u003e=7天 / Ensure password expiration warning days is 7 or more",
-      "description": "确保密码到期警告天数为7或更多。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/login.defs",
-              "\\s*\\t*PASS_WARN_AGE\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003e=)7"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "在 /etc/login.defs 中将 PASS_WARN_AGE 参数设置为 \u003e=7。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0004",
-      "category": "身份鉴别",
-      "title": "密码复杂性检查 / Ensure password creation requirements are configured",
-      "description": "检查密码长度和密码是否使用多种字符类型。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_003",
+      "category": "文件系统",
+      "title": "/tmp 应配置为独立分区",
+      "description": "将 /tmp 独立挂载便于施加 nodev/nosuid/noexec 选项，限制临时目录中的恶意执行。该项涉及磁盘分区，无法通过命令安全自动修复。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
           {
             "type": "command_exec",
             "param": [
-              "dpkg -s libpam-cracklib"
-            ],
-            "result": "install ok installed"
+              "findmnt -kn /tmp",
+              "/tmp"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "规划独立的 /tmp 分区或启用 tmp.mount，并附加 nodev,nosuid,noexec 挂载选项。需在维护窗口由管理员手动调整，不做自动变更。",
+        "command": ""
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_004",
+      "category": "服务",
+      "title": "禁止安装 telnet 服务端",
+      "description": "telnet 明文传输口令与数据，存在严重窃听风险，应使用 SSH 替代并移除 telnet 服务端。",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "telnetd"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 telnetd 软件包，改用 SSH 远程登录。",
+        "command": "DEBIAN_FRONTEND=noninteractive apt-get remove -y telnetd 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_005",
+      "category": "服务",
+      "title": "禁用 Avahi 网络发现服务",
+      "description": "Avahi(mDNS) 会主动广播主机信息，增加被探测风险，服务器环境通常无需启用。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "avahi-daemon",
+              "disabled"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "停止并禁用 avahi-daemon 服务。",
+        "command": "systemctl stop avahi-daemon.socket avahi-daemon.service 2>/dev/null; systemctl disable avahi-daemon.socket avahi-daemon.service 2>/dev/null; systemctl mask avahi-daemon.service 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_006",
+      "category": "服务",
+      "title": "启用系统时间同步服务",
+      "description": "准确的系统时间是日志关联与审计取证的基础，应运行 chrony、ntp 或 systemd-timesyncd 之一。",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "chrony",
+              "active"
+            ]
           },
           {
-            "type": "file_line_expr",
+            "type": "service_status",
             "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "$(not)^#$(\u0026\u0026)password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minlen=8"
+              "ntp",
+              "active"
+            ]
           },
           {
-            "type": "file_line_expr",
+            "type": "service_status",
             "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "$(not)^#$(\u0026\u0026)password\\s*\\t*requisite\\s*\\t*pam_cracklib.so.*minclass=3"
+              "systemd-timesyncd",
+              "active"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "1.安装libpam-cracklib: apt-get update \u0026\u0026 apt-get install libpam-cracklib。\n2.编辑/etc/pam.d/common-password，在password requisite pam_cracklib.so开头的这一行配置:minclass=3(至少包含小写字母、大写字母、数字、特殊字符等4类字符中的3类)以及minlen=8(长度八位以上)。"
+        "suggestion": "安装并启用 chrony 作为时间同步服务。",
+        "command": "dpkg -s chrony >/dev/null 2>&1 || { apt-get update -y; DEBIAN_FRONTEND=noninteractive apt-get install -y chrony; }; systemctl enable --now chrony",
+        "restart_services": [
+          "chrony"
+        ]
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0005",
-      "category": "身份鉴别",
-      "title": "确保root是唯一UID为0的用户 / Ensure root is the only UID 0 account",
-      "description": "除root以外其他UID为0的用户都应该删除，或者为其分配新的UID。",
+      "rule_id": "CIS_UBUNTU_007",
+      "category": "服务",
+      "title": "启用并运行 cron 守护进程",
+      "description": "cron 用于执行定时维护与安全任务，应保持启用并运行。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "cron",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "启用并立即启动 cron 服务。",
+        "command": "systemctl enable --now cron",
+        "restart_services": [
+          "cron"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_008",
+      "category": "审计",
+      "title": "安装并启用 auditd 审计服务",
+      "description": "auditd 是 Linux 内核审计框架的用户态守护进程，需安装并保持运行以满足等保审计要求。",
       "severity": "high",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "package_installed",
             "param": [
-              "/etc/passwd"
-            ],
-            "result": "$(not)^root:$(\u0026\u0026)^\\w+:\\w+:0:"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "除root以外其他UID为0的用户(查看命令cat /etc/passwd | awk -F: '($3 == 0) { print $1 }'|grep -v '^root$' )都应该删除，或者为其分配新的UID。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0006",
-      "category": "身份鉴别",
-      "title": "检查是否限制密码重用 / Ensure password reuse is limited",
-      "description": "应限制用户之间重用密码的行为，降低密码泄漏的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/pam.d/common-password",
-              "remember\\s*\\t*=\\s*\\t*(\\d+)"
-            ],
-            "result": "password.*pam_unix.so$(\u0026\u0026)$(\u003c)5"
+              "auditd"
+            ]
           },
           {
-            "type": "file_line_expr",
+            "type": "service_status",
             "param": [
-              "/etc/pam.d/common-password"
-            ],
-            "result": "password.*pam_unix.so$(\u0026\u0026)$(not)remember"
+              "auditd",
+              "active"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "编辑/etc/pam.d/common-password，在password [success=1 default=ignore] pam_unix.so开头的行插入配置remember\u003e=5的值，建议为5，即在行末尾加上参数remember=5。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0007",
-      "category": "身份鉴别",
-      "title": "空口令账户检测 / Ensure password fields are not empty",
-      "description": "检查系统空密码账户。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/shadow"
-            ],
-            "result": "^\\w+::"
-          }
+        "suggestion": "通过 apt 安装 auditd 并启用服务。",
+        "command": "dpkg -s auditd >/dev/null 2>&1 || { apt-get update -y; DEBIAN_FRONTEND=noninteractive apt-get install -y auditd audispd-plugins; }; systemctl enable --now auditd",
+        "restart_services": [
+          "auditd"
         ]
-      },
-      "fix": {
-        "suggestion": "为空口令的用户设置安全密码，或者执行passwd -l \u003cusername\u003e锁定用户。"
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0008",
-      "category": "SSH检测",
-      "title": "SSH空密码检测 / Ensure SSH PermitEmptyPasswords is disabled",
-      "description": "禁止SSH空密码用户登录。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_009",
+      "category": "SSH",
+      "title": "禁止 root 用户通过 SSH 直接登录",
+      "description": "禁用 root 直接远程登录可强制管理员先以普通账户登录再提权，便于审计追溯。",
+      "severity": "critical",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "file_kv",
             "param": [
               "/etc/ssh/sshd_config",
-              "^\\s*PermitEmptyPasswords\\s+(.*)"
-            ],
-            "result": "no"
+              "PermitRootLogin",
+              "^no$"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "编辑文件/etc/ssh/sshd_config，将PermitEmptyPasswords配置为no。"
+        "suggestion": "在 sshd_config 中设置 PermitRootLogin no，确保已有可提权的普通账户后再应用。",
+        "command": "F=/etc/ssh/sshd_config; cp \"$F\" \"$F.mxbak.009\" 2>/dev/null; sed -ri '/^\\s*#?\\s*PermitRootLogin\\b/Id' \"$F\"; echo 'PermitRootLogin no' >> \"$F\"; sshd -t 2>/dev/null || { mv \"$F.mxbak.009\" \"$F\"; exit 1; }; rm -f \"$F.mxbak.009\"",
+        "restart_services": [
+          "ssh"
+        ]
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0009",
-      "category": "SSH检测",
-      "title": "SSH失败尝试次数\u003c5 / Ensure SSH MaxAuthTries is set to 5 or less",
-      "description": "设置较低的Max AuthTrimes参数将降低SSH服务器被暴力攻击成功的风险。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_010",
+      "category": "SSH",
+      "title": "限制 SSH 最大认证尝试次数",
+      "description": "将 MaxAuthTries 设为不超过 4 次，可降低口令暴力破解的成功率。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "file_line_expr",
+            "type": "file_kv",
             "param": [
               "/etc/ssh/sshd_config",
-              "^\\s*MaxAuthTries\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c)5"
+              "MaxAuthTries",
+              "^[1-4]$"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "在/etc/ssh/sshd_config中取消MaxAuthTries注释符号#，设置最大密码尝试失败次数小于5。"
+        "suggestion": "在 sshd_config 中设置 MaxAuthTries 4。",
+        "command": "F=/etc/ssh/sshd_config; cp \"$F\" \"$F.mxbak.010\" 2>/dev/null; sed -ri '/^\\s*#?\\s*MaxAuthTries\\b/Id' \"$F\"; echo 'MaxAuthTries 4' >> \"$F\"; sshd -t 2>/dev/null || { mv \"$F.mxbak.010\" \"$F\"; exit 1; }; rm -f \"$F.mxbak.010\"",
+        "restart_services": [
+          "ssh"
+        ]
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0010",
-      "category": "安全审计",
-      "title": "确保开启日志守护进程(auditd) / Ensure auditd Service is enabled",
-      "description": "确保auditd服务已启用，记录日志用于审计。",
+      "rule_id": "CIS_UBUNTU_011",
+      "category": "SSH",
+      "title": "禁用 SSH X11 转发",
+      "description": "服务器无需图形转发，关闭 X11Forwarding 可避免通过 SSH 通道暴露 X 显示而被劫持。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "X11Forwarding",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 X11Forwarding no。",
+        "command": "F=/etc/ssh/sshd_config; cp \"$F\" \"$F.mxbak.011\" 2>/dev/null; sed -ri '/^\\s*#?\\s*X11Forwarding\\b/Id' \"$F\"; echo 'X11Forwarding no' >> \"$F\"; sshd -t 2>/dev/null || { mv \"$F.mxbak.011\" \"$F\"; exit 1; }; rm -f \"$F.mxbak.011\"",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_012",
+      "category": "SSH",
+      "title": "禁止 SSH 空口令登录",
+      "description": "PermitEmptyPasswords 设为 no，防止空密码账户被直接登录利用。",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitEmptyPasswords",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 PermitEmptyPasswords no。",
+        "command": "F=/etc/ssh/sshd_config; cp \"$F\" \"$F.mxbak.012\" 2>/dev/null; sed -ri '/^\\s*#?\\s*PermitEmptyPasswords\\b/Id' \"$F\"; echo 'PermitEmptyPasswords no' >> \"$F\"; sshd -t 2>/dev/null || { mv \"$F.mxbak.012\" \"$F\"; exit 1; }; rm -f \"$F.mxbak.012\"",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_013",
+      "category": "SSH",
+      "title": "限制 SSH 使用强加密算法",
+      "description": "通过 Ciphers 显式启用 AES-GCM/CTR 等强算法，避免使用已被弱化的 CBC/3DES 加密套件。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "Ciphers",
+              "aes(256|128)-(gcm@openssh\\.com|ctr)"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 Ciphers 为 chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr。",
+        "command": "F=/etc/ssh/sshd_config; cp \"$F\" \"$F.mxbak.013\" 2>/dev/null; sed -ri '/^\\s*#?\\s*Ciphers\\b/Id' \"$F\"; echo 'Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr' >> \"$F\"; sshd -t 2>/dev/null || { mv \"$F.mxbak.013\" \"$F\"; exit 1; }; rm -f \"$F.mxbak.013\"",
+        "restart_services": [
+          "ssh"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_014",
+      "category": "权限",
+      "title": "配置 /etc/sudoers 文件权限",
+      "description": "确保 sudoers 文件权限为 0440 且属主为 root，防止普通用户篡改提权规则。",
       "severity": "high",
       "check": {
         "condition": "all",
         "rules": [
           {
-            "type": "command_exec",
+            "type": "file_permission",
             "param": [
-              "systemctl is-enabled auditd"
-            ],
-            "result": "enabled"
+              "/etc/sudoers",
+              "440"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 440 /etc/sudoers 并设置属主为 root:root。",
+        "command": "chmod 440 /etc/sudoers && chown root:root /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_015",
+      "category": "权限",
+      "title": "启用 sudo 命令日志记录",
+      "description": "通过 Defaults logfile 记录所有 sudo 提权操作，满足等保对特权操作可追溯的要求。",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers",
+              "^\\s*Defaults\\s+logfile\\s*=",
+              "match"
+            ]
           },
           {
             "type": "command_exec",
             "param": [
-              "systemctl status auditd"
-            ],
-            "result": "active \\(running\\)"
+              "grep -rhE '^\\s*Defaults\\s+logfile' /etc/sudoers.d 2>/dev/null",
+              "logfile"
+            ]
           }
         ]
       },
       "fix": {
-        "suggestion": "运行以下命令启用auditd服务：\nservice auditd start"
+        "suggestion": "在 /etc/sudoers.d/ 下新增一行 Defaults logfile=/var/log/sudo.log，并用 visudo -cf 校验后生效。",
+        "command": "F=/etc/sudoers.d/mxsec-sudolog; echo 'Defaults logfile=/var/log/sudo.log' > \"$F\"; chmod 440 \"$F\"; visudo -cf \"$F\" >/dev/null 2>&1 || { rm -f \"$F\"; exit 1; }"
       }
     },
     {
-      "rule_id": "LINUX_CIS_UBUNTU_0011",
-      "category": "SSH检测",
-      "title": "减少空闲超时退出时间 / Ensure SSH Idle Timeout Interval is configured",
-      "description": "设置SSH空闲超时退出时间,可降低未授权用户访问其他用户ssh会话的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "ClientAliveInterval\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)900"
-          },
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "ClientAliveCountMax\\s*\\t*(\\d+)"
-            ],
-            "result": "$(\u003c=)3"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑/etc/ssh/sshd_config，将ClientAliveInterval 设置为\u003c=900(15分钟)，将ClientAliveCountMax设置为0-3之间。"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0012",
-      "category": "SSH检测",
-      "title": "确保log level为info / Ensure SSH LogLevel is set to INFO",
-      "description": "确保SSH LogLevel设置为INFO,记录登录和注销活动。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "^\\s*LogLevel\\s+(.*)"
-            ],
-            "result": "INFO"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数(取消注释):\nLogLevel INFO"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0013",
-      "category": "SSH检测",
-      "title": "确保ssh协议设置为2 / Ensure SSH Protocol is set to 2",
-      "description": "SSH 支持两种不同且不兼容的协议：SSH1 和 SSH2。SSH1 是原始协议，存在安全问题。SSH2 更先进、更安全。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_line_expr",
-            "param": [
-              "/etc/ssh/sshd_config",
-              "Protocol\\s*\\t*(.*)"
-            ],
-            "result": "2"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "编辑 /etc/ssh/sshd_config 文件以按如下方式设置参数:\nProtocol 2"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0014",
-      "category": "安全审计",
-      "title": "确保开启日志守护进程(rsyslog) / Ensure rsyslog Service is enabled",
-      "description": "确保rsyslog服务已启用，记录日志用于审计。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl is-enabled rsyslog"
-            ],
-            "result": "enabled"
-          },
-          {
-            "type": "command_exec",
-            "param": [
-              "systemctl status rsyslog"
-            ],
-            "result": "active \\(running\\)"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "运行以下命令启用rsyslog服务：\nservice rsyslog start"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0015",
-      "category": "入侵防范",
-      "title": "开启地址随机化(ASLR) / Ensure address space layout randomization (ASLR) is enabled",
-      "description": "它将进程的内存空间地址随机化来增大入侵者预测目的地址难度，从而降低进程被成功入侵的风险。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "command_exec",
-            "param": [
-              "grep -Rh ^kernel\\.randomize_va_space /etc/sysctl.conf /etc/sysctl.d"
-            ],
-            "result": "\\s*\\t*2"
-          },
-          {
-            "type": "command_exec",
-            "param": [
-              "sysctl kernel.randomize_va_space"
-            ],
-            "result": "^kernel.randomize_va_space\\s*\\t*=\\s*\\t*2"
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "在/etc/sysctl.conf或/etc/sysctl.d/*文件中设置以下参数： \nkernel.randomize_va_space = 2 \n执行命令： \nsysctl -w kernel.randomize_va_space=2"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0016",
-      "category": "文件权限",
-      "title": "确保配置文件的安全性 / Ensure permissions on files",
-      "description": "为了保证系统的安全性，请确保配置文件的安全性和唯一性，限制未授权用户对配置文件的一切操作，包括访问、读写、删除等。",
-      "severity": "high",
+      "rule_id": "CIS_UBUNTU_016",
+      "category": "权限",
+      "title": "配置 /etc/passwd 文件权限",
+      "description": "确保 /etc/passwd 权限为 0644 且属主为 root，防止被未授权篡改。",
+      "severity": "medium",
       "check": {
         "condition": "all",
         "rules": [
@@ -412,61 +426,234 @@
               "/etc/passwd",
               "644"
             ]
-          },
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/passwd 并设置属主 root:root。",
+        "command": "chmod 644 /etc/passwd && chown root:root /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_017",
+      "category": "权限",
+      "title": "配置 /etc/shadow 文件权限",
+      "description": "影子口令文件应限制为 root 只读(0640，属组 shadow)或更严，防止口令哈希泄露。",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
           {
             "type": "file_permission",
             "param": [
               "/etc/shadow",
-              "400"
+              "640"
             ]
           },
           {
             "type": "file_permission",
             "param": [
-              "/etc/group",
-              "644"
+              "/etc/shadow",
+              "600"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "000"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 640 /etc/shadow 并设置属主 root:shadow。",
+        "command": "chown root:shadow /etc/shadow 2>/dev/null || chown root:root /etc/shadow; chmod 640 /etc/shadow"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_018",
+      "category": "权限",
+      "title": "配置 /etc/gshadow 文件权限",
+      "description": "组影子文件应限制为 root 只读(0640，属组 shadow)或更严，防止组口令信息泄露。",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/gshadow",
+              "640"
             ]
           },
           {
             "type": "file_permission",
             "param": [
               "/etc/gshadow",
-              "400"
-            ]
-          }
-        ]
-      },
-      "fix": {
-        "suggestion": "执行以下5条命令\nchown root:root /etc/passwd /etc/shadow /etc/group /etc/gshadow\nchmod 0644 /etc/group\nchmod 0644 /etc/passwd\nchmod 0400 /etc/shadow\nchmod 0400 /etc/gshadow"
-      }
-    },
-    {
-      "rule_id": "LINUX_CIS_UBUNTU_0017",
-      "category": "设置用户访问配置文件的权限",
-      "title": "设置用户访问配置文件的权限 / Verify permissions on files",
-      "description": "设置用户访问配置文件的权限。",
-      "severity": "high",
-      "check": {
-        "condition": "all",
-        "rules": [
-          {
-            "type": "file_permission",
-            "param": [
-              "/etc/hosts.allow",
-              "644"
+              "600"
             ]
           },
           {
             "type": "file_permission",
             "param": [
-              "/etc/hosts.deny",
-              "644"
+              "/etc/gshadow",
+              "000"
             ]
           }
         ]
       },
       "fix": {
-        "suggestion": "运行以下4条命令：\nchown root:root /etc/hosts.allow\nchown root:root /etc/hosts.deny\nchmod 644 /etc/hosts.allow\nchmod 644 /etc/hosts.deny"
+        "suggestion": "执行 chmod 640 /etc/gshadow 并设置属主 root:shadow。",
+        "command": "chown root:shadow /etc/gshadow 2>/dev/null || chown root:root /etc/gshadow; chmod 640 /etc/gshadow"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_019",
+      "category": "认证",
+      "title": "设置口令最长有效期",
+      "description": "在 login.defs 中将 PASS_MAX_DAYS 限制为不超过 365 天，强制定期更换口令。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/login.defs",
+              "PASS_MAX_DAYS",
+              "^([1-9][0-9]?|[12][0-9]{2}|3[0-5][0-9]|36[0-5])$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/login.defs 中设置 PASS_MAX_DAYS 90。",
+        "command": "cp /etc/login.defs /etc/login.defs.mxbak.021 2>/dev/null; if grep -qE '^\\s*PASS_MAX_DAYS' /etc/login.defs; then sed -ri 's|^\\s*PASS_MAX_DAYS.*|PASS_MAX_DAYS 90|' /etc/login.defs; else echo 'PASS_MAX_DAYS 90' >> /etc/login.defs; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_020",
+      "category": "认证",
+      "title": "设置最小口令长度",
+      "description": "通过 pam_pwquality 限制最小口令长度不少于 8 位，提升口令强度。",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "^\\s*minlen\\s*=\\s*(8|9|1[0-9]|[2-9][0-9])",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/pam.d/common-password",
+              "minlen=([89]|1[0-9]|[2-9][0-9])",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装 libpam-pwquality 并在 /etc/security/pwquality.conf 中设置 minlen = 12。",
+        "command": "dpkg -s libpam-pwquality >/dev/null 2>&1 || { apt-get update -y; DEBIAN_FRONTEND=noninteractive apt-get install -y libpam-pwquality; }; cp /etc/security/pwquality.conf /etc/security/pwquality.conf.mxbak.022 2>/dev/null; if grep -qE '^\\s*#?\\s*minlen' /etc/security/pwquality.conf; then sed -ri 's|^\\s*#?\\s*minlen.*|minlen = 12|' /etc/security/pwquality.conf; else echo 'minlen = 12' >> /etc/security/pwquality.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_021",
+      "category": "网络",
+      "title": "关闭 IP 数据包转发",
+      "description": "非路由/网关用途的主机应关闭 net.ipv4.ip_forward，避免被当作流量中转跳板。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.ip_forward",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.ip_forward = 0。若主机承担路由/NAT 功能请保留为 1。",
+        "command": "sysctl -w net.ipv4.ip_forward=0; if grep -q '^net.ipv4.ip_forward' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.ip_forward = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_022",
+      "category": "网络",
+      "title": "禁止接受 ICMP 重定向",
+      "description": "关闭 accept_redirects，防止攻击者通过伪造重定向篡改主机路由表。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.accept_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.accept_redirects = 0。",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; if grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_023",
+      "category": "网络",
+      "title": "启用反向路径过滤",
+      "description": "开启 rp_filter 可校验数据包源地址路径，缓解 IP 欺骗类攻击。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.rp_filter",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.rp_filter = 1。",
+        "command": "C=/etc/sysctl.d/90-mxsec-baseline.conf; mkdir -p \"$(dirname \"$C\")\"; for K in net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter; do if grep -qE \"^\\s*$K\\b\" \"$C\" 2>/dev/null; then sed -ri \"s|^\\s*$K\\b.*|$K = 1|\" \"$C\"; else echo \"$K = 1\" >> \"$C\"; fi; done; for IF in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 1 > \"$IF\" 2>/dev/null; done; sysctl -w net.ipv4.conf.default.rp_filter=1 net.ipv4.conf.all.rp_filter=1"
+      }
+    },
+    {
+      "rule_id": "CIS_UBUNTU_024",
+      "category": "网络",
+      "title": "启用 TCP SYN Cookies",
+      "description": "开启 tcp_syncookies 可在半连接队列耗尽时仍正常响应合法连接，缓解 SYN Flood 攻击。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.tcp_syncookies",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.tcp_syncookies = 1。",
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1; if grep -q '^net.ipv4.tcp_syncookies' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.tcp_syncookies = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
       }
     }
   ]

@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/imkerbos/mxsec-platform/internal/common/ssrf"
 	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
 	"github.com/imkerbos/mxsec-platform/internal/server/model"
 )
@@ -180,6 +181,13 @@ func (h *NotificationsHandler) UpdateNotification(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "请求参数错误")
 		return
+	}
+	// 防 SSRF：更新时若带 Webhook 地址，校验不得指向内网/回环/元数据
+	if req.Config != nil && req.Config.WebhookURL != "" {
+		if err := ssrf.ValidateURL(req.Config.WebhookURL); err != nil {
+			BadRequest(c, "Webhook 地址不合法")
+			return
+		}
 	}
 
 	var notification model.Notification
@@ -367,6 +375,10 @@ func (h *NotificationsHandler) validateNotificationRequest(req *CreateNotificati
 	if req.Config.WebhookURL == "" {
 		return fmt.Errorf("Webhook URL 不能为空")
 	}
+	// 防 SSRF：拒绝指向内网/回环/云元数据的 Webhook 地址
+	if err := ssrf.ValidateURL(req.Config.WebhookURL); err != nil {
+		return fmt.Errorf("Webhook 地址不合法: %w", err)
+	}
 
 	return nil
 }
@@ -508,9 +520,11 @@ func (h *NotificationsHandler) buildLarkCardMessage(
 
 // sendTestNotification 发送测试通知
 func (h *NotificationsHandler) sendTestNotification(webhookURL string, body []byte) error {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	// 防 SSRF：先校验地址，再用带 dial 期 IP 复查的安全客户端发送
+	if err := ssrf.ValidateURL(webhookURL); err != nil {
+		return fmt.Errorf("Webhook 地址不合法: %w", err)
 	}
+	client := ssrf.NewSafeClient(10 * time.Second)
 
 	resp, err := client.Post(webhookURL, "application/json", bytes.NewBuffer(body))
 	if err != nil {

@@ -232,7 +232,6 @@ const passCount = computed(() => stats.value.pass)
 const failCount = computed(() => stats.value.fail)
 const errorCount = computed(() => stats.value.error)
 
-const failedResults = computed(() => stats.value.failed)
 const criticalCount = computed(() => stats.value.critical)
 const highCount = computed(() => stats.value.high)
 const mediumCount = computed(() => stats.value.medium)
@@ -383,7 +382,6 @@ const handleExport = async ({ key }: { key: string }) => {
     message.success(`导出${format === 'markdown' ? 'Markdown' : 'Excel'}成功`)
   } catch (error) {
     console.error('导出失败:', error)
-    message.error('导出失败，请重试')
   } finally {
     exporting.value = false
   }

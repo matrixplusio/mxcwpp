@@ -436,10 +436,10 @@ async function handleScanHost(record: Host) {
       host_ids: [record.host_id],
       reconcile_stale: true,
     })
-    message.success(`扫描已启动: ${resp.data.task_id.slice(0, 8)}...`)
-    router.push({ path: '/vulnerabilities', query: { task_id: resp.data.task_id } })
-  } catch (e: any) {
-    message.error(e?.response?.data?.message || e?.message || '触发扫描失败')
+    message.success(`扫描已启动: ${resp.task_id.slice(0, 8)}...`)
+    router.push({ path: '/vulnerabilities', query: { task_id: resp.task_id } })
+  } catch (error) {
+    console.error('触发扫描失败:', error)
   }
 }
 
@@ -572,7 +572,7 @@ const OS_COLORS = ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A', '#6DC8
 const osDistributionData = computed(() => {
   const m = new Map<string, number>()
   for (const h of hosts.value) {
-    const os = h.os_family || h.osFamily || h.os || '未知'
+    const os = h.os_family || '未知'
     m.set(os, (m.get(os) || 0) + 1)
   }
   return Array.from(m.entries()).map(([name, value], i) => ({
@@ -721,7 +721,6 @@ const loadHosts = async () => {
     pagination.total = response.total
   } catch (error) {
     console.error('加载主机列表失败:', error)
-    message.error('加载主机列表失败')
   } finally {
     loading.value = false
   }
@@ -787,9 +786,8 @@ const handleDeleteHost = async (record: Host) => {
     loadHosts()
     loadStatusDistribution()
     loadRiskDistribution()
-  } catch (error: any) {
+  } catch (error) {
     console.error('删除主机失败:', error)
-    message.error(error?.message || '删除主机失败，请重试')
   }
 }
 
@@ -829,9 +827,8 @@ const doRestartAgent = async (hostIds: string[]) => {
     await hostsApi.restartAgent(hostIds.length > 0 ? hostIds : undefined)
     message.success('重启命令已提交，Agent 将在数秒后重启')
     selectedRowKeys.value = []
-  } catch (error: any) {
+  } catch (error) {
     console.error('重启 Agent 失败:', error)
-    message.error(error?.message || '重启 Agent 失败，请重试')
   }
 }
 
@@ -898,8 +895,8 @@ const doBatchDelete = async (force: boolean) => {
     loadHosts()
     loadStatusDistribution()
     loadRiskDistribution()
-  } catch (error: any) {
-    message.error(error?.message || '批量删除失败')
+  } catch (error) {
+    console.error('批量删除失败:', error)
   }
 }
 
@@ -933,8 +930,8 @@ const handleConfirmBatchTags = async () => {
     selectedRowKeys.value = []
     batchTagsModalVisible.value = false
     loadHosts()
-  } catch (error: any) {
-    message.error(error?.message || '批量更新标签失败')
+  } catch (error) {
+    console.error('批量更新标签失败:', error)
   }
 }
 

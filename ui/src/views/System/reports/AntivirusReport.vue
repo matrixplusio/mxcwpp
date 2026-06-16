@@ -182,7 +182,6 @@ const exportPDF = async () => {
     message.success('PDF 已生成')
   } catch (e: any) {
     console.error('PDF 导出失败', e)
-    message.error(`PDF 导出失败: ${e?.response?.data?.message || e?.message || e}`)
   } finally {
     exporting.value = false
   }
@@ -341,7 +340,6 @@ const loadData = async () => {
     report.value = data
   } catch (error) {
     console.error('加载病毒查杀报告失败:', error)
-    message.error('加载病毒查杀报告失败')
   } finally {
     loading.value = false
   }

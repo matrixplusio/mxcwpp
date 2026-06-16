@@ -275,8 +275,8 @@ const handleSubmit = async () => {
     modalVisible.value = false
     resetForm()
     loadSchedules()
-  } catch {
-    message.error(editingSchedule.value ? '更新失败' : '创建失败')
+  } catch (error) {
+    console.error('保存扫描计划失败:', error)
   } finally {
     submitting.value = false
   }
@@ -288,8 +288,8 @@ const handleToggle = async (record: ScanSchedule) => {
     await scanSchedulesApi.toggle(record.id)
     message.success(record.enabled ? '已禁用' : '已启用')
     loadSchedules()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('切换扫描计划状态失败:', error)
   } finally {
     toggleLoadingId.value = null
   }
@@ -300,8 +300,8 @@ const handleDelete = async (record: ScanSchedule) => {
     await scanSchedulesApi.delete(record.id)
     message.success('扫描计划已删除')
     loadSchedules()
-  } catch {
-    message.error('删除失败')
+  } catch (error) {
+    console.error('删除扫描计划失败:', error)
   }
 }
 

@@ -189,8 +189,12 @@ func TestAssetHistory(t *testing.T) {
 		t.Fatalf("failed to seed host: %v", err)
 	}
 
-	oldTime := model.LocalTime(time.Now().Add(-2 * time.Hour))
-	newTime := model.LocalTime(time.Now())
+	// 锚定到当天正午附近：history 按 DATE(collected_at) 聚合，若用 now()/now()-2h，
+	// 凌晨时段 now-2h 会跨 UTC 午夜被拆成两天（时区 flaky）。正午 ±1h 在 UTC 与本地都同一天。
+	now := time.Now()
+	noon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+	oldTime := model.LocalTime(noon.Add(-1 * time.Hour))
+	newTime := model.LocalTime(noon)
 	rows := []interface{}{
 		&model.Process{ID: "hist-proc-1", HostID: "host-1", PID: "101", Exe: "/usr/bin/nginx", Cmdline: "nginx: master", Username: "root", CollectedAt: oldTime},
 		&model.Port{ID: "hist-port-1", HostID: "host-1", Protocol: "tcp", Port: 80, PID: "101", ProcessName: "nginx", State: "LISTEN", CollectedAt: oldTime},

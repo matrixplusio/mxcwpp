@@ -115,41 +115,38 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 		logger.Warn("初始化漏洞数据源失败", zap.Error(err))
 	}
 
-	// 检查是否已完成首次数据初始化
-	if isDataInitialized(db) {
-		logger.Info("默认数据已初始化过，跳过策略组和策略重建")
-		return nil
-	}
-
-	// 首次初始化：创建默认策略组
+	// 每次启动幂等同步基线策略库。内置规则以 JSON 文件为准：
+	// 检查/修复配置每次覆盖，但保留用户在 UI 上设置的 enabled 开关。
+	// 新增 JSON 文件重启即自动入库；屏蔽内置规则请用「禁用」而非删除（删除后重启会重建）。
 	if err := initDefaultPolicyGroup(db, logger); err != nil {
 		return fmt.Errorf("初始化默认策略组失败: %w", err)
 	}
 
-	// 首次初始化：加载策略数据
 	if policyDir == "" {
 		if _, err := os.Stat("/opt/mxsec-platform/policies"); err == nil {
 			policyDir = "/opt/mxsec-platform/policies"
 		} else {
-			policyDir = "plugins/baseline/config/examples"
+			policyDir = "plugins/baseline/config"
 		}
 	}
 
 	policies, err := loadPoliciesFromDir(policyDir, logger)
 	if err != nil {
-		logger.Warn("加载策略文件失败，跳过策略初始化", zap.Error(err), zap.String("policy_dir", policyDir))
+		logger.Warn("加载策略文件失败，跳过策略同步", zap.Error(err), zap.String("policy_dir", policyDir))
 	} else {
+		ruleTotal := 0
 		for _, policy := range policies {
-			if err := savePolicyToDB(db, policy, DefaultPolicyGroupID, logger); err != nil {
-				return fmt.Errorf("保存策略 %s 失败: %w", policy.ID, err)
+			n, err := savePolicyToDB(db, policy, DefaultPolicyGroupID, logger)
+			if err != nil {
+				return fmt.Errorf("同步策略 %s 失败: %w", policy.ID, err)
 			}
-			logger.Info("策略初始化成功", zap.String("policy_id", policy.ID), zap.String("name", policy.Name))
+			ruleTotal += n
 		}
-		logger.Info("默认数据初始化完成", zap.Int("policy_count", len(policies)))
+		logger.Info("基线策略库同步完成",
+			zap.String("policy_dir", policyDir),
+			zap.Int("policy_count", len(policies)),
+			zap.Int("rule_count", ruleTotal))
 	}
-
-	// 标记数据已初始化
-	markDataInitialized(db, logger)
 
 	return nil
 }
@@ -189,26 +186,6 @@ func SeedRetentionPolicies(db *gorm.DB, logger *zap.Logger) {
 		}
 	}
 	logger.Info("retention_policies 默认值已 seed", zap.Int("count", len(model.DefaultRetentionPolicies)))
-}
-
-// isDataInitialized 检查默认数据是否已完成首次初始化
-func isDataInitialized(db *gorm.DB) bool {
-	var cfg model.SystemConfig
-	err := db.Where("`key` = ? AND category = ?", "data_initialized", "system").First(&cfg).Error
-	return err == nil && cfg.Value == "true"
-}
-
-// markDataInitialized 标记默认数据已完成首次初始化
-func markDataInitialized(db *gorm.DB, logger *zap.Logger) {
-	cfg := model.SystemConfig{
-		Key:         "data_initialized",
-		Value:       "true",
-		Category:    "system",
-		Description: "默认数据是否已完成首次初始化（策略组、策略等）",
-	}
-	if err := db.Create(&cfg).Error; err != nil {
-		logger.Warn("标记数据初始化状态失败", zap.Error(err))
-	}
 }
 
 // initDefaultUsers 初始化默认用户
@@ -307,51 +284,68 @@ func initDefaultUsers(db *gorm.DB, logger *zap.Logger) error {
 	return nil
 }
 
-// loadPoliciesFromDir 从目录加载所有策略文件
-func loadPoliciesFromDir(dir string, logger *zap.Logger) ([]*engine.Policy, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("读取目录失败: %w", err)
-	}
+// skipPolicyDirs 主机基线同步时跳过的子目录：
+// windows 非 Linux；cis-k8s/cis-docker 属容器基线，走 KubeBaselineRule 独立入库路径。
+var skipPolicyDirs = map[string]bool{
+	"windows":    true,
+	"cis-k8s":    true,
+	"cis-docker": true,
+}
 
+// loadPoliciesFromDir 递归加载目录下所有策略 JSON 文件（跳过非 Linux / 容器目录）
+func loadPoliciesFromDir(dir string, logger *zap.Logger) ([]*engine.Policy, error) {
 	var policies []*engine.Policy
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		// 只处理 JSON 文件
-		if filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-
-		filePath := filepath.Join(dir, entry.Name())
-		logger.Info("加载策略文件", zap.String("file", filePath))
-
-		data, err := os.ReadFile(filePath)
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			logger.Warn("读取策略文件失败", zap.Error(err), zap.String("file", filePath))
-			continue
+			return err
+		}
+		if d.IsDir() {
+			if skipPolicyDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(d.Name()) != ".json" {
+			return nil
+		}
+
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			logger.Warn("读取策略文件失败", zap.Error(rerr), zap.String("file", path))
+			return nil
 		}
 
 		var policy engine.Policy
-		if err := json.Unmarshal(data, &policy); err != nil {
-			logger.Warn("解析策略文件失败", zap.Error(err), zap.String("file", filePath))
-			continue
+		if jerr := json.Unmarshal(data, &policy); jerr != nil {
+			logger.Warn("解析策略文件失败", zap.Error(jerr), zap.String("file", path))
+			return nil
 		}
 
+		// 跳过空策略（如占位的 weakpassword.json，无规则）
+		if policy.ID == "" || len(policy.Rules) == 0 {
+			logger.Warn("跳过空策略文件", zap.String("file", path), zap.String("policy_id", policy.ID))
+			return nil
+		}
+
+		logger.Info("加载策略文件", zap.String("file", path), zap.Int("rules", len(policy.Rules)))
 		policies = append(policies, &policy)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("遍历策略目录失败: %w", err)
 	}
 
 	return policies, nil
 }
 
-// savePolicyToDB 保存策略到数据库
-func savePolicyToDB(db *gorm.DB, policy *engine.Policy, groupID string, logger *zap.Logger) error {
-	// 转换 Policy 模型
-	// 默认设置 RuntimeTypes 为 ["vm"]（仅虚拟机适用）
-	// 这样确保 Linux 系统基线规则不会应用于 Docker 容器
+// savePolicyToDB 幂等同步内置策略到数据库，返回写入的规则数。
+// 隔离原则：
+//   - 内置策略/规则（builtin=true）以 JSON 文件为准，每次启动覆盖元数据/检查/修复配置；
+//   - 但保留用户设置的 enabled 开关；
+//   - 若某 ID 已被用户自定义（builtin=false）占用，则跳过、绝不覆盖，保证不干扰用户规则。
+func savePolicyToDB(db *gorm.DB, policy *engine.Policy, groupID string, logger *zap.Logger) (int, error) {
+	// 默认 RuntimeTypes=["vm"]（仅虚拟机适用），确保 Linux 主机基线不应用于容器
 	dbPolicy := &model.Policy{
 		ID:           policy.ID,
 		Name:         policy.Name,
@@ -359,36 +353,49 @@ func savePolicyToDB(db *gorm.DB, policy *engine.Policy, groupID string, logger *
 		Description:  policy.Description,
 		OSFamily:     model.StringArray(policy.OSFamily),
 		OSVersion:    policy.OSVersion,
-		RuntimeTypes: model.StringArray{"vm"}, // 默认仅适用于虚拟机
+		RuntimeTypes: model.StringArray{"vm"},
 		Enabled:      policy.Enabled,
-		GroupID:      groupID, // 关联到策略组
+		Builtin:      true,
+		GroupID:      groupID,
 	}
 
-	// 创建策略
-	if err := db.Create(dbPolicy).Error; err != nil {
-		return fmt.Errorf("创建策略失败: %w", err)
+	var existing model.Policy
+	err := db.Where("id = ?", policy.ID).First(&existing).Error
+	switch {
+	case err == gorm.ErrRecordNotFound:
+		if cErr := db.Create(dbPolicy).Error; cErr != nil {
+			return 0, fmt.Errorf("创建策略失败: %w", cErr)
+		}
+	case err != nil:
+		return 0, fmt.Errorf("查询策略失败: %w", err)
+	case !existing.Builtin:
+		// ID 已被用户自定义策略占用 → 跳过整个策略，绝不覆盖用户数据
+		logger.Warn("策略 ID 被用户自定义占用，跳过内置同步",
+			zap.String("policy_id", policy.ID))
+		return 0, nil
+	default:
+		// 内置策略已存在：覆盖元数据，保留 enabled（用户开关）
+		if uErr := db.Model(&existing).Select(
+			"name", "version", "description", "os_family", "os_version", "runtime_types", "group_id", "builtin",
+		).Updates(dbPolicy).Error; uErr != nil {
+			return 0, fmt.Errorf("更新策略失败: %w", uErr)
+		}
 	}
 
-	// 转换并创建规则
+	count := 0
 	for _, rule := range policy.Rules {
-		// 转换 Check 配置
 		checkConfig := model.CheckConfig{
 			Condition: rule.Check.Condition,
 			Rules:     make([]model.CheckRule, len(rule.Check.Rules)),
 		}
 		for i, cr := range rule.Check.Rules {
-			checkRule := model.CheckRule{
-				Type:  cr.Type,
-				Param: cr.Param,
-			}
-			// Result 字段可能为空，需要检查
+			checkRule := model.CheckRule{Type: cr.Type, Param: cr.Param}
 			if cr.Result != "" {
 				checkRule.Result = cr.Result
 			}
 			checkConfig.Rules[i] = checkRule
 		}
 
-		// 转换 Fix 配置
 		fixConfig := model.FixConfig{
 			Suggestion:      rule.Fix.Suggestion,
 			Command:         rule.Fix.Command,
@@ -402,18 +409,56 @@ func savePolicyToDB(db *gorm.DB, policy *engine.Policy, groupID string, logger *
 			Title:       rule.Title,
 			Description: rule.Description,
 			Severity:    rule.Severity,
-			// RuntimeTypes 为空，表示继承策略的设置
-			// 策略已设置为 ["vm"]，规则自动继承
+			Enabled:     true, // 仅新建时生效；已存在规则保留用户开关
+			Builtin:     true,
 			CheckConfig: checkConfig,
 			FixConfig:   fixConfig,
 		}
 
-		if err := db.Create(dbRule).Error; err != nil {
-			return fmt.Errorf("创建规则 %s 失败: %w", rule.RuleID, err)
+		var existingRule model.Rule
+		rErr := db.Where("rule_id = ?", rule.RuleID).First(&existingRule).Error
+		switch {
+		case rErr == gorm.ErrRecordNotFound:
+			if cErr := db.Create(dbRule).Error; cErr != nil {
+				return count, fmt.Errorf("创建规则 %s 失败: %w", rule.RuleID, cErr)
+			}
+		case rErr != nil:
+			return count, fmt.Errorf("查询规则 %s 失败: %w", rule.RuleID, rErr)
+		case !existingRule.Builtin:
+			// rule_id 被用户自定义规则占用 → 跳过，绝不覆盖
+			logger.Warn("规则 ID 被用户自定义占用，跳过内置同步",
+				zap.String("rule_id", rule.RuleID))
+			continue
+		default:
+			// 内置规则已存在：覆盖检查/修复配置，保留 enabled
+			if uErr := db.Model(&existingRule).Select(
+				"policy_id", "category", "title", "description", "severity", "check_config", "fix_config", "builtin",
+			).Updates(dbRule).Error; uErr != nil {
+				return count, fmt.Errorf("更新规则 %s 失败: %w", rule.RuleID, uErr)
+			}
+		}
+		count++
+	}
+
+	// reconcile：删除该策略下已从 JSON 移除的内置规则（用户自定义 builtin=false 不动）
+	jsonRuleIDs := make([]string, 0, len(policy.Rules))
+	for _, r := range policy.Rules {
+		jsonRuleIDs = append(jsonRuleIDs, r.RuleID)
+	}
+	if len(jsonRuleIDs) > 0 {
+		del := db.Where("policy_id = ? AND builtin = ? AND rule_id NOT IN ?", policy.ID, true, jsonRuleIDs).
+			Delete(&model.Rule{})
+		if del.Error != nil {
+			return count, fmt.Errorf("清理策略 %s 过期内置规则失败: %w", policy.ID, del.Error)
+		}
+		if del.RowsAffected > 0 {
+			logger.Info("清理过期内置规则",
+				zap.String("policy_id", policy.ID),
+				zap.Int64("removed", del.RowsAffected))
 		}
 	}
 
-	return nil
+	return count, nil
 }
 
 // initDefaultPolicyGroup 初始化默认策略组

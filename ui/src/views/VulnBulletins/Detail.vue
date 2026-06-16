@@ -415,8 +415,8 @@ const loadBulletin = async () => {
     const res = await vulnBulletinsApi.get(id)
     bulletin.value = res.bulletin
     affectedHosts.value = res.affected_hosts ?? []
-  } catch {
-    message.error('获取通报详情失败')
+  } catch (error) {
+    console.error('获取通报详情失败:', error)
   } finally {
     loading.value = false
   }
@@ -431,8 +431,8 @@ const handleAcknowledge = async () => {
     await vulnBulletinsApi.acknowledge(bulletin.value.id)
     message.success('通报已确认')
     loadBulletin()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('确认通报失败:', error)
   } finally {
     actionLoading.value = false
   }
@@ -451,8 +451,8 @@ const handleResolve = async () => {
     message.success('通报已标记为修复')
     resolveModalVisible.value = false
     loadBulletin()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('标记修复失败:', error)
   } finally {
     actionLoading.value = false
   }
@@ -471,8 +471,8 @@ const handleIgnore = async () => {
     message.success('通报已忽略')
     ignoreModalVisible.value = false
     loadBulletin()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('忽略通报失败:', error)
   } finally {
     actionLoading.value = false
   }
@@ -485,8 +485,8 @@ const handleReopen = async () => {
     await vulnBulletinsApi.reopen(bulletin.value.id)
     message.success('通报已重新打开')
     loadBulletin()
-  } catch {
-    message.error('操作失败')
+  } catch (error) {
+    console.error('重新打开通报失败:', error)
   } finally {
     actionLoading.value = false
   }

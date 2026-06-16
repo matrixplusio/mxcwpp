@@ -44,9 +44,8 @@ type HostListItem struct {
 // ListHosts 获取主机列表
 // GET /api/v1/hosts
 func (h *HostsHandler) ListHosts(c *gin.Context) {
-	// 解析查询参数
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	// 解析查询参数（ParsePagination 内置上限，防超大 page_size 拖垮 DB）
+	page, pageSize := ParsePagination(c)
 	osFamily := c.Query("os_family")
 	status := c.Query("status")
 	businessLine := c.Query("business_line")  // 业务线筛选

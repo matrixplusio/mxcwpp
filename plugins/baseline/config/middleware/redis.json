@@ -3,18 +3,301 @@
   "name": "Redis 中间件基线 (CIS + 等保 2.0)",
   "version": "1.0.0",
   "description": "Redis 6.2/7.0 安全基线",
-  "os_family": ["centos", "rocky", "almalinux", "rhel", "ubuntu", "debian", "openeuler", "kylin", "uos"],
+  "os_family": [
+    "centos",
+    "rocky",
+    "almalinux",
+    "rhel",
+    "ubuntu",
+    "debian",
+    "openeuler",
+    "kylin",
+    "uos"
+  ],
   "enabled": true,
   "rules": [
-    {"rule_id": "REDIS_001", "category": "认证", "title": "强口令 requirepass", "description": "Redis 默认无密码, 必须设强密码", "severity": "critical", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^requirepass\\s+.{12,}", "match"]}]}, "fix": {"suggestion": "redis.conf: requirepass <12+ 字符强口令>"}},
-    {"rule_id": "REDIS_002", "category": "网络", "title": "bind 127.0.0.1 (或内网 IP)", "description": "默认 0.0.0.0 暴露公网严重风险", "severity": "critical", "check": {"condition": "none", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^bind\\s+0\\.0\\.0\\.0", "match"]}]}, "fix": {"suggestion": "bind 127.0.0.1 或内网 IP"}},
-    {"rule_id": "REDIS_003", "category": "网络", "title": "protected-mode on", "description": "默认 yes, 防未授权访问", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^protected-mode\\s+yes", "match"]}]}, "fix": {"suggestion": "protected-mode yes"}},
-    {"rule_id": "REDIS_004", "category": "运行用户", "title": "非 root 启动", "description": "redis 用户启动", "severity": "high", "check": {"condition": "all", "rules": [{"type": "command_exec", "param": ["ps -o user= -p $(pgrep -f 'redis-server' | head -1) 2>/dev/null", "^redis$"]}]}, "fix": {"suggestion": "systemd User=redis"}},
-    {"rule_id": "REDIS_005", "category": "命令禁用", "title": "禁用 FLUSHDB/FLUSHALL/CONFIG", "description": "防误删 + 防 config rewrite 攻击", "severity": "high", "check": {"condition": "all", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "rename-command\\s+(FLUSHDB|FLUSHALL|CONFIG)\\s+\"\"", "match"]}]}, "fix": {"suggestion": "rename-command FLUSHALL \"\" / rename-command CONFIG \"\""}},
-    {"rule_id": "REDIS_006", "category": "命令禁用", "title": "禁用 EVAL Lua 沙箱逃逸", "description": "高危场景禁用 EVAL", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "rename-command\\s+EVAL\\s+\"\"", "match"]}, {"type": "command_exec", "param": ["redis-cli config get lua-time-limit 2>/dev/null | head -2 | tail -1", "^[0-9]+$"]}]}, "fix": {"suggestion": "如不用 Lua 脚本: rename-command EVAL \"\""}},
-    {"rule_id": "REDIS_007", "category": "持久化", "title": "持久化开启 (AOF or RDB)", "description": "防数据丢失", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^appendonly\\s+yes", "match"]}, {"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^save\\s+[0-9]+\\s+[0-9]+", "match"]}]}, "fix": {"suggestion": "appendonly yes 或 save 配置"}},
-    {"rule_id": "REDIS_008", "category": "TLS", "title": "TLS 加密通信 (Redis 6+)", "description": "防中间人 + 等保要求", "severity": "high", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^tls-port\\s+[0-9]+", "match"]}, {"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^tls-cert-file\\s+/", "match"]}]}, "fix": {"suggestion": "Redis 6+ 启用 TLS: tls-port 6379 + tls-cert-file/tls-key-file"}},
-    {"rule_id": "REDIS_009", "category": "权限", "title": "redis.conf 权限 ≤640", "description": "防口令泄露", "severity": "medium", "check": {"condition": "all", "rules": [{"type": "file_permission", "param": ["/etc/redis/redis.conf", "640"]}]}, "fix": {"suggestion": "chmod 640 /etc/redis/redis.conf && chown redis:redis"}},
-    {"rule_id": "REDIS_010", "category": "ACL", "title": "Redis 6+ ACL 用户配置", "description": "默认 default 用户, 推荐细粒度 ACL", "severity": "medium", "check": {"condition": "any", "rules": [{"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^aclfile\\s+/", "match"]}, {"type": "file_line_match", "param": ["/etc/redis/redis.conf", "^user\\s+\\S+\\s+", "match"]}]}, "fix": {"suggestion": "user app +get +set ~app:* >password"}}
+    {
+      "rule_id": "REDIS_001",
+      "category": "认证",
+      "title": "强口令 requirepass",
+      "description": "Redis 默认无密码, 必须设强密码",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^requirepass\\s+.{12,}",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^requirepass\\s+.{12,}' \"$F\"; then exit 0; fi; PW=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32); if grep -Eq '^[[:space:]]*#?[[:space:]]*requirepass' \"$F\"; then sed -i -E \"s|^[[:space:]]*#?[[:space:]]*requirepass.*|requirepass $PW|\" \"$F\"; else printf 'requirepass %s\\n' \"$PW\" >> \"$F\"; fi; if ! grep -Eq '^requirepass\\s+.{12,}' \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi; umask 077; printf '%s\\n' \"$PW\" > /etc/redis/.mxsec_requirepass 2>/dev/null; chmod 600 /etc/redis/.mxsec_requirepass 2>/dev/null; echo \"requirepass 已设置(口令存于 /etc/redis/.mxsec_requirepass, 仅root可读)\"",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "redis.conf: requirepass <12+ 字符强口令>"
+      }
+    },
+    {
+      "rule_id": "REDIS_002",
+      "category": "网络",
+      "title": "bind 127.0.0.1 (或内网 IP)",
+      "description": "默认 0.0.0.0 暴露公网严重风险",
+      "severity": "critical",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^bind\\s+0\\.0\\.0\\.0",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*#?[[:space:]]*bind' \"$F\"; then sed -i -E 's|^[[:space:]]*#?[[:space:]]*bind.*|bind 127.0.0.1 -::1|' \"$F\"; else printf 'bind 127.0.0.1 -::1\\n' >> \"$F\"; fi; if grep -Eq '^bind\\s+0\\.0\\.0\\.0' \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "bind 127.0.0.1 或内网 IP"
+      }
+    },
+    {
+      "rule_id": "REDIS_003",
+      "category": "网络",
+      "title": "protected-mode on",
+      "description": "默认 yes, 防未授权访问",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^protected-mode\\s+yes",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^[[:space:]]*#?[[:space:]]*protected-mode' \"$F\"; then sed -i -E 's|^[[:space:]]*#?[[:space:]]*protected-mode.*|protected-mode yes|' \"$F\"; else printf 'protected-mode yes\\n' >> \"$F\"; fi; if ! grep -Eq '^protected-mode\\s+yes' \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "protected-mode yes"
+      }
+    },
+    {
+      "rule_id": "REDIS_004",
+      "category": "运行用户",
+      "title": "非 root 启动",
+      "description": "redis 用户启动",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "ps -o user= -p $(pgrep -f 'redis-server' | head -1) 2>/dev/null",
+              "^redis$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "",
+        "manual": true,
+        "suggestion": "systemd User=redis: 确认 /var/lib/redis 等数据目录归属 redis:redis, 在 service 单元设置 User=redis Group=redis 后 systemctl daemon-reload && systemctl restart redis (改运行用户涉及数据目录属主, 需人工核对避免启动失败)"
+      }
+    },
+    {
+      "rule_id": "REDIS_005",
+      "category": "命令禁用",
+      "title": "禁用 FLUSHDB/FLUSHALL/CONFIG",
+      "description": "防误删 + 防 config rewrite 攻击",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "rename-command\\s+(FLUSHDB|FLUSHALL|CONFIG)\\s+\"\"",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; for C in FLUSHDB FLUSHALL CONFIG; do if ! grep -Eq \"^rename-command\\s+$C\\s+\\\"\\\"\" \"$F\"; then printf 'rename-command %s \"\"\\n' \"$C\" >> \"$F\"; fi; done; for C in FLUSHDB FLUSHALL CONFIG; do if ! grep -Eq \"rename-command\\s+$C\\s+\\\"\\\"\" \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi; done",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "rename-command FLUSHALL \"\" / rename-command CONFIG \"\""
+      }
+    },
+    {
+      "rule_id": "REDIS_006",
+      "category": "命令禁用",
+      "title": "禁用 EVAL Lua 沙箱逃逸",
+      "description": "高危场景禁用 EVAL",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "rename-command\\s+EVAL\\s+\"\"",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq 'rename-command\\s+EVAL\\s+\"\"' \"$F\"; then exit 0; fi; printf 'rename-command EVAL \"\"\\n' >> \"$F\"; if ! grep -Eq 'rename-command\\s+EVAL\\s+\"\"' \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "如不用 Lua 脚本: rename-command EVAL \"\""
+      }
+    },
+    {
+      "rule_id": "REDIS_007",
+      "category": "持久化",
+      "title": "持久化开启 (AOF or RDB)",
+      "description": "防数据丢失",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^appendonly\\s+yes",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^save\\s+[0-9]+\\s+[0-9]+",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -Eq '^appendonly\\s+yes' \"$F\" || grep -Eq '^save\\s+[0-9]+\\s+[0-9]+' \"$F\"; then exit 0; fi; if grep -Eq '^[[:space:]]*#?[[:space:]]*appendonly' \"$F\"; then sed -i -E 's|^[[:space:]]*#?[[:space:]]*appendonly.*|appendonly yes|' \"$F\"; else printf 'appendonly yes\\n' >> \"$F\"; fi; if ! grep -Eq '^appendonly\\s+yes' \"$F\"; then mv \"$F.mxbak\" \"$F\"; echo \"verify failed, rolled back\"; exit 1; fi",
+        "restart_services": [
+          "redis"
+        ],
+        "suggestion": "appendonly yes 或 save 配置"
+      }
+    },
+    {
+      "rule_id": "REDIS_008",
+      "category": "TLS",
+      "title": "TLS 加密通信 (Redis 6+)",
+      "description": "防中间人 + 等保要求",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^tls-port\\s+[0-9]+",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^tls-cert-file\\s+/",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "",
+        "manual": true,
+        "suggestion": "Redis 6+ 启用 TLS: 先签发 CA/服务端证书私钥, 在 redis.conf 设置 tls-port 6379 + tls-cert-file/tls-key-file/tls-ca-cert-file 并将 port 设 0, 客户端同步改用 --tls (需准备证书, 不可自动签发)"
+      }
+    },
+    {
+      "rule_id": "REDIS_009",
+      "category": "权限",
+      "title": "redis.conf 权限 ≤640",
+      "description": "防口令泄露",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/redis/redis.conf",
+              "640"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "F=/etc/redis/redis.conf; [ -f \"$F\" ] || F=/etc/redis.conf; [ -f \"$F\" ] || { echo \"redis.conf not found\"; exit 1; }; chmod 640 \"$F\"; if id redis >/dev/null 2>&1; then chown redis:redis \"$F\"; fi",
+        "suggestion": "chmod 640 /etc/redis/redis.conf && chown redis:redis"
+      }
+    },
+    {
+      "rule_id": "REDIS_010",
+      "category": "ACL",
+      "title": "Redis 6+ ACL 用户配置",
+      "description": "默认 default 用户, 推荐细粒度 ACL",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^aclfile\\s+/",
+              "match"
+            ]
+          },
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/redis/redis.conf",
+              "^user\\s+\\S+\\s+",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "command": "",
+        "manual": true,
+        "suggestion": "user app +get +set ~app:* >password: 需按业务确定 ACL 用户名/权限/键空间/口令, 写入 aclfile 或 redis.conf 后重载 (权限模型与口令需人工设计, 不可自动生成)"
+      }
+    }
   ]
 }

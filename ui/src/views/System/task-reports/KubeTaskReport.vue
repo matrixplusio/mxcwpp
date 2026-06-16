@@ -415,8 +415,8 @@ const handleViewSaved = async (record: GeneratedReportItem) => {
   loading.value = true
   try {
     report.value = await reportsApi.getGeneratedReport(record.id)
-  } catch (error: any) {
-    message.error(error.message || '加载报告失败')
+  } catch (error) {
+    console.error('加载报告失败:', error)
   } finally {
     loading.value = false
   }
@@ -427,8 +427,8 @@ const handleDeleteSaved = async (id: number) => {
     await reportsApi.deleteGeneratedReport(id)
     message.success('删除成功')
     await loadSavedReports()
-  } catch (error: any) {
-    message.error(error.message || '删除失败')
+  } catch (error) {
+    console.error('删除报告失败:', error)
   }
 }
 
@@ -443,8 +443,8 @@ const generateReport = async () => {
       start_time: dateRange.value[0].format('YYYY-MM-DD'),
       end_time: dateRange.value[1].format('YYYY-MM-DD'),
     })
-  } catch (error: any) {
-    message.error(error.message || '生成报告失败')
+  } catch (error) {
+    console.error('生成报告失败:', error)
   } finally {
     loading.value = false
   }

@@ -103,6 +103,15 @@ type Service struct {
 	notifyCtx    context.Context
 	notifyCancel context.CancelFunc
 	notifySem    chan struct{}
+
+	// per_agent_cert 在线签发限并发：RSA-4096 keygen CPU 尖峰，500 台首装并发会打满核心。
+	// 信号量把并发签发压到 ~NumCPU，多余请求排队。首次签发时 lazy init。
+	signOnce sync.Once
+	signSem  chan struct{}
+
+	// 吊销序列号 set：首次查询时由 cfg.MTLS.RevokedSerials 构一次，避免每连接 O(n) 线性扫描。
+	revokedOnce sync.Once
+	revokedSet  map[string]struct{}
 }
 
 // initAsyncNotify P1-3: 启动时调一次, 后续 SpawnNotify 用 notifyCtx 接管 dangling goroutine.
@@ -226,6 +235,40 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 		return status.Errorf(codes.InvalidArgument, "Agent ID 不能为空")
 	}
 
+	// 身份校验：把 TLS 客户端证书 CN 与上报 AgentID 绑定，杜绝伪造 AgentID 顶替他机。
+	// EnforceAgentID=false 为观察模式（只告警不拒绝，供存量迁移），=true 为强制模式（步骤 6）。
+	leafCert, hasClientCert := peerLeafCert(stream.Context())
+	if hasClientCert && s.isRevokedSerial(leafCert.SerialNumber) {
+		s.logger.Warn("拒绝已吊销证书的连接",
+			zap.String("agent_id", agentID),
+			zap.String("serial", leafCert.SerialNumber.String()),
+		)
+		return status.Errorf(codes.PermissionDenied, "客户端证书已吊销")
+	}
+	if s.cfg.MTLS.EnforceAgentID {
+		if hasClientCert {
+			if leafCert.Subject.CommonName != agentID {
+				s.logger.Warn("强制模式：拒绝 CN 与 AgentID 不符的连接",
+					zap.String("cert_cn", leafCert.Subject.CommonName),
+					zap.String("agent_id", agentID),
+				)
+				return status.Errorf(codes.PermissionDenied, "客户端证书 CN 与上报 AgentID 不符")
+			}
+		} else if !s.enrollTokenValid(enrollTokenFromCtx(stream.Context())) {
+			s.logger.Warn("强制模式：拒绝无有效客户端证书且 enroll 令牌无效的连接",
+				zap.String("agent_id", agentID),
+			)
+			return status.Errorf(codes.Unauthenticated, "缺少有效客户端证书，且 enroll 令牌无效")
+		}
+	} else if hasClientCert && leafCert.Subject.CommonName != agentID {
+		// 观察模式降 Debug：迁移期 500 台重连会高频命中，Warn 会刷屏。
+		// 真正该拦截的场景由强制模式（EnforceAgentID=true）的 Warn + 拒绝兜底。
+		s.logger.Debug("观察模式：客户端证书 CN 与上报 AgentID 不符（迁移期允许，强制后将拒绝）",
+			zap.String("cert_cn", leafCert.Subject.CommonName),
+			zap.String("agent_id", agentID),
+		)
+	}
+
 	s.logger.Info("Agent 连接",
 		zap.String("agent_id", agentID),
 		zap.String("hostname", firstData.Hostname),
@@ -260,8 +303,9 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 	// 检查并发送 Agent 上线恢复通知（如果之前离线）
 	go s.checkAndSendAgentOnlineNotification(agentID, conn)
 
-	// 检查并下发证书（首次连接时）
-	if err := s.sendCertificateBundleIfNeeded(ctx, conn); err != nil {
+	// 检查并下发证书（首次连接时）。已持有匹配 CN 单机证书的连接无需重复下发。
+	alreadyEnrolled := hasClientCert && leafCert.Subject.CommonName == agentID
+	if err := s.sendCertificateBundleIfNeeded(ctx, conn, hasClientCert, alreadyEnrolled); err != nil {
 		s.logger.Error("下发证书包失败", zap.Error(err), zap.String("agent_id", agentID))
 		// 证书下发失败不影响连接，继续处理
 	}
@@ -1855,7 +1899,18 @@ func (s *Service) resolveAgentOfflineAlert(agentID string) {
 
 // sendCertificateBundleIfNeeded 检查并下发证书包（如果Agent首次连接）
 // 理论上，AgentCenter的证书申请后一直使用，然后分发给Agent用于通信
-func (s *Service) sendCertificateBundleIfNeeded(ctx context.Context, conn *Connection) error {
+//
+// PerAgentCert 开启时：为每台 agent 按 AgentID 在线签发独立证书（一机一证），取代下发全网共享证书。
+// alreadyEnrolled=true（已持有 CN 匹配的单机证书）则跳过，避免每次重连重复签发。
+func (s *Service) sendCertificateBundleIfNeeded(ctx context.Context, conn *Connection, hasClientCert, alreadyEnrolled bool) error {
+	if s.cfg.MTLS.PerAgentCert {
+		if alreadyEnrolled {
+			s.logger.Debug("Agent 已持有单机证书，跳过下发", zap.String("agent_id", conn.AgentID))
+			return nil
+		}
+		return s.signAndSendAgentCert(ctx, conn, hasClientCert)
+	}
+
 	// 读取Server端的证书文件
 	caCertPath := s.cfg.MTLS.CACert
 	// 客户端证书路径：从server_cert路径推导（例如 server.crt -> client.crt）

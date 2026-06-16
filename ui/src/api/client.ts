@@ -10,6 +10,9 @@
 import axios, { AxiosRequestConfig } from 'axios'
 import { message } from 'ant-design-vue'
 import type { ApiResponse } from './types'
+import { RespCode } from './codes'
+
+const CODE_TOKEN_EXPIRED = RespCode.TOKEN_EXPIRED
 
 /**
  * 创建 axios 实例
@@ -72,61 +75,51 @@ axiosInstance.interceptors.response.use(
     if (response.config.responseType === 'blob') {
       return response.data
     }
+    // 统一约定：业务接口一律 HTTP 200，用 body 的 code 表达结果（0=成功，非0=业务错误）。
     const res = response.data as ApiResponse
-    if (res.code !== 0) {
-      // 处理业务错误
-      const errorMessage = res.message || '请求失败'
-      console.error('API Error:', errorMessage)
+    if (res.code === 0) {
+      // 后端 SuccessMessage 仅返回 {code, message} 无 data；返回 {message} 兜底，避免调用方 NPE
+      return res.data ?? { message: res.message }
+    }
 
-      // 显示错误提示（某些错误可能不需要提示，由调用方处理）
-      if (res.code !== 401) {
-        message.error(errorMessage)
+    const errorMessage = res.message || '请求失败'
+    console.error('API Error:', res.code, errorMessage)
+
+    // 40101 = 登录已过期 / Token 无效：清理并跳转登录页（打印路由与登录页本身除外）
+    if (res.code === CODE_TOKEN_EXPIRED) {
+      const path = window.location.pathname
+      if (!path.startsWith('/print/') && path !== '/login') {
+        localStorage.removeItem('mxcsec_token')
+        localStorage.removeItem('mxcsec_user')
+        message.warning(errorMessage)
+        window.location.href = '/login'
       }
-
       return Promise.reject(new Error(errorMessage))
     }
-    // 后端 SuccessMessage 仅返回 {code, message} 无 data；返回 {message} 兜底，避免调用方 NPE
-    return res.data ?? { message: res.message }
+
+    // 其余业务错误：统一弹窗提示后端 message（绝不暴露裸 code / "status code 4xx"）
+    message.error(errorMessage)
+    return Promise.reject(new Error(errorMessage))
   },
   (error) => {
-    // 处理 HTTP 错误
-    if (error.response?.status === 401) {
-      // 打印路由 (Gotenberg 拉取) 不要跳登录页，否则 PDF 渲染出登录页
-      if (window.location.pathname.startsWith('/print/')) {
-        return Promise.reject(error)
-      }
-      // 未授权，清除认证信息并跳转到登录页
-      localStorage.removeItem('mxcsec_token')
-      localStorage.removeItem('mxcsec_user')
-      message.warning('登录已过期，请重新登录')
-      window.location.href = '/login'
-      return Promise.reject(error)
-    }
-
-    // 处理网络错误
+    // 走到这里的只剩真正的传输层错误：网络断开、gin panic(500)、探针 503 等（业务错误已在上面以 200+code 处理）
+    const backendMsg: string = error.response?.data?.message || ''
     if (!error.response) {
-      message.error('网络错误，请检查网络连接')
+      const msg = '网络错误，请检查网络连接'
+      message.error(msg)
       console.error('Network Error:', error)
-      return Promise.reject(error)
+      return Promise.reject(new Error(msg))
     }
-
-    // 处理其他 HTTP 错误
     const status = error.response.status
-    const errorMessage = error.response?.data?.message || `请求失败 (${status})`
-
-    // 根据状态码显示不同的错误提示
-    if (status >= 500) {
-      message.error('服务器错误，请稍后重试')
-    } else if (status === 404) {
-      message.error('请求的资源不存在')
-    } else if (status === 403) {
-      message.error('没有权限执行此操作')
-    } else {
-      message.error(errorMessage)
+    let msg = backendMsg
+    if (!msg) {
+      if (status >= 500) msg = '服务器错误，请稍后重试'
+      else if (status === 404) msg = '请求的资源不存在'
+      else msg = '请求失败'
     }
-
+    message.error(msg)
     console.error('HTTP Error:', error)
-    return Promise.reject(error)
+    return Promise.reject(new Error(msg))
   }
 )
 

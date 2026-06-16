@@ -6,7 +6,7 @@ export interface UseRequestOptions<T> {
   fn: (...args: any[]) => Promise<T>
   /** 失败时的提示前缀 */
   errorMessage?: string
-  /** 是否在请求失败时自动弹出错误提示，默认 true */
+  /** 是否在请求失败时自动弹出错误提示。默认 false：错误已由全局 axios 拦截器统一弹窗，避免重复提示 */
   showError?: boolean
 }
 
@@ -37,7 +37,8 @@ export function useRequest<T>(options: UseRequestOptions<T>): UseRequestReturn<T
       data.value = result
       return result
     } catch (error: any) {
-      if (options.showError !== false) {
+      // 默认不再重复弹窗（全局拦截器已统一提示）；仅在显式 showError=true 时弹出
+      if (options.showError === true) {
         const prefix = options.errorMessage ?? '请求失败'
         message.error(`${prefix}: ${error.message || '未知错误'}`)
       }

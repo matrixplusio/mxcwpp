@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -150,8 +151,22 @@ func TestExportAssets_InvalidFormat(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/export?type=processes&format=xml", nil)
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", w.Code)
+	// 统一响应：不支持的格式走 BadRequest，HTTP 200 + body code=40000
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+	var resp struct {
+		Code int `json:"code"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse body: %v, body=%q", err, w.Body.String())
+	}
+	if resp.Code != CodeInvalidParam {
+		t.Errorf("code = %d, want %d (CodeInvalidParam)", resp.Code, CodeInvalidParam)
+	}
+	// 错误响应不应带附件下载头（格式校验在设头之前）。
+	if cd := w.Header().Get("Content-Disposition"); cd != "" {
+		t.Errorf("error response should not set Content-Disposition, got %q", cd)
 	}
 }
 

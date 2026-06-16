@@ -315,8 +315,8 @@ const loadTask = async () => {
   try {
     task.value = await remediationTasksApi.get(id)
     loadRelatedTasks()
-  } catch {
-    message.error('获取任务详情失败')
+  } catch (error) {
+    console.error('获取任务详情失败:', error)
   } finally {
     loading.value = false
   }
@@ -352,8 +352,8 @@ const doConfirm = async () => {
     message.success('任务已确认，等待 Agent 执行')
     confirmModalVisible.value = false
     loadTask()
-  } catch {
-    message.error('确认失败')
+  } catch (error) {
+    console.error('确认任务失败:', error)
   } finally {
     confirmLoading.value = false
   }
@@ -365,8 +365,8 @@ const handleRetry = async () => {
     await remediationTasksApi.retry(task.value.id)
     message.success('任务已重置为待确认状态')
     loadTask()
-  } catch {
-    message.error('重试失败')
+  } catch (error) {
+    console.error('重试任务失败:', error)
   }
 }
 
@@ -376,8 +376,8 @@ const handleCancel = async () => {
     await remediationTasksApi.cancel(task.value.id)
     message.success('任务已取消')
     loadTask()
-  } catch {
-    message.error('取消失败')
+  } catch (error) {
+    console.error('取消任务失败:', error)
   }
 }
 
@@ -419,8 +419,8 @@ const handleConfirmExecuted = async () => {
     const r = await remediationTasksApi.confirmExecuted(task.value.id)
     message.success(`已确认执行，复测中（${r.requestId}）`)
     setTimeout(loadTask, 5000)
-  } catch (err: any) {
-    message.error('确认失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('确认已执行失败:', error)
   }
 }
 

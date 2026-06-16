@@ -255,7 +255,7 @@ const cancelTask = async (record: any) => {
     await apiClient.post(`/virus/scan-tasks/${record.id}/cancel`)
     message.success('任务已取消')
     loadTasks()
-  } catch { message.error('取消失败') }
+  } catch (error) { console.error('取消扫描任务失败:', error) }
 }
 
 const quarantineFile = async (record: any) => {
@@ -263,7 +263,7 @@ const quarantineFile = async (record: any) => {
     await apiClient.post(`/virus/results/${record.id}/quarantine`)
     message.success('文件已隔离')
     loadResults()
-  } catch { message.error('操作失败') }
+  } catch (error) { console.error('隔离文件失败:', error) }
 }
 
 const ignoreFile = async (record: any) => {
@@ -271,7 +271,7 @@ const ignoreFile = async (record: any) => {
     await apiClient.post(`/virus/results/${record.id}/ignore`)
     message.success('已忽略')
     loadResults()
-  } catch { message.error('操作失败') }
+  } catch (error) { console.error('忽略文件失败:', error) }
 }
 
 const handleCreateScan = async () => {
@@ -282,7 +282,7 @@ const handleCreateScan = async () => {
     showScanModal.value = false
     scanForm.value = { scope: 'all', hostIds: [], scanPath: '', depth: 'quick' }
     loadTasks()
-  } catch { message.error('创建失败') }
+  } catch (error) { console.error('创建扫描任务失败:', error) }
   finally { scanSubmitting.value = false }
 }
 

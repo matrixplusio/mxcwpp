@@ -40,6 +40,11 @@ COPY --from=builder /app/llmproxy /usr/bin/llmproxy
 
 RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform
 
+# 非 root 运行：缩小容器逃逸攻击面。日志/工作目录归属应用用户，配置目录留 root 只读。
+RUN addgroup -S mxsec && adduser -S -G mxsec -u 10001 mxsec && \
+    chown -R mxsec:mxsec /var/log/mxsec-platform /opt/mxsec-platform
+USER mxsec
+
 WORKDIR /opt/mxsec-platform
 
 EXPOSE 8085

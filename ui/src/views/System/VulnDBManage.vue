@@ -237,8 +237,8 @@ const handleUpload = async () => {
     fileList.value = []
     loadStats()
     loadImports()
-  } catch {
-    message.error('导入失败')
+  } catch (error) {
+    console.error('漏洞库导入失败:', error)
   } finally {
     uploading.value = false
   }
@@ -250,8 +250,8 @@ const handlePurge = async () => {
     await apiClient.post('/vulnerabilities/cache/purge')
     message.success('过期缓存已清理')
     loadStats()
-  } catch {
-    message.error('清理失败')
+  } catch (error) {
+    console.error('清理过期缓存失败:', error)
   } finally {
     purging.value = false
   }

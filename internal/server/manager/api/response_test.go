@@ -93,12 +93,13 @@ func TestErrorResponses(t *testing.T) {
 		wantStatus int
 		wantCode   float64
 	}{
-		{"BadRequest", BadRequest, http.StatusBadRequest, 400},
-		{"NotFound", NotFound, http.StatusNotFound, 404},
-		{"Conflict", Conflict, http.StatusConflict, 409},
-		{"InternalError", InternalError, http.StatusInternalServerError, 500},
-		{"Unauthorized", Unauthorized, http.StatusUnauthorized, 401},
-		{"Forbidden", Forbidden, http.StatusForbidden, 403},
+		// 统一响应约定：业务错误一律 HTTP 200 + body code（见 respcode.go）。
+		{"BadRequest", BadRequest, http.StatusOK, float64(CodeInvalidParam)},
+		{"NotFound", NotFound, http.StatusOK, float64(CodeNotFound)},
+		{"Conflict", Conflict, http.StatusOK, float64(CodeConflict)},
+		{"InternalError", InternalError, http.StatusOK, float64(CodeInternalError)},
+		{"Unauthorized", Unauthorized, http.StatusOK, float64(CodeUnauthorized)},
+		{"Forbidden", Forbidden, http.StatusOK, float64(CodeForbidden)},
 	}
 
 	for _, tt := range tests {

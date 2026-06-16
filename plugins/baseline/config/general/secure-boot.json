@@ -3,7 +3,15 @@
   "name": "安全启动配置基线",
   "version": "1.0.0",
   "description": "GRUB 引导安全和系统启动安全配置检查（参考 CIS Benchmark）",
-  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_family": [
+    "rocky",
+    "centos",
+    "oracle",
+    "almalinux",
+    "rhel",
+    "debian",
+    "ubuntu"
+  ],
   "os_version": ">=7",
   "enabled": true,
   "rules": [
@@ -18,15 +26,27 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/boot/grub2/grub.cfg", "password_pbkdf2", "match"]
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "password_pbkdf2",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/boot/grub2/user.cfg", "GRUB2_PASSWORD", "match"]
+            "param": [
+              "/boot/grub2/user.cfg",
+              "GRUB2_PASSWORD",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/grub.d/40_custom", "password", "match"]
+            "param": [
+              "/etc/grub.d/40_custom",
+              "password",
+              "match"
+            ]
           }
         ]
       },
@@ -46,7 +66,11 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/usr/lib/systemd/system/rescue.service", "ExecStart=.*sulogin", "match"]
+            "param": [
+              "/usr/lib/systemd/system/rescue.service",
+              "ExecStart=.*sulogin",
+              "match"
+            ]
           }
         ]
       },
@@ -66,13 +90,16 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["systemctl is-enabled ctrl-alt-del.target 2>/dev/null || echo masked", "(?m)^(masked|disabled)$"]
+            "param": [
+              "systemctl is-enabled ctrl-alt-del.target 2>/dev/null || echo masked",
+              "(?m)^(masked|disabled)$"
+            ]
           }
         ]
       },
       "fix": {
         "suggestion": "禁用 Ctrl-Alt-Del 重启功能",
-        "command": "systemctl mask ctrl-alt-del.target && systemctl daemon-reload"
+        "command": "ln -sf /dev/null /etc/systemd/system/ctrl-alt-del.target && systemctl daemon-reload"
       }
     },
     {
@@ -86,15 +113,24 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["! test -f /boot/grub2/grub.cfg && echo skip", "skip"]
+            "param": [
+              "! test -f /boot/grub2/grub.cfg && echo skip",
+              "skip"
+            ]
           },
           {
             "type": "file_permission",
-            "param": ["/boot/grub2/grub.cfg", "0600"]
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "0600"
+            ]
           },
           {
             "type": "file_permission",
-            "param": ["/boot/grub2/grub.cfg", "0400"]
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "0400"
+            ]
           }
         ]
       },
@@ -114,11 +150,17 @@
         "rules": [
           {
             "type": "command_exec",
-            "param": ["! test -f /boot/grub2/grub.cfg && echo skip", "skip"]
+            "param": [
+              "! test -f /boot/grub2/grub.cfg && echo skip",
+              "skip"
+            ]
           },
           {
             "type": "file_owner",
-            "param": ["/boot/grub2/grub.cfg", "root:root"]
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "root:root"
+            ]
           }
         ]
       },
@@ -138,7 +180,11 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/proc/cmdline", "init=/bin/(ba)?sh", "not_match"]
+            "param": [
+              "/proc/cmdline",
+              "init=/bin/(ba)?sh",
+              "not_match"
+            ]
           }
         ]
       },
@@ -158,11 +204,19 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/usb-storage.conf", "install usb-storage /bin/true", "match"]
+            "param": [
+              "/etc/modprobe.d/usb-storage.conf",
+              "install usb-storage /bin/true",
+              "match"
+            ]
           },
           {
             "type": "file_line_match",
-            "param": ["/etc/modprobe.d/usb-storage.conf", "blacklist usb-storage", "match"]
+            "param": [
+              "/etc/modprobe.d/usb-storage.conf",
+              "blacklist usb-storage",
+              "match"
+            ]
           }
         ]
       },

@@ -309,8 +309,8 @@ const handleBatchResolve = () => {
         message.success(`成功解决 ${selectedRowKeys.value.length} 个告警`)
         clearSelection()
         emit('refresh')
-      } catch (error: any) {
-        message.error(error?.message || '批量解决失败')
+      } catch (error) {
+        console.error('批量解决告警失败:', error)
       } finally {
         batchLoading.value = false
       }
@@ -333,8 +333,8 @@ const handleBatchIgnore = () => {
         message.success(`成功忽略 ${selectedRowKeys.value.length} 个告警`)
         clearSelection()
         emit('refresh')
-      } catch (error: any) {
-        message.error(error?.message || '批量忽略失败')
+      } catch (error) {
+        console.error('批量忽略告警失败:', error)
       } finally {
         batchLoading.value = false
       }
@@ -357,8 +357,8 @@ const handleBatchDelete = () => {
         message.success(`成功删除 ${selectedRowKeys.value.length} 个告警`)
         clearSelection()
         emit('refresh')
-      } catch (error: any) {
-        message.error(error?.message || '批量删除失败')
+      } catch (error) {
+        console.error('批量删除告警失败:', error)
       } finally {
         batchLoading.value = false
       }

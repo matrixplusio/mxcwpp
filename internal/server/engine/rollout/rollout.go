@@ -88,12 +88,7 @@ func (r *Resolver) refresh(ctx context.Context) {
 	}
 	next := make(map[string]State, len(rows))
 	for _, x := range rows {
-		next[x.TenantID+"|"+x.RuleID] = State{
-			RuleID:    x.RuleID,
-			TenantID:  x.TenantID,
-			Percent:   x.Percent,
-			StartedAt: x.StartedAt,
-		}
+		next[x.TenantID+"|"+x.RuleID] = State(x)
 	}
 	r.mu.Lock()
 	r.cache = next

@@ -1,5 +1,4 @@
 import apiClient from './client'
-import axios from 'axios'
 import type { Host, HostDetail, PaginatedResponse, BaselineScore, BaselineSummary, HostMetrics } from './types'
 
 export type { Host } from './types'
@@ -163,29 +162,11 @@ export const hostsApi = {
     })
   },
 
-  // 导出主机基线检查结果
+  // 导出主机基线检查结果（统一走 apiClient：含鉴权头 + 统一错误弹窗）
   exportBaselineResults: async (hostId: string, format: 'markdown' | 'excel') => {
-    const token = localStorage.getItem('mxcsec_token')
-    const response = await axios.get(`/api/v1/results/host/${hostId}/export`, {
-      params: { format },
-      responseType: 'blob',
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-      },
-    })
-
-    // 从响应头获取文件名
-    const contentDisposition = response.headers['content-disposition']
-    let filename = `baseline_report_${hostId}.${format === 'markdown' ? 'md' : 'xlsx'}`
-    if (contentDisposition) {
-      const matches = /filename="?([^"]+)"?/.exec(contentDisposition)
-      if (matches && matches[1]) {
-        filename = matches[1]
-      }
-    }
-
-    // 创建下载链接
-    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const blob = await apiClient.download(`/results/host/${hostId}/export`, { format })
+    const filename = `baseline_report_${hostId}.${format === 'markdown' ? 'md' : 'xlsx'}`
+    const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.setAttribute('download', filename)

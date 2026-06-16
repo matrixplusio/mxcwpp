@@ -376,8 +376,8 @@ const doConfirm = async () => {
     confirmModalVisible.value = false
     loadTasks()
     loadStats()
-  } catch {
-    message.error('确认失败')
+  } catch (error) {
+    console.error('确认任务失败:', error)
   } finally {
     confirmLoading.value = false
   }
@@ -390,8 +390,8 @@ const handleConfirmExecuted = async (record: RemediationTaskItem) => {
     const r = await remediationTasksApi.confirmExecuted(record.id)
     message.success(`已确认执行，复测中（pre-check request: ${r.requestId}）`)
     setTimeout(() => { loadTasks(); loadStats() }, 5000)
-  } catch (err: any) {
-    message.error('确认失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('确认已执行失败:', error)
   } finally {
     confirmExecutedId.value = null
   }
@@ -403,8 +403,8 @@ const handleRetry = async (record: RemediationTaskItem) => {
     message.success('任务已重置为待确认状态')
     loadTasks()
     loadStats()
-  } catch {
-    message.error('重试失败')
+  } catch (error) {
+    console.error('重试任务失败:', error)
   }
 }
 
@@ -414,8 +414,8 @@ const handleCancel = async (record: RemediationTaskItem) => {
     message.success('任务已取消')
     loadTasks()
     loadStats()
-  } catch {
-    message.error('取消失败')
+  } catch (error) {
+    console.error('取消任务失败:', error)
   }
 }
 
@@ -439,8 +439,8 @@ const handleBatchConfirm = async () => {
     selectedRowKeys.value = []
     loadTasks()
     loadStats()
-  } catch {
-    message.error('批量确认失败')
+  } catch (error) {
+    console.error('批量确认失败:', error)
   } finally {
     batchConfirmLoading.value = false
   }
@@ -458,8 +458,8 @@ const handleBatchRetry = async () => {
     selectedRowKeys.value = []
     loadTasks()
     loadStats()
-  } catch {
-    message.error('批量重试失败')
+  } catch (error) {
+    console.error('批量重试失败:', error)
   } finally {
     batchRetryLoading.value = false
   }
@@ -477,8 +477,8 @@ const handleBatchCancel = async () => {
     selectedRowKeys.value = []
     loadTasks()
     loadStats()
-  } catch {
-    message.error('批量取消失败')
+  } catch (error) {
+    console.error('批量取消失败:', error)
   } finally {
     batchCancelLoading.value = false
   }
@@ -596,8 +596,8 @@ const submitNewTask = async () => {
     resetNewTaskModal()
     loadTasks()
     loadStats()
-  } catch (err: any) {
-    message.error('创建失败: ' + (err?.message || err))
+  } catch (error) {
+    console.error('创建任务失败:', error)
   } finally {
     newTaskSubmitting.value = false
   }

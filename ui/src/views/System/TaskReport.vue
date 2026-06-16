@@ -541,8 +541,8 @@ const loadCompletedTasks = async () => {
   try {
     const res = await tasksApi.list({ status: 'completed', page_size: 100 }) as any
     completedTasks.value = res.items || res.data?.items || []
-  } catch (error: any) {
-    message.error(error.message || '加载任务列表失败')
+  } catch (error) {
+    console.error('加载任务列表失败:', error)
   } finally {
     loadingTasks.value = false
   }
@@ -582,8 +582,8 @@ const generateReport = async () => {
   loading.value = true
   try {
     report.value = await reportsApi.getExecutiveTaskReport(selectedTaskId.value)
-  } catch (error: any) {
-    message.error(error.message || '生成报告失败')
+  } catch (error) {
+    console.error('生成报告失败:', error)
   } finally {
     loading.value = false
   }

@@ -32,8 +32,8 @@ async function loadDashboard() {
   try {
     const r = await MSSPApi.dashboard()
     summary.value = r.data
-  } catch (e: any) {
-    message.error('加载汇总失败: ' + e?.message)
+  } catch (error) {
+    console.error('加载汇总失败:', error)
   }
 }
 
@@ -47,8 +47,8 @@ async function loadTenants() {
       page_size: 100,
     })
     tenants.value = r.data.items
-  } catch (e: any) {
-    message.error('加载子租户失败: ' + e?.message)
+  } catch (error) {
+    console.error('加载子租户失败:', error)
   } finally {
     loading.value = false
   }
@@ -61,8 +61,8 @@ async function onSuspend(t: ChildTenant) {
     await MSSPApi.suspendChildTenant(t.id, reason)
     message.success(`${t.name} 已暂停`)
     loadTenants()
-  } catch (e: any) {
-    message.error('暂停失败: ' + e?.message)
+  } catch (error) {
+    console.error('暂停子租户失败:', error)
   }
 }
 
@@ -71,8 +71,8 @@ async function onResume(t: ChildTenant) {
     await MSSPApi.resumeChildTenant(t.id)
     message.success(`${t.name} 已恢复`)
     loadTenants()
-  } catch (e: any) {
-    message.error('恢复失败: ' + e?.message)
+  } catch (error) {
+    console.error('恢复子租户失败:', error)
   }
 }
 
