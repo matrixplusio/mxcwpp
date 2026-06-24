@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 func makeRecord(dataType int32) *grpc.EncodedRecord {

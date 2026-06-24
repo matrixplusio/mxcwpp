@@ -16,7 +16,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/plugins/collector/engine"
+	"github.com/matrixplusio/mxcwpp/plugins/collector/engine"
 )
 
 // BinaryProbeHandler 是二进制探针采集器

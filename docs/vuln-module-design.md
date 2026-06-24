@@ -49,7 +49,7 @@ type RemediationTask struct {
 
 ### 1.3 竞品对标
 
-| 能力 | MxSec 当前 | 青藤万相 | CrowdStrike | Qualys/Tenable |
+| 能力 | MxCwpp 当前 | 青藤万相 | CrowdStrike | Qualys/Tenable |
 |------|-----------|---------|-------------|----------------|
 | 数据源覆盖 | 3 源 | 10+ 源（含 CNVD/CNNVD） | 自研情报 + NVD + KEV | 20+ 源 |
 | 漏洞优先级 | 仅 CVSS | 多维评分 | Threat Graph 关联 | EPSS + 资产权重 |

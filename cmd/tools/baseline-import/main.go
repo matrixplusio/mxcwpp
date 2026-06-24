@@ -1,4 +1,4 @@
-// Package main 将 Elkeid baseline yaml 转成 mxsec baseline JSON。
+// Package main 将 Elkeid baseline yaml 转成 mxcwpp baseline JSON。
 //
 // 用法:
 //
@@ -11,7 +11,7 @@
 //
 // 字段映射:
 //
-//	Elkeid                          mxsec
+//	Elkeid                          mxcwpp
 //	---------------                 ---------------------
 //	check_id                        rule_id (Policy_xxxx 拼接)
 //	title / title_cn                title (中英拼接)
@@ -75,46 +75,46 @@ type elkeidRule struct {
 	Result string      `yaml:"result"`
 }
 
-type mxsecPolicy struct {
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	Version     string       `json:"version"`
+type mxcwppPolicy struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Version     string        `json:"version"`
+	Description string        `json:"description"`
+	OSFamily    []string      `json:"os_family"`
+	OSVersion   string        `json:"os_version,omitempty"`
+	Enabled     bool          `json:"enabled"`
+	Rules       []*mxcwppRule `json:"rules"`
+}
+
+type mxcwppRule struct {
+	RuleID      string       `json:"rule_id"`
+	Category    string       `json:"category"`
+	Title       string       `json:"title"`
 	Description string       `json:"description"`
-	OSFamily    []string     `json:"os_family"`
-	OSVersion   string       `json:"os_version,omitempty"`
-	Enabled     bool         `json:"enabled"`
-	Rules       []*mxsecRule `json:"rules"`
+	Severity    string       `json:"severity"`
+	Check       *mxcwppCheck `json:"check"`
+	Fix         *mxcwppFix   `json:"fix,omitempty"`
 }
 
-type mxsecRule struct {
-	RuleID      string      `json:"rule_id"`
-	Category    string      `json:"category"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Severity    string      `json:"severity"`
-	Check       *mxsecCheck `json:"check"`
-	Fix         *mxsecFix   `json:"fix,omitempty"`
+type mxcwppCheck struct {
+	Condition string             `json:"condition"`
+	Rules     []*mxcwppCheckRule `json:"rules"`
 }
 
-type mxsecCheck struct {
-	Condition string            `json:"condition"`
-	Rules     []*mxsecCheckRule `json:"rules"`
-}
-
-type mxsecCheckRule struct {
+type mxcwppCheckRule struct {
 	Type   string   `json:"type"`
 	Param  []string `json:"param"`
 	Result string   `json:"result,omitempty"`
 }
 
-type mxsecFix struct {
+type mxcwppFix struct {
 	Suggestion string `json:"suggestion"`
 }
 
 func main() {
 	in := flag.String("in", "", "input Elkeid baseline yaml")
-	out := flag.String("out", "", "output mxsec baseline JSON")
-	policyID := flag.String("policy-id", "", "mxsec Policy.ID (e.g. LINUX_CIS_CENTOS)")
+	out := flag.String("out", "", "output mxcwpp baseline JSON")
+	policyID := flag.String("policy-id", "", "mxcwpp Policy.ID (e.g. LINUX_CIS_CENTOS)")
 	policyName := flag.String("policy-name", "", "Policy.Name")
 	osFamilies := flag.String("os", "", "comma-separated os_family override (defaults to yaml system)")
 	flag.Parse()
@@ -145,7 +145,7 @@ func main() {
 	fmt.Printf("OK  in=%s  out=%s  rules=%d\n", *in, *out, len(dst.Rules))
 }
 
-func convert(src elkeidPolicy, policyID, policyName, osFamiliesOverride string) *mxsecPolicy {
+func convert(src elkeidPolicy, policyID, policyName, osFamiliesOverride string) *mxcwppPolicy {
 	osFamily := src.System
 	if osFamiliesOverride != "" {
 		osFamily = strings.Split(osFamiliesOverride, ",")
@@ -161,14 +161,14 @@ func convert(src elkeidPolicy, policyID, policyName, osFamiliesOverride string) 
 	if name == "" {
 		name = src.BaselineName
 	}
-	dst := &mxsecPolicy{
+	dst := &mxcwppPolicy{
 		ID:          policyID,
 		Name:        name,
 		Version:     src.BaselineVersion,
 		Description: desc + "\n借鉴 Elkeid baseline (Apache 2.0, https://github.com/bytedance/Elkeid).",
 		OSFamily:    osFamily,
 		Enabled:     true,
-		Rules:       make([]*mxsecRule, 0, len(src.CheckList)),
+		Rules:       make([]*mxcwppRule, 0, len(src.CheckList)),
 	}
 	for _, c := range src.CheckList {
 		r := convertCheck(policyID, c)
@@ -179,7 +179,7 @@ func convert(src elkeidPolicy, policyID, policyName, osFamiliesOverride string) 
 	return dst
 }
 
-func convertCheck(policyID string, c elkeidCheck) *mxsecRule {
+func convertCheck(policyID string, c elkeidCheck) *mxcwppRule {
 	title := c.Title
 	if c.TitleCN != "" {
 		title = c.TitleCN
@@ -203,7 +203,7 @@ func convertCheck(policyID string, c elkeidCheck) *mxsecRule {
 	if severity == "" {
 		severity = "medium"
 	}
-	rules := make([]*mxsecCheckRule, 0, len(c.Check.Rules))
+	rules := make([]*mxcwppCheckRule, 0, len(c.Check.Rules))
 	for _, r := range c.Check.Rules {
 		mr := mapRule(r)
 		if mr != nil {
@@ -213,29 +213,29 @@ func convertCheck(policyID string, c elkeidCheck) *mxsecRule {
 	if len(rules) == 0 {
 		return nil
 	}
-	out := &mxsecRule{
+	out := &mxcwppRule{
 		RuleID:      fmt.Sprintf("%s_%04d", policyID, c.CheckID),
 		Category:    category,
 		Title:       title,
 		Description: desc,
 		Severity:    severity,
-		Check: &mxsecCheck{
+		Check: &mxcwppCheck{
 			Condition: "all",
 			Rules:     rules,
 		},
 	}
 	if sol != "" {
-		out.Fix = &mxsecFix{Suggestion: sol}
+		out.Fix = &mxcwppFix{Suggestion: sol}
 	}
 	return out
 }
 
-func mapRule(r elkeidRule) *mxsecCheckRule {
+func mapRule(r elkeidRule) *mxcwppCheckRule {
 	params := flattenParam(r.Param)
 	switch r.Type {
 	case "file_line_check":
 		// param[0]=file, filter=regex, result=expr → file_line_expr
-		out := &mxsecCheckRule{
+		out := &mxcwppCheckRule{
 			Type:   "file_line_expr",
 			Param:  []string{},
 			Result: r.Result,
@@ -249,20 +249,20 @@ func mapRule(r elkeidRule) *mxsecCheckRule {
 		return out
 	case "command_check":
 		// param[0]=cmd, param[1]=expected output regex → command_exec
-		return &mxsecCheckRule{
+		return &mxcwppCheckRule{
 			Type:   "command_exec",
 			Param:  params,
 			Result: r.Result,
 		}
 	case "file_permission":
-		return &mxsecCheckRule{
+		return &mxcwppCheckRule{
 			Type:   "file_permission",
 			Param:  params,
 			Result: r.Result,
 		}
 	}
 	// 未识别 type 透传
-	return &mxsecCheckRule{
+	return &mxcwppCheckRule{
 		Type:   r.Type,
 		Param:  params,
 		Result: r.Result,

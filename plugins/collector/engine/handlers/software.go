@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/plugins/collector/engine"
+	"github.com/matrixplusio/mxcwpp/plugins/collector/engine"
 )
 
 // SoftwareHandler 是软件包采集器

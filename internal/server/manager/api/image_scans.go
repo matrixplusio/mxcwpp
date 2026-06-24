@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ImageScansHandler 镜像扫描 API 处理器
@@ -63,7 +63,13 @@ func (h *ImageScansHandler) ListScans(c *gin.Context) {
 		pageSize = 20
 	}
 
-	scans, total, err := h.scanner.GetScanHistory(page, pageSize)
+	var clusterID *uint
+	if cid, err := strconv.ParseUint(c.Query("cluster_id"), 10, 64); err == nil && cid > 0 {
+		v := uint(cid)
+		clusterID = &v
+	}
+
+	scans, total, err := h.scanner.GetScanHistory(page, pageSize, clusterID)
 	if err != nil {
 		InternalError(c, "查询扫描记录失败")
 		return
@@ -110,6 +116,7 @@ func (h *ImageScansHandler) GetScanVulns(c *gin.Context) {
 func (h *ImageScansHandler) CreateRegistry(c *gin.Context) {
 	var req struct {
 		Name     string `json:"name" binding:"required"`
+		Type     string `json:"type"`
 		URL      string `json:"url" binding:"required"`
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -119,9 +126,13 @@ func (h *ImageScansHandler) CreateRegistry(c *gin.Context) {
 		BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
+	if req.Type == "" {
+		req.Type = "basic"
+	}
 
 	registry := model.ImageRegistry{
 		Name:     req.Name,
+		Type:     req.Type,
 		URL:      req.URL,
 		Username: req.Username,
 		Password: req.Password,
@@ -151,6 +162,7 @@ func (h *ImageScansHandler) UpdateRegistry(c *gin.Context) {
 
 	var req struct {
 		Name     string `json:"name"`
+		Type     string `json:"type"`
 		URL      string `json:"url"`
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -164,6 +176,9 @@ func (h *ImageScansHandler) UpdateRegistry(c *gin.Context) {
 	updates := map[string]any{}
 	if req.Name != "" {
 		updates["name"] = req.Name
+	}
+	if req.Type != "" {
+		updates["type"] = req.Type
 	}
 	if req.URL != "" {
 		updates["url"] = req.URL

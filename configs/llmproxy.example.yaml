@@ -70,7 +70,7 @@ routing:
 cache:
   redis_addr: "redis:6379"
   ttl: "24h"
-  key_prefix: "mxsec:llm:cache:"
+  key_prefix: "mxcwpp:llm:cache:"
 
 # Fallback 黑名单
 fallback:
@@ -91,10 +91,10 @@ privacy:
     - "username"
   enabled: true
 
-# 审计 (写入 Kafka mxsec.llm.audit)
+# 审计 (写入 Kafka mxcwpp.llm.audit)
 audit:
   enabled: true
-  kafka_topic: "mxsec.llm.audit"
+  kafka_topic: "mxcwpp.llm.audit"
 
 otel:
   endpoint: "http://otel-collector:4318"

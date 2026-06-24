@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Boxes, CheckCircle2, Server, Layers } from "lucide-react";
@@ -46,17 +47,10 @@ function healthColor(score: number): string {
   return "text-danger";
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex gap-3 text-sm">
-      <span className="w-24 shrink-0 text-muted">{label}</span>
-      <span className="text-ink break-all">{value}</span>
-    </div>
-  );
-}
 
 export default function KubeClustersPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [params, setParams] = useUrlState({ page: 1, page_size: 20 });
 
@@ -71,7 +65,6 @@ export default function KubeClustersPage() {
   const [form, setForm] = useState<ClusterForm>(emptyForm);
   const [deleting, setDeleting] = useState<KubeCluster | null>(null);
   const [regenerating, setRegenerating] = useState<KubeCluster | null>(null);
-  const [detail, setDetail] = useState<KubeCluster | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["kube-clusters"] });
 
@@ -217,7 +210,7 @@ export default function KubeClustersPage() {
             rowKey={(r) => r.id ?? r.name}
             loading={isLoading}
             emptyText={t("kube.clusters.empty")}
-            onRowClick={(r) => setDetail(r)}
+            onRowClick={(r) => router.push(`/kube/clusters/detail?id=${r.id}`)}
           />
           <Pagination
             page={params.page}
@@ -227,42 +220,6 @@ export default function KubeClustersPage() {
           />
         </Card>
       </div>
-
-      {/* 详情 Drawer */}
-      <Drawer
-        open={!!detail}
-        onClose={() => setDetail(null)}
-        title={detail ? t("kube.clusters.detailTitleNamed", { name: detail.name }) : t("kube.clusters.detailTitle")}
-        width={560}
-      >
-        {detail && (
-          <div className="space-y-5">
-            <div className="rounded-card border border-border bg-surface-muted/50 p-4">
-              <div className="flex items-center gap-2">
-                <StatusTag tone={statusTone(detail.status)}>{detail.status || "—"}</StatusTag>
-                <span className="font-semibold text-ink">{detail.name}</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Field label={t("kube.clusters.colVersion")} value={<span className="font-mono">{detail.version || "—"}</span>} />
-              <Field label={t("kube.clusters.colNodeCount")} value={<span className="tabular-nums">{detail.nodeCount ?? 0}</span>} />
-              <Field label={t("kube.clusters.colPodCount")} value={<span className="tabular-nums">{detail.podCount ?? 0}</span>} />
-              <Field label={t("kube.clusters.colNamespaceCount")} value={<span className="tabular-nums">{detail.namespaceCount ?? 0}</span>} />
-              <Field
-                label={t("kube.clusters.colHealth")}
-                value={
-                  <span className={`tabular-nums font-semibold ${healthColor(detail.healthScore ?? 0)}`}>
-                    {detail.healthScore ?? 0}
-                  </span>
-                }
-              />
-              <Field label={t("kube.clusters.colApiServer")} value={<span className="font-mono">{detail.apiServer || "—"}</span>} />
-              {detail.remark && <Field label={t("kube.clusters.fieldRemark")} value={detail.remark} />}
-              <Field label={t("kube.clusters.colCreatedAt")} value={<span className="tabular-nums">{detail.createdAt}</span>} />
-            </div>
-          </div>
-        )}
-      </Drawer>
 
       {/* 接入 / 编辑集群 */}
       <Drawer

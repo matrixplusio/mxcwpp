@@ -11,6 +11,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Select } from "@/components/ui/Select";
+import { ClusterFilter } from "@/components/kube/ClusterFilter";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -62,7 +63,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 export default function KubeEventsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [params, setParams] = useUrlState({ page: 1, page_size: 20, severity: "", status: "" });
+  const [params, setParams] = useUrlState({ page: 1, page_size: 20, severity: "", status: "", cluster_id: "" });
 
   const severityOptions = buildSeverityOptions(t);
   const statusOptions = buildStatusOptions(t);
@@ -77,6 +78,7 @@ export default function KubeEventsPage() {
         page_size: params.page_size,
         severity: params.severity || undefined,
         status: params.status || undefined,
+        cluster_id: params.cluster_id || undefined,
       }),
   });
 
@@ -137,6 +139,10 @@ export default function KubeEventsPage() {
     <>
       <div className="space-y-4">
         <FilterBar>
+          <ClusterFilter
+            value={params.cluster_id}
+            onChange={(v) => setParams((p) => ({ ...p, cluster_id: v, page: 1 }))}
+          />
           <Select
             value={params.severity}
             onChange={(v) => setParams((p) => ({ ...p, severity: v, page: 1 }))}

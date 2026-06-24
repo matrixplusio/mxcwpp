@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 type fakeDriver struct {

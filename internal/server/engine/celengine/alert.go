@@ -9,10 +9,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/sanitize"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/siem"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/sanitize"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/siem"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // notifyThrottleWindow 通知节流窗口：同一告警在此时间内不重复发送通知

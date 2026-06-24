@@ -4,7 +4,7 @@
 #   - 1k EPS 持续 30s 时延曲线 (用 ab/wrk 不行 - 需要 EDR 事件流, 改测 hosts API 压测)
 #   - 心跳数据传播延迟 (本身 dev VM 已工作, 看 ms 级)
 set -uo pipefail
-JWT=$(/bin/cat /tmp/mxsec-jwt)
+JWT=$(/bin/cat /tmp/mxcwpp-jwt)
 MGR="${MGR:-http://localhost:8080}"
 CURL="/usr/bin/curl"
 JQ="/usr/bin/jq"

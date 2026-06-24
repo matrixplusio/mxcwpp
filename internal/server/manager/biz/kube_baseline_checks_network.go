@@ -9,7 +9,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ===== 网络安全检查 (002, 029-035) =====

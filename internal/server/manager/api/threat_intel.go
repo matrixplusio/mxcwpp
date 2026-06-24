@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 )
 
 // ThreatIntelHandler 威胁情报 API
@@ -40,7 +40,7 @@ func (h *ThreatIntelHandler) GetIOCStats(c *gin.Context) {
 	var total int64
 
 	for _, t := range types {
-		count, err := h.redisClient.SCard(ctx, "mxsec:ioc:"+t).Result()
+		count, err := h.redisClient.SCard(ctx, "mxcwpp:ioc:"+t).Result()
 		if err != nil {
 			count = 0
 		}
@@ -63,7 +63,7 @@ func (h *ThreatIntelHandler) ListIOCs(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	key := "mxsec:ioc:" + iocType
+	key := "mxcwpp:ioc:" + iocType
 	members, err := h.redisClient.SMembers(ctx, key).Result()
 	if err != nil {
 		h.logger.Warn("查询 IOC 失败", zap.String("type", iocType), zap.Error(err))

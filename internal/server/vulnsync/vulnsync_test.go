@@ -11,7 +11,7 @@ import (
 
 func TestNewHTTPHandler_Health(t *testing.T) {
 	t.Parallel()
-	h := NewHTTPHandler(zap.NewNop())
+	h := NewHTTPHandler(zap.NewNop(), nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/health", nil))
 	if w.Code != http.StatusOK {
@@ -24,7 +24,7 @@ func TestNewHTTPHandler_Health(t *testing.T) {
 
 func TestNewHTTPHandler_NotImplemented(t *testing.T) {
 	t.Parallel()
-	h := NewHTTPHandler(zap.NewNop())
+	h := NewHTTPHandler(zap.NewNop(), nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/sources", nil))
 	if w.Code != http.StatusNotFound {

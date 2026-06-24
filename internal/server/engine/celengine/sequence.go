@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // compiledSequenceRule 编译后的序列规则，步骤表达式已预编译
@@ -149,7 +149,7 @@ func (d *SequenceDetector) Evaluate(hostID string, dataType int32, fields map[st
 
 	for i := range rules {
 		cr := &rules[i]
-		stateKey := fmt.Sprintf("mxsec:seq:%d:%s", cr.rule.ID, hostID)
+		stateKey := fmt.Sprintf("mxcwpp:seq:%d:%s", cr.rule.ID, hostID)
 
 		state := d.getState(ctx, stateKey)
 

@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // AnomalyHandler handles ML anomaly detection API requests.

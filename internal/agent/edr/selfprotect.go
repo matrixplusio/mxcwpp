@@ -137,8 +137,8 @@ func (sp *SelfProtect) watchdogLoop(ctx context.Context, wg *sync.WaitGroup) {
 
 // protectedDirs are directories that get chattr +i protection.
 var protectedDirs = []string{
-	"/var/lib/mxsec/rules",
-	"/usr/local/mxsec",
+	"/var/lib/mxcwpp/rules",
+	"/usr/local/mxcwpp",
 }
 
 // applyImmutable sets the immutable attribute on protected directories
@@ -230,16 +230,16 @@ func (sp *SelfProtect) removeImmutable(path string) {
 }
 
 // GenerateSystemdUnit returns a recommended systemd unit file content
-// for the MxSec Agent with self-protection features.
+// for the MxCwpp Agent with self-protection features.
 func GenerateSystemdUnit() string {
 	return `[Unit]
-Description=MxSec Security Agent
+Description=MxCwpp Security Agent
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=notify
-ExecStart=/usr/local/mxsec/mxsec-agent
+ExecStart=/usr/local/mxcwpp/mxcwpp-agent
 Restart=on-failure
 RestartSec=3s
 StartLimitBurst=5

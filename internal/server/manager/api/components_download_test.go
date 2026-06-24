@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // setupDownloadTest 创建 ComponentsHandler 及测试用的插件包文件，返回 handler 和清理函数

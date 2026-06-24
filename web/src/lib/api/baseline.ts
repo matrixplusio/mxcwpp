@@ -6,6 +6,7 @@ import type {
   BaselinePolicyStatistics,
   PolicyGroup,
   BaselineTask,
+  BaselineTaskChecks,
   BaselineFixItem,
   BaselineFixHistory,
 } from "./types";
@@ -40,6 +41,8 @@ export const baselineApi = {
   listTasks: (params: { page: number; page_size: number; status?: string; policy_id?: string }) =>
     get<Paged<BaselineTask>>("/tasks", params),
   getTask: (taskId: string) => get<BaselineTask>(`/tasks/${taskId}`),
+  getTaskChecks: (taskId: string, params?: { result?: string }) =>
+    get<BaselineTaskChecks>(`/tasks/${taskId}/checks`, params),
   createTask: (body: Record<string, unknown>) => post<BaselineTask>("/tasks", body),
   runTask: (taskId: string) => post<BaselineTask>(`/tasks/${taskId}/run`),
   cancelTask: (taskId: string) => post<BaselineTask>(`/tasks/${taskId}/cancel`),

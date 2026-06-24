@@ -1,25 +1,25 @@
-# MxSec Platform — Prometheus 告警规则（精简，仅自研服务）
+# MxCwpp Platform — Prometheus 告警规则（精简，仅自研服务）
 #
 # 设计原则：
-#   - 只关心 mxsec 自研服务（manager / agentcenter / consumer）
-#   - 不规则 mysql / redis / clickhouse / kafka — 这些由 mxsec monitor handler
-#     的 driver-level 检查覆盖，且 mxsec 内置告警系统会用其他路径上报
+#   - 只关心 mxcwpp 自研服务（manager / agentcenter / consumer）
+#   - 不规则 mysql / redis / clickhouse / kafka — 这些由 mxcwpp monitor handler
+#     的 driver-level 检查覆盖，且 mxcwpp 内置告警系统会用其他路径上报
 #
-# 命名规范：MxSec<Component><Issue>
+# 命名规范：MxCwpp<Component><Issue>
 # severity: critical (P0) / warning (P1) / info (P2)
 #
 # 告警流向：
 #   Prometheus 触发 → webhook /api/v1/internal/alerts/prometheus
-#                  → mxsec alerts 表 (source=prometheus_infra)
+#                  → mxcwpp alerts 表 (source=prometheus_infra)
 #                  → notification 系统 (Lark/Webhook)
 
 groups:
   # ============ 服务存活 ============
-  - name: mxsec_service_availability
+  - name: mxcwpp_service_availability
     interval: 30s
     rules:
-      - alert: MxSecServiceDown
-        expr: up{job=~"mxsec-.+"} == 0
+      - alert: MxCwppServiceDown
+        expr: up{job=~"mxcwpp-.+"} == 0
         for: 1m
         labels:
           severity: critical
@@ -27,12 +27,12 @@ groups:
         annotations:
           summary: "{{ $labels.service }} 服务不可达 (job={{ $labels.job }})"
           description: |
-            mxsec 服务 {{ $labels.service }} ({{ $labels.instance }}) 已 1 分钟无法 scrape。
+            mxcwpp 服务 {{ $labels.service }} ({{ $labels.instance }}) 已 1 分钟无法 scrape。
             可能原因：进程崩溃、网络中断、配置错误。
             排查：docker ps / docker logs {{ $labels.instance }} / curl http://{{ $labels.instance }}/metrics
 
-      - alert: MxSecServiceFlapping
-        expr: changes(up{job=~"mxsec-.+"}[10m]) > 4
+      - alert: MxCwppServiceFlapping
+        expr: changes(up{job=~"mxcwpp-.+"}[10m]) > 4
         for: 5m
         labels:
           severity: warning
@@ -42,13 +42,13 @@ groups:
           description: "服务在 10 分钟内状态翻转 {{ $value }} 次，可能崩溃重启循环。"
 
   # ============ Manager HTTP RED 指标 ============
-  - name: mxsec_manager_http
+  - name: mxcwpp_manager_http
     interval: 30s
     rules:
-      - alert: MxSecManagerHighErrorRate
+      - alert: MxCwppManagerHighErrorRate
         expr: |
-          sum(rate(mxsec_http_requests_total{status_code=~"5.."}[5m]))
-          / sum(rate(mxsec_http_requests_total[5m])) > 0.05
+          sum(rate(mxcwpp_http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(mxcwpp_http_requests_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -57,10 +57,10 @@ groups:
           summary: "Manager 5xx 错误率 > 5% 持续 5 分钟"
           description: "当前: {{ $value | humanizePercentage }}。查 manager 日志。"
 
-      - alert: MxSecManagerHighP99Latency
+      - alert: MxCwppManagerHighP99Latency
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(mxsec_http_request_duration_seconds_bucket[5m]))
+            sum by (le) (rate(mxcwpp_http_request_duration_seconds_bucket[5m]))
           ) > 1.0
         for: 5m
         labels:
@@ -71,13 +71,13 @@ groups:
           description: "当前 p99: {{ $value }}s。可能 DB 慢查询或下游卡顿。"
 
   # ============ AgentCenter gRPC RED 指标 ============
-  - name: mxsec_ac_grpc
+  - name: mxcwpp_ac_grpc
     interval: 30s
     rules:
-      - alert: MxSecACHighErrorRate
+      - alert: MxCwppACHighErrorRate
         expr: |
-          sum(rate(mxsec_ac_grpc_handled_total{grpc_code!="OK"}[5m]))
-          / sum(rate(mxsec_ac_grpc_handled_total[5m])) > 0.05
+          sum(rate(mxcwpp_ac_grpc_handled_total{grpc_code!="OK"}[5m]))
+          / sum(rate(mxcwpp_ac_grpc_handled_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -86,8 +86,8 @@ groups:
           summary: "AgentCenter gRPC 错误率 > 5%"
           description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
 
-      - alert: MxSecACNoTraffic
-        expr: sum(rate(mxsec_ac_grpc_handled_total[5m])) == 0
+      - alert: MxCwppACNoTraffic
+        expr: sum(rate(mxcwpp_ac_grpc_handled_total[5m])) == 0
         for: 10m
         labels:
           severity: warning
@@ -97,11 +97,11 @@ groups:
           description: "可能所有 Agent 离线，或 AC 实例不健康。"
 
   # ============ Consumer 处理能力 ============
-  - name: mxsec_consumer_kafka
+  - name: mxcwpp_consumer_kafka
     interval: 30s
     rules:
-      - alert: MxSecConsumerHighLag
-        expr: mxsec_consumer_lag > 50000
+      - alert: MxCwppConsumerHighLag
+        expr: mxcwpp_consumer_lag > 50000
         for: 5m
         labels:
           severity: warning
@@ -110,10 +110,10 @@ groups:
           summary: "Consumer 队列积压超过 50K"
           description: "topic={{ $labels.topic }} partition={{ $labels.partition }} lag={{ $value }}"
 
-      - alert: MxSecConsumerHighErrorRate
+      - alert: MxCwppConsumerHighErrorRate
         expr: |
-          sum(rate(mxsec_consumer_records_consumed_total{status=~"error|dlq"}[5m]))
-          / sum(rate(mxsec_consumer_records_consumed_total[5m])) > 0.05
+          sum(rate(mxcwpp_consumer_records_consumed_total{status=~"error|dlq"}[5m]))
+          / sum(rate(mxcwpp_consumer_records_consumed_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -122,8 +122,8 @@ groups:
           summary: "Consumer 错误率 > 5%"
           description: "{{ $value | humanizePercentage }} 消息处理失败或进入 DLQ。"
 
-      - alert: MxSecConsumerNoMembers
-        expr: mxsec_consumer_group_members == 0
+      - alert: MxCwppConsumerNoMembers
+        expr: mxcwpp_consumer_group_members == 0
         for: 2m
         labels:
           severity: critical
@@ -132,12 +132,12 @@ groups:
           summary: "Consumer Group 无活跃成员"
           description: "所有 consumer 实例已断开，Kafka 消息将停滞。"
 
-  # ============ Go 运行时饱和度（自动覆盖所有 mxsec-* 服务）============
-  - name: mxsec_saturation
+  # ============ Go 运行时饱和度（自动覆盖所有 mxcwpp-* 服务）============
+  - name: mxcwpp_saturation
     interval: 60s
     rules:
-      - alert: MxSecHighCPU
-        expr: 100 * rate(process_cpu_seconds_total{job=~"mxsec-.+"}[5m]) > 80
+      - alert: MxCwppHighCPU
+        expr: 100 * rate(process_cpu_seconds_total{job=~"mxcwpp-.+"}[5m]) > 80
         for: 10m
         labels:
           severity: warning
@@ -145,8 +145,8 @@ groups:
           summary: "{{ $labels.service }} CPU 持续 > 80% (10min)"
           description: "当前: {{ $value | humanize }}%"
 
-      - alert: MxSecHighMemory
-        expr: process_resident_memory_bytes{job=~"mxsec-.+"} > 2147483648  # 2GB
+      - alert: MxCwppHighMemory
+        expr: process_resident_memory_bytes{job=~"mxcwpp-.+"} > 2147483648  # 2GB
         for: 10m
         labels:
           severity: warning
@@ -154,8 +154,8 @@ groups:
           summary: "{{ $labels.service }} RSS > 2GB (10min)"
           description: "当前: {{ $value | humanize1024 }}B"
 
-      - alert: MxSecGoroutineLeak
-        expr: go_goroutines{job=~"mxsec-.+"} > 10000
+      - alert: MxCwppGoroutineLeak
+        expr: go_goroutines{job=~"mxcwpp-.+"} > 10000
         for: 10m
         labels:
           severity: warning
@@ -163,10 +163,10 @@ groups:
           summary: "{{ $labels.service }} goroutine 数 > 10000，疑似泄漏"
           description: "当前: {{ $value }}"
 
-      - alert: MxSecGCPauseLong
+      - alert: MxCwppGCPauseLong
         expr: |
           histogram_quantile(0.99, sum by (job, le)
-            (rate(go_gc_duration_seconds_bucket{job=~"mxsec-.+"}[5m]))) > 0.5
+            (rate(go_gc_duration_seconds_bucket{job=~"mxcwpp-.+"}[5m]))) > 0.5
         for: 10m
         labels:
           severity: warning
@@ -175,14 +175,14 @@ groups:
           description: "当前: {{ $value }}s"
 
   # ============ Manager → MySQL 视角（gorm callback 埋点）============
-  # 注：mxsec_db_query_duration_seconds 由 Manager 端 gorm callback 提供（Tier 1-2 新增）
-  - name: mxsec_db
+  # 注：mxcwpp_db_query_duration_seconds 由 Manager 端 gorm callback 提供（Tier 1-2 新增）
+  - name: mxcwpp_db
     interval: 60s
     rules:
-      - alert: MxSecDBSlowQuery
+      - alert: MxCwppDBSlowQuery
         expr: |
           histogram_quantile(0.99,
-            sum by (le, operation, table) (rate(mxsec_db_query_duration_seconds_bucket[5m]))
+            sum by (le, operation, table) (rate(mxcwpp_db_query_duration_seconds_bucket[5m]))
           ) > 1.0
         for: 5m
         labels:
@@ -195,13 +195,13 @@ groups:
   # ============ Manager → ClickHouse 视角（edr_events.go recordCHQuery 埋点）============
   # 商业级 EDR 查询基线：列表 < 200ms，统计 < 1s。
   # 慢于此说明 projection 未命中 / 数据量异常 / CH 资源紧张。
-  - name: mxsec_clickhouse
+  - name: mxcwpp_clickhouse
     interval: 60s
     rules:
-      - alert: MxSecCHQuerySlow
+      - alert: MxCwppCHQuerySlow
         expr: |
           histogram_quantile(0.99,
-            sum by (le, operation, table) (rate(mxsec_clickhouse_query_duration_seconds_bucket[5m]))
+            sum by (le, operation, table) (rate(mxcwpp_clickhouse_query_duration_seconds_bucket[5m]))
           ) > 3.0
         for: 5m
         labels:
@@ -216,10 +216,10 @@ groups:
             2. SELECT * FROM system.mutations WHERE table='{{ $labels.table }}' AND not is_done
             3. EXPLAIN PIPELINE SELECT ... 看是否走 projection
 
-      - alert: MxSecCHQueryTimeout
+      - alert: MxCwppCHQueryTimeout
         expr: |
           sum by (operation, table) (
-            rate(mxsec_clickhouse_query_duration_seconds_count{status="timeout"}[5m])
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="timeout"}[5m])
           ) > 0
         for: 2m
         labels:
@@ -232,10 +232,10 @@ groups:
             通常意味着 projection 未命中或数据量暴增。
             立即检查 system.parts merge backlog + materialize projection 进度。
 
-      - alert: MxSecCHQueryError
+      - alert: MxCwppCHQueryError
         expr: |
           sum by (operation, table) (
-            rate(mxsec_clickhouse_query_duration_seconds_count{status="error"}[5m])
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="error"}[5m])
           ) > 0.01
         for: 5m
         labels:

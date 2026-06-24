@@ -2,7 +2,7 @@
 
 ## 项目治理模型
 
-MxSec Platform 采用 **Maintainer 委员会制**，由核心维护者共同决策项目方向和重大技术选型。
+MxCwpp Platform 采用 **Maintainer 委员会制**，由核心维护者共同决策项目方向和重大技术选型。
 
 ### 角色定义
 

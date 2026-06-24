@@ -84,9 +84,9 @@ render_server_config() {
         -e "s|__SERVER_HTTP_PORT__|${SERVER_HTTP_PORT:-8080}|g" \
         -e "s|__MYSQL_HOST__|${MYSQL_HOST:-mysql}|g" \
         -e "s|__MYSQL_PORT__|${MYSQL_PORT:-3306}|g" \
-        -e "s|__MYSQL_USER__|${MYSQL_USER:-mxsec_user}|g" \
+        -e "s|__MYSQL_USER__|${MYSQL_USER:-mxcwpp_user}|g" \
         -e "s|__MYSQL_PASSWORD__|${MYSQL_PASSWORD:-123456}|g" \
-        -e "s|__MYSQL_DATABASE__|${MYSQL_DATABASE:-mxsec}|g" \
+        -e "s|__MYSQL_DATABASE__|${MYSQL_DATABASE:-mxcwpp}|g" \
         -e "s|__DB_MAX_IDLE_CONNS__|${DB_MAX_IDLE_CONNS:-20}|g" \
         -e "s|__DB_MAX_OPEN_CONNS__|${DB_MAX_OPEN_CONNS:-200}|g" \
         -e "s|__DB_CONN_MAX_LIFETIME__|${DB_CONN_MAX_LIFETIME:-1h}|g" \
@@ -106,7 +106,7 @@ render_server_config() {
         -e "s|__KAFKA_TOPIC_PREFIX__|${KAFKA_TOPIC_PREFIX:-}|g" \
         -e "s|__CLICKHOUSE_ENABLED__|${CLICKHOUSE_ENABLED:-true}|g" \
         -e "s|__CLICKHOUSE_ADDR__|${CLICKHOUSE_ADDR:-clickhouse:9000}|g" \
-        -e "s|__CLICKHOUSE_DATABASE__|${CLICKHOUSE_DATABASE:-mxsec}|g" \
+        -e "s|__CLICKHOUSE_DATABASE__|${CLICKHOUSE_DATABASE:-mxcwpp}|g" \
         -e "s|__CLICKHOUSE_USER__|${CLICKHOUSE_USER:-default}|g" \
         -e "s|__CLICKHOUSE_PASSWORD__|${CLICKHOUSE_PASSWORD:-}|g" \
         -e "s|__PROMETHEUS_ENABLED__|${PROMETHEUS_ENABLED:-true}|g" \
@@ -116,7 +116,7 @@ render_server_config() {
         -e "s|__LOG_FORMAT__|${LOG_FORMAT:-console}|g" \
         -e "s|__LOG_MAX_AGE__|${LOG_MAX_AGE:-7}|g" \
         -e "s|__HEARTBEAT_INTERVAL__|${HEARTBEAT_INTERVAL:-60}|g" \
-        -e "s|__PLUGINS_DIR__|${PLUGINS_DIR:-/opt/mxsec-platform/plugins}|g" \
+        -e "s|__PLUGINS_DIR__|${PLUGINS_DIR:-/opt/mxcwpp/plugins}|g" \
         -e "s|__PLUGINS_BASE_URL__|${PLUGINS_BASE_URL:-}|g" \
         -e "s|__JWT_SECRET__|${JWT_SECRET:-dev-secret-change-in-production}|g" \
         -e "s|__MANAGER_ADDR__|${MANAGER_ADDR:-http://manager:8080}|g" \

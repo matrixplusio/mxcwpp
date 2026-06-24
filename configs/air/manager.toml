@@ -17,7 +17,7 @@ tmp_dir = "tmp"
   exclude_unchanged = false
   follow_symlink = false
   # 使用容器内的配置文件路径
-  full_bin = "./tmp/manager -config /etc/mxsec-platform/server.yaml"
+  full_bin = "./tmp/manager -config /etc/mxcwpp/server.yaml"
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []

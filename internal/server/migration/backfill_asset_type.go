@@ -162,9 +162,9 @@ SET subscope = 'security_agent'
 WHERE (subscope IS NULL OR subscope = '' OR subscope = 'unknown')
   AND host_binary_path IS NOT NULL
   AND (
-    host_binary_path LIKE '/usr/bin/mxsec-agent%' OR
-    host_binary_path LIKE '/var/lib/mxsec-agent/%' OR
-    host_binary_path LIKE '/var/lib/mxsec/%' OR
+    host_binary_path LIKE '/usr/bin/mxcwpp-agent%' OR
+    host_binary_path LIKE '/var/lib/mxcwpp-agent/%' OR
+    host_binary_path LIKE '/var/lib/mxcwpp/%' OR
     host_binary_path LIKE '/usr/sbin/clamd%' OR
     host_binary_path LIKE '/usr/bin/clamav%' OR
     host_binary_path LIKE '/usr/bin/freshclam%' OR

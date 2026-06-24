@@ -96,8 +96,8 @@ func CollectDiskInfo(ctx context.Context, logger *zap.Logger) string {
 		if strings.Contains(mountPoint, "/etc/resolv.conf") ||
 			strings.Contains(mountPoint, "/etc/hostname") ||
 			strings.Contains(mountPoint, "/etc/hosts") ||
-			strings.Contains(mountPoint, "/var/lib/mxsec-agent") ||
-			strings.Contains(mountPoint, "/var/log/mxsec-agent") {
+			strings.Contains(mountPoint, "/var/lib/mxcwpp-agent") ||
+			strings.Contains(mountPoint, "/var/log/mxcwpp-agent") {
 			continue
 		}
 

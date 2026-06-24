@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 // Scanner is a no-op stub on non-Linux platforms.

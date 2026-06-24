@@ -11,9 +11,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // NetworkBlockHandler 网络阻断 API 处理器

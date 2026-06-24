@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
 )
 
 // DataType constants for EDR events, matching Server consumer expectations.

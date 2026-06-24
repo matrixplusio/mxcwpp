@@ -24,6 +24,7 @@ type KubeBaseline struct {
 	ID                uint              `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	ClusterID         uint              `gorm:"column:cluster_id;not null;index" json:"clusterId"`
 	ClusterName       string            `gorm:"column:cluster_name;type:varchar(255)" json:"clusterName"`
+	TaskID            uint              `gorm:"column:task_id;index" json:"taskId"` // 所属检查任务
 	Category          string            `gorm:"column:category;type:varchar(50);not null;index" json:"category"`
 	CheckID           string            `gorm:"column:check_id;type:varchar(50);not null" json:"checkId"`
 	CheckName         string            `gorm:"column:check_name;type:varchar(255)" json:"checkName"`

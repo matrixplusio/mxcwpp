@@ -14,7 +14,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 // cn_proc constants from linux/cn_proc.h and linux/connector.h

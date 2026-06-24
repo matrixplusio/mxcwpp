@@ -6,7 +6,7 @@ package outbound
 // 端点格式: POST https://elastic.local:9200/_bulk
 // Body 每两行一组 (NDJSON):
 //
-//	{"index": {"_index": "mxsec-alerts-YYYY.MM.dd"}}
+//	{"index": {"_index": "mxcwpp-alerts-YYYY.MM.dd"}}
 //	{"@timestamp": "...", "severity": "...", ...}
 //
 // 单条优化吞吐: 后续 PR 加 batch 缓冲 + 周期 flush。
@@ -25,7 +25,7 @@ import (
 // ElasticBulkConnector 推送到 Elasticsearch _bulk。
 type ElasticBulkConnector struct {
 	url           string // base URL (e.g. https://es:9200)
-	indexPrefix   string // 例 "mxsec-alerts"
+	indexPrefix   string // 例 "mxcwpp-alerts"
 	authHeader    string // 例 "Basic xxxx" or "ApiKey xxxx"
 	rolloverDaily bool
 	client        *http.Client
@@ -38,7 +38,7 @@ func NewElasticBulkConnector(baseURL, indexPrefix, authHeader string, rolloverDa
 		logger = zap.NewNop()
 	}
 	if indexPrefix == "" {
-		indexPrefix = "mxsec-alerts"
+		indexPrefix = "mxcwpp-alerts"
 	}
 	return &ElasticBulkConnector{
 		url:           strings.TrimRight(baseURL, "/") + "/_bulk",

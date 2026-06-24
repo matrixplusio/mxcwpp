@@ -10,7 +10,7 @@
 rule Webshell_JSP_Runtime_Exec {
     meta:
         description = "JSP 一句话: Runtime.exec + Request 参数"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -26,7 +26,7 @@ rule Webshell_JSP_Runtime_Exec {
 rule Webshell_JSP_Behinder {
     meta:
         description = "JSP Behinder (冰蝎) 特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -44,7 +44,7 @@ rule Webshell_JSP_Behinder {
 rule Webshell_JSP_Godzilla {
     meta:
         description = "JSP Godzilla (哥斯拉) 特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -62,7 +62,7 @@ rule Webshell_JSP_Godzilla {
 rule Webshell_JSP_Memshell_Filter {
     meta:
         description = "JSP 内存马 - 运行时注册 Filter (T1505.003 内存 webshell)"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "memshell"
         attck = "T1505.003"
@@ -79,7 +79,7 @@ rule Webshell_JSP_Memshell_Filter {
 rule Webshell_JSP_Memshell_Servlet {
     meta:
         description = "JSP 内存马 - 运行时注册 Servlet"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "memshell"
         attck = "T1505.003"
@@ -95,7 +95,7 @@ rule Webshell_JSP_Memshell_Servlet {
 rule Webshell_JSP_JspSpy {
     meta:
         description = "JspSpy 经典大马"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"

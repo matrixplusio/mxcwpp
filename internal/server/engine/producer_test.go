@@ -18,7 +18,7 @@ func TestAlertProducer_Publish_WithMock(t *testing.T) {
 
 	p := &AlertProducer{
 		producer: mp,
-		topic:    "mxsec.engine.alert",
+		topic:    "mxcwpp.engine.alert",
 		logger:   nil,
 		stopCh:   make(chan struct{}),
 	}

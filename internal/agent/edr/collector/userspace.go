@@ -11,8 +11,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
-	"github.com/imkerbos/mxsec-platform/internal/agent/resource"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/resource"
 )
 
 // userspaceCollector implements Collector using userspace APIs for old kernels (< 5.4).

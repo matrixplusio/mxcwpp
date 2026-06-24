@@ -3,34 +3,34 @@ package kafka
 // Topic 常量（对应设计文档 docs/architecture.md §4.1 + docs/datatype-allocation.md）
 const (
 	// v1.x Agent → Server 数据 Topic
-	TopicHeartbeat   = "mxsec.agent.heartbeat"   // DataType 1000/1001, Retention 24h
-	TopicEvents      = "mxsec.agent.events"      // DataType 6001 (FIM), Retention 72h
-	TopicRASP        = "mxsec.agent.rasp"        // DataType 4000~4099 (RASP), Retention 7d (P5-2)
-	TopicBaseline    = "mxsec.agent.baseline"    // DataType 8000~8004, Retention 7d
-	TopicAsset       = "mxsec.agent.asset"       // DataType 5050~5060, Retention 7d
-	TopicCommandAck  = "mxsec.agent.command-ack" // 命令执行回包, Retention 7d
-	TopicScanner     = "mxsec.agent.scanner"     // DataType 7000~7004, Retention 7d
-	TopicEBPF        = "mxsec.agent.ebpf"        // DataType 3000~3002, Retention 3d
-	TopicRemediation = "mxsec.agent.remediation" // DataType 9100~9299, Retention 7d
+	TopicHeartbeat   = "mxcwpp.agent.heartbeat"   // DataType 1000/1001, Retention 24h
+	TopicEvents      = "mxcwpp.agent.events"      // DataType 6001 (FIM), Retention 72h
+	TopicRASP        = "mxcwpp.agent.rasp"        // DataType 4000~4099 (RASP), Retention 7d (P5-2)
+	TopicBaseline    = "mxcwpp.agent.baseline"    // DataType 8000~8004, Retention 7d
+	TopicAsset       = "mxcwpp.agent.asset"       // DataType 5050~5060, Retention 7d
+	TopicCommandAck  = "mxcwpp.agent.command-ack" // 命令执行回包, Retention 7d
+	TopicScanner     = "mxcwpp.agent.scanner"     // DataType 7000~7004, Retention 7d
+	TopicEBPF        = "mxcwpp.agent.ebpf"        // DataType 3000~3002, Retention 3d
+	TopicRemediation = "mxcwpp.agent.remediation" // DataType 9100~9299, Retention 7d
 
 	// v2.0 Engine 产出 Topic
-	TopicEngineAlert     = "mxsec.engine.alert"     // DataType 11001-11099, Retention 7d
-	TopicEngineStoryline = "mxsec.engine.storyline" // DataType 11100-11199, Retention 14d
-	TopicEngineFeedback  = "mxsec.engine.feedback"  // DataType 11900-11999, Retention 30d
+	TopicEngineAlert     = "mxcwpp.engine.alert"     // DataType 11001-11099, Retention 7d
+	TopicEngineStoryline = "mxcwpp.engine.storyline" // DataType 11100-11199, Retention 14d
+	TopicEngineFeedback  = "mxcwpp.engine.feedback"  // DataType 11900-11999, Retention 30d
 
 	// v2.0 Engine → AC 命令 Topic (Sprint 2 PR14 新增)
 	// 解耦 Engine 决策与 AC 接入: Engine 产命令 → Kafka → AC 消费 → Agent 下发
 	// 详见 docs/architecture.md §3.1 + internal/server/engine/scheduler/README.md
-	TopicEngineCommand = "mxsec.engine.command" // DataType 11800-11899, Retention 24h
+	TopicEngineCommand = "mxcwpp.engine.command" // DataType 11800-11899, Retention 24h
 
 	// v2.0 VulnSync 产出 Topic
-	TopicVulnAdvisory = "mxsec.vuln.advisory" // DataType 12001-12099, Retention 30d
+	TopicVulnAdvisory = "mxcwpp.vuln.advisory" // DataType 12001-12099, Retention 30d
 
 	// v2.0 LLMProxy 审计 Topic
-	TopicLLMAudit = "mxsec.llm.audit" // DataType 13001-13099, Retention 90d
+	TopicLLMAudit = "mxcwpp.llm.audit" // DataType 13001-13099, Retention 90d
 
 	// v2.0 多租户计量 Topic
-	TopicMeteringUsage = "mxsec.metering.usage" // DataType 14001-14099, Retention 365d
+	TopicMeteringUsage = "mxcwpp.metering.usage" // DataType 14001-14099, Retention 365d
 
 	// DLQ 后缀约定：{topic}.dlq
 	DLQSuffix = ".dlq"

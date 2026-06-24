@@ -6,7 +6,7 @@
 //   - cache/     Redis 24h 缓存 (SHA256 入参)
 //   - fallback/  主厂商失败黑名单 + 备用切换
 //   - quota/     租户级月度 USD 上限 + token cap
-//   - audit/     Kafka mxsec.llm.audit 审计
+//   - audit/     Kafka mxcwpp.llm.audit 审计
 //
 // 设计文档: docs/llmproxy-design.md
 package llmproxy

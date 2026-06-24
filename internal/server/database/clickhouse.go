@@ -9,7 +9,7 @@ import (
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 var globalCHConn chdriver.Conn

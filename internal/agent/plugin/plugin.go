@@ -21,13 +21,13 @@ import (
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/agent/config"
-	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
-	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
-	"github.com/imkerbos/mxsec-platform/internal/common/fileutil"
-	"github.com/imkerbos/mxsec-platform/internal/common/signing"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/agent/config"
+	agentrt "github.com/matrixplusio/mxcwpp/internal/agent/runtime"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/internal/common/fileutil"
+	"github.com/matrixplusio/mxcwpp/internal/common/signing"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -332,7 +332,7 @@ func (m *Manager) loadPlugin(ctx context.Context, cfg *grpc.Config) (*Plugin, er
 	// 从 Agent 日志文件路径提取目录，插件日志放在同级的 plugins 子目录
 	agentLogFile := m.cfg.Local.Log.File
 	if agentLogFile == "" {
-		agentLogFile = "/var/log/mxsec-agent/agent.log" // 默认路径
+		agentLogFile = "/var/log/mxcwpp-agent/agent.log" // 默认路径
 	}
 	logDir := filepath.Join(filepath.Dir(agentLogFile), "plugins")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -379,9 +379,9 @@ func (m *Manager) loadPlugin(ctx context.Context, cfg *grpc.Config) (*Plugin, er
 	rtInfo := agentrt.Get()
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("PLUGIN_DIR=%s", workDir),
-		fmt.Sprintf("MXSEC_RUNTIME_TYPE=%s", rtInfo.Type),
-		fmt.Sprintf("MXSEC_IS_CONTAINER=%t", rtInfo.IsContainer),
-		fmt.Sprintf("MXSEC_CONTAINER_ID=%s", rtInfo.ContainerID),
+		fmt.Sprintf("MXCWPP_RUNTIME_TYPE=%s", rtInfo.Type),
+		fmt.Sprintf("MXCWPP_IS_CONTAINER=%t", rtInfo.IsContainer),
+		fmt.Sprintf("MXCWPP_CONTAINER_ID=%s", rtInfo.ContainerID),
 	)
 
 	if err := cmd.Start(); err != nil {

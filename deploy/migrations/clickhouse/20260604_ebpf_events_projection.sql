@@ -22,17 +22,17 @@
 --   5. 历史 part 完成 MATERIALIZE 后，新写入自动维护 projection
 --
 -- 执行步骤:
---   clickhouse-client --host=10.170.3.3 --user=default --password=<pwd> --database=mxsec < 20260604_ebpf_events_projection.sql
+--   clickhouse-client --host=10.170.3.3 --user=default --password=<pwd> --database=mxcwpp < 20260604_ebpf_events_projection.sql
 --
 -- 观察 materialize 进度:
 --   SELECT table, name, parts_to_do, is_done, latest_fail_reason
 --   FROM system.mutations WHERE table='ebpf_events' AND not is_done ORDER BY create_time DESC;
 
-ALTER TABLE mxsec.ebpf_events
+ALTER TABLE mxcwpp.ebpf_events
 ADD PROJECTION IF NOT EXISTS proj_time_desc (
     SELECT *
     ORDER BY timestamp
 );
 
-ALTER TABLE mxsec.ebpf_events
+ALTER TABLE mxcwpp.ebpf_events
 MATERIALIZE PROJECTION proj_time_desc;

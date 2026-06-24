@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 )
 
 // VulnCacheHandler 漏洞库缓存 API 处理器

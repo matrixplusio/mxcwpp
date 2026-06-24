@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/provider"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/router"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/provider"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/router"
 )
 
 // CompleteAPIHandler 提供 POST /complete HTTP 接口。

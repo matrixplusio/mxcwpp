@@ -3,7 +3,7 @@ package migration
 import (
 	"testing"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 func TestBuildManagedPluginDownloadURL(t *testing.T) {

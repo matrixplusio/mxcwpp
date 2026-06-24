@@ -35,9 +35,9 @@ database:
   mysql:
     host: "localhost"
     port: 3306
-    user: "mxsec_user"
-    password: "mxsec_password"
-    database: "mxsec"
+    user: "mxcwpp_user"
+    password: "mxcwpp_password"
+    database: "mxcwpp"
 
 mtls:
   ca_cert: "certs/ca.crt"
@@ -63,10 +63,10 @@ go run ./cmd/server/agentcenter -config configs/server.yaml
 
 ```bash
 # 1. 构建
-go build -o mxsec-agentcenter ./cmd/server/agentcenter
+go build -o mxcwpp-agentcenter ./cmd/server/agentcenter
 
 # 2. 运行
-./mxsec-agentcenter -config /etc/mxsec-server/server.yaml
+./mxcwpp-agentcenter -config /etc/mxcwpp-server/server.yaml
 ```
 
 ## 数据库
@@ -90,7 +90,7 @@ AgentCenter 支持 mTLS 双向认证：
 
 ## 日志
 
-日志文件：`/var/log/mxsec-server/server.log`
+日志文件：`/var/log/mxcwpp-server/server.log`
 
 - 格式：JSON（结构化日志）
 - 轮转：按天轮转（`server.log.YYYY-MM-DD`）
@@ -150,7 +150,7 @@ func (s *Service) handleNewDataType(ctx context.Context, record *grpc.EncodedRec
 
 1. 检查防火墙端口（默认 6751）
 2. 检查 mTLS 证书配置
-3. 查看日志：`tail -f /var/log/mxsec-server/server.log`
+3. 查看日志：`tail -f /var/log/mxcwpp-server/server.log`
 
 ### 数据库连接失败
 

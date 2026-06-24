@@ -7,7 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 var globalRedis *redis.Client

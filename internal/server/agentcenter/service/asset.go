@@ -13,9 +13,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/plugins/collector/engine"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/plugins/collector/engine"
 )
 
 // shortHash 生成短哈希 ID（取 SHA256 前 16 字节 = 32 hex），确保不超过 varchar(128)

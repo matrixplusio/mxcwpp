@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // SystemModeHandler 提供 /api/v2/system/mode 与 /api/v2/admin/tenants/:id/mode API。

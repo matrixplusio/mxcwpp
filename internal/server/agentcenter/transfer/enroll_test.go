@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 func newSvc(mtls config.MTLSConfig) *Service {

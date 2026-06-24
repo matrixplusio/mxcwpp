@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/integrity"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/integrity"
 )
 
 // RockySource 拉取 Rocky Linux Apollo Errata API。

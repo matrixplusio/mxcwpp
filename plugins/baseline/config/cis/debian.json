@@ -392,7 +392,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.ip_forward=0 并持久化到 sysctl 配置。",
-        "command": "sysctl -w net.ipv4.ip_forward=0 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.ip_forward' \"$F\"; then sed -ri 's|^\\s*net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\"; else echo 'net.ipv4.ip_forward = 0' >> \"$F\"; fi"
+        "command": "sysctl -w net.ipv4.ip_forward=0 >/dev/null; F=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.ip_forward' \"$F\"; then sed -ri 's|^\\s*net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\"; else echo 'net.ipv4.ip_forward = 0' >> \"$F\"; fi"
       }
     },
     {
@@ -415,7 +415,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.accept_redirects=0 并持久化。",
-        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.conf.all.accept_redirects' \"$F\"; then sed -ri 's|^\\s*net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\"; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; fi"
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 >/dev/null; F=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.conf.all.accept_redirects' \"$F\"; then sed -ri 's|^\\s*net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\"; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; fi"
       }
     },
     {
@@ -438,7 +438,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.tcp_syncookies=1 并持久化。",
-        "command": "sysctl -w net.ipv4.tcp_syncookies=1 >/dev/null; F=/etc/sysctl.d/90-mxsec-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.tcp_syncookies' \"$F\"; then sed -ri 's|^\\s*net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\"; else echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; fi"
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1 >/dev/null; F=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch \"$F\"; if grep -qE '^\\s*net.ipv4.tcp_syncookies' \"$F\"; then sed -ri 's|^\\s*net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\"; else echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; fi"
       }
     },
     {

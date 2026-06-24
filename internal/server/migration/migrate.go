@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 // Migrate 执行数据库迁移

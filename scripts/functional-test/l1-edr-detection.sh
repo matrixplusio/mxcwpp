@@ -6,13 +6,13 @@
 #     bash scripts/functional-test/l1-edr-detection.sh
 #
 # 凭证: SSH user=centos pass=centos
-# JWT: /tmp/mxsec-jwt
+# JWT: /tmp/mxcwpp-jwt
 
 set -uo pipefail
 ROCKY_IP="${ROCKY_IP:-192.168.254.109}"
 CENTOS_IP="${CENTOS_IP:-192.168.254.114}"
 MGR="${MGR:-http://localhost:8080}"
-JWT_FILE="${JWT_FILE:-/tmp/mxsec-jwt}"
+JWT_FILE="${JWT_FILE:-/tmp/mxcwpp-jwt}"
 JWT=$(cat "$JWT_FILE")
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
@@ -74,17 +74,17 @@ trigger_and_check "openssl 加密反弹" "$ROCKY_IP" \
 
 # === 2. 持久化 6 种 ===
 trigger_and_check "cron 写入" "$ROCKY_IP" \
-  "echo '* * * * * /tmp/mxsec-test.sh' | sudo -n tee /etc/cron.d/mxsec-test-\$\$ >/dev/null 2>&1; sudo -n rm -f /etc/cron.d/mxsec-test-\$\$" \
+  "echo '* * * * * /tmp/mxcwpp-test.sh' | sudo -n tee /etc/cron.d/mxcwpp-test-\$\$ >/dev/null 2>&1; sudo -n rm -f /etc/cron.d/mxcwpp-test-\$\$" \
   "cron|persistence|持久化"
 trigger_and_check "bashrc 写入" "$ROCKY_IP" \
-  "echo 'export MXSEC_E2E=1' >> ~/.bashrc; sed -i '/MXSEC_E2E/d' ~/.bashrc" \
+  "echo 'export MXCWPP_E2E=1' >> ~/.bashrc; sed -i '/MXCWPP_E2E/d' ~/.bashrc" \
   "bashrc|persistence|持久化"
 trigger_and_check "authorized_keys 写" "$ROCKY_IP" \
-  "mkdir -p ~/.ssh; echo 'ssh-rsa AAAAB3NzaC1yc2EmxsecE2E test@e2e' >> ~/.ssh/authorized_keys; sed -i '/mxsecE2E/d' ~/.ssh/authorized_keys" \
+  "mkdir -p ~/.ssh; echo 'ssh-rsa AAAAB3NzaC1yc2EmxcwppE2E test@e2e' >> ~/.ssh/authorized_keys; sed -i '/mxcwppE2E/d' ~/.ssh/authorized_keys" \
   "ssh|authorized|keys|persistence"
 trigger_and_check "systemd 服务" "$ROCKY_IP" \
   "echo '[Unit]
-Description=mxsec-test' | sudo -n tee /etc/systemd/system/mxsec-test.service >/dev/null 2>&1; sudo -n rm -f /etc/systemd/system/mxsec-test.service" \
+Description=mxcwpp-test' | sudo -n tee /etc/systemd/system/mxcwpp-test.service >/dev/null 2>&1; sudo -n rm -f /etc/systemd/system/mxcwpp-test.service" \
   "systemd|service|persistence"
 trigger_and_check "rc.local 写" "$ROCKY_IP" \
   "echo '#!/bin/sh' | sudo -n tee /etc/rc.local >/dev/null 2>&1 || true; sudo -n rm -f /etc/rc.local 2>/dev/null" \
@@ -101,10 +101,10 @@ trigger_and_check "su root 失败" "$ROCKY_IP" \
   "echo wrong | su root -c whoami 2>&1 | head -1 || true" \
   "su|提权|privilege"
 trigger_and_check "SUID 文件创建" "$ROCKY_IP" \
-  "cp /bin/bash /tmp/mxsec-suid-test; sudo -n chmod u+s /tmp/mxsec-suid-test 2>/dev/null; rm -f /tmp/mxsec-suid-test" \
+  "cp /bin/bash /tmp/mxcwpp-suid-test; sudo -n chmod u+s /tmp/mxcwpp-suid-test 2>/dev/null; rm -f /tmp/mxcwpp-suid-test" \
   "suid|提权|privilege"
 trigger_and_check "capability 添加" "$ROCKY_IP" \
-  "cp /bin/bash /tmp/mxsec-cap; sudo -n setcap cap_net_admin+ep /tmp/mxsec-cap 2>/dev/null; rm -f /tmp/mxsec-cap" \
+  "cp /bin/bash /tmp/mxcwpp-cap; sudo -n setcap cap_net_admin+ep /tmp/mxcwpp-cap 2>/dev/null; rm -f /tmp/mxcwpp-cap" \
   "cap|capability|提权"
 
 # === 4. 横向 4 种 ===
@@ -112,7 +112,7 @@ trigger_and_check "ssh 链式登录" "$ROCKY_IP" \
   "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes nobody@127.0.0.1 'whoami' 2>&1 | head -1 || true" \
   "ssh|横向|lateral"
 trigger_and_check "wget+exec" "$ROCKY_IP" \
-  "wget -q -O /tmp/mxsec-wget-test http://127.0.0.1:1/ 2>&1; rm -f /tmp/mxsec-wget-test" \
+  "wget -q -O /tmp/mxcwpp-wget-test http://127.0.0.1:1/ 2>&1; rm -f /tmp/mxcwpp-wget-test" \
   "wget|download|横向"
 trigger_and_check "curl+pipe-bash" "$ROCKY_IP" \
   "curl -s http://127.0.0.1:1/ 2>&1 | head -1 || true" \
@@ -134,7 +134,7 @@ trigger_and_check "kernel info" "$ROCKY_IP" \
 
 # === 6. 内存 / 进程 3 种 ===
 trigger_and_check "memfd_exec 模拟" "$ROCKY_IP" \
-  "python3 -c 'import os,subprocess; fd=os.memfd_create(\"mxsec\"); os.write(fd, b\"#!/bin/sh\necho test\"); os.execve(\"/proc/self/fd/{}\".format(fd), [\"mxsec\"], os.environ)' 2>&1 | head -1 || true" \
+  "python3 -c 'import os,subprocess; fd=os.memfd_create(\"mxcwpp\"); os.write(fd, b\"#!/bin/sh\necho test\"); os.execve(\"/proc/self/fd/{}\".format(fd), [\"mxcwpp\"], os.environ)' 2>&1 | head -1 || true" \
   "memfd|内存|hollow"
 trigger_and_check "fork bomb (受控)" "$ROCKY_IP" \
   "(for i in 1 2 3 4 5; do (sleep 0.1 &) ; done; wait) 2>&1 | head -1 || true" \
@@ -153,18 +153,18 @@ trigger_and_check "lsmod 异常 module" "$ROCKY_IP" \
 
 # === 8. WebShell 写入 3 种 ===
 trigger_and_check "PHP webshell 写" "$ROCKY_IP" \
-  "echo '<?php @eval(\$_POST[\"cmd\"]); ?>' > /tmp/mxsec-shell.php; rm -f /tmp/mxsec-shell.php" \
+  "echo '<?php @eval(\$_POST[\"cmd\"]); ?>' > /tmp/mxcwpp-shell.php; rm -f /tmp/mxcwpp-shell.php" \
   "webshell|php|文件"
 trigger_and_check "JSP webshell 写" "$ROCKY_IP" \
-  "echo '<%@ page import=\"java.util.*,java.io.*\"%><% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>' > /tmp/mxsec-shell.jsp; rm -f /tmp/mxsec-shell.jsp" \
+  "echo '<%@ page import=\"java.util.*,java.io.*\"%><% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>' > /tmp/mxcwpp-shell.jsp; rm -f /tmp/mxcwpp-shell.jsp" \
   "webshell|jsp|文件"
 trigger_and_check "WebShell 大马 (wso)" "$ROCKY_IP" \
-  "echo 'wso25_marker_eval base64_decode str_rot13 system' > /tmp/mxsec-wso.php; rm -f /tmp/mxsec-wso.php" \
+  "echo 'wso25_marker_eval base64_decode str_rot13 system' > /tmp/mxcwpp-wso.php; rm -f /tmp/mxcwpp-wso.php" \
   "wso|webshell|文件"
 
 # === 9. DNS / 网络异常 2 种 ===
 trigger_and_check "DNS 隧道模拟" "$ROCKY_IP" \
-  "for i in 1 2 3 4 5 6 7 8 9 10; do dig +short +timeout=1 mxsec-test-\$i.invalid 2>/dev/null || true; done" \
+  "for i in 1 2 3 4 5 6 7 8 9 10; do dig +short +timeout=1 mxcwpp-test-\$i.invalid 2>/dev/null || true; done" \
   "dns|tunnel|隧道|信息"
 trigger_and_check "ICMP 大包" "$ROCKY_IP" \
   "ping -c 3 -s 1400 127.0.0.1 2>&1 | head -2 || true" \

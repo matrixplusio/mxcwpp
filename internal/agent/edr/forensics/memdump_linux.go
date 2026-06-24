@@ -12,8 +12,8 @@
 //
 // 输出:
 //
-//	/var/lib/mxsec-agent/forensics/mem-<host>-<pid>-<timestamp>.raw
-//	/var/lib/mxsec-agent/forensics/mem-<host>-full-<timestamp>.lime
+//	/var/lib/mxcwpp-agent/forensics/mem-<host>-<pid>-<timestamp>.raw
+//	/var/lib/mxcwpp-agent/forensics/mem-<host>-full-<timestamp>.lime
 //
 // 上传:
 //

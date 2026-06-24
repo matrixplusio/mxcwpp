@@ -4,7 +4,7 @@ set -uo pipefail
 ROCKY_IP="${ROCKY_IP:-192.168.254.109}"
 CENTOS_IP="${CENTOS_IP:-192.168.254.114}"
 MGR="${MGR:-http://localhost:8080}"
-JWT=$(/bin/cat /tmp/mxsec-jwt)
+JWT=$(/bin/cat /tmp/mxcwpp-jwt)
 CURL="/usr/bin/curl"
 JQ="/usr/bin/jq"
 
@@ -56,19 +56,19 @@ trigger_and_check "openssl 加密反弹" "$ROCKY_IP" \
 
 # === 持久化 (sudo) ===
 trigger_and_check "cron 写入 (sudo)" "$ROCKY_IP" \
-  "echo \"* * * * * root /tmp/mxsec-test.sh\" > /etc/cron.d/mxsec-test-\$\$ && rm -f /etc/cron.d/mxsec-test-\$\$" \
+  "echo \"* * * * * root /tmp/mxcwpp-test.sh\" > /etc/cron.d/mxcwpp-test-\$\$ && rm -f /etc/cron.d/mxcwpp-test-\$\$" \
   "cron|persistence|持久化|定时" yes
 trigger_and_check "systemd 服务写入 (sudo)" "$ROCKY_IP" \
-  "echo \"[Unit]\nDescription=mxsec-test\n[Service]\nExecStart=/bin/true\" > /etc/systemd/system/mxsec-test.service && rm -f /etc/systemd/system/mxsec-test.service" \
+  "echo \"[Unit]\nDescription=mxcwpp-test\n[Service]\nExecStart=/bin/true\" > /etc/systemd/system/mxcwpp-test.service && rm -f /etc/systemd/system/mxcwpp-test.service" \
   "systemd|service|持久化" yes
 trigger_and_check "rc.local 写 (sudo)" "$ROCKY_IP" \
   "echo \"#!/bin/sh\nexit 0\" > /etc/rc.local && chmod +x /etc/rc.local && rm -f /etc/rc.local" \
   "rc.local|持久化" yes
 trigger_and_check "bashrc 写入 ×10" "$ROCKY_IP" \
-  "for i in 1 2 3 4 5 6 7 8 9 10; do echo \"export MXSEC_TEST_\$i=1\" >> ~/.bashrc; done; sed -i '/MXSEC_TEST/d' ~/.bashrc" \
+  "for i in 1 2 3 4 5 6 7 8 9 10; do echo \"export MXCWPP_TEST_\$i=1\" >> ~/.bashrc; done; sed -i '/MXCWPP_TEST/d' ~/.bashrc" \
   "bashrc|profile|persistence|持久化"
 trigger_and_check "authorized_keys 写" "$ROCKY_IP" \
-  "mkdir -p ~/.ssh; for i in 1 2 3; do echo \"ssh-rsa AAAAB3NzaC1yc2EmxsecE2E\$i test@e2e\" >> ~/.ssh/authorized_keys; done; sed -i '/mxsecE2E/d' ~/.ssh/authorized_keys" \
+  "mkdir -p ~/.ssh; for i in 1 2 3; do echo \"ssh-rsa AAAAB3NzaC1yc2EmxcwppE2E\$i test@e2e\" >> ~/.ssh/authorized_keys; done; sed -i '/mxcwppE2E/d' ~/.ssh/authorized_keys" \
   "ssh|authorized|keys|persistence"
 trigger_and_check "ld.so.preload (sudo)" "$ROCKY_IP" \
   "echo /tmp/evil.so > /etc/ld.so.preload && rm -f /etc/ld.so.preload" \
@@ -81,17 +81,17 @@ trigger_and_check "sudo 失败 5 次" "$ROCKY_IP" \
 trigger_and_check "su root 失败" "$ROCKY_IP" \
   "echo wrong | su root -c whoami 2>&1 | head -1 || true" "su|提权|登录失败"
 trigger_and_check "SUID 创建 (sudo)" "$ROCKY_IP" \
-  "cp /bin/bash /tmp/mxsec-suid-bash && chmod u+s /tmp/mxsec-suid-bash && /tmp/mxsec-suid-bash -c whoami; rm -f /tmp/mxsec-suid-bash" \
+  "cp /bin/bash /tmp/mxcwpp-suid-bash && chmod u+s /tmp/mxcwpp-suid-bash && /tmp/mxcwpp-suid-bash -c whoami; rm -f /tmp/mxcwpp-suid-bash" \
   "suid|提权|privilege" yes
 trigger_and_check "capability setcap (sudo)" "$ROCKY_IP" \
-  "cp /bin/bash /tmp/mxsec-cap && setcap cap_net_admin+ep /tmp/mxsec-cap && getcap /tmp/mxsec-cap; rm -f /tmp/mxsec-cap" \
+  "cp /bin/bash /tmp/mxcwpp-cap && setcap cap_net_admin+ep /tmp/mxcwpp-cap && getcap /tmp/mxcwpp-cap; rm -f /tmp/mxcwpp-cap" \
   "cap|capability|提权" yes
 
 # === 横向 ===
 trigger_and_check "ssh 链式登录" "$ROCKY_IP" \
   "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes nobody@127.0.0.1 'whoami' 2>&1 | head -1 || true" "ssh|横向|lateral"
 trigger_and_check "wget+exec" "$ROCKY_IP" \
-  "wget -q -O /tmp/mxsec-wget-test http://127.0.0.1:1/ 2>&1; rm -f /tmp/mxsec-wget-test" "wget|download|横向"
+  "wget -q -O /tmp/mxcwpp-wget-test http://127.0.0.1:1/ 2>&1; rm -f /tmp/mxcwpp-wget-test" "wget|download|横向"
 trigger_and_check "curl pipe bash" "$ROCKY_IP" \
   "curl -s http://127.0.0.1:1/installer.sh 2>&1 | head -1; bash -c 'echo simulated curl-pipe-bash'" "curl|管道|download"
 trigger_and_check "scp 反弹" "$ROCKY_IP" \
@@ -113,15 +113,15 @@ trigger_and_check "kthread 伪装" "$ROCKY_IP" \
 
 # === WebShell ===
 trigger_and_check "PHP webshell" "$ROCKY_IP" \
-  "echo '<?php @eval(\$_POST[\"cmd\"]); ?>' > /tmp/mxsec-shell.php; rm -f /tmp/mxsec-shell.php" "webshell|php|文件"
+  "echo '<?php @eval(\$_POST[\"cmd\"]); ?>' > /tmp/mxcwpp-shell.php; rm -f /tmp/mxcwpp-shell.php" "webshell|php|文件"
 trigger_and_check "JSP webshell" "$ROCKY_IP" \
-  "echo '<%@ page import=\"java.util.*,java.io.*\"%><% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>' > /tmp/mxsec-shell.jsp; rm -f /tmp/mxsec-shell.jsp" "webshell|jsp|文件"
+  "echo '<%@ page import=\"java.util.*,java.io.*\"%><% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>' > /tmp/mxcwpp-shell.jsp; rm -f /tmp/mxcwpp-shell.jsp" "webshell|jsp|文件"
 trigger_and_check "WSO 大马" "$ROCKY_IP" \
-  "echo 'wso25_marker_eval base64_decode str_rot13 system' > /tmp/mxsec-wso.php; rm -f /tmp/mxsec-wso.php" "wso|webshell|文件"
+  "echo 'wso25_marker_eval base64_decode str_rot13 system' > /tmp/mxcwpp-wso.php; rm -f /tmp/mxcwpp-wso.php" "wso|webshell|文件"
 
 # === DNS / 网络 ===
 trigger_and_check "DNS 隧道 30 query" "$ROCKY_IP" \
-  "for i in \$(seq 1 30); do dig +short +timeout=1 mxsec-tunnel-\$i.invalid 2>/dev/null; done" "dns|tunnel|隧道|信息"
+  "for i in \$(seq 1 30); do dig +short +timeout=1 mxcwpp-tunnel-\$i.invalid 2>/dev/null; done" "dns|tunnel|隧道|信息"
 
 # === SSH 暴破 ===
 trigger_and_check "SSH 弱口令暴破 ×8" "$ROCKY_IP" \
@@ -134,7 +134,7 @@ trigger_and_check "centos7 bash /dev/tcp" "$CENTOS_IP" \
 
 # === 内存攻击 ===
 trigger_and_check "memfd_create syscall" "$ROCKY_IP" \
-  "python3 -c 'import ctypes, os; libc=ctypes.CDLL(\"libc.so.6\"); fd=libc.memfd_create(b\"mxsec\",0); os.write(fd, b\"#!/bin/sh\necho test\")' 2>&1 | head -1 || true" \
+  "python3 -c 'import ctypes, os; libc=ctypes.CDLL(\"libc.so.6\"); fd=libc.memfd_create(b\"mxcwpp\",0); os.write(fd, b\"#!/bin/sh\necho test\")' 2>&1 | head -1 || true" \
   "memfd|内存|hollow"
 
 # === 报告 ===

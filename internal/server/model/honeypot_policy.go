@@ -47,8 +47,8 @@ var DefaultHoneypotWhitelist = []string{
 	"/usr/bin/rclone",
 	"/usr/bin/find", // 运维巡检
 	"/usr/bin/grep",
-	"/usr/sbin/clamscan",           // 老牌 AV
-	"/opt/mxsec/agent/bin/scanner", // 我们自己的 scanner
+	"/usr/sbin/clamscan",            // 老牌 AV
+	"/opt/mxcwpp/agent/bin/scanner", // 我们自己的 scanner
 }
 
 // HoneypotDeploymentRecord 记录单台主机的诱饵部署快照。

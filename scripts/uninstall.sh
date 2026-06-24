@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 stop_service() {
     echo -e "${GREEN}Stopping agent service...${NC}"
     
-    if systemctl is-active --quiet mxsec-agent 2>/dev/null; then
-        systemctl stop mxsec-agent
+    if systemctl is-active --quiet mxcwpp-agent 2>/dev/null; then
+        systemctl stop mxcwpp-agent
         echo -e "${GREEN}Agent service stopped${NC}"
     else
         echo -e "${YELLOW}Agent service is not running${NC}"
@@ -27,8 +27,8 @@ stop_service() {
 disable_service() {
     echo -e "${GREEN}Disabling agent service...${NC}"
     
-    if systemctl is-enabled --quiet mxsec-agent 2>/dev/null; then
-        systemctl disable mxsec-agent
+    if systemctl is-enabled --quiet mxcwpp-agent 2>/dev/null; then
+        systemctl disable mxcwpp-agent
         echo -e "${GREEN}Agent service disabled${NC}"
     else
         echo -e "${YELLOW}Agent service is not enabled${NC}"
@@ -40,16 +40,16 @@ uninstall_package() {
     echo -e "${GREEN}Uninstalling agent package...${NC}"
     
     # 检测包管理器
-    if command -v rpm &> /dev/null && rpm -q mxsec-agent &> /dev/null; then
+    if command -v rpm &> /dev/null && rpm -q mxcwpp-agent &> /dev/null; then
         if command -v yum &> /dev/null; then
-            yum remove -y mxsec-agent
+            yum remove -y mxcwpp-agent
         elif command -v dnf &> /dev/null; then
-            dnf remove -y mxsec-agent
+            dnf remove -y mxcwpp-agent
         else
-            rpm -e mxsec-agent
+            rpm -e mxcwpp-agent
         fi
-    elif command -v dpkg &> /dev/null && dpkg -l | grep -q mxsec-agent; then
-        apt-get remove -y mxsec-agent || apt-get purge -y mxsec-agent
+    elif command -v dpkg &> /dev/null && dpkg -l | grep -q mxcwpp-agent; then
+        apt-get remove -y mxcwpp-agent || apt-get purge -y mxcwpp-agent
     else
         echo -e "${YELLOW}Agent package not found in package manager${NC}"
     fi
@@ -60,11 +60,11 @@ cleanup_files() {
     echo -e "${GREEN}Cleaning up agent files...${NC}"
     
     # 清理数据目录（可选，保留日志）
-    if [ -d "/var/lib/mxsec-agent" ]; then
-        read -p "Do you want to remove agent data directory (/var/lib/mxsec-agent)? [y/N]: " -n 1 -r
+    if [ -d "/var/lib/mxcwpp-agent" ]; then
+        read -p "Do you want to remove agent data directory (/var/lib/mxcwpp-agent)? [y/N]: " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf /var/lib/mxsec-agent
+            rm -rf /var/lib/mxcwpp-agent
             echo -e "${GREEN}Agent data directory removed${NC}"
         else
             echo -e "${YELLOW}Agent data directory kept${NC}"
@@ -72,11 +72,11 @@ cleanup_files() {
     fi
     
     # 清理日志目录（可选）
-    if [ -d "/var/log/mxsec-agent" ]; then
-        read -p "Do you want to remove agent log directory (/var/log/mxsec-agent)? [y/N]: " -n 1 -r
+    if [ -d "/var/log/mxcwpp-agent" ]; then
+        read -p "Do you want to remove agent log directory (/var/log/mxcwpp-agent)? [y/N]: " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf /var/log/mxsec-agent
+            rm -rf /var/log/mxcwpp-agent
             echo -e "${GREEN}Agent log directory removed${NC}"
         else
             echo -e "${YELLOW}Agent log directory kept${NC}"

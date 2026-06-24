@@ -1,6 +1,6 @@
 // Package commandsub 是 AC 的 Engine 命令订阅器。
 //
-// 职责: 订阅 Kafka mxsec.engine.command Topic, 把 Engine 产出的命令
+// 职责: 订阅 Kafka mxcwpp.engine.command Topic, 把 Engine 产出的命令
 // 解码并通过 transfer.Service 推送到目标 Agent (gRPC stream)。
 //
 // 实现 engine/scheduler.EngineCommander interface,
@@ -8,7 +8,7 @@
 //
 // 数据流:
 //
-//	Engine.Scheduler → kafka.Produce(mxsec.engine.command)
+//	Engine.Scheduler → kafka.Produce(mxcwpp.engine.command)
 //	                              │
 //	                              v
 //	                AC.commandsub.Consumer.ConsumeClaim
@@ -33,11 +33,11 @@ import (
 )
 
 // ConsumerGroupID 是 AC 订阅 Engine 命令使用的 Kafka ConsumerGroup。
-// 与 Consumer "mxsec-writers" / Engine "mxsec-engine" 完全隔离,
+// 与 Consumer "mxcwpp-writers" / Engine "mxcwpp-engine" 完全隔离,
 // 保证 Engine 命令既被 Consumer 持久化,又被 AC 真实推送 Agent。
-const ConsumerGroupID = "mxsec-ac-command"
+const ConsumerGroupID = "mxcwpp-ac-command"
 
-// CommandMessage 是 Engine 产出的命令 (落 Kafka mxsec.engine.command)。
+// CommandMessage 是 Engine 产出的命令 (落 Kafka mxcwpp.engine.command)。
 //
 // 字段对齐 docs/operating-modes.md §6 告警 schema 的 action 字段格式,
 // 这样 Engine 在 protect 模式下产生的处置 action 可直接走该 Topic 路由。
@@ -60,7 +60,7 @@ type AgentPusher interface {
 	PushToAgents(agentIDs []string, command []byte) (succeeded, failed int, err error)
 }
 
-// Consumer 是 AC 订阅 mxsec.engine.command 的消费器。
+// Consumer 是 AC 订阅 mxcwpp.engine.command 的消费器。
 type Consumer struct {
 	brokers []string
 	group   sarama.ConsumerGroup
@@ -106,7 +106,7 @@ func (c *Consumer) Start(ctx context.Context) {
 		defer c.wg.Done()
 		h := &handler{pusher: c.pusher, logger: c.logger}
 		for {
-			if err := c.group.Consume(ctx, []string{"mxsec.engine.command"}, h); err != nil {
+			if err := c.group.Consume(ctx, []string{"mxcwpp.engine.command"}, h); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -125,7 +125,7 @@ func (c *Consumer) Start(ctx context.Context) {
 	}()
 	c.logger.Info("AC commandsub started",
 		zap.String("group_id", ConsumerGroupID),
-		zap.String("topic", "mxsec.engine.command"),
+		zap.String("topic", "mxcwpp.engine.command"),
 	)
 }
 

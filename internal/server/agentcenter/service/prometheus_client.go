@@ -55,7 +55,7 @@ func (c *PrometheusClient) writeToPushgateway(ctx context.Context, hostID string
 
 	for name, value := range metrics {
 		// Prometheus 指标格式：metric_name{labels} value timestamp
-		metricLine := fmt.Sprintf("mxsec_host_%s{host_id=\"%s\"} %f %d\n",
+		metricLine := fmt.Sprintf("mxcwpp_host_%s{host_id=\"%s\"} %f %d\n",
 			name, hostID, value, timestamp.UnixMilli())
 		buf.WriteString(metricLine)
 	}
@@ -109,7 +109,7 @@ func (c *PrometheusClient) writeToRemoteWrite(ctx context.Context, hostID string
 				Name  string `json:"name"`
 				Value string `json:"value"`
 			}{
-				{Name: "__name__", Value: fmt.Sprintf("mxsec_host_%s", name)},
+				{Name: "__name__", Value: fmt.Sprintf("mxcwpp_host_%s", name)},
 				{Name: "host_id", Value: hostID},
 			},
 			Samples: []struct {

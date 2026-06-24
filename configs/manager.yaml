@@ -1,10 +1,10 @@
-# mxsec Manager 配置 (P1-5 viper schema)
+# mxcwpp Manager 配置 (P1-5 viper schema)
 #
-# 优先级: env (MXSEC_MANAGER_*) > 本文件 > 内置默认
+# 优先级: env (MXCWPP_MANAGER_*) > 本文件 > 内置默认
 # 示例 env:
-#   MXSEC_MANAGER_HTTP_ADDR=:9080
-#   MXSEC_MANAGER_DATABASE_DSN=mysql://...
-#   MXSEC_MANAGER_KAFKA_BROKERS=k1:9092,k2:9092
+#   MXCWPP_MANAGER_HTTP_ADDR=:9080
+#   MXCWPP_MANAGER_DATABASE_DSN=mysql://...
+#   MXCWPP_MANAGER_KAFKA_BROKERS=k1:9092,k2:9092
 
 http_addr: ":8080"
 jwt_secret: ""               # >= 32 chars, 必填
@@ -30,7 +30,7 @@ kafka:
 
 clickhouse:
   addr: "localhost:9000"
-  database: mxsec
+  database: mxcwpp
   user: default
   password: ""
 

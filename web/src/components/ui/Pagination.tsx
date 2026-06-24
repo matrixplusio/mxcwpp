@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils/cn";
@@ -15,6 +16,12 @@ const btn = "inline-flex h-8 w-8 items-center justify-center rounded-control bor
 export function Pagination({ page, pageSize, total, onChange }: Props) {
   const { t } = useTranslation();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // 数据变少导致当前页越界时（如 page=2 但只剩 1 页）自动回弹到末页，避免渲染空列表
+  useEffect(() => {
+    if (total > 0 && page > totalPages) {
+      onChange(totalPages);
+    }
+  }, [page, totalPages, total, onChange]);
   return (
     <div className="flex items-center justify-end gap-3 px-4 py-3 text-sm">
       <span className="text-muted">{t("common.totalItems", { count: total })}</span>

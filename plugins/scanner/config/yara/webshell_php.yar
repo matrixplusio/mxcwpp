@@ -15,7 +15,7 @@
 rule Webshell_PHP_Eval_Base64 {
     meta:
         description = "PHP 一句话: eval/assert + base64_decode"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -32,7 +32,7 @@ rule Webshell_PHP_Eval_Base64 {
 rule Webshell_PHP_Shell_Exec {
     meta:
         description = "PHP webshell 含命令执行函数 + 参数取自 GET/POST/COOKIE"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -48,7 +48,7 @@ rule Webshell_PHP_Shell_Exec {
 rule Webshell_PHP_Behinder {
     meta:
         description = "PHP Behinder (冰蝎) 一句话特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -65,7 +65,7 @@ rule Webshell_PHP_Behinder {
 rule Webshell_PHP_Godzilla {
     meta:
         description = "PHP Godzilla (哥斯拉) 特征 - aes 加密 + base64 payload"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -82,7 +82,7 @@ rule Webshell_PHP_Godzilla {
 rule Webshell_PHP_AntSword {
     meta:
         description = "PHP AntSword (蚁剑) 特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -99,7 +99,7 @@ rule Webshell_PHP_AntSword {
 rule Webshell_PHP_C99_R57 {
     meta:
         description = "PHP C99 / R57 大马特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -117,7 +117,7 @@ rule Webshell_PHP_C99_R57 {
 rule Webshell_PHP_File_Upload_To_Web {
     meta:
         description = "PHP 写入 .php 到 web 根目录 (上传后落地)"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "high"
         category = "webshell"
         attck = "T1505.003"

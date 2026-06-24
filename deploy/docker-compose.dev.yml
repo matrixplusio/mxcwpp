@@ -1,4 +1,4 @@
-name: mxsec-platform-dev
+name: mxcwpp-dev
 
 # 开发环境 compose 文件（独立，Air 热重载）
 # 启动：docker compose -f docker-compose.dev.yml up
@@ -7,12 +7,12 @@ services:
   # ==================== 基础设施 ====================
   mysql:
     image: mysql:8.4
-    container_name: mxsec-mysql
+    container_name: mxcwpp-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-mxsec}
-      MYSQL_USER: ${MYSQL_USER:-mxsec_user}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mxcwpp}
+      MYSQL_USER: ${MYSQL_USER:-mxcwpp_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: ${TZ:-Asia/Shanghai}
     ports:
@@ -29,11 +29,11 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   redis:
     image: redis:7-alpine
-    container_name: mxsec-redis
+    container_name: mxcwpp-redis
     restart: always
     command: >
       sh -c '
@@ -56,11 +56,11 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxsec-kafka
+    container_name: mxcwpp-kafka
     restart: always
     ports:
       - "9092:9092"
@@ -92,11 +92,11 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
-    container_name: mxsec-clickhouse
+    container_name: mxcwpp-clickhouse
     restart: always
     cap_add:
       - SYS_NICE
@@ -104,7 +104,7 @@ services:
       - "8123:8123"
       - "9000:9000"
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxsec}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxcwpp}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
       TZ: ${TZ:-Asia/Shanghai}
@@ -119,7 +119,7 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -130,8 +130,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.agentcenter.dev
-    image: mxsec-agentcenter:dev
-    container_name: mxsec-agentcenter-dev
+    image: mxcwpp-agentcenter:dev
+    container_name: mxcwpp-agentcenter-dev
     restart: unless-stopped
     depends_on:
       mysql:
@@ -146,8 +146,8 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
@@ -166,7 +166,7 @@ services:
           air -c configs/air/agentcenter.toml
         else
           echo '使用 go run 模式...';
-          go run ./cmd/server/agentcenter -config /etc/mxsec-platform/server.yaml
+          go run ./cmd/server/agentcenter -config /etc/mxcwpp/server.yaml
         fi
       "
     healthcheck:
@@ -176,14 +176,14 @@ services:
       retries: 5
       start_period: 120s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   manager:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.manager.dev
-    image: mxsec-manager:dev
-    container_name: mxsec-manager-dev
+    image: mxcwpp-manager:dev
+    container_name: mxcwpp-manager-dev
     restart: unless-stopped
     dns:
       - 8.8.8.8
@@ -200,8 +200,8 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
@@ -220,7 +220,7 @@ services:
           air -c configs/air/manager.toml
         else
           echo '使用 go run 模式...';
-          go run ./cmd/server/manager -config /etc/mxsec-platform/server.yaml
+          go run ./cmd/server/manager -config /etc/mxcwpp/server.yaml
         fi
       "
     healthcheck:
@@ -230,14 +230,14 @@ services:
       retries: 3
       start_period: 180s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   consumer:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.consumer.dev
-    image: mxsec-consumer:dev
-    container_name: mxsec-consumer-dev
+    image: mxcwpp-consumer:dev
+    container_name: mxcwpp-consumer-dev
     restart: unless-stopped
     depends_on:
       mysql:
@@ -251,8 +251,8 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
@@ -260,7 +260,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       GO_ENV: development
       # v2 拆分: Consumer 仅 writer 路径, CEL 检测全部交 Engine 服务
-      MXSEC_CONSUMER_ANALYSIS: "false"
+      MXCWPP_CONSUMER_ANALYSIS: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: >
@@ -273,7 +273,7 @@ services:
           air -c configs/air/consumer.toml
         else
           echo '使用 go run 模式...';
-          go run ./cmd/server/consumer -config /etc/mxsec-platform/server.yaml
+          go run ./cmd/server/consumer -config /etc/mxcwpp/server.yaml
         fi
       "
     healthcheck:
@@ -283,43 +283,17 @@ services:
       retries: 3
       start_period: 120s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
-  ui:
-    build:
-      context: ..
-      dockerfile: deploy/docker/Dockerfile.ui.dev
-    image: mxsec-ui:dev
-    container_name: mxsec-ui-dev
-    restart: unless-stopped
-    depends_on:
-      manager:
-        condition: service_healthy
-    ports:
-      - "3000:3000"
-    volumes:
-      - ../ui:/app:rw
-      - /app/node_modules
-      - ../configs/air/ui.toml:/etc/air/ui.toml:ro
-    working_dir: /app
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      NODE_ENV: development
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://0.0.0.0:3000/ 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    networks:
-      - mxsec-net
+  # 前端 web 不进容器：macOS 下 bind mount 走 virtiofs，dev 热更新慢。
+  # 前端在本机跑（make web-dev，端口 3000，代理 /api 到 host:8080），后端留容器。
 
   agent:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.agent.dev
-    image: mxsec-agent:dev
-    container_name: mxsec-agent-dev
+    image: mxcwpp-agent:dev
+    container_name: mxcwpp-agent-dev
     restart: unless-stopped
     depends_on:
       agentcenter:
@@ -327,9 +301,9 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - agent_data:/var/lib/mxsec-agent
-      - agent_logs:/var/log/mxsec-agent
-      - ./certs:/var/lib/mxsec-agent/certs:rw
+      - agent_data:/var/lib/mxcwpp-agent
+      - agent_logs:/var/log/mxcwpp-agent
+      - ./certs:/var/lib/mxcwpp-agent/certs:rw
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
@@ -351,7 +325,7 @@ services:
         fi
       "
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -360,7 +334,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.51.0
-    container_name: mxsec-prometheus
+    container_name: mxcwpp-prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -374,13 +348,13 @@ services:
       - "--storage.tsdb.retention.time=90d"
       - "--web.enable-lifecycle"
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   # 撤销：原计划部署 mysql/redis/kafka/clickhouse exporter + alertmanager
   # 重新评估后判定全部重复造轮子：
   #   - mysql/redis/clickhouse 指标已由 driver (gorm/redis INFO/system.metrics) 真实采集
   #   - kafka 指标已由 sarama admin 真实采集
-  #   - 告警路由已由 mxsec alerts 表 + notification 系统覆盖 (Lark/Webhook)
+  #   - 告警路由已由 mxcwpp alerts 表 + notification 系统覆盖 (Lark/Webhook)
   # 替代：Prometheus 直 webhook 到 manager /api/v1/internal/alerts/prometheus，
   #       告警入 alerts 表 (source=prometheus_infra)，复用现有 notification 分发。
 
@@ -389,7 +363,7 @@ services:
   # 通过 HTTP API: POST /forms/chromium/convert/url
   gotenberg:
     image: gotenberg/gotenberg:8
-    container_name: mxsec-gotenberg
+    container_name: mxcwpp-gotenberg
     restart: unless-stopped
     command:
       - "gotenberg"
@@ -404,15 +378,15 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   # ==================== Engine (检测引擎独立服务) ====================
   engine:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.consumer.dev
-    image: mxsec-consumer:dev
-    container_name: mxsec-engine-dev
+    image: mxcwpp-consumer:dev
+    container_name: mxcwpp-engine-dev
     restart: unless-stopped
     depends_on:
       mysql: { condition: service_healthy }
@@ -422,22 +396,22 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       GO_ENV: development
-      # v2 拆分: engine 接管 CEL 检测, consumer 仅 writer 路径 (MXSEC_CONSUMER_ANALYSIS=false)
-      MXSEC_ENGINE_DATABASE_DSN: "mxsec_user:123456@tcp(mysql:3306)/mxsec?charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
-      MXSEC_ENGINE_KAFKA_BROKERS: "kafka:9092"
-    networks: [mxsec-net]
+      # v2 拆分: engine 接管 CEL 检测, consumer 仅 writer 路径 (MXCWPP_CONSUMER_ANALYSIS=false)
+      MXCWPP_ENGINE_DATABASE_DSN: "mxcwpp_user:123456@tcp(mysql:3306)/mxcwpp?charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
+      MXCWPP_ENGINE_KAFKA_BROKERS: "kafka:9092"
+    networks: [mxcwpp-net]
     command: >
       sh -c "
         cd /workspace && mkdir -p tmp && go mod tidy &&
         echo '启动 Engine...' &&
-        go run ./cmd/server/engine -config /etc/mxsec-platform/server.yaml
+        go run ./cmd/server/engine -config /etc/mxcwpp/server.yaml
       "
 
   # ==================== VulnSync (漏洞情报融合) ====================
@@ -445,8 +419,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.consumer.dev
-    image: mxsec-consumer:dev
-    container_name: mxsec-vulnsync-dev
+    image: mxcwpp-consumer:dev
+    container_name: mxcwpp-vulnsync-dev
     restart: unless-stopped
     depends_on:
       mysql: { condition: service_healthy }
@@ -455,19 +429,19 @@ services:
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       GO_ENV: development
-    networks: [mxsec-net]
+    networks: [mxcwpp-net]
     command: >
       sh -c "
         cd /workspace && mkdir -p tmp && go mod tidy &&
         echo '启动 VulnSync...' &&
-        go run ./cmd/server/vulnsync -config /etc/mxsec-platform/server.yaml
+        go run ./cmd/server/vulnsync -config /etc/mxcwpp/server.yaml
       "
 
   # ==================== LLMProxy (LLM 网关) ====================
@@ -475,31 +449,48 @@ services:
     build:
       context: ..
       dockerfile: deploy/docker/Dockerfile.consumer.dev
-    image: mxsec-consumer:dev
-    container_name: mxsec-llmproxy-dev
+    image: mxcwpp-consumer:dev
+    container_name: mxcwpp-llmproxy-dev
     restart: unless-stopped
     depends_on:
       redis: { condition: service_healthy }
     volumes:
       - ../:/workspace:rw
       - /workspace/deploy/data
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     working_dir: /workspace
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       GO_ENV: development
-    networks: [mxsec-net]
+    networks: [mxcwpp-net]
     command: >
       sh -c "
         cd /workspace && mkdir -p tmp && go mod tidy &&
         echo '启动 LLMProxy...' &&
-        go run ./cmd/server/llmproxy -config /etc/mxsec-platform/server.yaml
+        go run ./cmd/server/llmproxy -config /etc/mxcwpp/server.yaml
       "
 
+  scanner:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.scanner
+    image: mxcwpp-scanner:dev
+    container_name: mxcwpp-scanner-dev
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+    volumes:
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - trivy_cache:/root/.cache/trivy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    networks: [mxcwpp-net]
+    command: ["-config", "/etc/mxcwpp/server.yaml"]
+
 networks:
-  mxsec-net:
+  mxcwpp-net:
     driver: bridge
 
 volumes:
@@ -512,4 +503,6 @@ volumes:
   agent_logs:
     driver: local
   prometheus_data:
+    driver: local
+  trivy_cache:
     driver: local

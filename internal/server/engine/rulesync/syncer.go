@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // rulesYAMLFile 规则 YAML 文件结构
@@ -48,7 +48,7 @@ func New(cfg config.RuleSyncConfig, db *gorm.DB, logger *zap.Logger) *Syncer {
 		cfg.Branch = "main"
 	}
 	if cfg.LocalDir == "" {
-		cfg.LocalDir = "/var/mxsec/rules-repo"
+		cfg.LocalDir = "/var/mxcwpp/rules-repo"
 	}
 	if cfg.Interval <= 0 {
 		cfg.Interval = 10 * time.Minute

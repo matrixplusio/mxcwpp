@@ -32,8 +32,8 @@ export TEST_DB_USER=root
 # 数据库密码（默认：123456）
 export TEST_DB_PASSWORD=123456
 
-# 数据库名称（默认：mxsec_test）
-export TEST_DB_NAME=mxsec_test
+# 数据库名称（默认：mxcwpp_test）
+export TEST_DB_NAME=mxcwpp_test
 ```
 
 ## 运行测试
@@ -62,7 +62,7 @@ go test -tags=e2e ./tests/e2e/... -v -run TestAssetCollectionE2E
 ### 创建测试数据库
 
 ```sql
-CREATE DATABASE IF NOT EXISTS mxsec_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS mxcwpp_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ### 清理测试数据（可选）
@@ -70,7 +70,7 @@ CREATE DATABASE IF NOT EXISTS mxsec_test CHARACTER SET utf8mb4 COLLATE utf8mb4_u
 测试运行后，如果需要清理测试数据：
 
 ```sql
-USE mxsec_test;
+USE mxcwpp_test;
 TRUNCATE TABLE scan_results;
 TRUNCATE TABLE scan_tasks;
 TRUNCATE TABLE rules;
@@ -80,7 +80,7 @@ TRUNCATE TABLE hosts;
 
 ## 注意事项
 
-1. **测试数据库隔离**：建议使用独立的测试数据库（如 `mxsec_test`），避免影响开发/生产数据
+1. **测试数据库隔离**：建议使用独立的测试数据库（如 `mxcwpp_test`），避免影响开发/生产数据
 2. **数据清理**：测试会在数据库中创建测试数据，测试完成后不会自动清理（便于调试）
 3. **并发测试**：如果多个测试同时运行，确保使用不同的数据库或表前缀
 
@@ -100,7 +100,7 @@ TRUNCATE TABLE hosts;
 ### 权限不足
 
 ```
-Error 1044: Access denied for user 'xxx'@'localhost' to database 'mxsec_test'
+Error 1044: Access denied for user 'xxx'@'localhost' to database 'mxcwpp_test'
 ```
 
 **解决方案**：

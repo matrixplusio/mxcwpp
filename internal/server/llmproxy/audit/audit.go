@@ -1,4 +1,4 @@
-// Package audit 把 LLM 调用日志推到 Kafka mxsec.llm.audit Topic。
+// Package audit 把 LLM 调用日志推到 Kafka mxcwpp.llm.audit Topic。
 //
 // 字段对齐 docs/llmproxy-design.md §3.6 audit。
 package audit
@@ -31,7 +31,7 @@ type Event struct {
 	// 不写入入参内容 (隐私), 仅记录元数据
 }
 
-// Logger 把 Event 写到 Kafka mxsec.llm.audit。
+// Logger 把 Event 写到 Kafka mxcwpp.llm.audit。
 type Logger struct {
 	producer sarama.SyncProducer
 	topic    string
@@ -44,7 +44,7 @@ func New(brokers []string, topic string, logger *zap.Logger) (*Logger, error) {
 		return nil, fmt.Errorf("audit: brokers must not be empty")
 	}
 	if topic == "" {
-		topic = "mxsec.llm.audit"
+		topic = "mxcwpp.llm.audit"
 	}
 	if logger == nil {
 		logger = zap.NewNop()

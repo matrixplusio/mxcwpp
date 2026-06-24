@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/ssrf"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/common/ssrf"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 )
 
 // VulnDataSourcesHandler 漏洞数据源 admin 配置 API。

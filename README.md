@@ -1,19 +1,19 @@
-# MxSec Platform Community Edition
+# MxCwpp Platform Community Edition
 
 **English | [中文](README_ZH.md)**
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform)
-[![License](https://img.shields.io/github/license/imkerbos/mxsec-platform)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/imkerbos/mxsec-platform?style=social)](https://github.com/imkerbos/mxsec-platform/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform/commits/main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/imkerbos/mxsec-platform)](https://goreportcard.com/report/github.com/imkerbos/mxsec-platform)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp)
+[![License](https://img.shields.io/github/license/matrixplusio/mxcwpp)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/matrixplusio/mxcwpp?style=social)](https://github.com/matrixplusio/mxcwpp/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/commits/main)
+[![Go Report Card](https://goreportcard.com/badge/github.com/matrixplusio/mxcwpp)](https://goreportcard.com/report/github.com/matrixplusio/mxcwpp)
 
 An open-source, enterprise-grade host and container security management platform. Covers security baselines, asset management, vulnerability scanning, antivirus, runtime detection, and compliance auditing — providing a unified management view for security operations teams.
 
 ## Community Edition
 
-MxSec Platform **Community Edition** includes the complete platform framework and all core security capabilities, sharing the same architecture as the internal version. The Community Edition is fully free with no license required. Currently open-sourced capabilities include:
+MxCwpp Platform **Community Edition** includes the complete platform framework and all core security capabilities, sharing the same architecture as the internal version. The Community Edition is fully free with no license required. Currently open-sourced capabilities include:
 
 - **Full on-device capabilities**: Agent data collection, asset fingerprinting, eBPF runtime probes, baseline check plugins, etc.
 - **Full backend capabilities**: AgentCenter, Manager, Consumer, service discovery — all horizontally scalable.
@@ -108,12 +108,12 @@ To build a more comprehensive security operations system, we recommend extending
 
 ```
 Browser ─→ Nginx ─→ Manager ×N ─→ MySQL / Redis / ClickHouse / Prometheus
-Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ Storage (持久化)
-                                                 └→ Engine ×N    ─→ Alerts (检测分析)
-Manager ──HTTP──→ LLMProxy ×N (多 LLM 适配)    VulnSync ×N ──Kafka──→ Engine/Manager
+Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ Storage (persist)
+                                                 └→ Engine ×N    ─→ Alerts (detection)
+Manager ──HTTP──→ LLMProxy ×N (multi-LLM gateway)   VulnSync ×N ──Kafka──→ Manager/Engine
 ```
 
-v2.0 后端拆分为 **六微服务**：Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync。控制面全部无状态，支持水平扩展。Kafka 解耦数据写入与检测（两个 ConsumerGroup 独立 offset），Redis 处理服务发现与分布式锁，ClickHouse 承载时序分析和事件归档。
+In v2.0 the backend is split into **six microservices**: Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync. The control plane is fully stateless and scales horizontally. Kafka decouples data persistence from detection (two ConsumerGroups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and event archives. VulnSync pulls OS vendor advisories and publishes them to Kafka, where the Manager consumer matches them against host software.
 
 See [Architecture Documentation](docs/architecture.md) for details.
 
@@ -122,7 +122,7 @@ See [Architecture Documentation](docs/architecture.md) for details.
 | Layer | Technology |
 |-------|------------|
 | Backend | Go 1.25+ (Gin / gRPC / Gorm / Zap) |
-| Frontend | Vue 3 + TypeScript + Pinia + Ant Design Vue 4 |
+| Frontend | Next.js 15 + React 19 + TypeScript + TailwindCSS + Zustand + TanStack Query |
 | Storage | MySQL 8.0+ / Redis 7 / ClickHouse 24 |
 | Messaging | Kafka (KRaft mode, 7 Topics + DLQ) |
 | Monitoring | Prometheus (sole data source for host metrics) |
@@ -138,8 +138,8 @@ See [Architecture Documentation](docs/architecture.md) for details.
 ## Quick Start
 
 ```bash
-git clone https://github.com/imkerbos/mxsec-platform.git
-cd mxsec-platform/deploy
+git clone https://github.com/matrixplusio/mxcwpp.git
+cd mxcwpp/deploy
 
 cp .env.example .env
 vim .env  # Edit SERVER_IP / JWT_SECRET / database passwords
@@ -168,7 +168,7 @@ make lint                                                # Lint check
 ## Project Structure
 
 ```
-mxsec-platform/
+mxcwpp/
 ├── cmd/                    # Entry points (agent + 6 server services + mxctl + tools)
 │   ├── agent/              # Agent entry
 │   └── server/             # manager / agentcenter / consumer / engine / llmproxy / vulnsync
@@ -177,7 +177,7 @@ mxsec-platform/
 │   └── agent/              # Agent (connection / transport / plugin / heartbeat / edr 25+ submods)
 ├── plugins/                # 11 plugins (baseline / collector / fim / scanner / avscanner / remediation / rasp-go / rasp-java / rasp-python / rasp-php / rasp-node)
 ├── api/proto/              # Protobuf definitions
-├── ui/                     # Frontend (Vue 3 + TypeScript)
+├── web/                    # Frontend (Next.js 15 + React 19 + TypeScript)
 ├── configs/                # Config files (server.yaml / agent.yaml / rule files)
 ├── deploy/                 # Docker Compose (dev / v2 / pret) + Nginx + systemd + prod cluster
 ├── scripts/                # Build and deployment scripts
@@ -196,7 +196,7 @@ mxsec-platform/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=imkerbos/mxsec-platform&type=Date)](https://star-history.com/#imkerbos/mxsec-platform&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=matrixplusio/mxcwpp&type=Date)](https://star-history.com/#matrixplusio/mxcwpp&Date)
 
 ## Contributors
 

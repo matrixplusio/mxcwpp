@@ -24,7 +24,7 @@
           {
             "type": "file_line_match",
             "param": [
-              "/etc/modprobe.d/mxsec-cramfs.conf",
+              "/etc/modprobe.d/mxcwpp-cramfs.conf",
               "install\\s+cramfs\\s+/bin/(true|false)",
               "match"
             ]
@@ -33,7 +33,7 @@
       },
       "fix": {
         "suggestion": "在 modprobe 配置中将 cramfs 模块加载重定向到 /bin/true 以阻止挂载。",
-        "command": "F=/etc/modprobe.d/mxsec-cramfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+cramfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+cramfs.*|install cramfs /bin/true|' \"$F\"; else echo 'install cramfs /bin/true' >> \"$F\"; fi"
+        "command": "F=/etc/modprobe.d/mxcwpp-cramfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+cramfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+cramfs.*|install cramfs /bin/true|' \"$F\"; else echo 'install cramfs /bin/true' >> \"$F\"; fi"
       }
     },
     {
@@ -48,7 +48,7 @@
           {
             "type": "file_line_match",
             "param": [
-              "/etc/modprobe.d/mxsec-squashfs.conf",
+              "/etc/modprobe.d/mxcwpp-squashfs.conf",
               "install\\s+squashfs\\s+/bin/(true|false)",
               "match"
             ]
@@ -57,7 +57,7 @@
       },
       "fix": {
         "suggestion": "在 modprobe 配置中将 squashfs 模块加载重定向到 /bin/true。",
-        "command": "F=/etc/modprobe.d/mxsec-squashfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+squashfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+squashfs.*|install squashfs /bin/true|' \"$F\"; else echo 'install squashfs /bin/true' >> \"$F\"; fi"
+        "command": "F=/etc/modprobe.d/mxcwpp-squashfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+squashfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+squashfs.*|install squashfs /bin/true|' \"$F\"; else echo 'install squashfs /bin/true' >> \"$F\"; fi"
       }
     },
     {
@@ -72,7 +72,7 @@
           {
             "type": "file_line_match",
             "param": [
-              "/etc/modprobe.d/mxsec-udf.conf",
+              "/etc/modprobe.d/mxcwpp-udf.conf",
               "install\\s+udf\\s+/bin/(true|false)",
               "match"
             ]
@@ -81,7 +81,7 @@
       },
       "fix": {
         "suggestion": "在 modprobe 配置中将 udf 模块加载重定向到 /bin/true。",
-        "command": "F=/etc/modprobe.d/mxsec-udf.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+udf' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+udf.*|install udf /bin/true|' \"$F\"; else echo 'install udf /bin/true' >> \"$F\"; fi"
+        "command": "F=/etc/modprobe.d/mxcwpp-udf.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+udf' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+udf.*|install udf /bin/true|' \"$F\"; else echo 'install udf /bin/true' >> \"$F\"; fi"
       }
     },
     {
@@ -486,7 +486,7 @@
           {
             "type": "file_line_match",
             "param": [
-              "/etc/sudoers.d/mxsec-logfile",
+              "/etc/sudoers.d/mxcwpp-logfile",
               "^\\s*Defaults\\s+logfile\\s*=",
               "match"
             ]
@@ -495,7 +495,7 @@
       },
       "fix": {
         "suggestion": "在 /etc/sudoers.d/ 下增加 Defaults logfile 配置，并用 visudo -cf 校验。",
-        "command": "F=/etc/sudoers.d/mxsec-logfile; T=$(mktemp); echo 'Defaults logfile=\"/var/log/sudo.log\"' > \"$T\"; if visudo -cf \"$T\" >/dev/null 2>&1; then install -m 0440 -o root -g root \"$T\" \"$F\"; rm -f \"$T\"; else rm -f \"$T\"; exit 1; fi"
+        "command": "F=/etc/sudoers.d/mxcwpp-logfile; T=$(mktemp); echo 'Defaults logfile=\"/var/log/sudo.log\"' > \"$T\"; if visudo -cf \"$T\" >/dev/null 2>&1; then install -m 0440 -o root -g root \"$T\" \"$F\"; rm -f \"$T\"; else rm -f \"$T\"; exit 1; fi"
       }
     },
     {
@@ -566,7 +566,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.ip_forward=0 并写入持久化配置。",
-        "command": "sysctl -w net.ipv4.ip_forward=0 && { F=/etc/sysctl.d/90-mxsec-baseline.conf; grep -q '^net.ipv4.ip_forward' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\" || echo 'net.ipv4.ip_forward = 0' >> \"$F\"; }"
+        "command": "sysctl -w net.ipv4.ip_forward=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.ip_forward' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\" || echo 'net.ipv4.ip_forward = 0' >> \"$F\"; }"
       }
     },
     {
@@ -589,7 +589,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.send_redirects=0 并持久化。",
-        "command": "sysctl -w net.ipv4.conf.all.send_redirects=0 && { F=/etc/sysctl.d/90-mxsec-baseline.conf; grep -q '^net.ipv4.conf.all.send_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.send_redirects.*|net.ipv4.conf.all.send_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.send_redirects = 0' >> \"$F\"; }"
+        "command": "sysctl -w net.ipv4.conf.all.send_redirects=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.send_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.send_redirects.*|net.ipv4.conf.all.send_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.send_redirects = 0' >> \"$F\"; }"
       }
     },
     {
@@ -612,7 +612,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.accept_redirects=0 并持久化。",
-        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && { F=/etc/sysctl.d/90-mxsec-baseline.conf; grep -q '^net.ipv4.conf.all.accept_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; }"
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.accept_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; }"
       }
     },
     {
@@ -635,7 +635,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.rp_filter=1 并持久化。",
-        "command": "sysctl -w net.ipv4.conf.all.rp_filter=1 && { F=/etc/sysctl.d/90-mxsec-baseline.conf; grep -q '^net.ipv4.conf.all.rp_filter' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.rp_filter.*|net.ipv4.conf.all.rp_filter = 1|' \"$F\" || echo 'net.ipv4.conf.all.rp_filter = 1' >> \"$F\"; }"
+        "command": "sysctl -w net.ipv4.conf.all.rp_filter=1 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.rp_filter' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.rp_filter.*|net.ipv4.conf.all.rp_filter = 1|' \"$F\" || echo 'net.ipv4.conf.all.rp_filter = 1' >> \"$F\"; }"
       }
     },
     {
@@ -658,7 +658,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.tcp_syncookies=1 并持久化。",
-        "command": "sysctl -w net.ipv4.tcp_syncookies=1 && { F=/etc/sysctl.d/90-mxsec-baseline.conf; grep -q '^net.ipv4.tcp_syncookies' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\" || echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; }"
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.tcp_syncookies' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\" || echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; }"
       }
     },
     {

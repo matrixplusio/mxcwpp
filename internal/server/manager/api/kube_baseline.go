@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // KubeBaselineHandler 基线检查 API Handler
@@ -119,6 +119,63 @@ func (h *KubeBaselineHandler) GetBaselineDetail(c *gin.Context) {
 	}
 
 	Success(c, check)
+}
+
+// ListBaselineTasks 基线检查任务列表（任务为指向：每次检测=一个任务）
+func (h *KubeBaselineHandler) ListBaselineTasks(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	clusterID := c.Query("cluster_id")
+
+	query := h.db.Model(&model.KubeBaselineTask{})
+	if clusterID != "" {
+		query = query.Where("cluster_id = ?", clusterID)
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var tasks []model.KubeBaselineTask
+	offset := (page - 1) * pageSize
+	if err := query.Offset(offset).Limit(pageSize).Order("id DESC").Find(&tasks).Error; err != nil {
+		h.logger.Error("查询基线任务列表失败", zap.Error(err))
+		InternalError(c, "查询基线任务列表失败")
+		return
+	}
+
+	SuccessPaginated(c, total, tasks)
+}
+
+// GetBaselineTaskDetail 单次基线任务详情（任务信息 + 该次 checklist）
+func (h *KubeBaselineHandler) GetBaselineTaskDetail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, "无效的任务 ID")
+		return
+	}
+
+	var task model.KubeBaselineTask
+	if err := h.db.First(&task, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			NotFound(c, "任务不存在")
+			return
+		}
+		InternalError(c, "查询任务失败")
+		return
+	}
+
+	// 该次任务的检查项（可选按结果/类别过滤）
+	q := h.db.Model(&model.KubeBaseline{}).Where("task_id = ?", task.ID)
+	if result := c.Query("result"); result != "" {
+		q = q.Where("result = ?", result)
+	}
+	if category := c.Query("category"); category != "" {
+		q = q.Where("category = ?", category)
+	}
+	var checks []model.KubeBaseline
+	q.Order("severity ASC, check_id ASC").Find(&checks)
+
+	Success(c, gin.H{"task": task, "items": checks})
 }
 
 // RunBaselineCheck 执行基线检查

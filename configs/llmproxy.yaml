@@ -1,11 +1,11 @@
-# mxsec LLMProxy 配置 (P1-5)
+# mxcwpp LLMProxy 配置 (P1-5)
 
 http_addr: ":8085"
 
 providers:
   openai:
     enabled: true
-    api_key: ""                # 通过 env MXSEC_LLMPROXY_PROVIDERS_OPENAI_API_KEY 注入
+    api_key: ""                # 通过 env MXCWPP_LLMPROXY_PROVIDERS_OPENAI_API_KEY 注入
     base_url: "https://api.openai.com/v1"
     model: "gpt-4o-mini"
   anthropic:
@@ -40,7 +40,7 @@ redis:
 
 kafka:
   brokers: []
-  # 用于落 LLM 审计 (mxsec.llm.audit topic)
+  # 用于落 LLM 审计 (mxcwpp.llm.audit topic)
 
 otel:
   enabled: false

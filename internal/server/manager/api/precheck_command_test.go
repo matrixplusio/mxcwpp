@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 func TestBuildCommandFromPreCheck(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 const (
@@ -79,19 +79,9 @@ func (v *VulnScanner) SyncOnly() error {
 		Error  string `json:"error,omitempty"`
 	}
 	var results []sourceResult
-	var coreErr error // 核心数据源失败
 
-	// 核心数据源：用 advisory.Coordinator 统一调度 RHSA/Rocky/USN/Debian/OSV
-	// 取代已 404 的 hydra REST NVD/RedHat sync，confidence=high 优先入库
-	if err := v.syncCoreAdvisories(); err != nil {
-		v.logger.Warn("advisory coordinator 同步失败", zap.Error(err))
-		results = append(results, sourceResult{Name: "advisory-coordinator", Status: "failed", Error: err.Error()})
-		if coreErr == nil {
-			coreErr = err
-		}
-	} else {
-		results = append(results, sourceResult{Name: "advisory-coordinator", Status: "success"})
-	}
+	// 注：OS advisory 拉源已剥离至 VulnSync 服务（VulnSync→Kafka→manager consumer 匹配）。
+	// SyncOnly 仅做元数据增强 + 优先级重算，不再 manager 内自拉 advisory。
 
 	// 增强数据源（失败不影响整体状态，按 cve_id 补全主表字段，不入独立 vuln）
 	// 走 vuln_data_sources 表的 enabled 配置：disabled 跳过
@@ -136,17 +126,14 @@ func (v *VulnScanner) SyncOnly() error {
 	duration := int(time.Since(startedAt).Seconds())
 	updates := map[string]any{"duration": duration}
 	resultsJSON, _ := json.Marshal(results)
-	if coreErr != nil {
-		updates["status"] = "failed"
-	} else {
-		updates["status"] = "success"
-		updates["version"] = time.Now().Format("20060102.150405")
-	}
+	// 增强源均 best-effort（失败仅记录在 results，不致整体失败）；advisory 拉源已移交 VulnSync。
+	updates["status"] = "success"
+	updates["version"] = time.Now().Format("20060102.150405")
 	updates["error_msg"] = string(resultsJSON)
 	v.db.Model(&record).Updates(updates)
 
-	v.logger.Info("漏洞库同步完成", zap.Int("duration_seconds", duration))
-	return coreErr
+	v.logger.Info("漏洞库同步完成（仅元数据增强）", zap.Int("duration_seconds", duration))
+	return nil
 }
 
 // GetLatestSyncStatus 查询最近一条漏洞相关同步记录
@@ -728,118 +715,6 @@ func roundUp(val float64) float64 {
 		return (truncated + 1) / 10
 	}
 	return truncated / 10
-}
-
-// syncCoreAdvisories 调用 advisory.Coordinator 拉取所有 OS Advisory + OSV 源。
-// 替代已废弃的 hydra REST NVD/RedHat 实现，confidence=high/medium 严格匹配入库。
-//
-// hosts 取自 hosts 表（host_packages 软件清单后续 collector 上报后再 join 入参，
-// 当前仅按 OS family + major 兼容性 match）。
-func (v *VulnScanner) syncCoreAdvisories() error {
-	// 必须 JOIN software 表带上每条主机的真实包清单，
-	// 否则 advisory matcher.Match 因 host.PkgName="" 永远不匹配 → host_vuln 全部为空。
-	// 历史 bug：原实现只查 hosts 表 OSFamily/OSMajor，advisory matcher 因 PkgName 空跳过所有 advisory，
-	// 但旧版本通过别的路径误写入 host_vuln，导致 prod 出现 690k+ debian/alpine 错关联 RHEL 主机。
-	// hosts 表无 ip 列（IP 在 network_interfaces JSON 内），advisory matcher 不依赖 IP，省略。
-	type hostPkgRow struct {
-		HostID      string
-		Hostname    string
-		OSFamily    string
-		OSVersion   string
-		Arch        string
-		PkgName     string
-		PkgVer      string
-		PkgEpoch    string
-		PkgRelease  string
-		PkgArch     string
-		PURL        string
-		PackageType string
-	}
-	var rows []hostPkgRow
-	if err := v.db.Table("hosts h").
-		Select("h.host_id, h.hostname, h.os_family, h.os_version, h.arch, s.name as pkg_name, s.version as pkg_ver, s.epoch as pkg_epoch, s.release as pkg_release, s.architecture as pkg_arch, s.purl, s.package_type").
-		Joins("JOIN software s ON s.host_id = h.host_id").
-		Where("h.status = ?", "online").
-		Find(&rows).Error; err != nil {
-		return fmt.Errorf("加载 host+software 清单失败: %w", err)
-	}
-	hostsAdv := make([]advisory.HostSoftware, 0, len(rows))
-	for _, r := range rows {
-		hostsAdv = append(hostsAdv, advisory.HostSoftware{
-			HostID:       r.HostID,
-			Hostname:     r.Hostname,
-			OSFamily:     r.OSFamily,
-			OSVer:        r.OSVersion,
-			OSMajor:      extractOSMajor(r.OSVersion),
-			Arch:         r.Arch,
-			PkgName:      r.PkgName,
-			PkgVer:       r.PkgVer,
-			PkgEpoch:     r.PkgEpoch,
-			PkgVerRaw:    r.PkgVer, // 旧字段含完整 version，新数据下与 PkgVer 一致
-			PkgRelease:   r.PkgRelease,
-			PkgArch:      r.PkgArch,
-			PURL:         r.PURL,
-			PkgEcosystem: pkgTypeToEcosystem(r.PackageType),
-			PkgManager:   pkgManagerFromType(r.PackageType, r.OSFamily),
-		})
-	}
-	v.logger.Info("advisory coordinator 输入清单", zap.Int("host_pkg_rows", len(hostsAdv)))
-
-	// 预查已入库 RHSA advisory ID，注入 RedHatSource skip 集合，
-	// 避免每次 sync 重复拉取已知 advisory 的 CSAF detail（5w 条全量 HTTP 不可接受）。
-	skipRHSA := v.loadKnownRHSAAdvisoryIDs()
-	v.logger.Info("已入库 RHSA advisory 集合", zap.Int("count", len(skipRHSA)))
-
-	rhsaSource := advisory.NewRedHatSource().
-		WithSkipAdvisoryIDs(skipRHSA)
-	sources := []advisory.Source{
-		rhsaSource,
-		advisory.NewRockySource(),
-		advisory.NewUbuntuSource(),
-		advisory.NewDebianSource(),
-		advisory.NewOSVSource(),
-		advisory.NewAlpineSource(),
-		advisory.NewCentOSSource(),
-	}
-
-	coord := advisory.NewCoordinator(v.db, v.logger).
-		WithSources(sources).
-		WithEnabledChecker(NewVulnDataSourceService(v.db, v.logger))
-	// 全量首跑 RHSA ~5w 条，并发 8 大约 30 min；为承载初次全量 + 富化耗时，timeout 2h。
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
-	defer cancel()
-	vulnCount, hostVulnCount, err := coord.Sync(ctx, time.Time{}, hostsAdv)
-	if err != nil {
-		return fmt.Errorf("coordinator sync: %w", err)
-	}
-	v.logger.Info("advisory coordinator 同步完成",
-		zap.Int("vuln_count", vulnCount),
-		zap.Int("host_vuln_count", hostVulnCount),
-		zap.Int("host_count", len(hostsAdv)),
-	)
-	return nil
-}
-
-// loadKnownRHSAAdvisoryIDs 从 vulnerabilities 表 source='rhsa' 记录的 reference_url
-// 反向解析出 advisory ID 集合，用于 RedHatSource 跳过已入库 advisory 的 detail HTTP。
-//
-// reference_url 形如 "https://access.redhat.com/errata/RHSA-2024:1234"，
-// 末段即 advisory ID。
-func (v *VulnScanner) loadKnownRHSAAdvisoryIDs() map[string]struct{} {
-	var urls []string
-	v.db.Model(&model.Vulnerability{}).
-		Where("source = ? AND reference_url != ''", "rhsa").
-		Pluck("DISTINCT reference_url", &urls)
-	out := make(map[string]struct{}, len(urls))
-	for _, u := range urls {
-		if slash := strings.LastIndex(u, "/"); slash >= 0 && slash < len(u)-1 {
-			id := u[slash+1:]
-			if strings.HasPrefix(strings.ToUpper(id), "RHSA-") {
-				out[id] = struct{}{}
-			}
-		}
-	}
-	return out
 }
 
 // wrapErr 把 func() error 适配成 func() (int64, error)（stub 没有 count）。

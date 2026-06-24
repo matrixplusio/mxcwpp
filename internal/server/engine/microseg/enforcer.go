@@ -102,10 +102,10 @@ func (e *Enforcer) Enforce(ctx context.Context, rec *PolicyRecommendation, mode 
 	if approvedBy == "" {
 		return nil, errors.New("approvedBy required (audit)")
 	}
-	policyName := fmt.Sprintf("mxsec-recommend-%s", rec.Namespace)
+	policyName := fmt.Sprintf("mxcwpp-recommend-%s", rec.Namespace)
 	yaml := rec.RenderYAML()
-	// 切到 enforce 模式: 改 mxsec.io/mode annotation
-	yaml = replaceFirst(yaml, "mxsec.io/mode: observe", fmt.Sprintf("mxsec.io/mode: %s", mode))
+	// 切到 enforce 模式: 改 mxcwpp.io/mode annotation
+	yaml = replaceFirst(yaml, "mxcwpp.io/mode: observe", fmt.Sprintf("mxcwpp.io/mode: %s", mode))
 
 	record := &EnforcementRecord{
 		TenantID:    rec.TenantID,

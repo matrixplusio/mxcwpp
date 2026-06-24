@@ -9,7 +9,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/IBM/sarama/mocks"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
 )
 
 // BenchmarkPipeline_NoStages 跑 pipeline 主路径无 stage 时的开销。
@@ -19,7 +19,7 @@ func BenchmarkPipeline_NoStages(b *testing.B) {
 	p := NewPipeline(nil, nil, nil, nil)
 	h := p.Handler()
 	msg := &sarama.ConsumerMessage{
-		Topic: "mxsec.agent.process",
+		Topic: "mxcwpp.agent.process",
 		Value: []byte(`{"tenant_id":"t1","host_id":"h1","data_type":1000}`),
 	}
 	b.ResetTimer()
@@ -45,7 +45,7 @@ func BenchmarkPipeline_OneStage(b *testing.B) {
 	p := NewPipeline(prod, resolver, []Stage{stage}, nil)
 	h := p.Handler()
 	msg := &sarama.ConsumerMessage{
-		Topic: "mxsec.agent.process",
+		Topic: "mxcwpp.agent.process",
 		Value: []byte(`{"tenant_id":"t1","host_id":"h1","data_type":1000}`),
 	}
 	b.ResetTimer()
@@ -66,7 +66,7 @@ func BenchmarkPipeline_VaryingStages(b *testing.B) {
 			p := NewPipeline(nil, mode.NewMemoryResolver(mode.Observe), stages, nil)
 			h := p.Handler()
 			msg := &sarama.ConsumerMessage{
-				Topic: "mxsec.agent.process",
+				Topic: "mxcwpp.agent.process",
 				Value: []byte(`{"tenant_id":"t1","host_id":"h1","data_type":1000}`),
 			}
 			b.ResetTimer()

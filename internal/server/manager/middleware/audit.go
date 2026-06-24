@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // 审计请求体最大捕获大小（4KB，超出截断）
@@ -139,7 +139,7 @@ func readAuditTarget(db *gorm.DB, logger *zap.Logger) string {
 	return "ch"
 }
 
-// writeAuditCH 把单条审计日志写到 CH mxsec.audit_log。
+// writeAuditCH 把单条审计日志写到 CH mxcwpp.audit_log。
 // CH 端 schema: timestamp / user_id / action / resource / detail / ip
 // MySQL 模型字段更丰富，部分序列化压缩到 resource+detail 字段。
 func writeAuditCH(conn chdriver.Conn, log *model.AuditLog) error {

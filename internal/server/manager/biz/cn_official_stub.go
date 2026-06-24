@@ -26,7 +26,7 @@ func checkChinaOfficialAvailable(ctx context.Context, url, name string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 mxsec-platform/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 mxcwpp/1.0")
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {

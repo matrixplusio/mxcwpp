@@ -151,7 +151,7 @@ func Generate(hostID, osName, osVersion string, packages []Package) *Format {
 		Metadata: Metadata{
 			Timestamp: now,
 			Tools: []Tool{
-				{Vendor: "mxsec", Name: "mxsec-platform", Version: "2.0"},
+				{Vendor: "mxcwpp", Name: "mxcwpp", Version: "2.0"},
 			},
 			Component: MainComponent{
 				Type:    "operating-system",

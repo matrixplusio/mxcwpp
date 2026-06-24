@@ -8,8 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
 )
 
 // Handler 是 AC HTTP 管理接口的处理器

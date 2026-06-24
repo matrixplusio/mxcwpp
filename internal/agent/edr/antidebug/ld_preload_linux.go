@@ -69,7 +69,7 @@ func NewLDPreloadScanner(logger *zap.Logger) *LDPreloadScanner {
 		logger: logger,
 		whitelistPrefixes: []string{
 			"/lib/", "/lib64/", "/usr/lib/", "/usr/lib64/", "/usr/local/lib/",
-			"/usr/local/lib64/", "/opt/mxsec/", "/proc/", "/dev/shm/mxsec_",
+			"/usr/local/lib64/", "/opt/mxcwpp/", "/proc/", "/dev/shm/mxcwpp_",
 		},
 		knownBadLibs: make(map[string]struct{}, len(KnownInjectionLibs)),
 	}
@@ -198,7 +198,7 @@ func (s *LDPreloadScanner) checkProcMaps(path string) *LDPreloadIndicator {
 		// 非系统路径 + .so → 可疑
 		if !strings.HasPrefix(soPath, "/usr/") &&
 			!strings.HasPrefix(soPath, "/lib") &&
-			!strings.HasPrefix(soPath, "/opt/mxsec/") {
+			!strings.HasPrefix(soPath, "/opt/mxcwpp/") {
 			unknownLibs = append(unknownLibs, soPath)
 		}
 	}

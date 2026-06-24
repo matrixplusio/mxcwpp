@@ -29,5 +29,5 @@ CA 私钥 `ca.key` 是集群信任根，**必须**异地备份（一旦丢失全
 | 现象 | 检查 |
 |---|---|
 | agent TLS handshake fail `hostname mismatch` | `openssl x509 -in server.crt -noout -ext subjectAltName` 对比 `cluster.yaml` additional_sans |
-| 新 deploy 后 agent 全断 + 无 reconnect | 验证 CA 是否被换：`openssl x509 -in ca.crt -noout -fingerprint -sha256` vs agent 端 `/var/lib/mxsec-agent/certs/ca.crt` |
+| 新 deploy 后 agent 全断 + 无 reconnect | 验证 CA 是否被换：`openssl x509 -in ca.crt -noout -fingerprint -sha256` vs agent 端 `/var/lib/mxcwpp-agent/certs/ca.crt` |
 | render 无 reissue 但 SAN 不对 | 跑 `mxctl render -f deploy/prod/cluster.yaml` 看 stderr 是否输出 `server.crt SAN 已更新并重签` 警告 |

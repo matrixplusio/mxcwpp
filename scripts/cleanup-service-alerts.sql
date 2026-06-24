@@ -15,7 +15,7 @@
 --      （参考 internal/server/manager/biz/fim_escalation.go 模式）
 --
 -- 使用方法：
---   mysql -u<user> -p<pass> mxsec_platform < scripts/cleanup-service-alerts.sql
+--   mysql -u<user> -p<pass> mxcwpp_platform < scripts/cleanup-service-alerts.sql
 -- ============================================================================
 
 -- 步骤 1: 统计待清理数据

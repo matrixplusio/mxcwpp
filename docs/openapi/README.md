@@ -1,4 +1,4 @@
-# mxsec OpenAPI 3.0 Schema
+# mxcwpp OpenAPI 3.0 Schema
 
 ref/09 模块 9 M2-P2-1: OpenAPI 3.0 schema + 客户 SDK.
 
@@ -17,14 +17,14 @@ docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
   -i /local/docs/openapi/openapi.yaml \
   -g python \
   -o /local/sdk/python \
-  --additional-properties=packageName=mxsec_sdk,packageVersion=2.0.0
+  --additional-properties=packageName=mxcwpp_sdk,packageVersion=2.0.0
 
 # Go SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
   -i /local/docs/openapi/openapi.yaml \
   -g go \
   -o /local/sdk/go \
-  --additional-properties=packageName=mxsec
+  --additional-properties=packageName=mxcwpp
 
 # TypeScript SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
@@ -37,7 +37,7 @@ docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
   -i /local/docs/openapi/openapi.yaml \
   -g java \
   -o /local/sdk/java \
-  --additional-properties=groupId=io.mxsec,artifactId=mxsec-sdk,artifactVersion=2.0.0
+  --additional-properties=groupId=io.mxcwpp,artifactId=mxcwpp-sdk,artifactVersion=2.0.0
 ```
 
 ## Swagger UI 部署

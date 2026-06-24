@@ -2,7 +2,7 @@
 //
 // 严格 read-only 哲学 (Sprint 4 PR63 起):
 //
-//	mxsec RASP 仅做观察 + 告警,不阻断业务,不抛异常,不修改进程行为。
+//	mxcwpp RASP 仅做观察 + 告警,不阻断业务,不抛异常,不修改进程行为。
 //	Agent 端 JVMTI Agent / php-fpm extension / Python pep667 hook
 //	仅采集事件,不参与控制流。
 //
@@ -84,7 +84,7 @@ func (e *Event) EnsureObserveMode() {
 	e.Mode = "observe"
 }
 
-// Marshal 序列化 (落 Kafka mxsec.engine.alert 用)。
+// Marshal 序列化 (落 Kafka mxcwpp.engine.alert 用)。
 func (e *Event) Marshal() ([]byte, error) {
 	e.EnsureObserveMode()
 	return json.Marshal(e)

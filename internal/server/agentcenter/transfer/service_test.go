@@ -5,8 +5,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 func TestBuildPluginDownloadURLsSkipsLegacyFileURL(t *testing.T) {

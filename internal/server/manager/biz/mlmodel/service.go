@@ -7,7 +7,7 @@
 //  3. G5 模型验证闸门: ROC/影子模式跑通后 approved=true
 //  4. 安全工程师创建订阅 → ml_model_subscriptions (host_id 或 label_selector)
 //  5. Agent 心跳带 model_manifest → Manager 计算 diff → 返回拉取 URL
-//  6. Agent 下载落 /opt/mxsec/agent/models/<spec_id>/<filename> + 校验 sha256
+//  6. Agent 下载落 /opt/mxcwpp/agent/models/<spec_id>/<filename> + 校验 sha256
 //  7. Agent 回报 → ml_model_deployment_status
 //
 // 选择复用 component 而非新建独立分发系统的原因:
@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // Service 管理 ML 模型生命周期 + 订阅 + 部署状态。

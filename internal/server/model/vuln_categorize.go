@@ -67,7 +67,7 @@ const (
 	FixOwnerImageMaintainer = "image_maintainer" // 镜像维护者: container/image
 	FixOwnerCloudProvider   = "cloud_provider"   // 云厂商 GCP/AWS/Azure 系统 agent
 	FixOwnerAPMVendor       = "apm_vendor"       // SkyWalking/Datadog 等 APM 探针
-	FixOwnerPlatformTeam    = "platform_team"    // mxsec 平台自身组件
+	FixOwnerPlatformTeam    = "platform_team"    // mxcwpp 平台自身组件
 	FixOwnerUnknown         = "unknown"
 )
 
@@ -80,7 +80,7 @@ const (
 const (
 	SubscopeCloudAgent      = "cloud_agent"      // GCP/AWS/Azure/Aliyun 自带
 	SubscopeMonitoringAgent = "monitoring_agent" // SkyWalking/Datadog/Prometheus exporter
-	SubscopeSecurityAgent   = "security_agent"   // mxsec-agent/EDR/ClamAV
+	SubscopeSecurityAgent   = "security_agent"   // mxcwpp-agent/EDR/ClamAV
 	SubscopeSystemTool      = "system_tool"      // OS 自带工具 buildah/podman/skopeo/runc/git (RPM 装的 Go binary)
 	SubscopeSystemLib       = "system_lib"       // glibc/libssl 关键共享库
 	SubscopeOSPackage       = "os_package"       // 主流 OS RPM/DEB
@@ -130,9 +130,9 @@ var systemPathPatterns = []struct {
 	{"/usr/sbin/telegraf", SubscopeMonitoringAgent},
 
 	// 安全平台
-	{"/usr/bin/mxsec-agent", SubscopeSecurityAgent},
-	{"/var/lib/mxsec-agent/", SubscopeSecurityAgent},
-	{"/var/lib/mxsec/", SubscopeSecurityAgent},
+	{"/usr/bin/mxcwpp-agent", SubscopeSecurityAgent},
+	{"/var/lib/mxcwpp-agent/", SubscopeSecurityAgent},
+	{"/var/lib/mxcwpp/", SubscopeSecurityAgent},
 	{"/usr/sbin/clamd", SubscopeSecurityAgent},
 	{"/usr/bin/clamav", SubscopeSecurityAgent},
 	{"/usr/bin/freshclam", SubscopeSecurityAgent},

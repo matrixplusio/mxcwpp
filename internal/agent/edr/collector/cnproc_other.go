@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 type cnProcListener struct{} //nolint:unused

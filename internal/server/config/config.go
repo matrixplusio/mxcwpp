@@ -38,6 +38,10 @@ type VulnConfig struct {
 	// 配 key 后 50 req / 30s(0.6s 间隔,~1h)。
 	// 申请: https://nvd.nist.gov/developers/request-an-api-key
 	NVDAPIKey string `mapstructure:"nvd_api_key"`
+
+	// VulnSyncURL VulnSync 服务地址（如 http://vulnsync:8083）。
+	// advisory-sync 手动 API 经此触发 VulnSync 立即拉取；留空则该 API 返回未配置提示。
+	VulnSyncURL string `mapstructure:"vulnsync_url"`
 }
 
 // PDFConfig 服务端 PDF 生成（Gotenberg sidecar）配置。
@@ -60,7 +64,7 @@ type RuleSyncConfig struct {
 	Enabled  bool          `mapstructure:"enabled"`   // 是否启用 Git 规则同步
 	GitURL   string        `mapstructure:"git_url"`   // Git 仓库 URL（支持 HTTPS/SSH）
 	Branch   string        `mapstructure:"branch"`    // 分支名（默认 main）
-	LocalDir string        `mapstructure:"local_dir"` // 本地克隆目录（默认 /var/mxsec/rules-repo）
+	LocalDir string        `mapstructure:"local_dir"` // 本地克隆目录（默认 /var/mxcwpp/rules-repo）
 	Interval time.Duration `mapstructure:"interval"`  // 同步间隔（默认 10m）
 }
 
@@ -98,7 +102,7 @@ type ServerConfig struct {
 	JWTSecret      string             `mapstructure:"jwt_secret"`      // JWT 密钥，用于生成和验证 Token
 	ManagerAddr    string             `mapstructure:"manager_addr"`    // AC 向 Manager SD 注册的 Manager HTTP 地址（如 http://manager:8080）
 	InstanceID     string             `mapstructure:"instance_id"`     // AC 实例唯一 ID（多实例部署时区分，留空则用 hostname）
-	ExternalURL    string             `mapstructure:"external_url"`    // 外网访问地址（如 https://mxsec.example.com），用于拼接 K8s Audit Webhook URL
+	ExternalURL    string             `mapstructure:"external_url"`    // 外网访问地址（如 https://mxcwpp.example.com），用于拼接 K8s Audit Webhook URL
 	CORSOrigins    []string           `mapstructure:"cors_origins"`    // CORS 允许的 Origin 列表（为空时默认仅允许同源访问）
 	InternalSecret string             `mapstructure:"internal_secret"` // AC 内部通信共享密钥（为空时不验证）
 	InternalMTLS   InternalMTLSConfig `mapstructure:"internal_mtls"`   // v2.0: AC↔Manager 内部通信 mTLS 配置
@@ -359,7 +363,7 @@ type PrometheusConfig struct {
 	QueryURL       string `mapstructure:"query_url"`        // Prometheus Query API URL（用于查询，如果为空则从 remote_write_url 提取）
 	// 如果使用 Pushgateway
 	PushgatewayURL string        `mapstructure:"pushgateway_url"` // Pushgateway URL（可选，与 remote_write_url 二选一）
-	JobName        string        `mapstructure:"job_name"`        // Job 名称（默认 "mxsec-platform"）
+	JobName        string        `mapstructure:"job_name"`        // Job 名称（默认 "mxcwpp"）
 	Timeout        time.Duration `mapstructure:"timeout"`         // 请求超时（默认 10 秒）
 }
 
@@ -376,11 +380,11 @@ func Load(configPath string) (*Config, error) {
 		v.SetConfigType("yaml")
 		v.AddConfigPath(".")
 		v.AddConfigPath("./configs")
-		v.AddConfigPath("/etc/mxsec-server")
+		v.AddConfigPath("/etc/mxcwpp-server")
 	}
 
 	// 设置环境变量支持
-	v.SetEnvPrefix("MXSEC_SERVER")
+	v.SetEnvPrefix("MXCWPP_SERVER")
 	v.AutomaticEnv()
 
 	// 读取配置文件
@@ -466,7 +470,7 @@ func setDefaults(cfg *Config, logFileSet bool) {
 	// 只有在配置文件中没有明确设置 log.file 字段时，才设置默认值
 	// 如果配置文件中设置了 file: ""，表示明确禁用文件日志，不设置默认值
 	if !logFileSet && cfg.Log.File == "" {
-		cfg.Log.File = "/var/log/mxsec-server/server.log"
+		cfg.Log.File = "/var/log/mxcwpp-server/server.log"
 	}
 	if cfg.Log.MaxAge == 0 {
 		cfg.Log.MaxAge = 30
@@ -477,7 +481,7 @@ func setDefaults(cfg *Config, logFileSet bool) {
 		cfg.Agent.HeartbeatInterval = 60
 	}
 	if cfg.Agent.WorkDir == "" {
-		cfg.Agent.WorkDir = "/var/lib/mxsec-agent"
+		cfg.Agent.WorkDir = "/var/lib/mxcwpp-agent"
 	}
 
 	// Metrics 默认配置
@@ -499,7 +503,7 @@ func setDefaults(cfg *Config, logFileSet bool) {
 		cfg.Metrics.MySQL.Enabled = false
 		// Prometheus 配置默认值
 		if cfg.Metrics.Prometheus.JobName == "" {
-			cfg.Metrics.Prometheus.JobName = "mxsec-platform"
+			cfg.Metrics.Prometheus.JobName = "mxcwpp"
 		}
 		if cfg.Metrics.Prometheus.Timeout == 0 {
 			cfg.Metrics.Prometheus.Timeout = 10 * time.Second
@@ -551,7 +555,7 @@ func setDefaults(cfg *Config, logFileSet bool) {
 		cfg.ClickHouse.Addrs = []string{"clickhouse:9000"}
 	}
 	if cfg.ClickHouse.Database == "" {
-		cfg.ClickHouse.Database = "mxsec"
+		cfg.ClickHouse.Database = "mxcwpp"
 	}
 	if cfg.ClickHouse.Username == "" {
 		cfg.ClickHouse.Username = "default"
@@ -583,7 +587,7 @@ func setDefaults(cfg *Config, logFileSet bool) {
 
 	// Plugins 默认配置
 	if cfg.Plugins.Dir == "" {
-		cfg.Plugins.Dir = "/opt/mxsec-platform/plugins"
+		cfg.Plugins.Dir = "/opt/mxcwpp/plugins"
 	}
 	// BaseURL 为空时，由 Manager 下发相对 HTTP 下载路径。
 }

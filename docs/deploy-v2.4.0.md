@@ -12,7 +12,7 @@
 ## 当前状态
 
 - ✅ Schema + hooks + ETL 工具 + setup 注入：commit `224c767` 已推 main
-- ✅ Prod node1 `/data/src/mxsec-platform` 已 `git pull` 最新
+- ✅ Prod node1 `/data/src/mxcwpp` 已 `git pull` 最新
 - ✅ ETL 二进制已编译：prod node1 `/tmp/etl-alerts-vulns-ch`
 - ⏳ Prod CH 3 张表未建（待 manager 2.4.0 启动自动 ensureSchemas）
 - ⏳ Prod 仍跑 2.3.0（未 bump 也未 deploy）
@@ -24,7 +24,7 @@
 
 ```bash
 ssh -p 51337 devops@35.241.106.122
-cd /data/src/mxsec-platform
+cd /data/src/mxcwpp
 sudo sed -i 's/version: 2.3.0/version: 2.4.0/' deploy/prod/cluster.yaml
 sudo grep '^  version:' deploy/prod/cluster.yaml  # 验证 2.4.0
 ```
@@ -32,7 +32,7 @@ sudo grep '^  version:' deploy/prod/cluster.yaml  # 验证 2.4.0
 ### 2. build + push 5 images
 
 ```bash
-sudo ./scripts/build-images.sh --version 2.4.0 --registry harbor.slileisure.com/mxsec --push
+sudo ./scripts/build-images.sh --version 2.4.0 --registry harbor.slileisure.com/mxcwpp --push
 ```
 
 ### 3. mxctl deploy
@@ -46,7 +46,7 @@ sudo ./bin/mxctl deploy -f deploy/prod/cluster.yaml
 ### 4. 验证 CH 表已建
 
 ```bash
-sudo ssh -p 51337 centos@10.170.3.3 'sudo docker exec mxsec-clickhouse clickhouse-client --user default --password 6a59253f957fbbeefe11676f7f3b269b --database mxsec -q "SHOW TABLES LIKE \"alerts\"; SHOW TABLES LIKE \"%vuln%\""'
+sudo ssh -p 51337 centos@10.170.3.3 'sudo docker exec mxcwpp-clickhouse clickhouse-client --user default --password 6a59253f957fbbeefe11676f7f3b269b --database mxcwpp -q "SHOW TABLES LIKE \"alerts\"; SHOW TABLES LIKE \"%vuln%\""'
 ```
 
 ### 5. 历史数据迁移 ETL
@@ -65,14 +65,14 @@ sudo /tmp/etl-alerts-vulns-ch -config deploy/prod/out/prod-cluster/nodes/node1-c
 ### 6. 抽样验证查询
 
 ```bash
-sudo ssh -p 51337 centos@10.170.3.3 'sudo docker exec mxsec-clickhouse clickhouse-client --user default --password 6a59253f957fbbeefe11676f7f3b269b --database mxsec -q "SELECT count() FROM alerts FINAL; SELECT count() FROM vulnerabilities FINAL; SELECT count() FROM host_vulnerabilities FINAL"'
+sudo ssh -p 51337 centos@10.170.3.3 'sudo docker exec mxcwpp-clickhouse clickhouse-client --user default --password 6a59253f957fbbeefe11676f7f3b269b --database mxcwpp -q "SELECT count() FROM alerts FINAL; SELECT count() FROM vulnerabilities FINAL; SELECT count() FROM host_vulnerabilities FINAL"'
 ```
 
 预期 alerts ≥ 16312、vulnerabilities ≥ 51394、host_vulnerabilities ≥ 919468。
 
 ### 7. 测 PDF (验证报告附录已写 ClickHouse)
 
-打开 http://mxsec.sl-devops.com 各报告页「导出 PDF」按钮，检查最后一章「附录」数据来源是否写 ClickHouse。
+打开 http://mxcwpp.sl-devops.com 各报告页「导出 PDF」按钮，检查最后一章「附录」数据来源是否写 ClickHouse。
 
 ## 回滚
 

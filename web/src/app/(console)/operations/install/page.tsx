@@ -75,20 +75,20 @@ export default function InstallPage() {
 
   const autoInstall = useMemo(
     () =>
-      `MXSEC_HTTP_SERVER=${httpVal} MXSEC_AGENT_SERVER=${grpcVal} bash -c "$(curl -fsSL http://${curlBase}/agent/install.sh)"`,
+      `MXCWPP_HTTP_SERVER=${httpVal} MXCWPP_AGENT_SERVER=${grpcVal} bash -c "$(curl -fsSL http://${curlBase}/agent/install.sh)"`,
     [httpVal, grpcVal, curlBase],
   );
 
   const manualInstall = useMemo(() => {
     const arch = "amd64";
     return pkgType === "rpm"
-      ? `curl -fsSL -o mxsec-agent.rpm http://${httpVal}/api/v1/agent/download/rpm/${arch} && yum install -y ./mxsec-agent.rpm && rm -f mxsec-agent.rpm`
-      : `curl -fsSL -o mxsec-agent.deb http://${httpVal}/api/v1/agent/download/deb/${arch} && apt-get install -y ./mxsec-agent.deb && rm -f mxsec-agent.deb`;
+      ? `curl -fsSL -o mxcwpp-agent.rpm http://${httpVal}/api/v1/agent/download/rpm/${arch} && yum install -y ./mxcwpp-agent.rpm && rm -f mxcwpp-agent.rpm`
+      : `curl -fsSL -o mxcwpp-agent.deb http://${httpVal}/api/v1/agent/download/deb/${arch} && apt-get install -y ./mxcwpp-agent.deb && rm -f mxcwpp-agent.deb`;
   }, [httpVal, pkgType]);
 
   const uninstall = `bash -c "$(curl -fsSL http://${curlBase}/agent/uninstall.sh)"`;
-  const statusCmd = "systemctl status mxsec-agent";
-  const logCmd = "journalctl -u mxsec-agent -n 50 --no-pager | grep -i connect";
+  const statusCmd = "systemctl status mxcwpp-agent";
+  const logCmd = "journalctl -u mxcwpp-agent -n 50 --no-pager | grep -i connect";
 
   return (
     <div className="space-y-4">

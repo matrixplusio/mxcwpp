@@ -11,7 +11,7 @@
 ./scripts/build-images.sh --version v1.0.0
 
 # 或构建并推送到私有仓库
-./scripts/build-images.sh --version v1.0.0 --registry harbor.example.com/mxsec --push
+./scripts/build-images.sh --version v1.0.0 --registry harbor.example.com/mxcwpp --push
 ```
 
 ### 2. 开发机：打包部署包
@@ -21,21 +21,21 @@
 ./scripts/package-deploy.sh --version v1.0.0
 
 # 如果使用私有仓库
-./scripts/package-deploy.sh --version v1.0.0 --registry harbor.example.com/mxsec
+./scripts/package-deploy.sh --version v1.0.0 --registry harbor.example.com/mxcwpp
 
-# 输出: dist/deploy/mxsec-platform-v1.0.0.tar.gz
+# 输出: dist/deploy/mxcwpp-v1.0.0.tar.gz
 ```
 
 ### 3. 生产服务器：部署
 
 ```bash
 # 上传并解压
-scp dist/deploy/mxsec-platform-v1.0.0.tar.gz root@server:/opt/
+scp dist/deploy/mxcwpp-v1.0.0.tar.gz root@server:/opt/
 ssh root@server
 
 cd /opt
-tar -xzf mxsec-platform-v1.0.0.tar.gz
-cd mxsec-platform-v1.0.0
+tar -xzf mxcwpp-v1.0.0.tar.gz
+cd mxcwpp-v1.0.0
 
 # 交互式初始化（首次部署，生成 .env / 证书 / 配置）
 ./deploy.sh
@@ -54,7 +54,7 @@ docker compose --env-file .env up -d \
 ## 部署包内容
 
 ```
-mxsec-platform-v1.0.0/
+mxcwpp-v1.0.0/
 ├── deploy.sh           # 部署脚本
 ├── docker-compose.yml  # 服务编排
 ├── init.sql            # 数据库初始化
@@ -107,8 +107,8 @@ mxsec-platform-v1.0.0/
 # ============ 数据库 ============
 MYSQL_ROOT_PASSWORD=xxx        # MySQL root 密码
 MYSQL_PASSWORD=xxx             # 应用密码
-MYSQL_DATABASE=mxsec           # 数据库名
-MYSQL_USER=mxsec_user          # 应用用户名
+MYSQL_DATABASE=mxcwpp           # 数据库名
+MYSQL_USER=mxcwpp_user          # 应用用户名
 MYSQL_HOST=mysql               # 数据库地址（Docker 内部用 mysql）
 MYSQL_PORT=3306                # 数据库端口
 
@@ -136,7 +136,7 @@ PROMETHEUS_ENABLED=true
 PROMETHEUS_QUERY_URL=http://prometheus:9090
 
 # ============ 数据目录 ============
-DATA_DIR=/data/mxsec           # 持久化数据根目录
+DATA_DIR=/data/mxcwpp           # 持久化数据根目录
 
 # ============ 网络 ============
 SERVER_IP=10.0.0.1             # 服务器 IP（用于生成插件下载 URL）
@@ -219,7 +219,7 @@ $DATA_DIR/logs/
 建议添加 crontab 定期清理：
 ```bash
 # 每天凌晨 3 点清理旧日志
-0 3 * * * /opt/mxsec-platform/deploy.sh clean-logs >> /var/log/mxsec-clean.log 2>&1
+0 3 * * * /opt/mxcwpp/deploy.sh clean-logs >> /var/log/mxcwpp-clean.log 2>&1
 ```
 
 ---
@@ -231,6 +231,6 @@ $DATA_DIR/logs/
 make package-agent-all VERSION=v1.0.0 SERVER_HOST=YOUR_SERVER_IP:6751
 
 # 目标主机安装
-rpm -ivh mxsec-agent-*.rpm
-systemctl enable --now mxsec-agent
+rpm -ivh mxcwpp-agent-*.rpm
+systemctl enable --now mxcwpp-agent
 ```

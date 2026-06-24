@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>io.mxsec</groupId>
-    <artifactId>mxsec-rasp-java</artifactId>
+    <groupId>io.mxcwpp</groupId>
+    <artifactId>mxcwpp-rasp-java</artifactId>
     <version>0.1.0</version>
     <packaging>jar</packaging>
-    <name>mxsec Java RASP Agent</name>
+    <name>mxcwpp Java RASP Agent</name>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -31,7 +31,7 @@
     </dependencies>
 
     <build>
-        <finalName>libmxsec_rasp</finalName>
+        <finalName>libmxcwpp_rasp</finalName>
         <plugins>
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -54,7 +54,7 @@
                             <relocations>
                                 <relocation>
                                     <pattern>org.objectweb.asm</pattern>
-                                    <shadedPattern>io.mxsec.rasp.shaded.asm</shadedPattern>
+                                    <shadedPattern>io.mxcwpp.rasp.shaded.asm</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>

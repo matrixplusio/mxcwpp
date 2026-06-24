@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 )
 
 // taskDispatchInterval 是任务调度器的轮询间隔

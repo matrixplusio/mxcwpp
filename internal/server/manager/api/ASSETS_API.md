@@ -17,7 +17,7 @@
 
 ```go
 import (
-    "github.com/imkerbos/mxsec-platform/internal/server/manager/api"
+    "github.com/matrixplusio/mxcwpp/internal/server/manager/api"
 )
 
 // 在路由设置中

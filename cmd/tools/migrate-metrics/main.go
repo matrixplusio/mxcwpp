@@ -17,9 +17,9 @@
 // 用法：
 //
 //	go run ./cmd/tools/migrate-metrics \
-//	  --mysql-dsn "user:pass@tcp(127.0.0.1:3306)/mxsec?parseTime=true&loc=Asia%2FShanghai" \
+//	  --mysql-dsn "user:pass@tcp(127.0.0.1:3306)/mxcwpp?parseTime=true&loc=Asia%2FShanghai" \
 //	  --clickhouse-addr "127.0.0.1:9000" \
-//	  --clickhouse-db mxsec \
+//	  --clickhouse-db mxcwpp \
 //	  --batch-size 5000 \
 //	  --since "2025-01-01T00:00:00+08:00" \
 //	  --dry-run
@@ -44,7 +44,7 @@ import (
 var (
 	mysqlDSN    = flag.String("mysql-dsn", "", "MySQL DSN（必填）")
 	chAddr      = flag.String("clickhouse-addr", "127.0.0.1:9000", "ClickHouse 原生协议地址")
-	chDB        = flag.String("clickhouse-db", "mxsec", "ClickHouse 数据库名")
+	chDB        = flag.String("clickhouse-db", "mxcwpp", "ClickHouse 数据库名")
 	chUser      = flag.String("clickhouse-user", "default", "ClickHouse 用户名")
 	chPass      = flag.String("clickhouse-pass", "", "ClickHouse 密码")
 	batchSize   = flag.Int("batch-size", 5000, "每批读取/写入行数")

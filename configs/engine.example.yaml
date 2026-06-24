@@ -9,16 +9,16 @@ server:
 
 # 后续 PR 接入字段(本 PR 仅占位):
 
-# kafka 消费者组 (mxsec-engine, 与 mxsec-writers Group 互不干扰)
+# kafka 消费者组 (mxcwpp-engine, 与 mxcwpp-writers Group 互不干扰)
 kafka:
   brokers: ["localhost:9092"]
-  group_id: "mxsec-engine"
+  group_id: "mxcwpp-engine"
   topics:
-    - "mxsec.agent.ebpf"
-    - "mxsec.agent.events"
-    - "mxsec.agent.scanner"
-    - "mxsec.agent.baseline"
-    - "mxsec.vuln.advisory"
+    - "mxcwpp.agent.ebpf"
+    - "mxcwpp.agent.events"
+    - "mxcwpp.agent.scanner"
+    - "mxcwpp.agent.baseline"
+    - "mxcwpp.vuln.advisory"
 
 # 多租户开关 (rule/model 按 tenant 加载)
 multi_tenant:

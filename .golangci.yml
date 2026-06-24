@@ -17,7 +17,7 @@ issues:
     # 部署 CLI 命令的进度输出
     - path: ^internal/deploy/cluster/
       linters: [forbidigo]
-    # Agent 自更新 CLI 输出 (mxsec-agent --update)
+    # Agent 自更新 CLI 输出 (mxcwpp-agent --update)
     - path: ^internal/agent/updater/
       linters: [forbidigo]
     # 测试允许更宽松

@@ -4,7 +4,7 @@
 // 用法:
 //
 //	go run ./cmd/tools/etl-alerts-vulns-ch \
-//	    -config /etc/mxsec-platform/server.yaml \
+//	    -config /etc/mxcwpp/server.yaml \
 //	    -table all \
 //	    -batch 5000
 //
@@ -15,8 +15,8 @@
 //
 //	# 直接传 DSN（覆盖 config）
 //	go run ./cmd/tools/etl-alerts-vulns-ch \
-//	    -mysql-dsn "user:pass@tcp(host:3306)/mxsec?parseTime=true&loc=Local" \
-//	    -ch-dsn   "clickhouse://user:pass@host:9000/mxsec" \
+//	    -mysql-dsn "user:pass@tcp(host:3306)/mxcwpp?parseTime=true&loc=Local" \
+//	    -ch-dsn   "clickhouse://user:pass@host:9000/mxcwpp" \
 //	    -table all
 //
 // 迁移逻辑:
@@ -43,9 +43,9 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 const (
@@ -58,7 +58,7 @@ const (
 func main() {
 	configPath := flag.String("config", "", "配置文件路径（与 mysql-dsn/ch-dsn 二选一）")
 	mysqlDSN := flag.String("mysql-dsn", "", "MySQL DSN（覆盖 config）")
-	chDSN := flag.String("ch-dsn", "", "ClickHouse DSN，如 clickhouse://user:pass@host:9000/mxsec")
+	chDSN := flag.String("ch-dsn", "", "ClickHouse DSN，如 clickhouse://user:pass@host:9000/mxcwpp")
 	table := flag.String("table", tableAll, "目标表: alerts / vulnerabilities / host_vulnerabilities / all")
 	batchSize := flag.Int("batch", 5000, "每批扫描行数（默认 5000）")
 	flag.Parse()

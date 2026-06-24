@@ -12,7 +12,7 @@ import (
 
 // IOCSyncScheduler 把威胁情报 IOC (域名 / IP / hash) 同步推送到 AC。
 //
-// 通过 mxsec.engine.command Topic 解耦:
+// 通过 mxcwpp.engine.command Topic 解耦:
 //
 //	Engine.IOCSyncScheduler → Kafka → AC.commandsub → Agent
 type IOCSyncScheduler struct {
@@ -37,7 +37,7 @@ func NewIOCSyncScheduler(brokers []string, topic string, logger *zap.Logger) (*I
 		return nil, fmt.Errorf("ioc_sync: brokers must not be empty")
 	}
 	if topic == "" {
-		topic = "mxsec.engine.command"
+		topic = "mxcwpp.engine.command"
 	}
 	if logger == nil {
 		logger = zap.NewNop()

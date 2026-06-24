@@ -128,22 +128,22 @@ func Load(configPath string) (*Config, error) {
 func LoadDefaults() *Config {
 	return &Config{
 		Local: LocalConfig{
-			IDFile: "/var/lib/mxsec-agent/agent_id",
+			IDFile: "/var/lib/mxcwpp-agent/agent_id",
 			Server: ServerConfig{
 				AgentCenter: AgentCenterConfig{
 					PrivateHost: "", // 必须通过构建时嵌入
 				},
 			},
 			TLS: TLSConfig{
-				CAFile:   "/var/lib/mxsec-agent/certs/ca.crt",
-				CertFile: "/var/lib/mxsec-agent/certs/client.crt",
-				KeyFile:  "/var/lib/mxsec-agent/certs/client.key",
+				CAFile:   "/var/lib/mxcwpp-agent/certs/ca.crt",
+				CertFile: "/var/lib/mxcwpp-agent/certs/client.crt",
+				KeyFile:  "/var/lib/mxcwpp-agent/certs/client.key",
 			},
 			Log: LogConfig{
 				Level:  "info",
 				Format: "json",
-				File:   "/var/log/mxsec-agent/agent.log", // 标准 Linux 日志目录，按天轮转
-				MaxAge: 7,                                // 保留7天
+				File:   "/var/log/mxcwpp-agent/agent.log", // 标准 Linux 日志目录，按天轮转
+				MaxAge: 7,                                 // 保留7天
 			},
 		},
 		Remote: RemoteConfig{
@@ -177,7 +177,7 @@ func (c *Config) GetWorkDir() string {
 	if c.Remote.Loaded && c.Remote.WorkDir != "" {
 		return c.Remote.WorkDir
 	}
-	return "/var/lib/mxsec-agent"
+	return "/var/lib/mxcwpp-agent"
 }
 
 // GetProduct 获取产品名称（优先使用远程配置）
@@ -187,7 +187,7 @@ func (c *Config) GetProduct() string {
 	if c.Remote.Loaded && c.Remote.Product != "" {
 		return c.Remote.Product
 	}
-	return "mxsec-agent"
+	return "mxcwpp-agent"
 }
 
 // GetVersion 获取版本（优先级：构建时嵌入 > 远程配置 > 默认值）
@@ -208,7 +208,7 @@ func (c *Config) GetVersion() string {
 // setDefaults 设置默认配置值（仅本地配置）
 func setDefaults() {
 	// Agent ID 文件路径
-	viper.SetDefault("local.id_file", "/var/lib/mxsec-agent/agent_id")
+	viper.SetDefault("local.id_file", "/var/lib/mxcwpp-agent/agent_id")
 
 	// Server 配置（通常通过构建时嵌入，这里只是默认值）
 	viper.SetDefault("local.server.service_discovery.url", "http://localhost:8088")
@@ -216,13 +216,13 @@ func setDefaults() {
 	viper.SetDefault("local.server.agent_center.public_host", "")
 
 	// TLS 默认配置（证书路径，证书由 Server 下发）
-	viper.SetDefault("local.tls.ca_file", "/var/lib/mxsec-agent/certs/ca.crt")
-	viper.SetDefault("local.tls.cert_file", "/var/lib/mxsec-agent/certs/client.crt")
-	viper.SetDefault("local.tls.key_file", "/var/lib/mxsec-agent/certs/client.key")
+	viper.SetDefault("local.tls.ca_file", "/var/lib/mxcwpp-agent/certs/ca.crt")
+	viper.SetDefault("local.tls.cert_file", "/var/lib/mxcwpp-agent/certs/client.crt")
+	viper.SetDefault("local.tls.key_file", "/var/lib/mxcwpp-agent/certs/client.key")
 
 	// 日志默认配置（标准 Linux 日志目录，按天轮转，保留30天）
 	viper.SetDefault("local.log.level", "info")
 	viper.SetDefault("local.log.format", "json")
-	viper.SetDefault("local.log.file", "/var/log/mxsec-agent/agent.log")
+	viper.SetDefault("local.log.file", "/var/log/mxcwpp-agent/agent.log")
 	viper.SetDefault("local.log.max_age", 30)
 }

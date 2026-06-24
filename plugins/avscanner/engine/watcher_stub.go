@@ -6,7 +6,7 @@ import "go.uber.org/zap"
 
 // decoyWatcher 非 Linux 平台 stub (开发期 macOS 编译过).
 //
-// macOS 投诱饵 + 监控不在 mxsec 支持范围 (产品定位 Linux/K8s)。
+// macOS 投诱饵 + 监控不在 mxcwpp 支持范围 (产品定位 Linux/K8s)。
 type decoyWatcher struct {
 	logger *zap.Logger
 	events chan decoyEvent

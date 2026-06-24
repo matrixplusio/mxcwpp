@@ -55,7 +55,7 @@ echo -e "${GREEN}[2/6] 生成 CA 证书...${NC}"
 openssl req -new -x509 -days "${VALIDITY_DAYS}" \
     -key "${CA_KEY}" \
     -out "${CA_CERT}" \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=CA/CN=mxsec-ca"
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=CA/CN=mxcwpp-ca"
 
 # 3. 生成 Server 私钥
 echo -e "${GREEN}[3/6] 生成 Server 私钥...${NC}"
@@ -66,7 +66,7 @@ echo -e "${GREEN}[4/6] 生成 Server 证书签名请求...${NC}"
 openssl req -new \
     -key "${SERVER_KEY}" \
     -out "${SERVER_CSR}" \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=Server/CN=mxsec-server"
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=Server/CN=mxcwpp-server"
 
 # 5. 使用 CA 签名 Server 证书
 echo -e "${GREEN}[5/6] 使用 CA 签名 Server 证书...${NC}"
@@ -121,7 +121,7 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 DNS.2 = *.local
 DNS.3 = agentcenter
-DNS.4 = agentcenter.mxsec-network${EXTRA_DNS_CONFIG}
+DNS.4 = agentcenter.mxcwpp-network${EXTRA_DNS_CONFIG}
 IP.1 = 127.0.0.1
 IP.2 = ::1${EXTRA_IP_CONFIG}
 EOF
@@ -133,7 +133,7 @@ openssl genrsa -out "${AGENT_KEY}" 4096
 openssl req -new \
     -key "${AGENT_KEY}" \
     -out "${AGENT_CSR}" \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=Agent/CN=mxsec-agent"
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Matrix Cloud Security Platform/OU=Agent/CN=mxcwpp-agent"
 
 openssl x509 -req -days "${VALIDITY_DAYS}" \
     -in "${AGENT_CSR}" \

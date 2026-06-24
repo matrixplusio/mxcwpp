@@ -3,7 +3,7 @@
 set -uo pipefail
 ROCKY_IP="${ROCKY_IP:-192.168.254.109}"
 MGR="${MGR:-http://localhost:8080}"
-JWT=$(cat "${JWT_FILE:-/tmp/mxsec-jwt}")
+JWT=$(cat "${JWT_FILE:-/tmp/mxcwpp-jwt}")
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
 RSH() { sshpass -p centos ssh $SSH_OPTS centos@"$1" "$2"; }
@@ -28,7 +28,7 @@ VIRUS_REPORT="$REPORT_DIR/l1-virus.md"
 V_PASS=0; V_FAIL=0
 write_and_scan() {
   local name="$1" payload="$2" expect="$3"
-  local fname="/tmp/mxsec-vt-$(echo "$name" | tr ' /' '__').sample"
+  local fname="/tmp/mxcwpp-vt-$(echo "$name" | tr ' /' '__').sample"
   RSH "$ROCKY_IP" "printf '%s' '$payload' > $fname"
   local task=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
     -d "{\"name\":\"vt-$name\",\"scanType\":\"custom\",\"scanPaths\":[\"/tmp\"],\"hostIds\":[\"$HID\"]}" \
@@ -90,7 +90,7 @@ fim_before=$(curl -s -H "Authorization: Bearer $JWT" "$MGR/api/v1/fim/events?pag
 echo "fim_events before: $fim_before"
 
 # 触发 /etc 系列变更 (sudo 失败时跳, 不影响事件采集)
-RSH "$ROCKY_IP" "touch /tmp/mxsec-fim-test-\$\$ && echo x > /tmp/mxsec-fim-test-\$\$ && rm /tmp/mxsec-fim-test-\$\$"
+RSH "$ROCKY_IP" "touch /tmp/mxcwpp-fim-test-\$\$ && echo x > /tmp/mxcwpp-fim-test-\$\$ && rm /tmp/mxcwpp-fim-test-\$\$"
 RSH "$ROCKY_IP" "echo 'test' >> ~/.profile; sed -i '/test/d' ~/.profile"
 RSH "$ROCKY_IP" "touch ~/test-file && rm ~/test-file"
 sleep 20

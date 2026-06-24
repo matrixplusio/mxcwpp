@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mxsec MySQL 物理备份脚本 (Percona XtraBackup, 全量 + 增量)
+# mxcwpp MySQL 物理备份脚本 (Percona XtraBackup, 全量 + 增量)
 #
 # 调用:
 #   ./mysql-xtrabackup.sh full       # 全量备份
@@ -11,21 +11,21 @@
 # 前置:
 #   apt install percona-xtrabackup-80
 #   或 dnf install percona-xtrabackup
-#   或 mxsec-agent 自带二进制
+#   或 mxcwpp-agent 自带二进制
 #
-# 部署: deploy/systemd/timers/mxsec-mysql-backup.timer
+# 部署: deploy/systemd/timers/mxcwpp-mysql-backup.timer
 
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-/var/lib/mxsec-backup/mysql}"
-MYSQL_USER="${MYSQL_USER:-mxsec_backup}"
+BACKUP_DIR="${BACKUP_DIR:-/var/lib/mxcwpp-backup/mysql}"
+MYSQL_USER="${MYSQL_USER:-mxcwpp_backup}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD?MYSQL_PASSWORD env required}"
 MYSQL_DATA_DIR="${MYSQL_DATA_DIR:-/var/lib/mysql}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
-OSS_BUCKET="${OSS_BUCKET:-}"        # 例 oss://mxsec-backups/mysql/
+OSS_BUCKET="${OSS_BUCKET:-}"        # 例 oss://mxcwpp-backups/mysql/
 OSS_TOOL="${OSS_TOOL:-aws s3}"      # aws s3 / gsutil / ossutil
 PROM_PUSHGATEWAY="${PROM_PUSHGATEWAY:-}"
-LOG_FILE="${LOG_FILE:-/var/log/mxsec-backup/mysql.log}"
+LOG_FILE="${LOG_FILE:-/var/log/mxcwpp-backup/mysql.log}"
 
 mode="${1:-full}"
 date_tag="$(date +%Y%m%d-%H%M%S)"
@@ -43,10 +43,10 @@ metric_push() {
   if [[ -z "$PROM_PUSHGATEWAY" ]]; then
     return
   fi
-  cat <<EOF | curl --data-binary @- --silent "$PROM_PUSHGATEWAY/metrics/job/mxsec_mysql_backup/instance/$(hostname)" || true
-mxsec_backup_started_at $(date +%s)
-mxsec_backup_mode{mode="$mode"} 1
-mxsec_backup_size_bytes $(du -sb "$target_dir" | awk '{print $1}')
+  cat <<EOF | curl --data-binary @- --silent "$PROM_PUSHGATEWAY/metrics/job/mxcwpp_mysql_backup/instance/$(hostname)" || true
+mxcwpp_backup_started_at $(date +%s)
+mxcwpp_backup_mode{mode="$mode"} 1
+mxcwpp_backup_size_bytes $(du -sb "$target_dir" | awk '{print $1}')
 $@
 EOF
 }

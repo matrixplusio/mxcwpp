@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var baselineDir = "/var/lib/mxsec/fim/baselines"
+var baselineDir = "/var/lib/mxcwpp/fim/baselines"
 
 // Baseline Agent 本地基线数据
 type Baseline struct {

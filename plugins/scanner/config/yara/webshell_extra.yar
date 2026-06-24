@@ -16,7 +16,7 @@
 rule Memshell_PHP_AntSword_Crypt {
     meta:
         description = "PHP 内存马 AntSword 加密通信特征"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "memshell"
         attck = "T1505.003"
@@ -32,7 +32,7 @@ rule Memshell_PHP_AntSword_Crypt {
 rule Memshell_PHP_Godzilla_BasePass {
     meta:
         description = "PHP Godzilla webshell pass+key+payloadName 三参"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "memshell"
     strings:
@@ -47,7 +47,7 @@ rule Memshell_PHP_Godzilla_BasePass {
 rule Memshell_PHP_Behinder_AES {
     meta:
         description = "Behinder 冰蝎 PHP 端 AES 加密"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "memshell"
     strings:
@@ -62,7 +62,7 @@ rule Memshell_PHP_Behinder_AES {
 rule Webshell_PHP_Wso25 {
     meta:
         description = "WSO 2.5 大马"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
     strings:
         $a = "WSO 2.5" nocase

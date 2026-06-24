@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/redact"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // EgressPolicy 控制告警分析的数据出境与脱敏（批4 合规）。

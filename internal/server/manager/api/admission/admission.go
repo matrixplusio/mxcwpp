@@ -28,7 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
 )
 
 // AdmissionReview K8s admission webhook 请求/响应 schema (v1)。
@@ -207,9 +207,9 @@ func (h *Handler) checkPolicies(obj json.RawMessage) []string {
 		violations = append(violations, "NO_RESOURCES: 容器未配置 resources.limits (CPU/Memory)")
 	}
 	// UNAUTHORIZED_REGISTRY: 镜像非内部 registry (后续可配置白名单)
-	// 默认白名单: 内部 registry.mxsec.local + 公共可信
+	// 默认白名单: 内部 registry.mxcwpp.local + 公共可信
 	knownGood := []string{"gcr.io/google_containers/", "gcr.io/k8s/", "registry.k8s.io/", "k8s.gcr.io/",
-		"registry.mxsec.local/", "docker.io/library/"}
+		"registry.mxcwpp.local/", "docker.io/library/"}
 	if strings.Contains(s, `"image":"`) {
 		isWhitelisted := false
 		for _, w := range knownGood {
@@ -256,7 +256,7 @@ func respondDeny(c *gin.Context, uid string, violations []string) {
 			Allowed: false,
 			Status: &Status{
 				Code:    403,
-				Message: fmt.Sprintf("mxsec admission deny: %s", strings.Join(violations, "; ")),
+				Message: fmt.Sprintf("mxcwpp admission deny: %s", strings.Join(violations, "; ")),
 			},
 		},
 	})

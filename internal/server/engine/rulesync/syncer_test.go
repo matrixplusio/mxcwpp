@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 // writeYAML 在 dir 下写入 YAML 文件，返回路径
@@ -159,8 +159,8 @@ func TestNewDefaults(t *testing.T) {
 	if s.cfg.Branch != "main" {
 		t.Errorf("Branch 默认值 = %q, want main", s.cfg.Branch)
 	}
-	if s.cfg.LocalDir != "/var/mxsec/rules-repo" {
-		t.Errorf("LocalDir 默认值 = %q, want /var/mxsec/rules-repo", s.cfg.LocalDir)
+	if s.cfg.LocalDir != "/var/mxcwpp/rules-repo" {
+		t.Errorf("LocalDir 默认值 = %q, want /var/mxcwpp/rules-repo", s.cfg.LocalDir)
 	}
 	if s.cfg.Interval != 10*time.Minute {
 		t.Errorf("Interval 默认值 = %v, want 10m", s.cfg.Interval)

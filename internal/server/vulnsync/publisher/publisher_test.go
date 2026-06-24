@@ -3,11 +3,10 @@ package publisher
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/IBM/sarama/mocks"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/sources"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 func TestPublisher_PublishAdvisory(t *testing.T) {
@@ -16,15 +15,18 @@ func TestPublisher_PublishAdvisory(t *testing.T) {
 	defer mp.Close()
 	mp.ExpectSendMessageAndSucceed()
 
-	p := &Publisher{producer: mp, topic: "mxsec.vuln.advisory"}
-	adv := sources.Advisory{
-		Source:     "nvd",
-		SourceID:   "CVE-2024-1",
-		CVE:        "CVE-2024-1",
-		Severity:   "high",
-		ModifiedAt: time.Now(),
+	p := &Publisher{producer: mp, topic: "mxcwpp.vuln.advisory"}
+	msg := advisory.AdvisoryMessage{
+		Source: "rhsa",
+		Advisory: &advisory.Advisory{
+			AdvisoryID: "RHSA-2024:0001",
+			CVEIDs:     []string{"CVE-2024-1"},
+			Severity:   advisory.SeverityHigh,
+			OSFamily:   "rhel",
+			OSMajorVer: "9",
+		},
 	}
-	if err := p.PublishAdvisory(context.Background(), adv); err != nil {
+	if err := p.PublishAdvisory(context.Background(), msg); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 }
@@ -37,11 +39,11 @@ func TestPublisher_PublishBatch(t *testing.T) {
 	mp.ExpectSendMessageAndSucceed()
 
 	p := &Publisher{producer: mp, topic: "x"}
-	advs := []sources.Advisory{
-		{Source: "nvd", SourceID: "1", Severity: "low", ModifiedAt: time.Now()},
-		{Source: "nvd", SourceID: "2", Severity: "low", ModifiedAt: time.Now()},
+	msgs := []advisory.AdvisoryMessage{
+		{Source: "usn", Advisory: &advisory.Advisory{AdvisoryID: "USN-1", Severity: advisory.SeverityLow}},
+		{Source: "usn", Advisory: &advisory.Advisory{AdvisoryID: "USN-2", Severity: advisory.SeverityLow}},
 	}
-	n, err := p.PublishBatch(context.Background(), advs)
+	n, err := p.PublishBatch(context.Background(), msgs)
 	if err != nil {
 		t.Fatalf("batch: %v", err)
 	}

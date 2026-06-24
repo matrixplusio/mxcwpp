@@ -1,7 +1,7 @@
 package biz
 
 import (
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 // osvDetailCacheAdapter 把 VulnCacheManager 适配成 advisory.DetailCache。

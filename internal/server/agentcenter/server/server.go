@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	_ "github.com/imkerbos/mxsec-platform/internal/common/compressor" // 注册 Snappy 解压器（Agent 端压缩，Server 端解压）
-	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	_ "github.com/matrixplusio/mxcwpp/internal/common/compressor" // 注册 Snappy 解压器（Agent 端压缩，Server 端解压）
+	acmetrics "github.com/matrixplusio/mxcwpp/internal/server/agentcenter/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 // CreateGRPCServer 创建并配置 gRPC Server
@@ -130,7 +130,7 @@ func CreateGRPCServer(cfg *config.Config, logger *zap.Logger) (*grpc.Server, err
 		logger.Info("AC gRPC 单 IP 限流已启用",
 			zap.Int("per_ip_rps", antiDoS.PerIPRPS), zap.Int("per_ip_burst", antiDoS.PerIPBurst))
 	}
-	// 服务端指标：暴露 mxsec_ac_grpc_handled_total / duration_seconds 给 Prometheus 抓取
+	// 服务端指标：暴露 mxcwpp_ac_grpc_handled_total / duration_seconds 给 Prometheus 抓取
 	unaryChain = append(unaryChain, acmetrics.UnaryServerInterceptor())
 	streamChain = append(streamChain, acmetrics.StreamServerInterceptor())
 	opts = append(opts,

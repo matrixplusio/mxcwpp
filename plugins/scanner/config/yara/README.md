@@ -16,7 +16,7 @@ ref/07-病毒 MVP P0-6: YARA 完整规则库 (suspiciousDirs + 恶意代码 + We
 
 ```sh
 # Agent 端 scanner 插件加载
-ls /var/lib/mxsec/yara-rules/
+ls /var/lib/mxcwpp/yara-rules/
 # webshell_php.yar webshell_jsp.yar webshell_misc.yar
 
 # YARA 规则文件由 Manager 通过 component 下发

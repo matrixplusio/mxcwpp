@@ -10,18 +10,18 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/gcppubsub"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/mssp"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/middleware"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/gcppubsub"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/api"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz/mssp"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/middleware"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/prometheus"
 )
 
 // Setup 设置并返回配置好的 Gin 路由引擎
@@ -38,7 +38,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 中间件
 	router.Use(middleware.Logger(logger))
 	router.Use(gin.Recovery())
-	router.Use(middleware.Prometheus()) // 记录 HTTP QPS + 延迟到 mxsec_http_requests_total/duration
+	router.Use(middleware.Prometheus()) // 记录 HTTP QPS + 延迟到 mxcwpp_http_requests_total/duration
 	router.Use(middleware.CORS(cfg.Server.CORSOrigins))
 
 	// 批4: 安全响应头（默认关，灰度开）。HSTS 需全站 HTTPS，否则会锁死 http 访问。
@@ -97,6 +97,10 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	auditHandler := api.NewKubeAuditHandler(db, logger, alarmService)
 	router.POST("/api/v1/kube/audit-webhook/:cluster_token", auditHandler.ReceiveAuditWebhook)
 
+	// 集群内扫描器 Push 接收（trivy-operator webhook broadcast，token 鉴权，不走 JWT）
+	scannerWebhookHandler := api.NewKubeScannerHandler(db, logger, biz.NewKubeClientManager(db, logger), cfg)
+	router.POST("/api/v1/kube/scanner/report-webhook/:cluster_token", scannerWebhookHandler.ReceiveReportWebhook)
+
 	// AC 内部注册接口（不需要 JWT，AC 到 Manager 的内部调用）
 	discoveryHandler := api.NewDiscoveryHandler(acRegistry, logger)
 	internalAC := router.Group("/api/v1/internal/ac")
@@ -108,7 +112,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	internalAC.DELETE("/deregister", discoveryHandler.Deregister)
 
 	// Prometheus 告警 webhook（不走 JWT，仅可选 X-Internal-Secret 鉴权 + Prom IP 白名单）
-	// 接收 Prometheus alerting 配置中 webhook 推送的告警，入 mxsec alerts 表
+	// 接收 Prometheus alerting 配置中 webhook 推送的告警，入 mxcwpp alerts 表
 	promAlertsHandler := api.NewPrometheusAlertsHandler(db, logger)
 	internalAlerts := router.Group("/api/v1/internal/alerts")
 	if secret := cfg.Server.InternalSecret; secret != "" {
@@ -277,7 +281,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupFIMAPI(router, db, logger, chConn)
 	setupKubeAPI(router, db, logger, alarmService, cfg, consumerManager)
 	setupMonitorAPI(router, db, logger, cfg, acRegistry, chConn, redisClient, promClient)
-	setupVulnerabilitiesAPI(router, db, logger, acDispatcher)
+	setupVulnerabilitiesAPI(router, db, logger, acDispatcher, cfg.Vuln.VulnSyncURL)
 	setupVulnBulletinsAPI(router, db, logger)
 	setupAntivirusAPI(router, db, logger, virusDBUpdater, acDispatcher)
 	setupQuarantineAPI(router, db, logger)
@@ -499,6 +503,7 @@ func setupTasksAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, acD
 	// 读操作（所有认证用户）
 	router.GET("/tasks", handler.ListTasks)
 	router.GET("/tasks/:task_id", handler.GetTask)
+	router.GET("/tasks/:task_id/checks", handler.GetTaskChecks)
 	router.GET("/tasks/:task_id/host-status", handler.GetTaskHostStatus)
 	// 写操作（需要 admin 角色）
 	admin := router.Group("", api.RoleMiddleware("admin"))
@@ -760,6 +765,15 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 	router.PUT("/kube/clusters/:id/gcp-config", clusterHandler.UpdateGCPConfig)
 	router.DELETE("/kube/clusters/:id/gcp-config", clusterHandler.DeleteGCPConfig)
 
+	// 集群内扫描器（trivy-operator）生命周期
+	scannerHandler := api.NewKubeScannerHandler(db, logger, kubeClient, cfg)
+	router.GET("/kube/clusters/:id/scanner/preflight", scannerHandler.Preflight)
+	router.POST("/kube/clusters/:id/scanner/install", scannerHandler.Install)
+	router.GET("/kube/clusters/:id/scanner/manifest", scannerHandler.Manifest)
+	router.GET("/kube/clusters/:id/scanner/status", scannerHandler.Status)
+	router.POST("/kube/clusters/:id/scanner/sync", scannerHandler.Sync)
+	router.DELETE("/kube/clusters/:id/scanner", scannerHandler.Uninstall)
+
 	// 容器告警
 	alarmHandler := api.NewKubeAlarmHandler(db, logger)
 	router.GET("/kube/alarms", alarmHandler.ListAlarms)
@@ -784,6 +798,8 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 	router.GET("/kube/baseline", baselineHandler.ListBaseline)
 	router.GET("/kube/baseline/:id", baselineHandler.GetBaselineDetail)
 	router.POST("/kube/baseline/detect", baselineHandler.RunBaselineCheck)
+	router.GET("/kube/baseline-tasks", baselineHandler.ListBaselineTasks)
+	router.GET("/kube/baseline-tasks/:id", baselineHandler.GetBaselineTaskDetail)
 
 	// 基线规则管理
 	rulesHandler := api.NewKubeBaselineRulesHandler(db, logger, baselineChecker, ruleEngine)
@@ -916,7 +932,7 @@ func setupQuarantineAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger
 }
 
 // setupVulnerabilitiesAPI 设置漏洞管理 API 路由
-func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, acDispatcher *sd.ACDispatcher) {
+func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, acDispatcher *sd.ACDispatcher, vulnSyncURL string) {
 	handler := api.NewVulnerabilitiesHandler(db, logger)
 	router.GET("/vulnerabilities", handler.ListVulnerabilities)
 	router.POST("/vulnerabilities/:id/ignore", handler.IgnoreVulnerability)
@@ -959,7 +975,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.GET("/remediation-tasks/:id/events/stream", taskHandler.StreamEvents) // SSE 实时流
 
 	// 漏洞 advisory 同步（admin 手动触发）
-	vulnSyncHandler := api.NewVulnSyncHandler(db, logger)
+	vulnSyncHandler := api.NewVulnSyncHandler(logger, vulnSyncURL)
 	router.POST("/vulnerabilities/advisory-sync", vulnSyncHandler.SyncAdvisories)
 
 	// 漏洞数据源管理（UI「漏洞源管理」页面）

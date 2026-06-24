@@ -2,7 +2,7 @@ package rasp
 
 // PHP RASP 检测扩展 (Sprint 4 PR71).
 //
-// Agent 端 Zend extension (libmxsec_rasp_php.so) hook:
+// Agent 端 Zend extension (libmxcwpp_rasp_php.so) hook:
 //   - zend_compile_string  → 检测 eval/assert 动态执行
 //   - php_execute_internal → 检测 system/exec/shell_exec/passthru/popen/proc_open
 //   - include/require      → 检测 LFI/RFI (远程 URL include)

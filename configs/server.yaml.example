@@ -27,9 +27,9 @@ database:
   mysql:
     host: "localhost"
     port: 3306
-    user: "mxsec_user"
-    password: "mxsec_password"
-    database: "mxsec"
+    user: "mxcwpp_user"
+    password: "mxcwpp_password"
+    database: "mxcwpp"
     charset: "utf8mb4"
     parse_time: true
     loc: "Local"
@@ -41,9 +41,9 @@ database:
   postgres:
     host: "localhost"
     port: 5432
-    user: "mxsec_user"
-    password: "mxsec_password"
-    database: "mxsec"
+    user: "mxcwpp_user"
+    password: "mxcwpp_password"
+    database: "mxcwpp"
     sslmode: "disable"
     timezone: "Asia/Shanghai"
     max_idle_conns: 10
@@ -77,13 +77,13 @@ mtls:
 log:
   level: "info"  # debug, info, warn, error
   format: "json"  # json 或 console
-  file: "/var/log/mxsec-server/server.log"
+  file: "/var/log/mxcwpp-server/server.log"
   max_age: 30  # 保留天数
 
 # Agent 配置（下发到 Agent）
 agent:
   heartbeat_interval: 60  # 心跳间隔（秒）
-  work_dir: "/var/lib/mxsec-agent"
+  work_dir: "/var/lib/mxcwpp-agent"
 
 # 插件配置
 plugins:
@@ -95,6 +95,13 @@ plugins:
   # 格式：http(s)://IP或域名:端口/api/v1/plugins/download
   # 如果为空，将使用相对路径（仅适用于 Agent 和 Server 在同一网络的场景）
   base_url: ""
+
+# 漏洞管理
+vuln:
+  nvd_api_key: ""                       # 可选, 提升 NVD enrich API 速率上限
+  # VulnSync 服务地址。OS advisory 拉源已剥离至 VulnSync(VulnSync→Kafka→manager consumer 匹配),
+  # advisory-sync 手动 API 经此触发 VulnSync 立即拉取;留空则该 API 返回未配置提示。
+  vulnsync_url: "http://vulnsync:8083"
 
 # 监控指标配置
 metrics:
@@ -118,7 +125,7 @@ metrics:
     # 方式 2：使用 Pushgateway（可选，与 remote_write_url 二选一）
     # 需要部署 Pushgateway 服务
     pushgateway_url: ""    # 例如: "http://pushgateway:9091"
-    job_name: "mxsec-platform"  # Job 名称（默认 "mxsec-platform"）
+    job_name: "mxcwpp"  # Job 名称（默认 "mxcwpp"）
     timeout: 10s           # 请求超时（默认 10 秒）
 
 # GKE 审计日志接入说明

@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/intrusion"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/intrusion"
 )
 
 // BruteForceStage 接入入侵检测六件套之"暴力破解"。

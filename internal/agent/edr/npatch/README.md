@@ -16,7 +16,7 @@ ref/06-漏洞 M2-P2-1/2: NPatch 虚拟补丁 eBPF 字节码注入 + 30 条规则
 
 ```
 Server NPatch rule (manager/biz/npatch)
-  ↓ Kafka mxsec.npatch.rules
+  ↓ Kafka mxcwpp.npatch.rules
 Agent NPatch rule subscriber
   ↓ 编译 → bpf_map 更新 rules_enabled
 内核 cgroup_skb/ingress hook

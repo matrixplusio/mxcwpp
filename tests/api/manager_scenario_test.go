@@ -34,10 +34,10 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/api"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ─────────────────────────────────────────────
@@ -50,7 +50,7 @@ func setupDB(t *testing.T) *gorm.DB {
 	port := getEnvOr("TEST_DB_PORT", "3306")
 	user := getEnvOr("TEST_DB_USER", "root")
 	pass := getEnvOr("TEST_DB_PASSWORD", "123456")
-	name := getEnvOr("TEST_DB_NAME", "mxsec_test")
+	name := getEnvOr("TEST_DB_NAME", "mxcwpp_test")
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		user, pass, host, port, name)
@@ -277,10 +277,10 @@ func TestScenario_BaselineLifecycle(t *testing.T) {
 		"enabled":     true,
 		"rules": []map[string]interface{}{
 			{
-				"rule_id":   ruleID,
-				"category":  "ssh",
-				"title":     "禁止 root 登录",
-				"severity":  "high",
+				"rule_id":  ruleID,
+				"category": "ssh",
+				"title":    "禁止 root 登录",
+				"severity": "high",
 				"check_config": map[string]interface{}{
 					"condition": "all",
 					"rules": []map[string]interface{}{

@@ -62,7 +62,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 export default function KubeImageScanPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [params, setParams] = useUrlState({ page: 1, page_size: 20, image: "", status: "" });
+  const [params, setParams] = useUrlState({ page: 1, page_size: 20, image: "", status: "", cluster_id: "" });
 
   const statusMeta = buildStatusMeta(t);
   const statusOptions = buildStatusOptions(t);
@@ -71,6 +71,48 @@ export default function KubeImageScanPage() {
     queryKey: ["kube-images", params],
     queryFn: () => kubeApi.listImageScans(params),
   });
+
+  const clustersQuery = useQuery({
+    queryKey: ["kube-clusters-options"],
+    queryFn: () => kubeApi.listClusters({ page: 1, page_size: 200 }),
+  });
+  const clusterOptions = [
+    { label: t("kube.imageScan.allClusters"), value: "" },
+    ...(clustersQuery.data?.items ?? []).map((c) => ({ label: c.name, value: String(c.id) })),
+  ];
+
+  // ---- 集群内扫描器（trivy-operator）生命周期 ----
+  const selectedClusterId = params.cluster_id ? Number(params.cluster_id) : 0;
+  const scannerStatus = useQuery({
+    queryKey: ["kube-scanner-status", selectedClusterId],
+    queryFn: () => kubeApi.scannerStatus(selectedClusterId),
+    enabled: selectedClusterId > 0,
+    refetchInterval: (q) => {
+      const s = q.state.data?.state;
+      return s === "installing" || s === "uninstalling" ? 5000 : false;
+    },
+  });
+  const invalidateScanner = () => {
+    queryClient.invalidateQueries({ queryKey: ["kube-scanner-status", selectedClusterId] });
+    queryClient.invalidateQueries({ queryKey: ["kube-images"] });
+  };
+  const installMutation = useMutation({
+    mutationFn: () => kubeApi.scannerInstall(selectedClusterId),
+    onSuccess: () => { invalidateScanner(); toast.success(t("kube.scanner.installSubmitted")); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const syncMutation = useMutation({
+    mutationFn: () => kubeApi.scannerSync(selectedClusterId),
+    onSuccess: (r) => { invalidateScanner(); toast.success(t("kube.scanner.synced", { count: r.reports })); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const uninstallMutation = useMutation({
+    mutationFn: () => kubeApi.scannerUninstall(selectedClusterId),
+    onSuccess: () => { invalidateScanner(); toast.success(t("kube.scanner.uninstallSubmitted")); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const scannerState = scannerStatus.data?.state ?? "not_installed";
+  const scannerBusy = installMutation.isPending || uninstallMutation.isPending || syncMutation.isPending;
 
   // ---- 扫描镜像 ----
   const [scanOpen, setScanOpen] = useState(false);
@@ -99,6 +141,19 @@ export default function KubeImageScanPage() {
       key: "image",
       title: t("kube.imageScan.colImage"),
       render: (r) => <span className="font-mono font-medium text-ink truncate block max-w-[280px]">{r.image}</span>,
+    },
+    {
+      key: "source",
+      title: t("kube.imageScan.colSource"),
+      render: (r) => {
+        const label =
+          r.source === "cluster"
+            ? t("kube.imageScan.sourceCluster")
+            : r.source === "registry"
+              ? t("kube.imageScan.sourceRegistry")
+              : t("kube.imageScan.sourceManual");
+        return <span className="text-muted">{label}</span>;
+      },
     },
     { key: "os", title: t("kube.imageScan.colOs"), render: (r) => <span className="text-muted">{r.os || "—"}</span> },
     {
@@ -163,11 +218,68 @@ export default function KubeImageScanPage() {
             placeholder={t("kube.imageScan.searchPlaceholder")}
           />
           <Select
+            value={params.cluster_id}
+            onChange={(v) => setParams((p) => ({ ...p, cluster_id: v, page: 1 }))}
+            options={clusterOptions}
+          />
+          <Select
             value={params.status}
             onChange={(v) => setParams((p) => ({ ...p, status: v, page: 1 }))}
             options={statusOptions}
           />
         </FilterBar>
+
+        {selectedClusterId > 0 && (
+          <Card>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink">{t("kube.scanner.title")}</span>
+                {(() => {
+                  const tone: ScanTone =
+                    scannerState === "ready" ? "success"
+                    : scannerState === "degraded" ? "danger"
+                    : scannerState === "not_installed" ? "neutral" : "info";
+                  return <StatusTag tone={tone}>{t(`kube.scanner.state.${scannerState}`)}</StatusTag>;
+                })()}
+                {scannerStatus.data?.operatorVersion && (
+                  <span className="text-xs text-faint">{scannerStatus.data.operatorVersion}</span>
+                )}
+                {scannerStatus.data?.webhookEnabled && (
+                  <StatusTag tone="info">{t("kube.scanner.webhookOn")}</StatusTag>
+                )}
+              </div>
+
+              {(scannerState === "ready" || scannerState === "degraded") && (
+                <div className="flex gap-5 text-sm text-muted">
+                  <span>{t("kube.scanner.lastSync")}: <span className="tabular-nums text-ink">{scannerStatus.data?.lastSyncAt || t("kube.scanner.never")}</span></span>
+                  <span>{t("kube.scanner.reports")}: <span className="tabular-nums text-ink">{scannerStatus.data?.lastReportCount ?? 0}</span></span>
+                </div>
+              )}
+
+              <div className="ml-auto flex gap-2">
+                {(scannerState === "not_installed") && (
+                  <Button onClick={() => installMutation.mutate()} disabled={scannerBusy}>
+                    {t("kube.scanner.deploy")}
+                  </Button>
+                )}
+                {(scannerState === "ready" || scannerState === "degraded") && (
+                  <>
+                    <Button onClick={() => syncMutation.mutate()} disabled={scannerBusy}>
+                      {syncMutation.isPending ? t("common.submitting") : t("kube.scanner.sync")}
+                    </Button>
+                    <Button variant="ghost" onClick={() => uninstallMutation.mutate()} disabled={scannerBusy}>
+                      {t("kube.scanner.uninstall")}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            {scannerStatus.data?.lastError && (
+              <p className="mt-2 text-xs text-danger break-all">{scannerStatus.data.lastError}</p>
+            )}
+            <p className="mt-2 text-xs text-faint">{t("kube.scanner.hint")}</p>
+          </Card>
+        )}
         <Card>
           <DataTable
             columns={columns}

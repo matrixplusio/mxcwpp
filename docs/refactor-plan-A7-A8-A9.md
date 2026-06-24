@@ -26,12 +26,12 @@
 **步骤** (后续 PR):
 
 1. 新建 `internal/server/engine/consumer/` 目录, 把 Consumer 当前注册 engine 的路由迁过来.
-2. `cmd/server/engine/main.go` 注册同样的 KafkaConsumer 路由 (ConsumerGroup `mxsec-engine`).
+2. `cmd/server/engine/main.go` 注册同样的 KafkaConsumer 路由 (ConsumerGroup `mxcwpp-engine`).
 3. `consumer/router.go` 删 `engine/anomaly`, `engine/baseline`, `engine/celengine`, `engine/storyline` import.
 4. `consumer/gcppubsub/manager.go` 删 `engine/kube` import, K8s Audit 走 Engine 进程消费.
 5. 部署文档加入: 升级时需先升 Engine (新 ConsumerGroup), 再升 Consumer (移除旧逻辑).
 
-**验证**: 启动 Engine 进程, `mxsec-engine` ConsumerGroup 出现在 Kafka, 同时 Consumer 进程 binary size 减半.
+**验证**: 启动 Engine 进程, `mxcwpp-engine` ConsumerGroup 出现在 Kafka, 同时 Consumer 进程 binary size 减半.
 
 ## A8 Manager→engine/kube + vulnsync 改 gRPC
 

@@ -4,7 +4,7 @@
 // 避免重复抓取浪费 API 配额 + Kafka 重复消息。
 //
 // 实现细节:
-//   - 用 Redis SET NX EX key=mxsec:vulnsync:leader ttl=30m
+//   - 用 Redis SET NX EX key=mxcwpp:vulnsync:leader ttl=30m
 //   - 启动 goroutine 每 5min 续期 (EXPIRE)
 //   - 失去 leader 后立即停止所有 source cron
 //
@@ -23,7 +23,7 @@ import (
 
 // Default 配置
 const (
-	DefaultKey       = "mxsec:vulnsync:leader"
+	DefaultKey       = "mxcwpp:vulnsync:leader"
 	DefaultTTL       = 30 * time.Minute
 	DefaultRenewTick = 5 * time.Minute
 )
@@ -42,7 +42,7 @@ type Election struct {
 
 // Config 配置参数。
 type Config struct {
-	Key       string        // Redis key (默认 mxsec:vulnsync:leader)
+	Key       string        // Redis key (默认 mxcwpp:vulnsync:leader)
 	TTL       time.Duration // leader 锁 TTL (默认 30m)
 	RenewTick time.Duration // 续期周期 (默认 5m)
 }

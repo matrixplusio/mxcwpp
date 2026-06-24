@@ -3,7 +3,7 @@ package model
 import (
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kms"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kms"
 )
 
 // KMSProvider 接口避免 model 包硬依赖 KMS 实例 (启动时注入)。

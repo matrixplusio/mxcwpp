@@ -1,4 +1,4 @@
--- MxSec Platform - ClickHouse 初始化 DDL
+-- MxCwpp Platform - ClickHouse 初始化 DDL
 -- 对应设计文档: docs/design/ha-architecture.md § 3.4.2
 
 -- ==================== 主机监控指标 ====================

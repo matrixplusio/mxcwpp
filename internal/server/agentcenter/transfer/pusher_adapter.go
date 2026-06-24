@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 // PushToAgent 实现 commandsub.AgentPusher interface。

@@ -86,7 +86,7 @@ CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -ldflags "\
     -X main.buildVersion=$VERSION \
     -X main.buildTime=$BUILD_TIME \
     -s -w" \
-    -o "$DIST_DIR/mxsec-agent-$OS-$ARCH" \
+    -o "$DIST_DIR/mxcwpp-agent-$OS-$ARCH" \
     ./cmd/agent
 
 # 2. 创建临时目录结构
@@ -97,29 +97,29 @@ trap "rm -rf $TEMP_DIR" EXIT
 # 创建目录结构
 mkdir -p "$TEMP_DIR/usr/bin"
 mkdir -p "$TEMP_DIR/etc/systemd/system"
-mkdir -p "$TEMP_DIR/var/lib/mxsec-agent"
-mkdir -p "$TEMP_DIR/var/lib/mxsec-agent/certs"
-mkdir -p "$TEMP_DIR/var/log/mxsec-agent"
+mkdir -p "$TEMP_DIR/var/lib/mxcwpp-agent"
+mkdir -p "$TEMP_DIR/var/lib/mxcwpp-agent/certs"
+mkdir -p "$TEMP_DIR/var/log/mxcwpp-agent"
 mkdir -p "$TEMP_DIR/scripts"
 
 # 复制二进制文件
-cp "$DIST_DIR/mxsec-agent-$OS-$ARCH" "$TEMP_DIR/usr/bin/mxsec-agent"
-chmod +x "$TEMP_DIR/usr/bin/mxsec-agent"
+cp "$DIST_DIR/mxcwpp-agent-$OS-$ARCH" "$TEMP_DIR/usr/bin/mxcwpp-agent"
+chmod +x "$TEMP_DIR/usr/bin/mxcwpp-agent"
 
 # 复制 systemd service 文件
-cp deploy/systemd/mxsec-agent.service "$TEMP_DIR/etc/systemd/system/mxsec-agent.service"
+cp deploy/systemd/mxcwpp-agent.service "$TEMP_DIR/etc/systemd/system/mxcwpp-agent.service"
 
 # 复制证书文件（如果存在）
 CERTS_INCLUDED=false
 if [ -d "$CERT_DIR" ]; then
     if [ -f "$CERT_DIR/ca.crt" ] && [ -f "$CERT_DIR/client.crt" ] && [ -f "$CERT_DIR/client.key" ]; then
         echo -e "${GREEN}  → 包含证书文件${NC}"
-        cp "$CERT_DIR/ca.crt" "$TEMP_DIR/var/lib/mxsec-agent/certs/"
-        cp "$CERT_DIR/client.crt" "$TEMP_DIR/var/lib/mxsec-agent/certs/"
-        cp "$CERT_DIR/client.key" "$TEMP_DIR/var/lib/mxsec-agent/certs/"
-        chmod 644 "$TEMP_DIR/var/lib/mxsec-agent/certs/ca.crt"
-        chmod 644 "$TEMP_DIR/var/lib/mxsec-agent/certs/client.crt"
-        chmod 600 "$TEMP_DIR/var/lib/mxsec-agent/certs/client.key"
+        cp "$CERT_DIR/ca.crt" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
+        cp "$CERT_DIR/client.crt" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
+        cp "$CERT_DIR/client.key" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
+        chmod 644 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/ca.crt"
+        chmod 644 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.crt"
+        chmod 600 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.key"
         CERTS_INCLUDED=true
     else
         echo -e "${YELLOW}  → 证书文件不完整，跳过证书打包${NC}"
@@ -135,14 +135,14 @@ fi
 cat > "$TEMP_DIR/scripts/postinstall.sh" <<'SCRIPT'
 #!/bin/bash
 systemctl daemon-reload
-systemctl enable mxsec-agent
+systemctl enable mxcwpp-agent
 SCRIPT
 chmod +x "$TEMP_DIR/scripts/postinstall.sh"
 
 cat > "$TEMP_DIR/scripts/preremove.sh" <<'SCRIPT'
 #!/bin/bash
-systemctl stop mxsec-agent || true
-systemctl disable mxsec-agent || true
+systemctl stop mxcwpp-agent || true
+systemctl disable mxcwpp-agent || true
 SCRIPT
 chmod +x "$TEMP_DIR/scripts/preremove.sh"
 
@@ -179,47 +179,47 @@ fi
 
 # RPM 配置
 cat > "$TEMP_DIR/nfpm-rpm.yaml" <<EOF
-name: mxsec-agent
+name: mxcwpp-agent
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
 release: ${RPM_RELEASE}
 section: default
 priority: extra
-maintainer: Matrix Cloud Security Platform <dev@mxsec-platform.local>
+maintainer: Matrix Cloud Security Platform <dev@mxcwpp.local>
 description: |
   Matrix Cloud Security Platform Agent
   A lightweight agent for baseline security checks on Linux hosts.
 vendor: Matrix Cloud Security Platform
-homepage: https://github.com/imkerbos/mxsec-platform
+homepage: https://github.com/matrixplusio/mxcwpp
 license: Apache-2.0
 contents:
-  - src: ${TEMP_DIR}/usr/bin/mxsec-agent
-    dst: /usr/bin/mxsec-agent
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-agent
+    dst: /usr/bin/mxcwpp-agent
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-agent.service
-    dst: /etc/systemd/system/mxsec-agent.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-agent.service
+    dst: /etc/systemd/system/mxcwpp-agent.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - dst: /var/lib/mxsec-agent
+  - dst: /var/lib/mxcwpp-agent
     type: dir
     file_info:
       mode: 0755
       owner: root
       group: root
-  - dst: /var/lib/mxsec-agent/certs
+  - dst: /var/lib/mxcwpp-agent/certs
     type: dir
     file_info:
       mode: 0700
       owner: root
       group: root
-  - dst: /var/log/mxsec-agent
+  - dst: /var/log/mxcwpp-agent
     type: dir
     file_info:
       mode: 0755
@@ -230,20 +230,20 @@ EOF
 # 如果包含证书，添加证书配置到 RPM YAML
 if [ "$CERTS_INCLUDED" = true ]; then
     cat >> "$TEMP_DIR/nfpm-rpm.yaml" <<EOF
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/ca.crt
-    dst: /var/lib/mxsec-agent/certs/ca.crt
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/ca.crt
+    dst: /var/lib/mxcwpp-agent/certs/ca.crt
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/client.crt
-    dst: /var/lib/mxsec-agent/certs/client.crt
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/client.crt
+    dst: /var/lib/mxcwpp-agent/certs/client.crt
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/client.key
-    dst: /var/lib/mxsec-agent/certs/client.key
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/client.key
+    dst: /var/lib/mxcwpp-agent/certs/client.key
     file_info:
       mode: 0600
       owner: root
@@ -260,46 +260,46 @@ EOF
 
 # DEB 配置
 cat > "$TEMP_DIR/nfpm-deb.yaml" <<EOF
-name: mxsec-agent
+name: mxcwpp-agent
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
 section: default
 priority: extra
-maintainer: Matrix Cloud Security Platform <dev@mxsec-platform.local>
+maintainer: Matrix Cloud Security Platform <dev@mxcwpp.local>
 description: |
   Matrix Cloud Security Platform Agent
   A lightweight agent for baseline security checks on Linux hosts.
 vendor: Matrix Cloud Security Platform
-homepage: https://github.com/imkerbos/mxsec-platform
+homepage: https://github.com/matrixplusio/mxcwpp
 license: Apache-2.0
 contents:
-  - src: ${TEMP_DIR}/usr/bin/mxsec-agent
-    dst: /usr/bin/mxsec-agent
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-agent
+    dst: /usr/bin/mxcwpp-agent
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-agent.service
-    dst: /etc/systemd/system/mxsec-agent.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-agent.service
+    dst: /etc/systemd/system/mxcwpp-agent.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - dst: /var/lib/mxsec-agent
+  - dst: /var/lib/mxcwpp-agent
     type: dir
     file_info:
       mode: 0755
       owner: root
       group: root
-  - dst: /var/lib/mxsec-agent/certs
+  - dst: /var/lib/mxcwpp-agent/certs
     type: dir
     file_info:
       mode: 0700
       owner: root
       group: root
-  - dst: /var/log/mxsec-agent
+  - dst: /var/log/mxcwpp-agent
     type: dir
     file_info:
       mode: 0755
@@ -310,20 +310,20 @@ EOF
 # 如果包含证书，添加证书配置到 DEB YAML
 if [ "$CERTS_INCLUDED" = true ]; then
     cat >> "$TEMP_DIR/nfpm-deb.yaml" <<EOF
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/ca.crt
-    dst: /var/lib/mxsec-agent/certs/ca.crt
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/ca.crt
+    dst: /var/lib/mxcwpp-agent/certs/ca.crt
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/client.crt
-    dst: /var/lib/mxsec-agent/certs/client.crt
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/client.crt
+    dst: /var/lib/mxcwpp-agent/certs/client.crt
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/var/lib/mxsec-agent/certs/client.key
-    dst: /var/lib/mxsec-agent/certs/client.key
+  - src: ${TEMP_DIR}/var/lib/mxcwpp-agent/certs/client.key
+    dst: /var/lib/mxcwpp-agent/certs/client.key
     file_info:
       mode: 0600
       owner: root
@@ -346,9 +346,9 @@ RPM_ARCH="$ARCH"
 
 # RPM 包名（包含发行版信息）
 if [ -n "$RPM_DISTRO" ]; then
-    RPM_PKG_NAME="mxsec-agent-${VERSION}-${RPM_RELEASE}.${RPM_ARCH}.rpm"
+    RPM_PKG_NAME="mxcwpp-agent-${VERSION}-${RPM_RELEASE}.${RPM_ARCH}.rpm"
 else
-    RPM_PKG_NAME="mxsec-agent-${VERSION}-${RPM_ARCH}.rpm"
+    RPM_PKG_NAME="mxcwpp-agent-${VERSION}-${RPM_ARCH}.rpm"
 fi
 
 $NFPM_CMD pkg --packager rpm --config "$TEMP_DIR/nfpm-rpm.yaml" --target "$PACKAGE_DIR/$RPM_PKG_NAME"
@@ -396,9 +396,9 @@ if [ -n "$DISTRO" ]; then
 fi
 
 if [ -n "$DEB_DISTRO" ]; then
-    DEB_PKG_NAME="mxsec-agent_${VERSION}-${DEB_RELEASE}_${DEB_ARCH}.deb"
+    DEB_PKG_NAME="mxcwpp-agent_${VERSION}-${DEB_RELEASE}_${DEB_ARCH}.deb"
 else
-    DEB_PKG_NAME="mxsec-agent_${VERSION}_${DEB_ARCH}.deb"
+    DEB_PKG_NAME="mxcwpp-agent_${VERSION}_${DEB_ARCH}.deb"
 fi
 
 $NFPM_CMD pkg --packager deb --config "$TEMP_DIR/nfpm-deb.yaml" --target "$PACKAGE_DIR/$DEB_PKG_NAME"
@@ -411,6 +411,6 @@ echo "DEB: $PACKAGE_DIR/$DEB_PKG_NAME"
 if [ "$CERTS_INCLUDED" = true ]; then
     echo -e "${GREEN}✓ 证书已包含在包中${NC}"
 else
-    echo -e "${YELLOW}⚠ 证书未包含，Agent 启动时需要手动部署证书到 /var/lib/mxsec-agent/certs/${NC}"
+    echo -e "${YELLOW}⚠ 证书未包含，Agent 启动时需要手动部署证书到 /var/lib/mxcwpp-agent/certs/${NC}"
 fi
-ls -lh "$PACKAGE_DIR"/mxsec-agent*.{rpm,deb} 2>/dev/null || true
+ls -lh "$PACKAGE_DIR"/mxcwpp-agent*.{rpm,deb} 2>/dev/null || true

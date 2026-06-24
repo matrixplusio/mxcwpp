@@ -549,7 +549,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.ip_forward=0",
-        "command": "sysctl -w net.ipv4.ip_forward=0; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.ip_forward' $C && sed -ri 's|^\\s*net\\.ipv4\\.ip_forward.*|net.ipv4.ip_forward = 0|' $C || echo 'net.ipv4.ip_forward = 0' >> $C)"
+        "command": "sysctl -w net.ipv4.ip_forward=0; C=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.ip_forward' $C && sed -ri 's|^\\s*net\\.ipv4\\.ip_forward.*|net.ipv4.ip_forward = 0|' $C || echo 'net.ipv4.ip_forward = 0' >> $C)"
       }
     },
     {
@@ -572,7 +572,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.tcp_syncookies=1",
-        "command": "sysctl -w net.ipv4.tcp_syncookies=1; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.tcp_syncookies' $C && sed -ri 's|^\\s*net\\.ipv4\\.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' $C || echo 'net.ipv4.tcp_syncookies = 1' >> $C)"
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1; C=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.tcp_syncookies' $C && sed -ri 's|^\\s*net\\.ipv4\\.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' $C || echo 'net.ipv4.tcp_syncookies = 1' >> $C)"
       }
     },
     {
@@ -595,7 +595,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0",
-        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; C=/etc/sysctl.d/90-mxsec-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects' $C && sed -ri 's|^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' $C || echo 'net.ipv4.conf.all.accept_redirects = 0' >> $C)"
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; C=/etc/sysctl.d/90-mxcwpp-baseline.conf; touch $C; (grep -qE '^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects' $C && sed -ri 's|^\\s*net\\.ipv4\\.conf\\.all\\.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' $C || echo 'net.ipv4.conf.all.accept_redirects = 0' >> $C)"
       }
     },
     {

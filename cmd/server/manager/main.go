@@ -13,14 +13,14 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/gcppubsub"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/router"
-	managerscheduler "github.com/imkerbos/mxsec-platform/internal/server/manager/scheduler"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/setup"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/advisory"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/gcppubsub"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/router"
+	managerscheduler "github.com/matrixplusio/mxcwpp/internal/server/manager/scheduler"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/setup"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 var (
@@ -80,6 +80,20 @@ func main() {
 	}()
 	defer scanScheduler.Stop()
 
+	// 启动 advisory Kafka consumer：消费 VulnSync 推送的富 advisory，匹配主机写 host_vuln。
+	// 取代 manager 进程内 syncCoreAdvisories 自拉路径（拉源已剥离至 VulnSync 服务）。
+	if len(services.Config.Kafka.Brokers) > 0 {
+		advConsumer, err := biz.NewAdvisoryConsumer(services.Config.Kafka.Brokers, services.DB, services.Logger.Named("advisory-consumer"))
+		if err != nil {
+			services.Logger.Error("advisory consumer 初始化失败", zap.Error(err))
+		} else {
+			advConsumer.Start(ctx)
+			defer func() { _ = advConsumer.Close() }()
+		}
+	} else {
+		services.Logger.Warn("Kafka brokers 未配置，advisory consumer 未启动")
+	}
+
 	// 启动 NVD enrich cron:对 cvss_score=0 / severity=none 的 vulnerability(主要 RHSA/OSV
 	// 不提供 NVD CVSS),按 cve_id 单查 NVD JSON 2.0 API 补 score/severity/description。
 	// 每 24h 跑一次,启动立即 backfill。
@@ -135,6 +149,6 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Println("mxsec-manager version dev")
+	fmt.Println("mxcwpp-manager version dev")
 	fmt.Println("Build time: unknown")
 }

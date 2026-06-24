@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 type Mode = "light" | "dark";
 
-const STORAGE_KEY = "mxsec-theme";
+const STORAGE_KEY = "mxcwpp-theme";
 
 function readStored(): Mode {
   if (typeof window === "undefined") return "light";

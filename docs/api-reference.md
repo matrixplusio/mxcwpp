@@ -179,6 +179,7 @@
 |------|------|------|
 | GET | `/api/v1/tasks` | 任务列表 |
 | GET | `/api/v1/tasks/:task_id` | 任务详情 |
+| GET | `/api/v1/tasks/:task_id/checks` | 任务检查项明细（按规则聚合，支持 `?result=pass\|fail`） |
 | GET | `/api/v1/tasks/:task_id/host-status` | 任务主机执行状态 |
 | POST | `/api/v1/tasks` | 创建扫描任务 |
 | POST | `/api/v1/tasks/:task_id/run` | 执行任务 |

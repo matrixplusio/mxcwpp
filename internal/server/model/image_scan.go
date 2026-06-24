@@ -5,6 +5,8 @@ type ImageScan struct {
 	TenantID    string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID          uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Image       string     `gorm:"column:image;type:varchar(500);not null;index" json:"image"`
+	ClusterID   *uint      `gorm:"column:cluster_id;index" json:"clusterId,omitempty"`            // 镜像来源集群（集群扫描时填充）
+	Source      string     `gorm:"column:source;type:varchar(20);default:'manual'" json:"source"` // manual / cluster / registry
 	Digest      string     `gorm:"column:digest;type:varchar(100)" json:"digest"`
 	OS          string     `gorm:"column:os;type:varchar(50)" json:"os"`
 	TotalVulns  int        `gorm:"column:total_vulns;default:0" json:"totalVulns"`
@@ -45,9 +47,10 @@ type ImageRegistry struct {
 	TenantID   string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Name       string     `gorm:"column:name;type:varchar(100);not null" json:"name"`
+	Type       string     `gorm:"column:type;type:varchar(20);default:'basic'" json:"type"` // basic / gcr / gar / acr
 	URL        string     `gorm:"column:url;type:varchar(500);not null" json:"url"`
 	Username   string     `gorm:"column:username;type:varchar(100)" json:"username"`
-	Password   string     `gorm:"column:password;type:varchar(500)" json:"-"` // JSON 中隐藏
+	Password   string     `gorm:"column:password;type:text" json:"-"` // user/pass 或 GCP SA JSON；JSON 响应隐藏
 	Insecure   bool       `gorm:"column:insecure;default:false" json:"insecure"`
 	ImageCount int        `gorm:"column:image_count;default:0" json:"imageCount"`
 	LastSyncAt *LocalTime `gorm:"column:last_sync_at;type:timestamp" json:"lastSyncAt"`

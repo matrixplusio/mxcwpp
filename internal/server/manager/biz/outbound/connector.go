@@ -76,7 +76,7 @@ func NewSyslogConnector(network, endpoint, hostname, appname string, logger *zap
 		hostname, _ = os.Hostname()
 	}
 	if appname == "" {
-		appname = "mxsec"
+		appname = "mxcwpp"
 	}
 	if network == "" {
 		network = "udp"
@@ -99,7 +99,7 @@ func (c *SyslogConnector) Name() string { return "syslog" }
 // 格式:
 //
 //	<PRI>1 timestamp hostname appname procid msgid [SD-IDs] JSON
-//	<134>1 2026-06-07T12:00:00.000Z host01 mxsec - alrt-xyz - {"severity":"high",...}
+//	<134>1 2026-06-07T12:00:00.000Z host01 mxcwpp - alrt-xyz - {"severity":"high",...}
 func (c *SyslogConnector) Send(ctx context.Context, ev *Event) error {
 	severity := mapSyslogSeverity(ev.Severity)
 	pri := c.facility*8 + severity
@@ -145,7 +145,7 @@ func (c *SyslogConnector) Close() error {
 	return nil
 }
 
-// mapSyslogSeverity mxsec severity → RFC 5424 0-7 (0=emerg).
+// mapSyslogSeverity mxcwpp severity → RFC 5424 0-7 (0=emerg).
 func mapSyslogSeverity(s string) int {
 	switch strings.ToLower(s) {
 	case "critical":

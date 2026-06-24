@@ -12,9 +12,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // KubeClientManager 管理 K8s 集群客户端连接池
@@ -94,6 +95,20 @@ func (m *KubeClientManager) GetClient(clusterID uint) (*kubernetes.Clientset, er
 	m.mu.Unlock()
 
 	return clientset, nil
+}
+
+// GetRESTConfig 读取集群 KubeConfig 并返回 rest.Config（供 dynamic / discovery 客户端使用）
+func (m *KubeClientManager) GetRESTConfig(clusterID uint) (*rest.Config, error) {
+	var cluster model.KubeCluster
+	if err := m.db.First(&cluster, clusterID).Error; err != nil {
+		return nil, fmt.Errorf("集群不存在: %w", err)
+	}
+	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfig))
+	if err != nil {
+		return nil, fmt.Errorf("解析 KubeConfig 失败: %w", err)
+	}
+	config.Timeout = 30 * time.Second
+	return config, nil
 }
 
 // RemoveClient 移除指定集群的客户端缓存

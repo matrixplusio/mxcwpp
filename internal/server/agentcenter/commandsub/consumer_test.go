@@ -44,8 +44,8 @@ func TestNewConsumer_RejectsEmptyBrokers(t *testing.T) {
 
 func TestConsumerGroupID_Constant(t *testing.T) {
 	t.Parallel()
-	if ConsumerGroupID != "mxsec-ac-command" {
-		t.Fatalf("ConsumerGroupID must be 'mxsec-ac-command', got %q", ConsumerGroupID)
+	if ConsumerGroupID != "mxcwpp-ac-command" {
+		t.Fatalf("ConsumerGroupID must be 'mxcwpp-ac-command', got %q", ConsumerGroupID)
 	}
 }
 

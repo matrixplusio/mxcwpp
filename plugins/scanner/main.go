@@ -14,10 +14,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/plugins/scanner/engine"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/plugins/scanner/engine"
 
-	plugins "github.com/imkerbos/mxsec-platform/plugins/lib/go"
+	plugins "github.com/matrixplusio/mxcwpp/plugins/lib/go"
 )
 
 // 版本信息（编译时注入）

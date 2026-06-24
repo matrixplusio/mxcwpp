@@ -17,9 +17,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/signing"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/common/signing"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ComponentsHandler 组件管理 API 处理器
@@ -705,7 +705,7 @@ func (h *ComponentsHandler) UploadPackage(c *gin.Context) {
 			InternalError(c, "保存文件失败")
 			return
 		}
-		fileName = fmt.Sprintf("mxsec-%s-%s-linux-%s.%s", component.Name, version.Version, arch, pkgType)
+		fileName = fmt.Sprintf("mxcwpp-%s-%s-linux-%s.%s", component.Name, version.Version, arch, pkgType)
 		filePath = filepath.Join(packagesDir, fileName)
 	}
 
@@ -904,7 +904,7 @@ func (h *ComponentsHandler) DownloadAgentPackage(c *gin.Context) {
 	}
 
 	// 设置下载响应头
-	fileName := fmt.Sprintf("mxsec-agent-%s.%s", latestVersion.Version, pkgType)
+	fileName := fmt.Sprintf("mxcwpp-agent-%s.%s", latestVersion.Version, pkgType)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Length", strconv.FormatInt(fileInfo.Size(), 10))

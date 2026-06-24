@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package bridge;
 
-option go_package = "github.com/imkerbos/mxsec-platform/api/proto/bridge";
+option go_package = "github.com/matrixplusio/mxcwpp/api/proto/bridge";
 
 // Record 是插件发送给 Agent 的数据记录
 message Record {

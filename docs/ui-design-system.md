@@ -1,4 +1,4 @@
-# mxsec UI 设计系统 (Design System)
+# mxcwpp UI 设计系统 (Design System)
 
 **目标**: 统一全平台 UI 语言, 卡片 / 间距 / 颜色 / 交互 一致.
 
@@ -18,7 +18,7 @@
 | min-height | **140px** (4 卡片高度一致) |
 | padding | 18px |
 | border-radius | 10px |
-| border | 1px solid `--mxsec-border` |
+| border | 1px solid `--mxcwpp-border` |
 | border-top | 2px solid (彩色, 区分类别) |
 | 标题字号 | 11px, 大写, letter-spacing 0.5px |
 | 数值字号 | 28px, font-weight 700 |
@@ -56,8 +56,8 @@ a-col span 标准:
 ## 3. SectionCard 规格 (大区块)
 
 CSS class `.dashboard-card`:
-- background: `var(--mxsec-card-bg)`
-- border: 1px solid `var(--mxsec-border)`
+- background: `var(--mxcwpp-card-bg)`
+- border: 1px solid `var(--mxcwpp-border)`
 - border-radius: 10px
 - padding 0 (头部 + body 内部 padding)
 
@@ -75,13 +75,13 @@ body `.card-body`:
 ## 4. 全局 CSS 变量 (已有, 使用)
 
 ```css
---mxsec-card-bg     /* 卡片背景 */
---mxsec-border      /* 边框 */
---mxsec-text-1      /* 主标题 */
---mxsec-text-2      /* 次级 */
---mxsec-text-3      /* 辅助 */
---mxsec-primary-bg  /* 主色 hover */
---mxsec-fill-1      /* 浅填充 */
+--mxcwpp-card-bg     /* 卡片背景 */
+--mxcwpp-border      /* 边框 */
+--mxcwpp-text-1      /* 主标题 */
+--mxcwpp-text-2      /* 次级 */
+--mxcwpp-text-3      /* 辅助 */
+--mxcwpp-primary-bg  /* 主色 hover */
+--mxcwpp-fill-1      /* 浅填充 */
 ```
 
 ## 5. 已迁移页面 (用 StatCard)
@@ -121,4 +121,4 @@ tooltip: {
 
 ## 8. 主题色 / 暗色模式
 
-变量已支持 light / dark 切换 (themeStore.isDark). 新加 CSS 必须用 `var(--mxsec-*)` 而非硬编码颜色.
+变量已支持 light / dark 切换 (themeStore.isDark). 新加 CSS 必须用 `var(--mxcwpp-*)` 而非硬编码颜色.

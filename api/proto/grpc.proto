@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package grpc;
 
-option go_package = "github.com/imkerbos/mxsec-platform/api/proto/grpc";
+option go_package = "github.com/matrixplusio/mxcwpp/api/proto/grpc";
 
 // PackagedData 是 Agent 发送给 Server 的数据包
 message PackagedData {

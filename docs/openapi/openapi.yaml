@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: mxsec Platform API
+  title: mxcwpp Platform API
   description: |
-    mxsec 商业级 CWPP 平台 REST API.
+    mxcwpp 商业级 CWPP 平台 REST API.
 
     认证: JWT Bearer token (登录后获得).
     路径前缀:
@@ -12,14 +12,14 @@ info:
     错误响应: 统一 JSON 信封 {code, message, data}.
   version: "2.0.0"
   contact:
-    name: mxsec dev
-    url: https://github.com/imkerbos/mxsec-platform
+    name: mxcwpp dev
+    url: https://github.com/matrixplusio/mxcwpp
   license:
     name: Commercial
-    url: https://github.com/imkerbos/mxsec-platform/blob/main/LICENSE
+    url: https://github.com/matrixplusio/mxcwpp/blob/main/LICENSE
 
 servers:
-  - url: https://mxsec.example.com
+  - url: https://mxcwpp.example.com
     description: 生产
   - url: http://localhost:8080
     description: 本地开发

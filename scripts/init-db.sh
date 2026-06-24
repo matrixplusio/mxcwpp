@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 数据库初始化脚本
-# 用于创建mxsec数据库（如果不存在）
+# 用于创建mxcwpp数据库（如果不存在）
 
 set -e
 
@@ -16,7 +16,7 @@ MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_USER="${MYSQL_USER:-root}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-123456}"
-MYSQL_DATABASE="${MYSQL_DATABASE:-mxsec}"
+MYSQL_DATABASE="${MYSQL_DATABASE:-mxcwpp}"
 
 echo -e "${GREEN}初始化数据库...${NC}"
 

@@ -1,9 +1,9 @@
-name: mxsec-storage
+name: mxcwpp-storage
 
 services:
   mysql:
     image: {{ .MySQLImage }}
-    container_name: mxsec-mysql
+    container_name: mxcwpp-mysql
     restart: always
     network_mode: host
     environment:
@@ -27,7 +27,7 @@ services:
 
   redis:
     image: {{ .RedisImage }}
-    container_name: mxsec-redis
+    container_name: mxcwpp-redis
     restart: always
     network_mode: host
     command: >
@@ -51,7 +51,7 @@ services:
 
   clickhouse:
     image: {{ .ClickHouseImage }}
-    container_name: mxsec-clickhouse
+    container_name: mxcwpp-clickhouse
     restart: always
     network_mode: host
     cap_add:
@@ -76,7 +76,7 @@ services:
 
   prometheus:
     image: {{ .PrometheusImage }}
-    container_name: mxsec-prometheus
+    container_name: mxcwpp-prometheus
     restart: always
     user: root
     network_mode: host

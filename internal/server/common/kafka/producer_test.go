@@ -57,14 +57,14 @@ func newTestAsyncProducer(fake sarama.AsyncProducer) *AsyncProducer {
 // TestSend_NoDoubleTopicPrefix 回归测试: producer.Send 不应再次拼接 TopicPrefix。
 //
 // 历史 bug: 调用方 (RouteDataType / DLQTopic) 已传入完整 topic
-// "prodmxsec.agent.ebpf"，旧版 Send 内部又拼一次 cfg.TopicPrefix，
-// 导致实际发送 topic 变成 "prodprodmxsec.agent.ebpf"，broker 不存在，
+// "prodmxcwpp.agent.ebpf"，旧版 Send 内部又拼一次 cfg.TopicPrefix，
+// 导致实际发送 topic 变成 "prodprodmxcwpp.agent.ebpf"，broker 不存在，
 // sarama circuit breaker 永久 open，所有 EDR/FIM 消息被丢弃。
 func TestSend_NoDoubleTopicPrefix(t *testing.T) {
 	fake := newFakeAsyncProducer()
 	p := newTestAsyncProducer(fake)
 
-	wantTopic := "prodmxsec.agent.ebpf"
+	wantTopic := "prodmxcwpp.agent.ebpf"
 	if err := p.Send(wantTopic, "agent-1", &MQMessage{DataType: 3002, AgentID: "agent-1"}); err != nil {
 		t.Fatalf("Send returned error: %v", err)
 	}
@@ -82,11 +82,11 @@ func TestSend_NoDoubleTopicPrefix(t *testing.T) {
 // TestSend_PreservesAlreadyPrefixedTopic 验证多种已带 prefix 的 topic 透传不变。
 func TestSend_PreservesAlreadyPrefixedTopic(t *testing.T) {
 	cases := []string{
-		"prodmxsec.agent.ebpf",
-		"prodmxsec.agent.events",
-		"prodmxsec.agent.ebpf.dlq",
-		"devmxsec.agent.baseline",
-		"mxsec.agent.heartbeat", // empty prefix case
+		"prodmxcwpp.agent.ebpf",
+		"prodmxcwpp.agent.events",
+		"prodmxcwpp.agent.ebpf.dlq",
+		"devmxcwpp.agent.baseline",
+		"mxcwpp.agent.heartbeat", // empty prefix case
 	}
 	for _, topic := range cases {
 		t.Run(topic, func(t *testing.T) {
@@ -112,7 +112,7 @@ func TestSend_FallbackPreservesTopic(t *testing.T) {
 	}
 	p := newTestAsyncProducer(fake)
 
-	wantTopic := "prodmxsec.agent.ebpf"
+	wantTopic := "prodmxcwpp.agent.ebpf"
 	if err := p.Send(wantTopic, "k", &MQMessage{DataType: 3002}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}

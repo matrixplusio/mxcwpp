@@ -1,6 +1,6 @@
 # 社区规范
 
-感谢你对 MxSec Platform 的关注。本文档说明如何参与项目开发。
+感谢你对 MxCwpp Platform 的关注。本文档说明如何参与项目开发。
 
 ## 开发环境
 
@@ -16,8 +16,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/mxsec/mxsec-platform.git
-cd mxsec-platform
+git clone https://github.com/mxcwpp/mxcwpp.git
+cd mxcwpp
 
 # 启动开发环境（带热更新）
 make dev-docker-up
@@ -191,7 +191,7 @@ plugins/<plugin-name>/
 插件 SDK 位于 `plugins/lib/go/`，提供 `Client` 类封装了与 Agent 的通信细节：
 
 ```go
-import plugins "github.com/imkerbos/mxsec-platform/plugins/lib/go"
+import plugins "github.com/matrixplusio/mxcwpp/plugins/lib/go"
 
 client, err := plugins.NewClient()
 // 使用 client 接收任务、上报数据
@@ -276,8 +276,8 @@ git branch -d kerbos/feat-xxx
 
 ```bash
 # Fork 后克隆
-git clone https://github.com/<your-username>/mxsec-platform.git
-cd mxsec-platform
+git clone https://github.com/<your-username>/mxcwpp.git
+cd mxcwpp
 git checkout dev
 
 # 创建功能分支开发

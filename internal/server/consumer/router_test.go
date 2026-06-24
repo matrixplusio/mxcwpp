@@ -6,10 +6,10 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/celengine"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // buildTestBody 构建 protobuf 编码的 MQMessage.Body

@@ -7,12 +7,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
 )
 
 // Prometheus 返回一个 gin middleware，记录每次 HTTP 请求的：
-//   - mxsec_http_requests_total{method, endpoint, status_code} 计数
-//   - mxsec_http_request_duration_seconds{method, endpoint} 直方图（用于 p50/p95/p99）
+//   - mxcwpp_http_requests_total{method, endpoint, status_code} 计数
+//   - mxcwpp_http_request_duration_seconds{method, endpoint} 直方图（用于 p50/p95/p99）
 //
 // endpoint 用 c.FullPath()（路由模板，如 /api/v1/hosts/:host_id），避免高基数爆炸。
 // 静态路径（/metrics、/health）跳过以减少噪声。

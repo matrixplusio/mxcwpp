@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// AlertEnvelope 是 Engine 产出的告警消息体 (落 Kafka mxsec.engine.alert)。
+// AlertEnvelope 是 Engine 产出的告警消息体 (落 Kafka mxcwpp.engine.alert)。
 //
 // 字段对齐 docs/operating-modes.md §6:
 //   - Mode: observe / protect
@@ -54,7 +54,7 @@ func NewAlertProducer(brokers []string, topic string, logger *zap.Logger) (*Aler
 		return nil, fmt.Errorf("engine: alert producer brokers must not be empty")
 	}
 	if topic == "" {
-		topic = "mxsec.engine.alert"
+		topic = "mxcwpp.engine.alert"
 	}
 	if logger == nil {
 		logger = zap.NewNop()

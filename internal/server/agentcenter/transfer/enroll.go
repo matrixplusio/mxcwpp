@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
 )
 
 // peerLeafCert 从 gRPC 上下文取已验证的客户端叶子证书。

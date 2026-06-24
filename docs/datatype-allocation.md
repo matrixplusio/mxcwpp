@@ -163,15 +163,15 @@
 
 | DataType 范围 | Kafka Topic | Retention | Partitions |
 |---------------|------------|-----------|------------|
-| 1000, 1001 | `mxsec.agent.heartbeat` | 24h | 6 |
-| 3000-3099 | `mxsec.agent.ebpf` | 3d | 12 |
-| 5050-5060 | `mxsec.agent.asset` | 7d | 6 |
-| 6001, 6002 | `mxsec.agent.events` | 72h | 12 |
-| 7000-7099 | `mxsec.agent.scanner` | 7d | 6 |
-| 8000-8004 | `mxsec.agent.baseline` | 7d | 6 |
-| 9100-9299 | `mxsec.agent.remediation` | 7d | 6 |
-| 9999 | `mxsec.agent.command-ack` | 7d | 6 |
-| **其他** | **`mxsec.agent.heartbeat`（兜底）** | 24h | 6 |
+| 1000, 1001 | `mxcwpp.agent.heartbeat` | 24h | 6 |
+| 3000-3099 | `mxcwpp.agent.ebpf` | 3d | 12 |
+| 5050-5060 | `mxcwpp.agent.asset` | 7d | 6 |
+| 6001, 6002 | `mxcwpp.agent.events` | 72h | 12 |
+| 7000-7099 | `mxcwpp.agent.scanner` | 7d | 6 |
+| 8000-8004 | `mxcwpp.agent.baseline` | 7d | 6 |
+| 9100-9299 | `mxcwpp.agent.remediation` | 7d | 6 |
+| 9999 | `mxcwpp.agent.command-ack` | 7d | 6 |
+| **其他** | **`mxcwpp.agent.heartbeat`（兜底）** | 24h | 6 |
 
 > **兜底陷阱**: 未注册的 DataType 会默认路由到心跳 Topic，被 Consumer 静默忽略。
 > 这就是本次 9200 路由缺口的根因 — 新增 DataType 必须同步更新 `RouteDataType()` 和 Consumer `handleMessage()`。

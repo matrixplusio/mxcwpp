@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mxsec-sdk"
+name = "mxcwpp-sdk"
 version = "0.1.0"
-description = "mxsec platform official Python SDK"
-authors = [{name = "mxsec dev", email = "dev@mxsec.local"}]
+description = "mxcwpp platform official Python SDK"
+authors = [{name = "mxcwpp dev", email = "dev@mxcwpp.local"}]
 requires-python = ">=3.8"
 license = {text = "Apache-2.0"}
 classifiers = [
@@ -16,4 +16,4 @@ classifiers = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mxsec*"]
+include = ["mxcwpp*"]

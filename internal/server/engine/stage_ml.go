@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/ml"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/ml"
 )
 
 // MLStage 用 ml.Registry 中的所有模型对事件做推理。

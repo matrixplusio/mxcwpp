@@ -16,11 +16,11 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 const (
-	iocRedisKeyPrefix = "mxsec:ioc:"
+	iocRedisKeyPrefix = "mxcwpp:ioc:"
 	iocTTL            = 24 * time.Hour
 )
 

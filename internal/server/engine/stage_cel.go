@@ -7,14 +7,14 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/celengine"
 )
 
 // CelRuleStage 把 PipelineEvent 喂给 celengine.Engine,
 // 返回命中的 DetectionRule 对应的 Alert(s)。
 //
 // v2 拆分: Engine 服务独立 deploy 时, alertGen 直接 upsert alerts 表 (取代旧
-// 架构 Consumer 内嵌 cel 写 DB 的路径). Kafka mxsec.engine.alert 仍推送, 供后续
+// 架构 Consumer 内嵌 cel 写 DB 的路径). Kafka mxcwpp.engine.alert 仍推送, 供后续
 // ML / SOAR / 通知 异步消费.
 type CelRuleStage struct {
 	celEngine *celengine.Engine

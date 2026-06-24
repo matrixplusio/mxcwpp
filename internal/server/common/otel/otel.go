@@ -26,7 +26,7 @@ type Config struct {
 	SampleRate    float64       // 0.0~1.0, 默认 0.1
 	BatchTimeout  time.Duration // span batch flush (默认 5s)
 	ExportTimeout time.Duration // export timeout (默认 30s)
-	ServiceName   string        // 服务名 (mxsec-manager / mxsec-engine 等)
+	ServiceName   string        // 服务名 (mxcwpp-manager / mxcwpp-engine 等)
 	ServiceVer    string        // 版本号
 	Environment   string        // prod / staging / dev
 }

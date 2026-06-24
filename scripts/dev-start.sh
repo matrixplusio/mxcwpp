@@ -53,16 +53,16 @@ if command -v mysql &> /dev/null; then
     if mysql -h 127.0.0.1 -P 3306 -u root -p123456 -e "SELECT 1;" 2>/dev/null; then
         echo "  ✓ MySQL 连接成功"
         # 检查数据库是否存在，不存在则创建
-        if ! mysql -h 127.0.0.1 -P 3306 -u root -p123456 -e "USE mxsec;" 2>/dev/null; then
-            echo -e "${YELLOW}  数据库 mxsec 不存在，正在创建...${NC}"
-            mysql -h 127.0.0.1 -P 3306 -u root -p123456 -e "CREATE DATABASE IF NOT EXISTS mxsec CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
+        if ! mysql -h 127.0.0.1 -P 3306 -u root -p123456 -e "USE mxcwpp;" 2>/dev/null; then
+            echo -e "${YELLOW}  数据库 mxcwpp 不存在，正在创建...${NC}"
+            mysql -h 127.0.0.1 -P 3306 -u root -p123456 -e "CREATE DATABASE IF NOT EXISTS mxcwpp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
             if [ $? -eq 0 ]; then
-                echo "  ✓ 数据库 mxsec 创建成功"
+                echo "  ✓ 数据库 mxcwpp 创建成功"
             else
                 echo -e "${RED}  错误: 无法创建数据库，请手动创建${NC}"
             fi
         else
-            echo "  ✓ 数据库 mxsec 已存在"
+            echo "  ✓ 数据库 mxcwpp 已存在"
         fi
     else
         echo -e "${RED}  错误: 无法连接到MySQL (127.0.0.1:3306, root)${NC}"
@@ -101,10 +101,10 @@ fi
 # 安装UI依赖（如果需要）
 echo ""
 echo -e "${YELLOW}[5/5] 检查UI依赖...${NC}"
-if [ ! -d "ui/node_modules" ]; then
+if [ ! -d "web/node_modules" ]; then
     echo "  正在安装UI依赖..."
-    cd ui
-    npm install
+    cd web
+    pnpm install
     cd ..
     echo "  ✓ UI依赖已安装"
 else
@@ -161,8 +161,8 @@ echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  启动前端UI服务...${NC}"
 echo -e "${GREEN}========================================${NC}"
-cd ui
-npm run dev &
+cd web
+API_TARGET=http://localhost:8080 pnpm dev &
 UI_PID=$!
 cd ..
 

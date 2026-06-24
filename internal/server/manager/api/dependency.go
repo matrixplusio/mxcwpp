@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // DependencyHandler 处理依赖管理相关 API

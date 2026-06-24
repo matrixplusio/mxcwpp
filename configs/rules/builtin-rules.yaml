@@ -1,4 +1,4 @@
-# MxSec 内置检测规则集 v1
+# MxCwpp 内置检测规则集 v1
 # CEL 表达式规则，由 Consumer CEL 引擎加载执行
 # 可通过 Manager API 导入到 detection_rules 表
 
@@ -1632,7 +1632,7 @@ rules:
     category: c2_communication
     mitre_id: "T1071"
     data_types: ["3003"]
-    description: "命中 IOC 黑名单 IP (mxsec.ioc 同步源)"
+    description: "命中 IOC 黑名单 IP (mxcwpp.ioc 同步源)"
 
   # ==================== 系统级反检测 ====================
 

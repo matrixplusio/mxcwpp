@@ -12,17 +12,17 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kms"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/migration"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kms"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	serverLogger "github.com/matrixplusio/mxcwpp/internal/server/logger"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/api"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/migration"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/prometheus"
 )
 
 // ManagerServices 包含 Manager 服务所需的所有组件
@@ -65,7 +65,7 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	cfg.LogInfo(logger)
 	logger.Info("Manager HTTP API Server 启动中...")
 
-	// 4. 初始化 Prometheus 指标 + 自暴露 mxsec_build_info（含 version + PID）
+	// 4. 初始化 Prometheus 指标 + 自暴露 mxcwpp_build_info（含 version + PID）
 	metrics.Init(logger)
 	metrics.SetBuildInfo(api.BuildVersion, "")
 
@@ -74,7 +74,7 @@ func Initialize(configPath string) (*ManagerServices, error) {
 	if kmsErr != nil {
 		logger.Warn("KMS 未初始化, KubeConfig/GCP 凭证将以明文落库",
 			zap.Error(kmsErr),
-			zap.String("hint", "设置 MXSEC_KMS_KEK_V1=<base64-32-bytes> 启用 envelope encryption"))
+			zap.String("hint", "设置 MXCWPP_KMS_KEK_V1=<base64-32-bytes> 启用 envelope encryption"))
 	} else {
 		model.SetKMS(kmsInst)
 		logger.Info("KMS 已启用 envelope encryption",

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	yaraRulesDir = "/var/mxsec/yara-rules"
+	yaraRulesDir = "/var/mxcwpp/yara-rules"
 	yaraBinary   = "yr" // YARA-X CLI
 )
 
@@ -90,13 +90,13 @@ func (s *YARAScanner) compileRulesOnce(ctx context.Context) string {
 			s.compiledErr = fmt.Errorf("yr binary not found")
 			return
 		}
-		tmp, err := os.CreateTemp("", "mxsec-yara-compiled-*.yarc")
+		tmp, err := os.CreateTemp("", "mxcwpp-yara-compiled-*.yarc")
 		if err != nil {
 			s.compiledErr = err
 			return
 		}
 		_ = tmp.Close()
-		// yr compile -o /tmp/mxsec-yara-compiled.yarc RULES_DIR
+		// yr compile -o /tmp/mxcwpp-yara-compiled.yarc RULES_DIR
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(cctx, bin, "compile", "-o", tmp.Name(), s.rulesDir)

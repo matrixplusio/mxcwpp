@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/celengine"
 )
 
 // SequenceStage 接入 celengine.SequenceDetector,

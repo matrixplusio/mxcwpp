@@ -10,7 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 // aggregateWindow 聚合窗口大小：同一签名的事件在此窗口内合并为一条

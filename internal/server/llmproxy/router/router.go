@@ -15,8 +15,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/provider"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/provider"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/redact"
 )
 
 // Scene 是 LLM 调用场景。

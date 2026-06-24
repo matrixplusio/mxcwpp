@@ -18,8 +18,8 @@
 //
 // 部署:
 //
-//	环境变量 MXSEC_KMS_KEK_V1 (base64 32 字节) 必填
-//	可选 MXSEC_KMS_KEK_V2 ... 用于轮换 (新加密用最高版本)
+//	环境变量 MXCWPP_KMS_KEK_V1 (base64 32 字节) 必填
+//	可选 MXCWPP_KMS_KEK_V2 ... 用于轮换 (新加密用最高版本)
 package kms
 
 import (
@@ -52,7 +52,7 @@ type KMS struct {
 	currentVer uint16            // 最新版本 (新加密用)
 }
 
-// New 从环境变量 MXSEC_KMS_KEK_V<N> 加载所有 KEK 版本。
+// New 从环境变量 MXCWPP_KMS_KEK_V<N> 加载所有 KEK 版本。
 //
 // 至少需要一个 V1。多版本场景: V2 V3 ... 同时存在, currentVer = max。
 func New() (*KMS, error) {
@@ -61,12 +61,12 @@ func New() (*KMS, error) {
 		return nil, err
 	}
 	if len(k.keks) == 0 {
-		return nil, errors.New("kms: MXSEC_KMS_KEK_V1 not set, refusing to start (敏感字段会以明文落库)")
+		return nil, errors.New("kms: MXCWPP_KMS_KEK_V1 not set, refusing to start (敏感字段会以明文落库)")
 	}
 	return k, nil
 }
 
-// LoadFromEnv 扫描 MXSEC_KMS_KEK_V* 环境变量。
+// LoadFromEnv 扫描 MXCWPP_KMS_KEK_V* 环境变量。
 func (k *KMS) LoadFromEnv() error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -78,20 +78,20 @@ func (k *KMS) LoadFromEnv() error {
 		}
 		key := kv[:idx]
 		val := kv[idx+1:]
-		if !strings.HasPrefix(key, "MXSEC_KMS_KEK_V") {
+		if !strings.HasPrefix(key, "MXCWPP_KMS_KEK_V") {
 			continue
 		}
-		verStr := key[len("MXSEC_KMS_KEK_V"):]
+		verStr := key[len("MXCWPP_KMS_KEK_V"):]
 		ver, err := strconv.ParseUint(verStr, 10, 16)
 		if err != nil || ver == 0 || ver > 65535 {
 			continue
 		}
 		raw, err := base64.StdEncoding.DecodeString(val)
 		if err != nil {
-			return fmt.Errorf("kms: MXSEC_KMS_KEK_V%d base64 decode: %w", ver, err)
+			return fmt.Errorf("kms: MXCWPP_KMS_KEK_V%d base64 decode: %w", ver, err)
 		}
 		if len(raw) != dekSize {
-			return fmt.Errorf("kms: MXSEC_KMS_KEK_V%d must be %d bytes (got %d)", ver, dekSize, len(raw))
+			return fmt.Errorf("kms: MXCWPP_KMS_KEK_V%d must be %d bytes (got %d)", ver, dekSize, len(raw))
 		}
 		k.keks[uint16(ver)] = raw
 		versions = append(versions, uint16(ver))
@@ -250,7 +250,7 @@ func (k *KMS) CurrentVersion() uint16 {
 // 用法 (一次性):
 //
 //	go run ./cmd/tools/kms-gen-kek
-//	→ 复制 base64 → systemd 环境文件 MXSEC_KMS_KEK_V1=...
+//	→ 复制 base64 → systemd 环境文件 MXCWPP_KMS_KEK_V1=...
 func GenerateKEK() (string, error) {
 	buf := make([]byte, dekSize)
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {

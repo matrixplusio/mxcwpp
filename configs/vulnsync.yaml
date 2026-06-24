@@ -1,8 +1,8 @@
-# mxsec VulnSync 配置 (P1-5)
+# mxcwpp VulnSync 配置 (P1-5)
 
 http_addr: ":8083"
 sync_interval: "6h"
-advisory_topic: "mxsec.vuln.advisory"
+advisory_topic: "mxcwpp.vuln.advisory"
 nvd_api_key: ""                # 可选, 提升 NVD API 速率上限
 
 # 启用的漏洞源 (15 源全开)

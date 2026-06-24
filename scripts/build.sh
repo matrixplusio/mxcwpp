@@ -102,7 +102,7 @@ package_agent() {
     echo -e "${GREEN}[PACKAGE] Agent ($arch)${NC}"
 
     # 编译
-    local bin="$TMP_DIR/mxsec-agent-$arch"
+    local bin="$TMP_DIR/mxcwpp-agent-$arch"
     local sign_flag=""
     if [ -n "${SIGN_PUBLIC_KEY:-}" ]; then
         sign_flag="-X main.signPublicKey=$SIGN_PUBLIC_KEY"
@@ -115,22 +115,22 @@ package_agent() {
     local pkg_tmp="$TMP_DIR/pkg-agent-$arch"
     mkdir -p "$pkg_tmp/usr/bin"
     mkdir -p "$pkg_tmp/etc/systemd/system"
-    mkdir -p "$pkg_tmp/var/lib/mxsec-agent/certs"
-    mkdir -p "$pkg_tmp/var/log/mxsec-agent"
+    mkdir -p "$pkg_tmp/var/lib/mxcwpp-agent/certs"
+    mkdir -p "$pkg_tmp/var/log/mxcwpp-agent"
     mkdir -p "$pkg_tmp/scripts"
 
-    cp "$bin" "$pkg_tmp/usr/bin/mxsec-agent"
-    chmod +x "$pkg_tmp/usr/bin/mxsec-agent"
-    cp deploy/systemd/mxsec-agent.service "$pkg_tmp/etc/systemd/system/"
+    cp "$bin" "$pkg_tmp/usr/bin/mxcwpp-agent"
+    chmod +x "$pkg_tmp/usr/bin/mxcwpp-agent"
+    cp deploy/systemd/mxcwpp-agent.service "$pkg_tmp/etc/systemd/system/"
 
     # systemd preset（推荐开机启动）
     mkdir -p "$pkg_tmp/usr/lib/systemd/system-preset"
-    echo "enable mxsec-agent.service" > "$pkg_tmp/usr/lib/systemd/system-preset/90-mxsec.preset"
+    echo "enable mxcwpp-agent.service" > "$pkg_tmp/usr/lib/systemd/system-preset/90-mxcwpp.preset"
 
     # 证书（如果存在）
     local cert_dir="deploy/certs"
     if [ -f "$cert_dir/ca.crt" ] && [ -f "$cert_dir/client.crt" ] && [ -f "$cert_dir/client.key" ]; then
-        cp "$cert_dir/ca.crt" "$cert_dir/client.crt" "$cert_dir/client.key" "$pkg_tmp/var/lib/mxsec-agent/certs/"
+        cp "$cert_dir/ca.crt" "$cert_dir/client.crt" "$cert_dir/client.key" "$pkg_tmp/var/lib/mxcwpp-agent/certs/"
     fi
 
     # 脚本
@@ -142,8 +142,8 @@ package_agent() {
 if [ "$1" = "configure" -a -z "$2" ] || [ "$1" == "1" ]; then
     # 首次安装：启用并启动服务
     systemctl daemon-reload
-    systemctl enable mxsec-agent
-    systemctl start mxsec-agent
+    systemctl enable mxcwpp-agent
+    systemctl start mxcwpp-agent
 elif [ "$1" = "configure" -a -n "$2" ] || [ "$1" == "2" ]; then
     # 升级：只 reload daemon，服务保持运行
     systemctl daemon-reload
@@ -156,13 +156,13 @@ SCRIPT
 
 if [ "$1" == "remove" ] || [ "$1" == "0" ]; then
     # 只有真正卸载时才停止和禁用服务
-    systemctl stop mxsec-agent || true
-    systemctl disable mxsec-agent || true
+    systemctl stop mxcwpp-agent || true
+    systemctl disable mxcwpp-agent || true
     # 清理 systemd drop-in 配置（如业务线配置）
-    rm -rf /etc/systemd/system/mxsec-agent.service.d || true
+    rm -rf /etc/systemd/system/mxcwpp-agent.service.d || true
     # 清理运行时数据（证书、插件、日志）
-    rm -rf /var/lib/mxsec-agent || true
-    rm -rf /var/log/mxsec-agent || true
+    rm -rf /var/lib/mxcwpp-agent || true
+    rm -rf /var/log/mxcwpp-agent || true
     systemctl daemon-reload || true
 fi
 # 升级时 ($1 == 1) 不做任何操作，保持服务运行
@@ -171,47 +171,47 @@ SCRIPT
 
     # 构建证书 contents 条目
     local cert_contents=""
-    if [ -f "$pkg_tmp/var/lib/mxsec-agent/certs/ca.crt" ]; then
-        cert_contents="  - src: $pkg_tmp/var/lib/mxsec-agent/certs/ca.crt
-    dst: /var/lib/mxsec-agent/certs/ca.crt
+    if [ -f "$pkg_tmp/var/lib/mxcwpp-agent/certs/ca.crt" ]; then
+        cert_contents="  - src: $pkg_tmp/var/lib/mxcwpp-agent/certs/ca.crt
+    dst: /var/lib/mxcwpp-agent/certs/ca.crt
     file_info: { mode: 0644 }
     type: config
-  - src: $pkg_tmp/var/lib/mxsec-agent/certs/client.crt
-    dst: /var/lib/mxsec-agent/certs/client.crt
+  - src: $pkg_tmp/var/lib/mxcwpp-agent/certs/client.crt
+    dst: /var/lib/mxcwpp-agent/certs/client.crt
     file_info: { mode: 0644 }
     type: config
-  - src: $pkg_tmp/var/lib/mxsec-agent/certs/client.key
-    dst: /var/lib/mxsec-agent/certs/client.key
+  - src: $pkg_tmp/var/lib/mxcwpp-agent/certs/client.key
+    dst: /var/lib/mxcwpp-agent/certs/client.key
     file_info: { mode: 0600 }
     type: config"
     fi
 
     # nFPM 配置 - 统一使用 amd64/arm64 命名
     cat > "$pkg_tmp/nfpm.yaml" <<EOF
-name: mxsec-agent
+name: mxcwpp-agent
 arch: $arch
 platform: linux
 version: $VERSION
-vendor: MxSec Platform
-homepage: https://github.com/imkerbos/mxsec-platform
-maintainer: MxSec Platform <dev@mxsec.local>
+vendor: MxCwpp Platform
+homepage: https://github.com/matrixplusio/mxcwpp
+maintainer: MxCwpp Platform <dev@mxcwpp.local>
 description: Matrix Cloud Security Platform Agent - 矩阵云安全平台主机安全Agent
 license: Proprietary
 contents:
-  - src: $pkg_tmp/usr/bin/mxsec-agent
-    dst: /usr/bin/mxsec-agent
+  - src: $pkg_tmp/usr/bin/mxcwpp-agent
+    dst: /usr/bin/mxcwpp-agent
     file_info: { mode: 0755 }
-  - src: $pkg_tmp/etc/systemd/system/mxsec-agent.service
-    dst: /etc/systemd/system/mxsec-agent.service
+  - src: $pkg_tmp/etc/systemd/system/mxcwpp-agent.service
+    dst: /etc/systemd/system/mxcwpp-agent.service
     type: config
-  - src: $pkg_tmp/usr/lib/systemd/system-preset/90-mxsec.preset
-    dst: /usr/lib/systemd/system-preset/90-mxsec.preset
-  - dst: /var/lib/mxsec-agent
+  - src: $pkg_tmp/usr/lib/systemd/system-preset/90-mxcwpp.preset
+    dst: /usr/lib/systemd/system-preset/90-mxcwpp.preset
+  - dst: /var/lib/mxcwpp-agent
     type: dir
-  - dst: /var/lib/mxsec-agent/certs
+  - dst: /var/lib/mxcwpp-agent/certs
     type: dir
     file_info: { mode: 0700 }
-  - dst: /var/log/mxsec-agent
+  - dst: /var/log/mxcwpp-agent
     type: dir
 $cert_contents
 scripts:
@@ -220,11 +220,11 @@ scripts:
 EOF
 
     # 打包 - 统一使用 amd64/arm64 命名
-    $NFPM_CMD pkg -f "$pkg_tmp/nfpm.yaml" -p rpm -t "$PKG_DIR/mxsec-agent-${VERSION}-${arch}.rpm"
-    $NFPM_CMD pkg -f "$pkg_tmp/nfpm.yaml" -p deb -t "$PKG_DIR/mxsec-agent_${VERSION}_${arch}.deb"
+    $NFPM_CMD pkg -f "$pkg_tmp/nfpm.yaml" -p rpm -t "$PKG_DIR/mxcwpp-agent-${VERSION}-${arch}.rpm"
+    $NFPM_CMD pkg -f "$pkg_tmp/nfpm.yaml" -p deb -t "$PKG_DIR/mxcwpp-agent_${VERSION}_${arch}.deb"
 
-    echo -e "  ${GREEN}✓${NC} mxsec-agent-${VERSION}-${arch}.rpm"
-    echo -e "  ${GREEN}✓${NC} mxsec-agent_${VERSION}_${arch}.deb"
+    echo -e "  ${GREEN}✓${NC} mxcwpp-agent-${VERSION}-${arch}.rpm"
+    echo -e "  ${GREEN}✓${NC} mxcwpp-agent_${VERSION}_${arch}.deb"
 }
 
 # 构建插件（只输出二进制文件，不打包成 RPM/DEB）
@@ -363,7 +363,7 @@ esac
 echo ""
 echo -e "${GREEN}=== 构建完成 ===${NC}"
 echo "Agent packages (RPM/DEB):"
-ls -lh "$PKG_DIR"/mxsec-agent*.{rpm,deb} 2>/dev/null || echo "  (none)"
+ls -lh "$PKG_DIR"/mxcwpp-agent*.{rpm,deb} 2>/dev/null || echo "  (none)"
 echo ""
 echo "Plugin binaries:"
 ls -lh dist/plugins/ 2>/dev/null || echo "  (none)"

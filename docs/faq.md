@@ -26,7 +26,7 @@
 
 1. 确认 MySQL 服务运行：`docker compose ps mysql`
 2. 检查凭证：`deploy/.env` 中的 `MYSQL_USER` / `MYSQL_PASSWORD`
-3. 测试连接：`docker compose exec mysql mysql -u mxsec -p mxsec`
+3. 测试连接：`docker compose exec mysql mysql -u mxcwpp -p mxcwpp`
 
 ### 服务启动顺序异常
 
@@ -50,15 +50,15 @@ docker compose logs kafka-1 | tail -20
 3. **检查防火墙**：确认 6751 端口开放
 4. **检查证书**：
    - 首次连接：AgentCenter 自动下发证书，确认服务端 `deploy/certs/` 完整
-   - 后续连接：检查 `/var/lib/mxsec-agent/certs/` 下 `ca.crt`、`client.crt`、`client.key`
+   - 后续连接：检查 `/var/lib/mxcwpp-agent/certs/` 下 `ca.crt`、`client.crt`、`client.key`
    - mTLS 连续失败 3 次后 Agent 会暂时降级为不安全模式重新取证
 5. **检查 DNS**：Agent 配置的主机名能否正确解析
 
 ### 插件未启动
 
-1. 检查插件文件是否存在：`ls -la /var/lib/mxsec-agent/plugin/`
-2. 检查执行权限：`chmod +x /var/lib/mxsec-agent/plugin/baseline`
-3. 查看 Agent 日志：`tail -f /var/log/mxsec-agent/agent.log | grep plugin`
+1. 检查插件文件是否存在：`ls -la /var/lib/mxcwpp-agent/plugin/`
+2. 检查执行权限：`chmod +x /var/lib/mxcwpp-agent/plugin/baseline`
+3. 查看 Agent 日志：`tail -f /var/log/mxcwpp-agent/agent.log | grep plugin`
 4. 确认 Server 已下发插件配置（插件版本和 sha256 需匹配）
 
 ### 没有检测数据上报
@@ -76,10 +76,10 @@ Agent 支持三种更新方式：
 ```bash
 # 服务端推送更新（管理界面触发）
 # CLI 主动更新
-mxsec-agent --update
-mxsec-agent --update --server http://manager:8080
+mxcwpp-agent --update
+mxcwpp-agent --update --server http://manager:8080
 # 本地文件更新
-mxsec-agent --update --file ./mxsec-agent-1.1.0.rpm
+mxcwpp-agent --update --file ./mxcwpp-agent-1.1.0.rpm
 ```
 
 ## 前端
@@ -119,7 +119,7 @@ mxsec-agent --update --file ./mxsec-agent-1.1.0.rpm
 ### ClickHouse 写入积压
 
 1. 检查 ClickHouse 磁盘空间
-2. 检查 parts 数量：`SELECT count() FROM system.parts WHERE active AND database = 'mxsec'`
+2. 检查 parts 数量：`SELECT count() FROM system.parts WHERE active AND database = 'mxcwpp'`
 3. 如果 parts 过多，等待后台 merge 完成或适当调大 Consumer 的批量写入间隔
 
 ## mxctl 工具
@@ -222,8 +222,8 @@ openssl x509 -in deploy/certs/ca.crt -noout -dates
 3. **检查数据源**：EDR/eBPF 已内置于 agent（不再独立 sensor/tetragon plugin），确认 agent 进程含 EDR 采集器
    ```bash
    # 在 Agent 所在主机检查
-   sudo systemctl status mxsec-agent
-   sudo journalctl -u mxsec-agent --since=10min | grep -iE "edr|ebpf|tetragon"
+   sudo systemctl status mxcwpp-agent
+   sudo journalctl -u mxcwpp-agent --since=10min | grep -iE "edr|ebpf|tetragon"
    ```
 4. **检查数据流转**：确认 EDR 事件已写入 Kafka，Consumer 正常消费
 
@@ -290,8 +290,8 @@ openssl x509 -in deploy/certs/ca.crt -noout -dates
 | Consumer | `docker compose logs consumer` |
 | Nginx | `docker compose logs ui` |
 | MySQL | `docker compose logs mysql` |
-| Agent | `/var/log/mxsec-agent/agent.log` |
-| 插件 | `/var/log/mxsec-agent/<plugin-name>.log` |
+| Agent | `/var/log/mxcwpp-agent/agent.log` |
+| 插件 | `/var/log/mxcwpp-agent/<plugin-name>.log` |
 
 ## 常见错误码
 

@@ -22,14 +22,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // Connection 表示一个 Agent 连接

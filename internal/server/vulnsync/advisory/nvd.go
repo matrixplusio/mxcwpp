@@ -83,7 +83,7 @@ func (c *NVDClient) Lookup(ctx context.Context, cveID string) (*NVDEnrichResult,
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "mxsec-platform/1.0 (nvd-enrich)")
+	req.Header.Set("User-Agent", "mxcwpp/1.0 (nvd-enrich)")
 	if c.apiKey != "" {
 		req.Header.Set("apiKey", c.apiKey)
 	}

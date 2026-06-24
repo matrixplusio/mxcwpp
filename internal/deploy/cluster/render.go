@@ -277,13 +277,13 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 		Network:          cfg.Network,
 		App:              cfg.App,
 		ControlPlane:     cfg.ControlPlane,
-		ManagerImage:     cfg.ImageRef("mxsec-manager"),
-		AgentCenterImage: cfg.ImageRef("mxsec-agentcenter"),
-		ConsumerImage:    cfg.ImageRef("mxsec-consumer"),
-		EngineImage:      cfg.ImageRef("mxsec-engine"),
-		LLMProxyImage:    cfg.ImageRef("mxsec-llmproxy"),
-		VulnSyncImage:    cfg.ImageRef("mxsec-vulnsync"),
-		UIImage:          cfg.ImageRef("mxsec-ui"),
+		ManagerImage:     cfg.ImageRef("mxcwpp-manager"),
+		AgentCenterImage: cfg.ImageRef("mxcwpp-agentcenter"),
+		ConsumerImage:    cfg.ImageRef("mxcwpp-consumer"),
+		EngineImage:      cfg.ImageRef("mxcwpp-engine"),
+		LLMProxyImage:    cfg.ImageRef("mxcwpp-llmproxy"),
+		VulnSyncImage:    cfg.ImageRef("mxcwpp-vulnsync"),
+		UIImage:          cfg.ImageRef("mxcwpp-ui"),
 		MySQLImage:       "mysql:8.0",
 		RedisImage:       "redis:7-alpine",
 		ClickHouseImage:  "clickhouse/clickhouse-server:24-alpine",
@@ -441,23 +441,23 @@ func writeServerConfig(path string, cfg *Config, assignment RoleAssignment, mana
 			},
 		},
 		MTLS: mtlsDoc{
-			CACert:     "/etc/mxsec-platform/certs/ca.crt",
-			ServerCert: "/etc/mxsec-platform/certs/server.crt",
-			ServerKey:  "/etc/mxsec-platform/certs/server.key",
+			CACert:     "/etc/mxcwpp/certs/ca.crt",
+			ServerCert: "/etc/mxcwpp/certs/server.crt",
+			ServerKey:  "/etc/mxcwpp/certs/server.key",
 		},
 		Log: logDoc{
 			Level:     cfg.App.LogLevel,
 			Format:    cfg.App.LogFormat,
-			File:      "/var/log/mxsec-platform/server.log",
-			ErrorFile: "/var/log/mxsec-platform/error.log",
+			File:      "/var/log/mxcwpp/server.log",
+			ErrorFile: "/var/log/mxcwpp/error.log",
 			MaxAge:    7,
 		},
 		Agent: agentDoc{
 			HeartbeatInterval: cfg.App.HeartbeatInterval,
-			WorkDir:           "/var/lib/mxsec-agent",
+			WorkDir:           "/var/lib/mxcwpp-agent",
 		},
 		Plugins: pluginsDoc{
-			Dir:                 "/opt/mxsec-platform/plugins",
+			Dir:                 "/opt/mxcwpp/plugins",
 			BaseURL:             cfg.PluginsBaseURL(),
 			DownloadConcurrency: cfg.App.PluginDownloadConcurrency,
 		},
@@ -497,7 +497,7 @@ func writeControlCerts(bundleDir string, certs *CertificateBundle) error {
 
 func writeNodeSummary(path string, cfg *Config, assignment RoleAssignment) error {
 	var builder strings.Builder
-	builder.WriteString("MxSec prod bundle\n")
+	builder.WriteString("MxCwpp prod bundle\n")
 	builder.WriteString(fmt.Sprintf("cluster: %s\n", cfg.Metadata.Name))
 	builder.WriteString(fmt.Sprintf("node: %s (%s)\n", assignment.Node.Name, assignment.Node.Host))
 	builder.WriteString(fmt.Sprintf("roles: %s\n", strings.Join(assignment.Roles, ",")))
@@ -541,7 +541,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 
 func writeNginxConf(dst string, cfg *Config) error {
 	conf := fmt.Sprintf(`# Manager 后端（host 网络模式，直接连 localhost）
-upstream mxsec-manager {
+upstream mxcwpp-manager {
     least_conn;
     server 127.0.0.1:%d;
     keepalive 32;
@@ -565,7 +565,7 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
 
     location /api {
-        proxy_pass http://mxsec-manager;
+        proxy_pass http://mxcwpp-manager;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -577,7 +577,7 @@ server {
     }
 
     location /agent {
-        proxy_pass http://mxsec-manager;
+        proxy_pass http://mxcwpp-manager;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -611,12 +611,12 @@ server {
 // writePrometheusConfig 渲染 Prometheus scrape 配置。
 //
 // 抓取 4 个自研服务（network_mode: host，端口直接绑宿主）：
-//   - mxsec-manager       :8080  /metrics
-//   - mxsec-agentcenter   :8081  /metrics
-//   - mxsec-consumer      :9100  /metrics  (独立 HTTP server)
+//   - mxcwpp-manager       :8080  /metrics
+//   - mxcwpp-agentcenter   :8081  /metrics
+//   - mxcwpp-consumer      :9100  /metrics  (独立 HTTP server)
 //   - prometheus self     :9090  /metrics
 //
-// 不部署 mysql/redis/kafka/clickhouse 外部 exporter（与 mxsec driver 端检查重复）。
+// 不部署 mysql/redis/kafka/clickhouse 外部 exporter（与 mxcwpp driver 端检查重复）。
 func writePrometheusConfig(dst string, cfg *Config) error {
 	// 收集所有 control 节点的 IP（manager + agentcenter + consumer 都在 control 节点）
 	var controlHosts []string
@@ -633,17 +633,17 @@ func writePrometheusConfig(dst string, cfg *Config) error {
 
 	var buf strings.Builder
 	buf.WriteString(`# 由 mxctl 自动生成 — 请勿手动修改
-# 抓取 mxsec 自研服务 + Prometheus 自身
+# 抓取 mxcwpp 自研服务 + Prometheus 自身
 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: mxsec-prod
+    cluster: mxcwpp-prod
     env: prod
 
 scrape_configs:
-  - job_name: mxsec-manager
+  - job_name: mxcwpp-manager
     scrape_interval: 15s
     static_configs:
       - targets:
@@ -653,13 +653,13 @@ scrape_configs:
 	}
 	buf.WriteString("        labels:\n          service: manager\n\n")
 
-	buf.WriteString("  - job_name: mxsec-agentcenter\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n")
+	buf.WriteString("  - job_name: mxcwpp-agentcenter\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n")
 	for _, h := range controlHosts {
 		fmt.Fprintf(&buf, "          - %s:%d\n", h, cfg.App.ACHTTPPort)
 	}
 	buf.WriteString("        labels:\n          service: agentcenter\n\n")
 
-	buf.WriteString("  - job_name: mxsec-consumer\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n")
+	buf.WriteString("  - job_name: mxcwpp-consumer\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n")
 	for _, h := range controlHosts {
 		fmt.Fprintf(&buf, "          - %s:%d\n", h, consumerMetricsPort)
 	}

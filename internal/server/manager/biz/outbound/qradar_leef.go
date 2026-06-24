@@ -6,7 +6,7 @@ package outbound
 //
 // 格式:
 //   LEEF:2.0|Vendor|Product|Version|EventID|<key1>=<val1>\t<key2>=<val2>...
-//   LEEF:2.0|mxsec|mxsec-platform|2.0|MXSEC-ALERT|cat=intrusion\tseverity=high\t...
+//   LEEF:2.0|mxcwpp|mxcwpp|2.0|MXCWPP-ALERT|cat=intrusion\tseverity=high\t...
 //
 // 传输: 通过 syslog UDP/TCP 推 QRadar Event Collector.
 
@@ -51,7 +51,7 @@ func (c *QRadarLEEFConnector) Name() string { return "qradar_leef" }
 // Send 把 Event 转 LEEF 2.0 格式 + 通过 syslog 发送.
 func (c *QRadarLEEFConnector) Send(ctx context.Context, ev *Event) error {
 	// LEEF 2.0 header
-	header := fmt.Sprintf("LEEF:2.0|mxsec|mxsec-platform|2.0|%s",
+	header := fmt.Sprintf("LEEF:2.0|mxcwpp|mxcwpp|2.0|%s",
 		escapeLEEFHeader(ev.RuleID))
 
 	// LEEF body (tab-separated key=value)
@@ -71,7 +71,7 @@ func (c *QRadarLEEFConnector) Send(ctx context.Context, ev *Event) error {
 	body := strings.Join(kv, "\t")
 
 	// Wrap syslog RFC 3164 prefix (QRadar 默认接收 syslog)
-	syslogPrefix := fmt.Sprintf("<134>%s mxsec ",
+	syslogPrefix := fmt.Sprintf("<134>%s mxcwpp ",
 		time.Now().Format("Jan _2 15:04:05"))
 
 	msg := syslogPrefix + header + "|" + body + "\n"
@@ -106,7 +106,7 @@ func (c *QRadarLEEFConnector) Close() error {
 	return nil
 }
 
-// mapLEEFSeverity mxsec severity → LEEF 1-10.
+// mapLEEFSeverity mxcwpp severity → LEEF 1-10.
 //
 // LEEF: 1 (info) → 10 (critical).
 func mapLEEFSeverity(s string) string {

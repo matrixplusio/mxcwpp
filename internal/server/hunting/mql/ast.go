@@ -1,4 +1,4 @@
-// Package mql implements the MxSec Query Language compiler.
+// Package mql implements the MxCwpp Query Language compiler.
 // MQL is a pipe-delimited query language for threat hunting over ClickHouse events.
 //
 // Syntax:

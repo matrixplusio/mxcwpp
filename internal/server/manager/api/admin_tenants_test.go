@@ -12,8 +12,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // bodyCode 解析统一响应 body 中的业务 code 字段（业务接口一律 HTTP 200）。

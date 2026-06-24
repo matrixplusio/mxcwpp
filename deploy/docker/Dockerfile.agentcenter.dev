@@ -29,4 +29,4 @@ ENV TZ=Asia/Shanghai
 EXPOSE 6751
 
 # 默认命令（会被 docker-compose 覆盖）
-CMD ["sh", "-c", "go run ./cmd/server/agentcenter -config /etc/mxsec-platform/server.yaml"]
+CMD ["sh", "-c", "go run ./cmd/server/agentcenter -config /etc/mxcwpp/server.yaml"]

@@ -19,7 +19,7 @@ import (
 const DefaultTTL = 24 * time.Hour
 
 // DefaultKeyPrefix Redis key 前缀。
-const DefaultKeyPrefix = "mxsec:llm:cache:"
+const DefaultKeyPrefix = "mxcwpp:llm:cache:"
 
 // Cache 包装 redis client 暴露 Get/Set。
 type Cache struct {

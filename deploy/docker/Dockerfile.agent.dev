@@ -39,7 +39,7 @@ WORKDIR /workspace
 ENV TZ=Asia/Shanghai
 
 # 创建必要的目录
-RUN mkdir -p /var/lib/mxsec-agent/{certs,cache} /var/log/mxsec-agent
+RUN mkdir -p /var/lib/mxcwpp-agent/{certs,cache} /var/log/mxcwpp-agent
 
 # 默认命令（会被 docker-compose 覆盖）
 CMD ["sh", "-c", "go run ./cmd/agent"]

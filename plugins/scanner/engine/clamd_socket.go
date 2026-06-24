@@ -18,7 +18,7 @@ package engine
 //
 // 子进程隔离 (避免 GPL 传染):
 //
-//	mxsec 通过 socket IPC 与 clamd 交互, 不 link libclamav。
+//	mxcwpp 通过 socket IPC 与 clamd 交互, 不 link libclamav。
 //	clamd 由系统自带安装 (apt/yum install clamav-daemon), 走标准 systemd 服务。
 
 import (
@@ -179,7 +179,7 @@ func (s *ClamdSocketScanner) Selfcheck(ctx context.Context) error {
 	if !s.Available() {
 		return errors.New("clamd socket unavailable")
 	}
-	tmp, err := os.CreateTemp("", ".mxsec_clamd_selfcheck_*.txt")
+	tmp, err := os.CreateTemp("", ".mxcwpp_clamd_selfcheck_*.txt")
 	if err != nil {
 		return fmt.Errorf("selfcheck create: %w", err)
 	}

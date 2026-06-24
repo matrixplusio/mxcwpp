@@ -1,19 +1,19 @@
-# MxSec Platform Community Edition
+# MxCwpp Platform Community Edition
 
 **[English](README.md) | 中文**
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform)
-[![License](https://img.shields.io/github/license/imkerbos/mxsec-platform)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/imkerbos/mxsec-platform?style=social)](https://github.com/imkerbos/mxsec-platform/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/imkerbos/mxsec-platform)](https://github.com/imkerbos/mxsec-platform/commits/main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/imkerbos/mxsec-platform)](https://goreportcard.com/report/github.com/imkerbos/mxsec-platform)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp)
+[![License](https://img.shields.io/github/license/matrixplusio/mxcwpp)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/matrixplusio/mxcwpp?style=social)](https://github.com/matrixplusio/mxcwpp/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/commits/main)
+[![Go Report Card](https://goreportcard.com/badge/github.com/matrixplusio/mxcwpp)](https://goreportcard.com/report/github.com/matrixplusio/mxcwpp)
 
 开源的企业级主机与容器安全管理平台。覆盖安全基线、资产管理、漏洞扫描、病毒查杀、EDR 检测与合规审计，面向安全运营团队提供统一管控视图。
 
 ## 社区版说明
 
-MxSec Platform **社区版** 包含完整的平台框架和全部核心安全能力，与内部版本架构一致。社区版完全免费，无需授权即可部署使用。当前已开源的能力主要包括：
+MxCwpp Platform **社区版** 包含完整的平台框架和全部核心安全能力，与内部版本架构一致。社区版完全免费，无需授权即可部署使用。当前已开源的能力主要包括：
 
 - **全部端上能力**：Agent 数据采集、资产指纹、eBPF 运行时探针、基线检查插件等；
 - **全部后端能力**：AgentCenter、Manager、Consumer、服务发现，均支持水平扩展；
@@ -122,7 +122,7 @@ v2.0 后端拆分为 **六微服务**：Manager / AgentCenter / Consumer / Engin
 | 层面 | 技术 |
 |------|------|
 | 后端 | Go 1.25+（Gin / gRPC / Gorm / Zap） |
-| 前端 | Vue 3 + TypeScript + Pinia + Ant Design Vue 4 |
+| 前端 | Next.js 15 + React 19 + TypeScript + TailwindCSS + Zustand + TanStack Query |
 | 存储 | MySQL 8.0+ / Redis 7 / ClickHouse 24 |
 | 消息 | Kafka（KRaft 模式，7 Topic + DLQ） |
 | 监控 | Prometheus（主机性能指标唯一数据源） |
@@ -138,8 +138,8 @@ v2.0 后端拆分为 **六微服务**：Manager / AgentCenter / Consumer / Engin
 ## 快速开始
 
 ```bash
-git clone https://github.com/imkerbos/mxsec-platform.git
-cd mxsec-platform/deploy
+git clone https://github.com/matrixplusio/mxcwpp.git
+cd mxcwpp/deploy
 
 cp .env.example .env
 vim .env  # 修改 SERVER_IP / JWT_SECRET / 数据库密码
@@ -168,7 +168,7 @@ make lint                                                # 代码检查
 ## 项目结构
 
 ```
-mxsec-platform/
+mxcwpp/
 ├── cmd/                    # 入口（agent + 6 个 server 服务 + mxctl + 工具）
 │   ├── agent/              # Agent 入口
 │   └── server/             # manager / agentcenter / consumer / engine / llmproxy / vulnsync
@@ -177,7 +177,7 @@ mxsec-platform/
 │   └── agent/              # Agent（connection / transport / plugin / heartbeat / edr 25+ 子模块）
 ├── plugins/                # 11 个插件（baseline / collector / fim / scanner / avscanner / remediation / rasp-go / rasp-java / rasp-python / rasp-php / rasp-node）
 ├── api/proto/              # Protobuf 定义
-├── ui/                     # 前端工程（Vue 3 + TypeScript）
+├── web/                    # 前端工程（Next.js 15 + React 19 + TypeScript）
 ├── configs/                # 配置文件（server.yaml / agent.yaml / 规则文件）
 ├── deploy/                 # 部署配置（Docker Compose dev/v2/pret + Nginx + systemd + 生产集群）
 ├── scripts/                # 构建与部署脚本
@@ -196,7 +196,7 @@ mxsec-platform/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=imkerbos/mxsec-platform&type=Date)](https://star-history.com/#imkerbos/mxsec-platform&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=matrixplusio/mxcwpp&type=Date)](https://star-history.com/#matrixplusio/mxcwpp&Date)
 
 ## Contributors
 

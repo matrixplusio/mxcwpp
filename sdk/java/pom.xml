@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>io.mxsec</groupId>
-    <artifactId>mxsec-sdk</artifactId>
+    <groupId>io.mxcwpp</groupId>
+    <artifactId>mxcwpp-sdk</artifactId>
     <version>0.1.0</version>
     <packaging>jar</packaging>
-    <name>mxsec Java SDK</name>
+    <name>mxcwpp Java SDK</name>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>

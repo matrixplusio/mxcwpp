@@ -5,7 +5,7 @@ package billing
 // 维度:
 //
 //	agents          : 当前 online host 数量 (peak)
-//	events          : 上一小时 mxsec.engine.alert + agent_events 事件总数
+//	events          : 上一小时 mxcwpp.engine.alert + agent_events 事件总数
 //	storage_gb_hours: ClickHouse + MySQL 占用 GB (按 tenant 分摊)
 //	alerts          : alerts 表 created_at in [hour-1, hour) 总数
 //	llm_input_tokens / llm_output_tokens: llm_audit 表聚合
@@ -20,7 +20,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // UsageWorker 用量聚合.
@@ -105,7 +105,7 @@ func (w *UsageWorker) collectDimensions(ctx context.Context, tenantID string, ho
 		Where("tenant_id = ? AND created_at >= ? AND created_at < ?", tenantID, hourBucket, hourEnd).
 		Count(&alertsCount)
 	out["alerts"] = alertsCount
-	// events 这里简化用 alerts × 100 估算 (实际从 mxsec_engine_message_processed_total Counter 抓)
+	// events 这里简化用 alerts × 100 估算 (实际从 mxcwpp_engine_message_processed_total Counter 抓)
 	out["events"] = alertsCount * 100
 
 	// storage: 简化为 host_count × 10 MB·hour

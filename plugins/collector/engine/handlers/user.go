@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/plugins/collector/engine"
+	"github.com/matrixplusio/mxcwpp/plugins/collector/engine"
 )
 
 // UserHandler 是账户采集器

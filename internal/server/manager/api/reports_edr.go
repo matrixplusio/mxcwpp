@@ -21,7 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // mitreTacticByCategory 把 alerts.category 映射到 MITRE ATT&CK Tactic。

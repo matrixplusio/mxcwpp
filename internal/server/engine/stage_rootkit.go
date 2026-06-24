@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/intrusion"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/intrusion"
 )
 
 // RootkitStage Rootkit/后门检测。

@@ -24,13 +24,13 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/plugins/baseline/engine"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/plugins/baseline/engine"
 )
 
 // TestAgentServerPluginE2E 测试 Agent + Server + Plugin 完整流程
@@ -105,11 +105,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	}
 	testDBName := os.Getenv("TEST_DB_NAME")
 	if testDBName == "" {
-		testDBName = "mxsec_test"
+		testDBName = "mxcwpp_test"
 	}
 
 	// 构建 MySQL DSN
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&allowNativePasswords=true",
 		testDBUser, testDBPassword, testDBHost, testDBPort, testDBName)
 
 	// 连接数据库
@@ -485,17 +485,18 @@ func testBaselineScoreCalculation(t *testing.T, db *gorm.DB, hostID string) {
 	// 创建多个检测结果
 	ruleIDs := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 	now := time.Now()
+	taskID := uuid.New().String()
 
 	for i, ruleID := range ruleIDs {
 		result := &model.ScanResult{
-			ResultID:  uuid.New().String(),
+			TaskID:    taskID,
 			HostID:    testHostID,
 			RuleID:    ruleID,
 			Status:    model.ResultStatusPass,
 			Severity:  "high",
 			Category:  "ssh",
 			Title:     fmt.Sprintf("规则 %d", i+1),
-			CheckedAt: now.Add(time.Duration(i) * time.Second),
+			CheckedAt: model.LocalTime(now.Add(time.Duration(i) * time.Second)),
 		}
 		if i == 0 {
 			result.Status = model.ResultStatusFail // 第一个规则失败
@@ -547,7 +548,7 @@ func TestBaselinePluginE2E(t *testing.T) {
 	ctx := context.Background()
 
 	// 加载示例策略
-	exampleDir := filepath.Join("..", "..", "plugins", "baseline", "config", "examples")
+	exampleDir := filepath.Join("..", "..", "plugins", "baseline", "config", "general")
 	policyFile := filepath.Join(exampleDir, "password-policy.json")
 
 	if _, err := os.Stat(policyFile); os.IsNotExist(err) {

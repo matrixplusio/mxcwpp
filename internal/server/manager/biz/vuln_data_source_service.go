@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/ssrf"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/common/ssrf"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // VulnDataSourceService 管理 vuln_data_sources 配置 + 同步状态回写。

@@ -25,10 +25,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
-	bridgepb "github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	bridgepb "github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 // ─────────────────────────────────────────────

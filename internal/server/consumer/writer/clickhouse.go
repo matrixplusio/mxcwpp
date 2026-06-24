@@ -10,8 +10,8 @@ import (
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/sanitize"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/sanitize"
 )
 
 // hostMetricRow 是 host_metrics 表的一行数据

@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/provider"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/provider"
 )
 
 type stubProvider struct {

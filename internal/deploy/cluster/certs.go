@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
 )
 
 // LoadCertificatesFromDir 从目录加载已有证书。
@@ -99,7 +99,7 @@ func GenerateCertificates(cfg *Config) (*CertificateBundle, error) {
 			Country:            []string{"CN"},
 			Organization:       []string{"Matrix Cloud Security Platform"},
 			OrganizationalUnit: []string{"CA"},
-			CommonName:         "mxsec-ca",
+			CommonName:         "mxcwpp-ca",
 		},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.AddDate(10, 0, 0),
@@ -122,7 +122,7 @@ func GenerateCertificates(cfg *Config) (*CertificateBundle, error) {
 			Country:            []string{"CN"},
 			Organization:       []string{"Matrix Cloud Security Platform"},
 			OrganizationalUnit: []string{"Server"},
-			CommonName:         "mxsec-server",
+			CommonName:         "mxcwpp-server",
 		},
 		NotBefore:   now.Add(-time.Hour),
 		NotAfter:    now.AddDate(5, 0, 0),
@@ -153,7 +153,7 @@ func GenerateCertificates(cfg *Config) (*CertificateBundle, error) {
 			Country:            []string{"CN"},
 			Organization:       []string{"Matrix Cloud Security Platform"},
 			OrganizationalUnit: []string{"Agent"},
-			CommonName:         "mxsec-agent",
+			CommonName:         "mxcwpp-agent",
 		},
 		NotBefore:   now.Add(-time.Hour),
 		NotAfter:    now.AddDate(5, 0, 0),
@@ -267,7 +267,7 @@ func ReissueServerCert(bundle *CertificateBundle, cfg *Config) error {
 			Country:            []string{"CN"},
 			Organization:       []string{"Matrix Cloud Security Platform"},
 			OrganizationalUnit: []string{"Server"},
-			CommonName:         "mxsec-server",
+			CommonName:         "mxcwpp-server",
 		},
 		NotBefore:   now.Add(-time.Hour),
 		NotAfter:    now.AddDate(5, 0, 0),

@@ -18,10 +18,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	builtinrules "github.com/imkerbos/mxsec-platform/configs/rules"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/plugins/baseline/engine"
+	builtinrules "github.com/matrixplusio/mxcwpp/configs/rules"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/plugins/baseline/engine"
 )
 
 // DefaultPolicyGroupID 默认策略组ID
@@ -56,7 +56,7 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 	}
 
 	// 初始化 RBAC 权限元数据（始终执行，新增权限码自动 seed；缺这步导致
-	// /api/v1/rbac/permissions 返回 500 "Table 'mxsec.permissions' doesn't exist"）
+	// /api/v1/rbac/permissions 返回 500 "Table 'mxcwpp.permissions' doesn't exist"）
 	if err := initRBACPermissions(db, logger); err != nil {
 		logger.Warn("初始化 RBAC 权限失败", zap.Error(err))
 	}
@@ -123,8 +123,8 @@ func InitDefaultData(db *gorm.DB, logger *zap.Logger, policyDir string, pluginsC
 	}
 
 	if policyDir == "" {
-		if _, err := os.Stat("/opt/mxsec-platform/policies"); err == nil {
-			policyDir = "/opt/mxsec-platform/policies"
+		if _, err := os.Stat("/opt/mxcwpp/policies"); err == nil {
+			policyDir = "/opt/mxcwpp/policies"
 		} else {
 			policyDir = "plugins/baseline/config"
 		}
@@ -528,7 +528,7 @@ func initDefaultPluginConfigs(db *gorm.DB, logger *zap.Logger, pluginsCfg *confi
 			Type:         model.PluginTypeScanner,
 			RuntimeTypes: model.StringArray{"vm"},
 			Description:  "病毒查杀插件，基于 ClamAV + YARA-X 双引擎检测恶意文件",
-			Detail:       `{"quarantine_dir": "/var/mxsec/quarantine", "yara_rules_dir": "/var/mxsec/yara-rules"}`,
+			Detail:       `{"quarantine_dir": "/var/mxcwpp/quarantine", "yara_rules_dir": "/var/mxcwpp/yara-rules"}`,
 		},
 	}
 

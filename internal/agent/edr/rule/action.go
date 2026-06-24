@@ -19,14 +19,14 @@ var protectedPaths = []string{
 	"/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/lib", "/usr/lib64",
 	"/lib", "/lib64", "/etc/init.d", "/etc/systemd",
 	// Agent self-protection.
-	"/usr/local/mxsec",
-	"/var/mxsec",
-	"/var/lib/mxsec",
-	"/var/log/mxsec",
+	"/usr/local/mxcwpp",
+	"/var/mxcwpp",
+	"/var/lib/mxcwpp",
+	"/var/log/mxcwpp",
 }
 
 // DefaultQuarantineDir is where quarantined files are stored.
-const DefaultQuarantineDir = "/var/mxsec/quarantine"
+const DefaultQuarantineDir = "/var/mxcwpp/quarantine"
 
 // ActionExecutor handles response actions (kill, suspend, quarantine).
 // All executions are gated by the rule's enforce flag, circuit breaker, and audited.

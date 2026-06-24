@@ -1,5 +1,5 @@
 <clickhouse>
-    <!-- MxSec Platform - ClickHouse 生产加固配置 -->
+    <!-- MxCwpp Platform - ClickHouse 生产加固配置 -->
 
     <!-- 关闭系统内部日志（压测环境减少内存占用） -->
     <trace_log remove="1"/>

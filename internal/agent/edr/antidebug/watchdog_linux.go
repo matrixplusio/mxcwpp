@@ -15,7 +15,7 @@
 //	  - 接收 parent "PING" → 立即回 "PONG"
 //	  - 心跳超时 → 怀疑 parent 被杀:
 //	    a) 检查父进程 (getppid()) 是否仍然存在
-//	    b) 父进程已死 → exec /usr/bin/systemctl restart mxsec-agent
+//	    b) 父进程已死 → exec /usr/bin/systemctl restart mxcwpp-agent
 //	       (依赖 systemd 重启保护)
 //
 // 攻击者杀单进程 → 另一进程立即检测 + 重启 + 上报告警。
@@ -39,15 +39,15 @@ import (
 const (
 	defaultHeartbeatInterval = 3 * time.Second
 	defaultMaxHeartbeatMiss  = 3 // 9s 没收到 → 怀疑死亡
-	envIsWatchdog            = "MXSEC_WATCHDOG_CHILD"
-	envSocketFD              = "MXSEC_WATCHDOG_SOCKFD"
+	envIsWatchdog            = "MXCWPP_WATCHDOG_CHILD"
+	envSocketFD              = "MXCWPP_WATCHDOG_SOCKFD"
 )
 
 // WatchdogConfig 配置。
 type WatchdogConfig struct {
 	HeartbeatInterval time.Duration
 	MaxHeartbeatMiss  int
-	// RestartCommand 父死后 child 拉起 Agent 用命令 (默认 systemctl restart mxsec-agent)
+	// RestartCommand 父死后 child 拉起 Agent 用命令 (默认 systemctl restart mxcwpp-agent)
 	RestartCommand []string
 	Logger         *zap.Logger
 }
@@ -77,7 +77,7 @@ func NewWatchdog(cfg WatchdogConfig) *Watchdog {
 		cfg.Logger = zap.NewNop()
 	}
 	if len(cfg.RestartCommand) == 0 {
-		cfg.RestartCommand = []string{"/bin/systemctl", "restart", "mxsec-agent"}
+		cfg.RestartCommand = []string{"/bin/systemctl", "restart", "mxcwpp-agent"}
 	}
 	return &Watchdog{cfg: cfg, logger: cfg.Logger}
 }
@@ -309,7 +309,7 @@ func (w *Watchdog) Stop() error {
 	return nil
 }
 
-// restartAgent (child 内) systemctl restart mxsec-agent。
+// restartAgent (child 内) systemctl restart mxcwpp-agent。
 func restartAgent(cfg WatchdogConfig) error {
 	cmd := exec.Command(cfg.RestartCommand[0], cfg.RestartCommand[1:]...)
 	if out, err := cmd.CombinedOutput(); err != nil {

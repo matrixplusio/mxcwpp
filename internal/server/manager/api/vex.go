@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/vex"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz/vex"
 )
 
 type VEXHandler struct {
@@ -25,7 +25,7 @@ type VEXHandler struct {
 
 func NewVEXHandler(db *gorm.DB, logger *zap.Logger) *VEXHandler {
 	return &VEXHandler{
-		gen:    vex.NewGenerator(db, logger, "mxsec"),
+		gen:    vex.NewGenerator(db, logger, "mxcwpp"),
 		logger: logger,
 	}
 }

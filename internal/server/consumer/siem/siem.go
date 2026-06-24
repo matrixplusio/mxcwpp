@@ -2,7 +2,7 @@
 // Security events (EDR alerts, IOC hits, rule matches) are forwarded to
 // external SIEM systems (Splunk, QRadar, ArcSight, ELK, etc.) in real-time.
 //
-// CEF Format: CEF:0|MxSec|EDR|1.0|<eventID>|<name>|<severity>|<extensions>
+// CEF Format: CEF:0|MxCwpp|EDR|1.0|<eventID>|<name>|<severity>|<extensions>
 package siem
 
 import (
@@ -173,7 +173,7 @@ func (f *Forwarder) formatCEF(a AlertEvent) string {
 		ext = append(ext, fmt.Sprintf("cs3=%s", cefEscape(k+"="+v)))
 	}
 
-	return fmt.Sprintf("CEF:0|MxSec|EDR|1.0|%s|%s|%d|%s",
+	return fmt.Sprintf("CEF:0|MxCwpp|EDR|1.0|%s|%s|%d|%s",
 		cefEscape(a.EventID),
 		cefEscape(a.Name),
 		sev,
@@ -185,7 +185,7 @@ func (f *Forwarder) formatSyslog(cef string) string {
 	pri := f.cfg.Facility*8 + 6 // facility + severity=informational
 	timestamp := time.Now().Format("Jan 02 15:04:05")
 	hostname, _ := os.Hostname()
-	return fmt.Sprintf("<%d>%s %s mxsec-edr: %s\n", pri, timestamp, hostname, cef)
+	return fmt.Sprintf("<%d>%s %s mxcwpp-edr: %s\n", pri, timestamp, hostname, cef)
 }
 
 func (f *Forwarder) connect() error {

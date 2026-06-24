@@ -10,7 +10,7 @@ server:
 # Leader Election (避免重复抓取)
 leader_election:
   enabled: true
-  redis_key: "mxsec:vulnsync:lock"
+  redis_key: "mxcwpp:vulnsync:lock"
   ttl: "30m"
   redis_addr: "redis:6379"
 
@@ -69,7 +69,7 @@ merge:
 # Kafka 产出
 kafka:
   brokers: ["localhost:9092"]
-  topic: "mxsec.vuln.advisory"
+  topic: "mxcwpp.vuln.advisory"
 
 otel:
   endpoint: "http://otel-collector:4318"

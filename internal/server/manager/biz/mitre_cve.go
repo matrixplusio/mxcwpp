@@ -160,7 +160,7 @@ func (e *MITRECVEEnricher) enrichOne(ctx context.Context, cveID string) (int64, 
 		return 0, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "mxsec-platform/1.0")
+	req.Header.Set("User-Agent", "mxcwpp/1.0")
 	resp, err := e.client.Do(req)
 	if err != nil {
 		return 0, err

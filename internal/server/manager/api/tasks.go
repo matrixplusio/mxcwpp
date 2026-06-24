@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // TasksHandler 是任务管理 API 处理器
@@ -304,6 +304,154 @@ func (h *TasksHandler) GetTask(c *gin.Context) {
 	}
 
 	Success(c, h.enrichTaskWithTargetHosts(&task))
+}
+
+// TaskCheckAffectedHost 不通过的主机（受影响资源/不通过原因）
+type TaskCheckAffectedHost struct {
+	HostID   string `json:"host_id"`
+	Hostname string `json:"hostname"`
+	Actual   string `json:"actual"` // 实际值（不通过的具体原因）
+}
+
+// TaskCheckItem 任务检查项（按规则聚合多台主机的结果）
+type TaskCheckItem struct {
+	RuleID        string                  `json:"rule_id"`
+	Title         string                  `json:"title"`
+	Category      string                  `json:"category"`
+	Severity      string                  `json:"severity"`
+	Description   string                  `json:"description"` // 说明（来自规则）
+	Expected      string                  `json:"expected"`    // 检查依据（期望值）
+	Remediation   string                  `json:"remediation"` // 修复建议
+	Result        string                  `json:"result"`      // 合规结果：pass/fail/error/na
+	HostTotal     int                     `json:"host_total"`  // 检查的主机数
+	HostPassed    int                     `json:"host_passed"` // 通过的主机数
+	HostFailed    int                     `json:"host_failed"` // 不通过的主机数
+	HostError     int                     `json:"host_error"`  // 检查异常的主机数
+	AffectedHosts []TaskCheckAffectedHost `json:"affected_hosts"`
+}
+
+// TaskChecksResponse 任务检查项响应（按规则聚合）
+type TaskChecksResponse struct {
+	Task     *TaskResponse   `json:"task"`
+	Total    int             `json:"total"`     // 检查项总数（规则数）
+	Passed   int             `json:"passed"`    // 通过的检查项数
+	Failed   int             `json:"failed"`    // 不通过的检查项数
+	ErrorCnt int             `json:"error_cnt"` // 检查异常的检查项数
+	PassRate float64         `json:"pass_rate"` // 通过率 0-1
+	Items    []TaskCheckItem `json:"items"`
+}
+
+// GetTaskChecks 获取任务的检查项明细（按规则聚合多台主机的合规结果）
+// GET /api/v1/tasks/:task_id/checks?result=pass|fail
+func (h *TasksHandler) GetTaskChecks(c *gin.Context) {
+	taskID := c.Param("task_id")
+	resultFilter := c.Query("result") // 可选：按合规结果过滤
+
+	var task model.ScanTask
+	if err := h.db.Where("task_id = ?", taskID).First(&task).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			NotFound(c, "任务不存在")
+			return
+		}
+		h.logger.Error("查询任务失败", zap.Error(err))
+		InternalError(c, "查询任务失败")
+		return
+	}
+
+	// 查询该任务的全部检测结果（每台主机每条规则一条），预加载规则以补全说明
+	var results []model.ScanResult
+	if err := h.db.Where("task_id = ?", taskID).
+		Preload("Rule").
+		Order("rule_id ASC").
+		Find(&results).Error; err != nil {
+		h.logger.Error("查询检测结果失败", zap.Error(err))
+		InternalError(c, "查询检测结果失败")
+		return
+	}
+
+	// 按 rule_id 聚合（order 保留首次出现顺序，即 SQL 排序）
+	order := make([]string, 0)
+	itemMap := make(map[string]*TaskCheckItem)
+	for i := range results {
+		r := &results[i]
+		it, ok := itemMap[r.RuleID]
+		if !ok {
+			it = &TaskCheckItem{
+				RuleID:        r.RuleID,
+				Title:         r.Title,
+				Category:      r.Category,
+				Severity:      r.Severity,
+				Description:   r.Rule.Description,
+				Expected:      r.Expected,
+				Remediation:   r.FixSuggestion,
+				AffectedHosts: []TaskCheckAffectedHost{},
+			}
+			if it.Remediation == "" {
+				it.Remediation = r.Rule.FixConfig.Suggestion
+			}
+			itemMap[r.RuleID] = it
+			order = append(order, r.RuleID)
+		}
+		it.HostTotal++
+		switch r.Status {
+		case model.ResultStatusPass:
+			it.HostPassed++
+		case model.ResultStatusFail:
+			it.HostFailed++
+			it.AffectedHosts = append(it.AffectedHosts, TaskCheckAffectedHost{
+				HostID:   r.HostID,
+				Hostname: r.Hostname,
+				Actual:   r.Actual,
+			})
+		case model.ResultStatusError:
+			it.HostError++
+		}
+		// 用首个非空值补全聚合字段
+		if it.Expected == "" && r.Expected != "" {
+			it.Expected = r.Expected
+		}
+		if it.Description == "" && r.Rule.Description != "" {
+			it.Description = r.Rule.Description
+		}
+	}
+
+	resp := TaskChecksResponse{Task: h.enrichTaskWithTargetHosts(&task)}
+	items := make([]TaskCheckItem, 0, len(order))
+	for _, id := range order {
+		it := itemMap[id]
+		// 合规结果优先级：不通过 > 检查异常 > 通过 > 不适用
+		switch {
+		case it.HostFailed > 0:
+			it.Result = string(model.ResultStatusFail)
+		case it.HostError > 0:
+			it.Result = string(model.ResultStatusError)
+		case it.HostPassed > 0:
+			it.Result = string(model.ResultStatusPass)
+		default:
+			it.Result = string(model.ResultStatusNA)
+		}
+
+		resp.Total++
+		switch it.Result {
+		case string(model.ResultStatusPass):
+			resp.Passed++
+		case string(model.ResultStatusFail):
+			resp.Failed++
+		case string(model.ResultStatusError):
+			resp.ErrorCnt++
+		}
+
+		if resultFilter != "" && it.Result != resultFilter {
+			continue
+		}
+		items = append(items, *it)
+	}
+	if resp.Total > 0 {
+		resp.PassRate = float64(resp.Passed) / float64(resp.Total)
+	}
+	resp.Items = items
+
+	Success(c, resp)
 }
 
 // RunTask 执行任务

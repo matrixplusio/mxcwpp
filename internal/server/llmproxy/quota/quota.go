@@ -3,7 +3,7 @@
 // 设计文档: docs/llmproxy-design.md §3.5 quota
 //
 // 实现:
-//   - Redis key mxsec:llm:tenant:cost:{tenant}:{yyyymm}
+//   - Redis key mxcwpp:llm:tenant:cost:{tenant}:{yyyymm}
 //   - INCRBYFLOAT 原子累积成本 (USD)
 //   - 32 天 TTL (跨月自动失效)
 //   - Pre-check: 调用前先 GET 比对 cap, 超额返回 ErrQuotaExceeded
@@ -20,7 +20,7 @@ import (
 )
 
 // DefaultKeyPrefix Redis key 前缀。
-const DefaultKeyPrefix = "mxsec:llm:tenant:cost:"
+const DefaultKeyPrefix = "mxcwpp:llm:tenant:cost:"
 
 // DefaultTTL Redis key 存活时间。
 const DefaultTTL = 32 * 24 * time.Hour

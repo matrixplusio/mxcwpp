@@ -51,8 +51,8 @@
 
 ```sh
 # Agent 端跑基线
-mxsec-baseline-plugin --policy plugins/baseline/config/dengbao/dengbao-l3-rhel.json
-mxsec-baseline-plugin --policy plugins/baseline/config/cis-rhel/cis-rhel8-l1.json
+mxcwpp-baseline-plugin --policy plugins/baseline/config/dengbao/dengbao-l3-rhel.json
+mxcwpp-baseline-plugin --policy plugins/baseline/config/cis-rhel/cis-rhel8-l1.json
 ```
 
 ## 后续 PR 路线

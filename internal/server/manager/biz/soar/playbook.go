@@ -271,7 +271,7 @@ func (e *Executor) nextSequential(pb *Playbook, currentID string) string {
 
 // ============ 内置 Playbook 模板 (起步 3 个) ============
 
-// BuiltinPlaybooks 返回 mxsec 内置应急响应 Playbook.
+// BuiltinPlaybooks 返回 mxcwpp 内置应急响应 Playbook.
 func BuiltinPlaybooks() []Playbook {
 	return []Playbook{
 		{

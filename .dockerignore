@@ -6,5 +6,7 @@ data/
 memory/
 .claude/
 deploy/data/
-ui/node_modules/
-ui/dist/
+web/node_modules/
+web/.next/
+web/out/
+web/.pnpm-store/

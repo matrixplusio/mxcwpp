@@ -16,13 +16,13 @@ import (
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
-	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/prometheus"
 )
 
 const (
-	dashboardCacheKey = "mxsec:cache:dashboard:stats"
+	dashboardCacheKey = "mxcwpp:cache:dashboard:stats"
 	dashboardCacheTTL = 30 * time.Second
 )
 
@@ -791,7 +791,7 @@ func (h *DashboardHandler) checkManagerSelfStatus() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	totalRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxsec_http_requests_total[1m]))`, nil)
+	totalRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxcwpp_http_requests_total[1m]))`, nil)
 	if err != nil || totalRes == nil || len(totalRes.Data.Result) == 0 {
 		return "healthy"
 	}
@@ -800,7 +800,7 @@ func (h *DashboardHandler) checkManagerSelfStatus() string {
 		return "healthy" // 无流量
 	}
 
-	errRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxsec_http_requests_total{status_code=~"5.."}[1m]))`, nil)
+	errRes, err := h.promClient.QueryInstant(ctx, `sum(rate(mxcwpp_http_requests_total{status_code=~"5.."}[1m]))`, nil)
 	if err != nil || errRes == nil || len(errRes.Data.Result) == 0 {
 		return "healthy"
 	}

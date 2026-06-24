@@ -10,7 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
 )
 
 // maxDeferredTasks 限制延迟投递的 goroutine 数量，防止业务卡住时 goroutine 暴涨

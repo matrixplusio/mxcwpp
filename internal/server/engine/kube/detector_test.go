@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // TestKubeDetectorRules 测试 Kube Audit 事件 → 规则匹配
@@ -14,8 +14,8 @@ func TestKubeDetectorRules(t *testing.T) {
 	d := &KubeDetector{}
 	d.registerRules()
 
-	if len(d.rules) != 8 {
-		t.Fatalf("期望 8 条规则，实际 %d", len(d.rules))
+	if len(d.rules) != 14 {
+		t.Fatalf("期望 14 条规则，实际 %d", len(d.rules))
 	}
 
 	tests := []struct {
@@ -203,28 +203,42 @@ func TestKubeDetectorRules(t *testing.T) {
 			wantMatch: false,
 		},
 
-		// K8S-006: ServiceAccount Token 异常使用
+		// K8S-006: ServiceAccount Token 疑似盗用（真信号：公网源 IP 或人类/脚本客户端）
 		{
-			name:   "K8S-006 匹配 - 异常 UserAgent + SA",
+			name:   "K8S-006 匹配 - SA + 脚本客户端 (python-requests)",
 			ruleID: "K8S-006",
 			event: &model.AuditEvent{
 				Verb:      "get",
 				User:      model.AuditUser{Username: "system:serviceaccount:default:my-sa"},
 				UserAgent: "python-requests/2.28",
 				ObjectRef: &model.AuditObjectRef{Resource: "pods"},
+				SourceIPs: []string{"10.0.1.5"},
 			},
 			wantMatch: true,
 		},
 		{
-			name:   "K8S-006 不匹配 - 标准 kubectl",
+			name:   "K8S-006 匹配 - SA 经 kubectl 人类客户端",
 			ruleID: "K8S-006",
 			event: &model.AuditEvent{
 				Verb:      "get",
 				User:      model.AuditUser{Username: "system:serviceaccount:default:my-sa"},
 				UserAgent: "kubectl/v1.28.0",
 				ObjectRef: &model.AuditObjectRef{Resource: "pods"},
+				SourceIPs: []string{"10.0.1.5"},
 			},
-			wantMatch: false,
+			wantMatch: true,
+		},
+		{
+			name:   "K8S-006 匹配 - SA token 来自公网源 IP",
+			ruleID: "K8S-006",
+			event: &model.AuditEvent{
+				Verb:      "list",
+				User:      model.AuditUser{Username: "system:serviceaccount:app:worker"},
+				UserAgent: "Go-http-client/2.0",
+				ObjectRef: &model.AuditObjectRef{Resource: "secrets"},
+				SourceIPs: []string{"203.0.113.9"},
+			},
+			wantMatch: true,
 		},
 		{
 			name:   "K8S-006 不匹配 - 非 SA 用户",
@@ -331,6 +345,97 @@ func TestKubeDetectorRules(t *testing.T) {
 				Verb:       "create",
 				ObjectRef:  &model.AuditObjectRef{Resource: "pods", Name: "safe-pod"},
 				RequestObj: json.RawMessage(`{"spec":{"volumes":[{"hostPath":{"path":"/data/app"}}]}}`),
+			},
+			wantMatch: false,
+		},
+
+		// K8S-009: port-forward
+		{
+			name:   "K8S-009 匹配 - port-forward",
+			ruleID: "K8S-009",
+			event: &model.AuditEvent{
+				Verb:      "create",
+				ObjectRef: &model.AuditObjectRef{Resource: "pods", Subresource: "portforward", Name: "db"},
+			},
+			wantMatch: true,
+		},
+		{
+			name:   "K8S-009 不匹配 - 普通 pod create",
+			ruleID: "K8S-009",
+			event: &model.AuditEvent{
+				Verb:      "create",
+				ObjectRef: &model.AuditObjectRef{Resource: "pods", Name: "web"},
+			},
+			wantMatch: false,
+		},
+		// K8S-010: attach
+		{
+			name:   "K8S-010 匹配 - attach",
+			ruleID: "K8S-010",
+			event: &model.AuditEvent{
+				Verb:      "create",
+				ObjectRef: &model.AuditObjectRef{Resource: "pods", Subresource: "attach", Name: "web"},
+			},
+			wantMatch: true,
+		},
+		// K8S-011: ephemeralContainers
+		{
+			name:   "K8S-011 匹配 - 注入 ephemeral container",
+			ruleID: "K8S-011",
+			event: &model.AuditEvent{
+				Verb:      "update",
+				ObjectRef: &model.AuditObjectRef{Resource: "pods", Subresource: "ephemeralcontainers", Name: "web"},
+			},
+			wantMatch: true,
+		},
+		// K8S-012: 删除 events（反取证）
+		{
+			name:   "K8S-012 匹配 - deletecollection events",
+			ruleID: "K8S-012",
+			event: &model.AuditEvent{
+				Verb:      "deletecollection",
+				User:      model.AuditUser{Username: "alice@corp.com"},
+				ObjectRef: &model.AuditObjectRef{Resource: "events", Namespace: "default"},
+			},
+			wantMatch: true,
+		},
+		{
+			name:   "K8S-012 不匹配 - 删除其他资源",
+			ruleID: "K8S-012",
+			event: &model.AuditEvent{
+				Verb:      "delete",
+				ObjectRef: &model.AuditObjectRef{Resource: "pods", Name: "x"},
+			},
+			wantMatch: false,
+		},
+		// K8S-013: 匿名访问
+		{
+			name:   "K8S-013 匹配 - system:anonymous",
+			ruleID: "K8S-013",
+			event: &model.AuditEvent{
+				Verb:      "get",
+				User:      model.AuditUser{Username: "system:anonymous"},
+				ObjectRef: &model.AuditObjectRef{Resource: "secrets", Name: "x"},
+			},
+			wantMatch: true,
+		},
+		// K8S-014: 篡改准入 webhook
+		{
+			name:   "K8S-014 匹配 - 创建 validatingwebhookconfiguration",
+			ruleID: "K8S-014",
+			event: &model.AuditEvent{
+				Verb:      "create",
+				User:      model.AuditUser{Username: "alice@corp.com"},
+				ObjectRef: &model.AuditObjectRef{Resource: "validatingwebhookconfigurations", Name: "evil-hook"},
+			},
+			wantMatch: true,
+		},
+		{
+			name:   "K8S-014 不匹配 - get webhook 配置",
+			ruleID: "K8S-014",
+			event: &model.AuditEvent{
+				Verb:      "get",
+				ObjectRef: &model.AuditObjectRef{Resource: "mutatingwebhookconfigurations", Name: "h"},
 			},
 			wantMatch: false,
 		},

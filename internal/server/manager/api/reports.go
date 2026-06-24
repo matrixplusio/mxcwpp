@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ReportsHandler 是报表 API 处理器
@@ -42,7 +42,7 @@ func (h *ReportsHandler) SetRedis(c *redis.Client) {
 
 // 报表 cache TTL:60s。同时间段同 host 集报表内容稳定,1 分钟内不变。
 const (
-	reportsEDRCacheKey = "mxsec:reports:edr:%d_%d" // start_unix _ end_unix
+	reportsEDRCacheKey = "mxcwpp:reports:edr:%d_%d" // start_unix _ end_unix
 	reportsCacheTTL    = 60 * time.Second
 )
 

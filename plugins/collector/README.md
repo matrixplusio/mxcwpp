@@ -208,7 +208,7 @@ type UserAsset struct {
 
 ```bash
 cd plugins/collector
-go build -o mxsec-collector .
+go build -o mxcwpp-collector .
 ```
 
 ### 运行

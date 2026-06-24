@@ -1,13 +1,13 @@
-# mxsec Engine 配置 (PR67: viper 统一加载)
+# mxcwpp Engine 配置 (PR67: viper 统一加载)
 #
-# 优先级: env (MXSEC_ENGINE_*) > 本文件 > 内置默认
+# 优先级: env (MXCWPP_ENGINE_*) > 本文件 > 内置默认
 # 示例:
-#   MXSEC_ENGINE_HTTP_ADDR=:9082
-#   MXSEC_ENGINE_KAFKA_BROKERS=kafka-1:9092,kafka-2:9092
+#   MXCWPP_ENGINE_HTTP_ADDR=:9082
+#   MXCWPP_ENGINE_KAFKA_BROKERS=kafka-1:9092,kafka-2:9092
 
 http_addr: ":8082"
 default_mode: observe        # observe (默认) | protect (需 6 闸门 admission)
-alert_topic: mxsec.engine.alert
+alert_topic: mxcwpp.engine.alert
 
 kafka:
   brokers: []                # 空 → 跳过 Kafka 检测链路 (开发自检模式)

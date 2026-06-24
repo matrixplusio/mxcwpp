@@ -30,7 +30,7 @@ RUN mkdir -p api/proto/bridge api/proto/grpc && \
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags="-s -w -X github.com/imkerbos/mxsec-platform/internal/server/manager/api.BuildVersion=${VERSION}" \
+    -ldflags="-s -w -X github.com/matrixplusio/mxcwpp/internal/server/manager/api.BuildVersion=${VERSION}" \
     -o manager ./cmd/server/manager
 
 FROM alpine:3.19
@@ -41,12 +41,12 @@ RUN apk add --no-cache ca-certificates tzdata curl clamav && \
     echo "DatabaseOwner root" >> /etc/clamav/freshclam.conf
 
 COPY --from=builder /app/manager /usr/bin/manager
-COPY --from=builder /app/plugins/baseline/config/examples /opt/mxsec-platform/policies
-COPY --from=builder /app/scripts /opt/mxsec-platform/scripts
+COPY --from=builder /app/plugins/baseline/config/examples /opt/mxcwpp/policies
+COPY --from=builder /app/scripts /opt/mxcwpp/scripts
 
-RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform/plugins /opt/mxsec-platform/uploads
+RUN mkdir -p /etc/mxcwpp /var/log/mxcwpp /opt/mxcwpp/plugins /opt/mxcwpp/uploads
 
-WORKDIR /opt/mxsec-platform
+WORKDIR /opt/mxcwpp
 
 EXPOSE 8080
 
@@ -56,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 # 容器内 root 运行：避免 host bind-mount cert/log/clamav 目录 owner 不一致导致权限拒绝
 
 ENTRYPOINT ["/usr/bin/manager"]
-CMD ["-config", "/etc/mxsec-platform/server.yaml"]
+CMD ["-config", "/etc/mxcwpp/server.yaml"]

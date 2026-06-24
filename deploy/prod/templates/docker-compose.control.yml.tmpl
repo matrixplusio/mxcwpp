@@ -1,4 +1,4 @@
-name: mxsec-control
+name: mxcwpp-control
 
 services:
   manager:
@@ -6,12 +6,12 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/manager:/var/log/mxsec-platform
-      - {{ .DataRoot }}/plugins:/opt/mxsec-platform/plugins
-      - {{ .DataRoot }}/uploads:/opt/mxsec-platform/uploads
-      - {{ .DataRoot }}/data:/opt/mxsec-platform/data
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/manager:/var/log/mxcwpp
+      - {{ .DataRoot }}/plugins:/opt/mxcwpp/plugins
+      - {{ .DataRoot }}/uploads:/opt/mxcwpp/uploads
+      - {{ .DataRoot }}/data:/opt/mxcwpp/data
       - {{ .DataRoot }}/clamav:/var/lib/clamav
     environment:
       TZ: {{ .Timezone }}
@@ -27,12 +27,12 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server-ac.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/agentcenter:/var/log/mxsec-platform
-      - {{ .DataRoot }}/plugins:/opt/mxsec-platform/plugins
-      - {{ .DataRoot }}/data:/opt/mxsec-platform/data:ro
-      - {{ .DataRoot }}/uploads:/opt/mxsec-platform/uploads:ro
+      - {{ .InstallDir }}/current/config/server-ac.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/agentcenter:/var/log/mxcwpp
+      - {{ .DataRoot }}/plugins:/opt/mxcwpp/plugins
+      - {{ .DataRoot }}/data:/opt/mxcwpp/data:ro
+      - {{ .DataRoot }}/uploads:/opt/mxcwpp/uploads:ro
     environment:
       TZ: {{ .Timezone }}
     healthcheck:
@@ -48,9 +48,9 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/consumer:/var/log/mxsec-platform
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/consumer:/var/log/mxcwpp
     environment:
       TZ: {{ .Timezone }}
     healthcheck:
@@ -63,16 +63,16 @@ services:
 
 {{- if gt .Assignment.EngineReplicas 0 }}
   # ===== Engine v2.0 检测分析引擎 =====
-  # 订阅 mxsec.agent.* (ConsumerGroup B "mxsec-engine"), 与 consumer 独立 offset.
+  # 订阅 mxcwpp.agent.* (ConsumerGroup B "mxcwpp-engine"), 与 consumer 独立 offset.
   # 16 stages: CEL / sequence / anomaly / ML / audit / intrusion / kube / RASP / storyline 等.
   engine:
     image: {{ .EngineImage }}
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/engine:/var/log/mxsec-platform
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/engine:/var/log/mxcwpp
     environment:
       TZ: {{ .Timezone }}
     healthcheck:
@@ -92,9 +92,9 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/llmproxy:/var/log/mxsec-platform
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/llmproxy:/var/log/mxcwpp
     environment:
       TZ: {{ .Timezone }}
     healthcheck:
@@ -114,9 +114,9 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - {{ .InstallDir }}/current/certs:/etc/mxsec-platform/certs:ro
-      - {{ .DataRoot }}/logs/vulnsync:/var/log/mxsec-platform
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/vulnsync:/var/log/mxcwpp
     environment:
       TZ: {{ .Timezone }}
     healthcheck:

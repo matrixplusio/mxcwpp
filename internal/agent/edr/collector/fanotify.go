@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 // fanotify constants not yet in x/sys/unix on all versions.

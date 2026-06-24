@@ -15,7 +15,7 @@
       "check": {"condition": "none", "rules": [
         {"type": "file_line_match", "param": ["/opt/tomcat/conf/tomcat-users.xml", "<user.*password=\"tomcat\"|<user.*password=\"admin\"|<user.*password=\"manager\"", "match"]}
       ]},
-      "fix": {"suggestion": "清空 tomcat-users.xml 默认账号, 仅保留必要管理用户用强密码", "command": "F=/opt/tomcat/conf/tomcat-users.xml; [ -f \"$F\" ] || exit 0; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; sed -i -E 's|^([[:space:]]*)(<user[^>]*password=\"(tomcat|admin|manager)\"[^>]*/?>)|\\1<!-- mxsec disabled: \\2 -->|g' \"$F\"; grep -qE '^[[:space:]]*<user[^>]*password=\"(tomcat|admin|manager)\"' \"$F\" && { cp -p \"$F.mxbak\" \"$F\"; exit 1; }; systemctl restart tomcat"}
+      "fix": {"suggestion": "清空 tomcat-users.xml 默认账号, 仅保留必要管理用户用强密码", "command": "F=/opt/tomcat/conf/tomcat-users.xml; [ -f \"$F\" ] || exit 0; [ -f \"$F.mxbak\" ] || cp -p \"$F\" \"$F.mxbak\"; sed -i -E 's|^([[:space:]]*)(<user[^>]*password=\"(tomcat|admin|manager)\"[^>]*/?>)|\\1<!-- mxcwpp disabled: \\2 -->|g' \"$F\"; grep -qE '^[[:space:]]*<user[^>]*password=\"(tomcat|admin|manager)\"' \"$F\" && { cp -p \"$F.mxbak\" \"$F\"; exit 1; }; systemctl restart tomcat"}
     },
     {
       "rule_id": "TOMCAT_002",

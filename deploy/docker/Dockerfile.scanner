@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+# 独立镜像扫描服务（消费 scan_jobs 队列，调用 trivy 扫描）。
+# runtime 基于官方 aquasec/trivy 镜像，自带 trivy 二进制（避免脚本安装的脆弱性）。
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-s -w" -o scanner ./cmd/server/scanner
+
+FROM aquasec/trivy:0.58.0
+
+COPY --from=builder /app/scanner /usr/bin/scanner
+WORKDIR /opt/mxcwpp
+EXPOSE 8085
+
+# 覆盖 aquasec/trivy 默认 entrypoint（trivy）为本扫描服务；trivy 仍在 PATH 供调用
+ENTRYPOINT ["/usr/bin/scanner"]
+CMD ["-config", "/etc/mxcwpp/server.yaml"]

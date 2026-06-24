@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/intrusion"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/intrusion"
 )
 
 // WebshellStage 检测文件落地/修改事件中的 Web 后门启发式特征。

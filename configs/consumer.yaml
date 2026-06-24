@@ -1,8 +1,8 @@
-# mxsec Consumer 配置 (P1-5)
+# mxcwpp Consumer 配置 (P1-5)
 
 http_addr: ":8081"
 analysis_enabled: false        # 走 Engine 微服务时此项为 false
-consumer_group: "mxsec-consumer"
+consumer_group: "mxcwpp-consumer"
 batch_size: 500
 batch_timeout: "5s"
 
@@ -19,7 +19,7 @@ kafka:
 
 clickhouse:
   addr: "localhost:9000"
-  database: mxsec
+  database: mxcwpp
 
 otel:
   enabled: false

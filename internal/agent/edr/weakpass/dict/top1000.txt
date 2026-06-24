@@ -1,6 +1,6 @@
-# mxsec 弱口令 Top 1000 字典 (P2-19)
+# mxcwpp 弱口令 Top 1000 字典 (P2-19)
 # 来源: SecLists Common-Credentials/10-million-password-list-top-1000.txt 节选
-# 仅取最高频 + 中文常见 + 业务上下文 (mxsec/admin/root 派生)
+# 仅取最高频 + 中文常见 + 业务上下文 (mxcwpp/admin/root 派生)
 # 每行一个弱口令; # 开头为注释忽略
 123456
 password
@@ -159,10 +159,10 @@ share
 sysadm
 sysadmin
 backup
-mxsec
-mxsec123
-mxsec@123
-mxsec@admin
+mxcwpp
+mxcwpp123
+mxcwpp@123
+mxcwpp@admin
 manager
 operator
 support
@@ -445,15 +445,15 @@ HelloWorld
 Hello@World
 HelloWorld@123
 helloworld123
-mxsec_admin
-mxsec_root
-mxsec_test
-mxsec_demo
-mxsec_2024
-mxsec_2025
-mxsec_2026
-mxsec.com
-mxsec.io
+mxcwpp_admin
+mxcwpp_root
+mxcwpp_test
+mxcwpp_demo
+mxcwpp_2024
+mxcwpp_2025
+mxcwpp_2026
+mxcwpp.com
+mxcwpp.io
 matrixsec
 matrixsec123
 MatrixSec@123
@@ -600,7 +600,7 @@ QwE@AsD
 qweasdZXC123
 QwEAsDzXc
 Qwerty@2024
-welcomemxsec
+welcomemxcwpp
 xinjianyonghu
 ANewUser
 mxnet
@@ -688,13 +688,13 @@ user@2024
 userroot
 test@admin
 admin@user
-mxsec_admin@2024
+mxcwpp_admin@2024
 test_user
 test_user@123
 test_user@2024
 demouser
 demouser@123
-mxsec_demo@123
+mxcwpp_demo@123
 demo_user
 demo_user@123
 qweasd123
@@ -764,7 +764,7 @@ qihoo@123
 360@123
 qax@123
 QAX@123
-mxsec_root@123
-mxsec_root@2024
-mxsec_test@123
-mxsec_test@2024
+mxcwpp_root@123
+mxcwpp_root@2024
+mxcwpp_test@123
+mxcwpp_test@2024

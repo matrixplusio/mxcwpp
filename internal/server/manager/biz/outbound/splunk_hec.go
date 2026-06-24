@@ -36,7 +36,7 @@ func NewSplunkHECConnector(url, token, index, sourcetype string, logger *zap.Log
 		logger = zap.NewNop()
 	}
 	if sourcetype == "" {
-		sourcetype = "mxsec:alert"
+		sourcetype = "mxcwpp:alert"
 	}
 	return &SplunkHECConnector{
 		url:        url,
@@ -56,7 +56,7 @@ func (c *SplunkHECConnector) Send(ctx context.Context, ev *Event) error {
 	hecEvent := map[string]any{
 		"time":       ev.Timestamp.Unix(),
 		"host":       ev.HostName,
-		"source":     "mxsec",
+		"source":     "mxcwpp",
 		"sourcetype": c.sourcetype,
 		"event":      ev,
 	}

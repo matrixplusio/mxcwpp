@@ -16,8 +16,8 @@
 //   }
 //   return 1; // SK_PASS
 
-#ifndef MXSEC_NPATCH_PROTECT_MAP_H
-#define MXSEC_NPATCH_PROTECT_MAP_H
+#ifndef MXCWPP_NPATCH_PROTECT_MAP_H
+#define MXCWPP_NPATCH_PROTECT_MAP_H
 
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
@@ -73,4 +73,4 @@ static __always_inline int should_block(__u32 rule_id, __u64 cgroup_id) {
     return get_protect_mode(rule_id, cgroup_id) == MODE_PROTECT;
 }
 
-#endif // MXSEC_NPATCH_PROTECT_MAP_H
+#endif // MXCWPP_NPATCH_PROTECT_MAP_H

@@ -408,7 +408,7 @@
       },
       "fix": {
         "suggestion": "在 /etc/sudoers.d/ 下新增一行 Defaults logfile=/var/log/sudo.log，并用 visudo -cf 校验后生效。",
-        "command": "F=/etc/sudoers.d/mxsec-sudolog; echo 'Defaults logfile=/var/log/sudo.log' > \"$F\"; chmod 440 \"$F\"; visudo -cf \"$F\" >/dev/null 2>&1 || { rm -f \"$F\"; exit 1; }"
+        "command": "F=/etc/sudoers.d/mxcwpp-sudolog; echo 'Defaults logfile=/var/log/sudo.log' > \"$F\"; chmod 440 \"$F\"; visudo -cf \"$F\" >/dev/null 2>&1 || { rm -f \"$F\"; exit 1; }"
       }
     },
     {
@@ -584,7 +584,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.ip_forward = 0。若主机承担路由/NAT 功能请保留为 1。",
-        "command": "sysctl -w net.ipv4.ip_forward=0; if grep -q '^net.ipv4.ip_forward' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.ip_forward = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
+        "command": "sysctl -w net.ipv4.ip_forward=0; if grep -q '^net.ipv4.ip_forward' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' /etc/sysctl.d/90-mxcwpp-baseline.conf; else echo 'net.ipv4.ip_forward = 0' >> /etc/sysctl.d/90-mxcwpp-baseline.conf; fi"
       }
     },
     {
@@ -607,7 +607,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.accept_redirects = 0。",
-        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; if grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0; if grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxcwpp-baseline.conf; else echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxcwpp-baseline.conf; fi"
       }
     },
     {
@@ -630,7 +630,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.conf.all.rp_filter = 1。",
-        "command": "C=/etc/sysctl.d/90-mxsec-baseline.conf; mkdir -p \"$(dirname \"$C\")\"; for K in net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter; do if grep -qE \"^\\s*$K\\b\" \"$C\" 2>/dev/null; then sed -ri \"s|^\\s*$K\\b.*|$K = 1|\" \"$C\"; else echo \"$K = 1\" >> \"$C\"; fi; done; for IF in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 1 > \"$IF\" 2>/dev/null; done; sysctl -w net.ipv4.conf.default.rp_filter=1 net.ipv4.conf.all.rp_filter=1"
+        "command": "C=/etc/sysctl.d/90-mxcwpp-baseline.conf; mkdir -p \"$(dirname \"$C\")\"; for K in net.ipv4.conf.all.rp_filter net.ipv4.conf.default.rp_filter; do if grep -qE \"^\\s*$K\\b\" \"$C\" 2>/dev/null; then sed -ri \"s|^\\s*$K\\b.*|$K = 1|\" \"$C\"; else echo \"$K = 1\" >> \"$C\"; fi; done; for IF in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 1 > \"$IF\" 2>/dev/null; done; sysctl -w net.ipv4.conf.default.rp_filter=1 net.ipv4.conf.all.rp_filter=1"
       }
     },
     {
@@ -653,7 +653,7 @@
       },
       "fix": {
         "suggestion": "设置 net.ipv4.tcp_syncookies = 1。",
-        "command": "sysctl -w net.ipv4.tcp_syncookies=1; if grep -q '^net.ipv4.tcp_syncookies' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' /etc/sysctl.d/90-mxsec-baseline.conf; else echo 'net.ipv4.tcp_syncookies = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf; fi"
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1; if grep -q '^net.ipv4.tcp_syncookies' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null; then sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' /etc/sysctl.d/90-mxcwpp-baseline.conf; else echo 'net.ipv4.tcp_syncookies = 1' >> /etc/sysctl.d/90-mxcwpp-baseline.conf; fi"
       }
     }
   ]

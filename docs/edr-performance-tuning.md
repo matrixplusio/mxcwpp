@@ -116,23 +116,23 @@ TTL toDateTime(timestamp) + INTERVAL 30 DAY
 ssh devops@<prod-host>
 
 # 2. 用 server.yaml 的 CH 凭据执行 migration
-CH_PWD=$(sudo grep -A1 'clickhouse:' /opt/mxsec-platform/current/config/server.yaml | grep password | awk '{print $2}')
+CH_PWD=$(sudo grep -A1 'clickhouse:' /opt/mxcwpp/current/config/server.yaml | grep password | awk '{print $2}')
 
 # 3. 应用 projection（秒级完成）
-curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
+curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxcwpp' \
     --data-binary 'ALTER TABLE ebpf_events ADD PROJECTION IF NOT EXISTS proj_time_desc (SELECT * ORDER BY timestamp)'
 
 # 4. MATERIALIZE 历史数据（IO 密集，3-15 分钟，不阻塞读写）
-curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
+curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxcwpp' \
     --data-binary 'ALTER TABLE ebpf_events MATERIALIZE PROJECTION proj_time_desc'
 
 # 5. 监控进度
-watch -n 5 "curl -s -u default:\$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
+watch -n 5 "curl -s -u default:\$CH_PWD 'http://<storage-ip>:8123/?database=mxcwpp' \
     --data-binary \"SELECT table, parts_to_do, is_done FROM system.mutations \
     WHERE table='ebpf_events' AND not is_done ORDER BY create_time DESC\""
 
 # 6. 失败回滚
-curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
+curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxcwpp' \
     --data-binary 'ALTER TABLE ebpf_events DROP PROJECTION proj_time_desc'
 # 原表数据零损失
 ```
@@ -141,7 +141,7 @@ curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
 
 ## 5. 慢查询排查 Checklist
 
-当 Prometheus 触发 `MxSecCHQuerySlow` / `MxSecCHQueryTimeout` 告警：
+当 Prometheus 触发 `MxCwppCHQuerySlow` / `MxCwppCHQueryTimeout` 告警：
 
 1. **看是否命中 projection**
 
@@ -158,7 +158,7 @@ curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
 
    ```sql
    SELECT table, count() AS parts FROM system.parts
-   WHERE active AND database='mxsec' AND table='ebpf_events'
+   WHERE active AND database='mxcwpp' AND table='ebpf_events'
    GROUP BY table;
    ```
 
@@ -179,7 +179,7 @@ curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
      ('SelectQuery','QueryTimeMicroseconds','MergedRows','InsertedRows');
    ```
 
-   或 `docker stats mxsec-clickhouse` 看 CPU/MEM 是否飙升。
+   或 `docker stats mxcwpp-clickhouse` 看 CPU/MEM 是否飙升。
 
 5. **前端 date_to 是日期未带时分秒**
 
@@ -192,9 +192,9 @@ curl -u default:$CH_PWD 'http://<storage-ip>:8123/?database=mxsec' \
 | 改动 | 位置 |
 |---|---|
 | ctx + max_execution_time + rows.Err + 慢查询 metric | `internal/server/manager/api/edr_events.go` |
-| Prom histogram `mxsec_clickhouse_query_duration_seconds` | `internal/server/metrics/metrics.go` |
+| Prom histogram `mxcwpp_clickhouse_query_duration_seconds` | `internal/server/metrics/metrics.go` |
 | Projection 表定义（新部署） | `deploy/init-clickhouse.sql` |
 | 存量集群 migration | `deploy/migrations/clickhouse/20260604_ebpf_events_projection.sql` |
 | 异常告警 trigger_context 回查 | `internal/server/consumer/anomaly/detector.go` |
-| 慢查询/超时/错误率告警规则 | `deploy/config/prometheus-rules.yml` (group `mxsec_clickhouse`) |
+| 慢查询/超时/错误率告警规则 | `deploy/config/prometheus-rules.yml` (group `mxcwpp_clickhouse`) |
 | 前端 24h 默认 + 长查询 cancel | `ui/src/views/EDR/Events/index.vue` |

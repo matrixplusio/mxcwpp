@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // CycloneDX v1.5 JSON structures
@@ -110,7 +110,7 @@ func (h *AssetsHandler) ExportSBOM(c *gin.Context) {
 		Metadata: cdxMetadata{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Tools: []cdxTool{
-				{Vendor: "MxSec", Name: "mxsec-platform", Version: "1.0.0"},
+				{Vendor: "MxCwpp", Name: "mxcwpp", Version: "1.0.0"},
 			},
 		},
 	}

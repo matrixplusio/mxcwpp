@@ -16,8 +16,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/npatch/afpacket"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/npatch/probe"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/npatch/afpacket"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/npatch/probe"
 )
 
 // Manager NPatch 双路径调度.

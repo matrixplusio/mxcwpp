@@ -22,34 +22,34 @@ import (
 
 var (
 	// Consumer 进程 build 元信息（value=1，labels 含 version/pid/commit）
-	// monitor.go 用 PromQL `mxsec_build_info{job="mxsec-consumer"}` 拉取 version + pid
+	// monitor.go 用 PromQL `mxcwpp_build_info{job="mxcwpp-consumer"}` 拉取 version + pid
 	BuildInfoGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_build_info",
+		Name: "mxcwpp_build_info",
 		Help: "Consumer 进程 build 元信息（value=1，labels 含 version/pid/commit）",
 	}, []string{"version", "pid", "commit"})
 
 	// 消息处理总数（按 topic + status 分桶，用于 rate + error_rate）
 	RecordsConsumedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "mxsec_consumer_records_consumed_total",
+		Name: "mxcwpp_consumer_records_consumed_total",
 		Help: "Total number of Kafka messages consumed by the consumer, labeled by topic and result status.",
 	}, []string{"topic", "data_type", "status"}) // status: success / error / dlq
 
 	// 处理延迟（histogram，用于 p99）
 	ProcessingDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "mxsec_consumer_processing_duration_seconds",
+		Name:    "mxcwpp_consumer_processing_duration_seconds",
 		Help:    "Histogram of Consumer message processing latency in seconds, labeled by topic.",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 	}, []string{"topic"})
 
 	// Kafka 消费 lag（gauge，定期由 lag-collector 协程刷新；亦可被外部 kafka-exporter 替代）
 	ConsumerLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_consumer_lag",
+		Name: "mxcwpp_consumer_lag",
 		Help: "Current Kafka consumer lag (messages behind newest offset), labeled by topic and partition.",
 	}, []string{"topic", "partition"})
 
 	// 当前消费组成员数
 	ConsumerGroupMembers = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "mxsec_consumer_group_members",
+		Name: "mxcwpp_consumer_group_members",
 		Help: "Current number of members in the consumer group.",
 	})
 )

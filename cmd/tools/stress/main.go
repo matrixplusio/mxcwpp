@@ -1,4 +1,4 @@
-// stress 是 MxSec AgentCenter 压测工具
+// stress 是 MxCwpp AgentCenter 压测工具
 // 模拟 N 个 Agent 并发通过 gRPC BiDi 流发送心跳，验证 AC → Kafka → Consumer 链路
 //
 // 用法：
@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
-	bridgeProto "github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	bridgeProto "github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 var (
@@ -54,7 +54,7 @@ var (
 func main() {
 	flag.Parse()
 
-	log.Printf("MxSec AgentCenter 压测工具启动")
+	log.Printf("MxCwpp AgentCenter 压测工具启动")
 	log.Printf("目标: %s | Agent 数: %d | 时长: %v | 消息间隔: %v",
 		*target, *agentCount, *duration, *msgInterval)
 

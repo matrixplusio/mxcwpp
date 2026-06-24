@@ -123,8 +123,8 @@ init_env() {
     fi
 
     # 数据目录
-    read -p "数据存储目录 [/data/mxsec]: " DATA_DIR
-    DATA_DIR="${DATA_DIR:-/data/mxsec}"
+    read -p "数据存储目录 [/data/mxcwpp]: " DATA_DIR
+    DATA_DIR="${DATA_DIR:-/data/mxcwpp}"
 
     # 服务器IP
     DEFAULT_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
@@ -171,8 +171,8 @@ TZ=Asia/Shanghai
 # ============ 数据库 ============
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 MYSQL_PASSWORD=$MYSQL_PASSWORD
-MYSQL_DATABASE=mxsec
-MYSQL_USER=mxsec_user
+MYSQL_DATABASE=mxcwpp
+MYSQL_USER=mxcwpp_user
 MYSQL_HOST=mysql
 MYSQL_PORT=3306
 
@@ -202,7 +202,7 @@ KAFKA_TOPIC_PREFIX=
 # ============ ClickHouse ============
 CLICKHOUSE_ENABLED=true
 CLICKHOUSE_ADDR=clickhouse:9000
-CLICKHOUSE_DATABASE=mxsec
+CLICKHOUSE_DATABASE=mxcwpp
 CLICKHOUSE_USER=default
 CLICKHOUSE_PASSWORD=
 
@@ -241,7 +241,7 @@ LOG_RETENTION_DAYS=$LOG_RETENTION_DAYS
 HEARTBEAT_INTERVAL=60
 
 # ============ Plugins ============
-PLUGINS_DIR=/opt/mxsec-platform/plugins
+PLUGINS_DIR=/opt/mxcwpp/plugins
 PLUGINS_BASE_URL=
 
 # ============ JWT ============
@@ -287,17 +287,17 @@ init_certs() {
 
         # CA
         openssl genrsa -out ca.key 4096
-        openssl req -new -x509 -days 3650 -key ca.key -out ca.crt -subj "/CN=MxSec CA"
+        openssl req -new -x509 -days 3650 -key ca.key -out ca.crt -subj "/CN=MxCwpp CA"
 
         # Server
         openssl genrsa -out server.key 2048
-        openssl req -new -key server.key -out server.csr -subj "/CN=mxsec-server"
+        openssl req -new -key server.key -out server.csr -subj "/CN=mxcwpp-server"
         openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt
         rm -f server.csr
 
         # Agent
         openssl genrsa -out agent.key 2048
-        openssl req -new -key agent.key -out agent.csr -subj "/CN=mxsec-agent"
+        openssl req -new -key agent.key -out agent.csr -subj "/CN=mxcwpp-agent"
         openssl x509 -req -days 365 -in agent.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out agent.crt
         rm -f agent.csr
     fi
@@ -334,9 +334,9 @@ init_config() {
         -e "s|__SERVER_HTTP_PORT__|${SERVER_HTTP_PORT:-8080}|g" \
         -e "s|__MYSQL_HOST__|${MYSQL_HOST:-mysql}|g" \
         -e "s|__MYSQL_PORT__|${MYSQL_PORT:-3306}|g" \
-        -e "s|__MYSQL_USER__|${MYSQL_USER:-mxsec_user}|g" \
+        -e "s|__MYSQL_USER__|${MYSQL_USER:-mxcwpp_user}|g" \
         -e "s|__MYSQL_PASSWORD__|${MYSQL_PASSWORD}|g" \
-        -e "s|__MYSQL_DATABASE__|${MYSQL_DATABASE:-mxsec}|g" \
+        -e "s|__MYSQL_DATABASE__|${MYSQL_DATABASE:-mxcwpp}|g" \
         -e "s|__DB_MAX_IDLE_CONNS__|${DB_MAX_IDLE_CONNS:-20}|g" \
         -e "s|__DB_MAX_OPEN_CONNS__|${DB_MAX_OPEN_CONNS:-200}|g" \
         -e "s|__DB_CONN_MAX_LIFETIME__|${DB_CONN_MAX_LIFETIME:-1h}|g" \
@@ -356,7 +356,7 @@ init_config() {
         -e "s|__KAFKA_TOPIC_PREFIX__|${KAFKA_TOPIC_PREFIX:-}|g" \
         -e "s|__CLICKHOUSE_ENABLED__|${CLICKHOUSE_ENABLED:-true}|g" \
         -e "s|__CLICKHOUSE_ADDR__|${CLICKHOUSE_ADDR:-clickhouse:9000}|g" \
-        -e "s|__CLICKHOUSE_DATABASE__|${CLICKHOUSE_DATABASE:-mxsec}|g" \
+        -e "s|__CLICKHOUSE_DATABASE__|${CLICKHOUSE_DATABASE:-mxcwpp}|g" \
         -e "s|__CLICKHOUSE_USER__|${CLICKHOUSE_USER:-default}|g" \
         -e "s|__CLICKHOUSE_PASSWORD__|${CLICKHOUSE_PASSWORD:-}|g" \
         -e "s|__PROMETHEUS_ENABLED__|${PROMETHEUS_ENABLED:-true}|g" \
@@ -366,7 +366,7 @@ init_config() {
         -e "s|__LOG_FORMAT__|${LOG_FORMAT:-json}|g" \
         -e "s|__LOG_MAX_AGE__|${LOG_MAX_AGE:-7}|g" \
         -e "s|__HEARTBEAT_INTERVAL__|${HEARTBEAT_INTERVAL:-60}|g" \
-        -e "s|__PLUGINS_DIR__|${PLUGINS_DIR:-/opt/mxsec-platform/plugins}|g" \
+        -e "s|__PLUGINS_DIR__|${PLUGINS_DIR:-/opt/mxcwpp/plugins}|g" \
         -e "s|__PLUGINS_BASE_URL__|${PLUGINS_URL}|g" \
         -e "s|__JWT_SECRET__|${JWT_SECRET:-change-me-in-production}|g" \
         -e "s|__MANAGER_ADDR__|${MANAGER_ADDR:-http://manager:8080}|g" \
@@ -473,15 +473,15 @@ backup() {
     source "$ENV_FILE"
     local BACKUP_DIR="$SCRIPT_DIR/backup"
     mkdir -p "$BACKUP_DIR"
-    BACKUP_FILE="$BACKUP_DIR/mxsec_$(date +%Y%m%d_%H%M%S).sql.gz"
+    BACKUP_FILE="$BACKUP_DIR/mxcwpp_$(date +%Y%m%d_%H%M%S).sql.gz"
 
     log_step "备份数据库..."
-    dc exec -T mysql mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction mxsec | gzip > "$BACKUP_FILE"
+    dc exec -T mysql mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction mxcwpp | gzip > "$BACKUP_FILE"
 
     log_info "备份完成: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
     # 清理 30 天前的备份
-    find "$BACKUP_DIR" -name "mxsec_*.sql.gz" -mtime +30 -delete 2>/dev/null || true
+    find "$BACKUP_DIR" -name "mxcwpp_*.sql.gz" -mtime +30 -delete 2>/dev/null || true
 }
 
 # ============================================================

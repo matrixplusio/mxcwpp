@@ -1,0 +1,29 @@
+[Unit]
+Description=Matrix Cloud Security Platform Agent
+Documentation=https://github.com/matrixplusio/mxcwpp
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/mxcwpp-agent
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxcwpp-agent
+
+# 资源限制
+# MemoryLimit (legacy)兼容 systemd <231 (Oracle Linux 7 / RHEL 7)
+# 新系统 systemd 仍接受 MemoryLimit
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=2G
+CPUQuota=100%
+
+# 环境变量
+Environment="TZ=Asia/Shanghai"
+
+[Install]
+WantedBy=multi-user.target

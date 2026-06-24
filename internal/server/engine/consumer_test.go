@@ -25,11 +25,11 @@ func TestSubscribedTopics_IsNonEmpty(t *testing.T) {
 		t.Fatalf("SubscribedTopics must not be empty")
 	}
 	want := map[string]bool{
-		"mxsec.agent.ebpf":     true,
-		"mxsec.agent.events":   true,
-		"mxsec.agent.scanner":  true,
-		"mxsec.agent.baseline": true,
-		"mxsec.vuln.advisory":  true,
+		"mxcwpp.agent.ebpf":     true,
+		"mxcwpp.agent.events":   true,
+		"mxcwpp.agent.scanner":  true,
+		"mxcwpp.agent.baseline": true,
+		"mxcwpp.vuln.advisory":  true,
 	}
 	for _, topic := range SubscribedTopics {
 		if !want[topic] {
@@ -40,8 +40,8 @@ func TestSubscribedTopics_IsNonEmpty(t *testing.T) {
 
 func TestConsumerGroupID_Constant(t *testing.T) {
 	t.Parallel()
-	if ConsumerGroupID != "mxsec-engine" {
-		t.Fatalf("ConsumerGroupID must be 'mxsec-engine', got %q", ConsumerGroupID)
+	if ConsumerGroupID != "mxcwpp-engine" {
+		t.Fatalf("ConsumerGroupID must be 'mxcwpp-engine', got %q", ConsumerGroupID)
 	}
 }
 

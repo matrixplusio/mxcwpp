@@ -162,7 +162,7 @@ func (m *HoneypotManager) deployToDir(dir string) {
 }
 
 func (m *HoneypotManager) decoyPath(dir string, kind DecoyKind) string {
-	// 隐蔽命名: .mxsec_decoy_<seed>.<ext> 太显眼
+	// 隐蔽命名: .mxcwpp_decoy_<seed>.<ext> 太显眼
 	// 选择业务感强的命名: salary_2025.<ext> / contracts_q4.<ext>
 	switch kind {
 	case DecoyDOCX:

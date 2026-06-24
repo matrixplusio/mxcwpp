@@ -19,8 +19,8 @@
 
 ```go
 import (
-    "github.com/imkerbos/mxsec-platform/internal/server/migration"
-    "github.com/imkerbos/mxsec-platform/internal/server/model"
+    "github.com/matrixplusio/mxcwpp/internal/server/migration"
+    "github.com/matrixplusio/mxcwpp/internal/server/model"
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
     "go.uber.org/zap"
@@ -59,7 +59,7 @@ import (
     "fmt"
     "os"
     
-    "github.com/imkerbos/mxsec-platform/internal/server/migration"
+    "github.com/matrixplusio/mxcwpp/internal/server/migration"
     // ... 其他导入
 )
 

@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/anomaly"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/anomaly"
 )
 
 // AnomalyStage 接入 anomaly.Detector (IForest 异常检测)。

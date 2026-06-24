@@ -12,7 +12,7 @@ import { initReactI18next } from "react-i18next";
 import zh from "@/locales/zh.json";
 import en from "@/locales/en.json";
 
-export const LANG_KEY = "mxsec-lang";
+export const LANG_KEY = "mxcwpp-lang";
 export type Lang = "zh" | "en";
 
 // SSR 阶段无 localStorage,默认中文;客户端读取持久化语言

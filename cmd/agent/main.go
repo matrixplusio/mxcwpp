@@ -15,21 +15,21 @@ import (
 
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	agentcli "github.com/imkerbos/mxsec-platform/internal/agent/cli"
-	"github.com/imkerbos/mxsec-platform/internal/agent/config"
-	"github.com/imkerbos/mxsec-platform/internal/agent/connection"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/antidebug"
-	agentgctune "github.com/imkerbos/mxsec-platform/internal/agent/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/agent/heartbeat"
-	"github.com/imkerbos/mxsec-platform/internal/agent/id"
-	"github.com/imkerbos/mxsec-platform/internal/agent/logger"
-	"github.com/imkerbos/mxsec-platform/internal/agent/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/agent/plugin"
-	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
-	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
-	"github.com/imkerbos/mxsec-platform/internal/agent/updater"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	agentcli "github.com/matrixplusio/mxcwpp/internal/agent/cli"
+	"github.com/matrixplusio/mxcwpp/internal/agent/config"
+	"github.com/matrixplusio/mxcwpp/internal/agent/connection"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/antidebug"
+	agentgctune "github.com/matrixplusio/mxcwpp/internal/agent/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/agent/heartbeat"
+	"github.com/matrixplusio/mxcwpp/internal/agent/id"
+	"github.com/matrixplusio/mxcwpp/internal/agent/logger"
+	"github.com/matrixplusio/mxcwpp/internal/agent/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/agent/plugin"
+	agentrt "github.com/matrixplusio/mxcwpp/internal/agent/runtime"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/internal/agent/updater"
 )
 
 var (
@@ -51,7 +51,7 @@ var (
 	logsFollow = flag.Bool("f", false, "实时跟踪日志（配合 --logs 使用）")
 
 	// --diag 子选项
-	diagOutput = flag.String("o", "", "诊断包输出路径（配合 --diag 使用，默认 /tmp/mxsec-agent-diag-<host>-<ts>.tar.gz）")
+	diagOutput = flag.String("o", "", "诊断包输出路径（配合 --diag 使用，默认 /tmp/mxcwpp-agent-diag-<host>-<ts>.tar.gz）")
 )
 
 // 构建时嵌入的变量（通过 -ldflags 设置）
@@ -69,11 +69,11 @@ var (
 func main() {
 	// Watchdog child 入口: 在 flag.Parse 之前判定, 避免 flag 处理影响 child 行为
 	if antidebug.IsChild() {
-		// child 用最小日志栈 (避开 /var/log/mxsec-agent 锁竞争)
+		// child 用最小日志栈 (避开 /var/log/mxcwpp-agent 锁竞争)
 		minimalLog, _ := zap.NewProduction()
 		if err := antidebug.ServeAsChild(antidebug.WatchdogConfig{
 			Logger:         minimalLog,
-			RestartCommand: []string{"/bin/systemctl", "restart", "mxsec-agent"},
+			RestartCommand: []string{"/bin/systemctl", "restart", "mxcwpp-agent"},
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "watchdog child exited: %v\n", err)
 		}
@@ -136,7 +136,7 @@ func main() {
 			ServerHost:     serverHost,
 			ServerHTTP:     *updateServer,
 			CurrentVersion: currentVer,
-			WorkDir:        "/var/lib/mxsec-agent",
+			WorkDir:        "/var/lib/mxcwpp-agent",
 			Force:          *updateForce,
 			LocalFile:      *updateFile,
 		}
@@ -164,12 +164,12 @@ func main() {
 
 	// Agent↔AC 信任链：CA 指纹 + enroll 令牌。
 	// 环境变量优先（便于安装脚本按机注入），其次构建时嵌入。
-	if v := os.Getenv("MXSEC_CA_FINGERPRINT"); v != "" {
+	if v := os.Getenv("MXCWPP_CA_FINGERPRINT"); v != "" {
 		cfg.Local.TLS.CAFingerprint = v
 	} else if caFingerprint != "" {
 		cfg.Local.TLS.CAFingerprint = caFingerprint
 	}
-	if v := os.Getenv("MXSEC_ENROLL_TOKEN"); v != "" {
+	if v := os.Getenv("MXCWPP_ENROLL_TOKEN"); v != "" {
 		cfg.Local.TLS.EnrollToken = v
 	} else if enrollToken != "" {
 		cfg.Local.TLS.EnrollToken = enrollToken
@@ -179,7 +179,7 @@ func main() {
 	log, err := logger.Init(logger.LogConfig{
 		Level:  "info",
 		Format: "json",
-		File:   "/var/log/mxsec-agent/agent.log",
+		File:   "/var/log/mxcwpp-agent/agent.log",
 		MaxAge: 7, // 保留7天
 	})
 	if err != nil {
@@ -216,7 +216,7 @@ func main() {
 	watchdog := antidebug.NewWatchdog(antidebug.WatchdogConfig{
 		HeartbeatInterval: 3 * time.Second,
 		MaxHeartbeatMiss:  3,
-		RestartCommand:    []string{"/bin/systemctl", "restart", "mxsec-agent"},
+		RestartCommand:    []string{"/bin/systemctl", "restart", "mxcwpp-agent"},
 		Logger:            log,
 	})
 	watchdog.OnSuspectKill = func(reason string) {
@@ -278,7 +278,7 @@ func main() {
 	transportMgr.SetConfigUpdateCallback(func(agentConfig *grpc.AgentConfig, certBundle *grpc.CertificateBundle) {
 		// 处理证书包更新
 		if certBundle != nil {
-			certDir := "/var/lib/mxsec-agent/certs"
+			certDir := "/var/lib/mxcwpp-agent/certs"
 			// 记录同步前是否已有客户端证书：无则本次为首次签发(enroll)，完成后主动重连切到单机证书 mTLS。
 			_, statErr := os.Stat(filepath.Join(certDir, "client.crt"))
 			wasEnrollment := os.IsNotExist(statErr)
@@ -383,7 +383,7 @@ func printVersion() {
 	if buildTimeStr == "" {
 		buildTimeStr = "unknown"
 	}
-	fmt.Printf("mxsec-agent version %s\n", version)
+	fmt.Printf("mxcwpp-agent version %s\n", version)
 	fmt.Printf("Build time: %s\n", buildTimeStr)
 	if serverHost != "" {
 		fmt.Printf("Server: %s\n", serverHost)

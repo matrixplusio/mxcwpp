@@ -6,7 +6,7 @@
 //
 //  1. 命中威胁 → Quarantine(path):
 //     - 算 sha256
-//     - mv 到 /var/mxsec/quarantine/<sha256>.qrn
+//     - mv 到 /var/mxcwpp/quarantine/<sha256>.qrn
 //     - chmod 000 + 移除 ownership (chown root:root)
 //     - 写 .meta JSON (原路径 / 原属主 / 原权限 / 隔离时间 / 触发规则)
 //
@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	defaultDir = "/var/lib/mxsec/quarantine"
+	defaultDir = "/var/lib/mxcwpp/quarantine"
 	metaSuffix = ".meta"
 	quarSuffix = ".qrn"
 )
@@ -55,7 +55,7 @@ type Manager struct {
 	mu sync.Mutex
 }
 
-// NewManager 构造。dir 空时用默认 /var/lib/mxsec/quarantine。
+// NewManager 构造。dir 空时用默认 /var/lib/mxcwpp/quarantine。
 func NewManager(dir string, logger *zap.Logger) (*Manager, error) {
 	if logger == nil {
 		logger = zap.NewNop()

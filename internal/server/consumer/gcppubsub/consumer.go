@@ -11,8 +11,8 @@ import (
 	"google.golang.org/api/option"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ClusterGCPConfig 单个集群的 GCP Pub/Sub 配置（从数据库读取）

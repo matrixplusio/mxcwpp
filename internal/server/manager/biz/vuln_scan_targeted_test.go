@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // setupTargetedScanDB 建 sqlite 内存库（包含 vuln_scan_tasks/hosts/host_vulnerabilities/vulnerabilities/software）

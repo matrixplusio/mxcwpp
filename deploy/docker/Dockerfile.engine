@@ -38,14 +38,14 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/engine /usr/bin/engine
 
-RUN mkdir -p /etc/mxsec-platform /var/log/mxsec-platform /opt/mxsec-platform
+RUN mkdir -p /etc/mxcwpp /var/log/mxcwpp /opt/mxcwpp
 
 # 非 root 运行：缩小容器逃逸攻击面。日志/工作目录归属应用用户，配置目录留 root 只读。
-RUN addgroup -S mxsec && adduser -S -G mxsec -u 10001 mxsec && \
-    chown -R mxsec:mxsec /var/log/mxsec-platform /opt/mxsec-platform
-USER mxsec
+RUN addgroup -S mxcwpp && adduser -S -G mxcwpp -u 10001 mxcwpp && \
+    chown -R mxcwpp:mxcwpp /var/log/mxcwpp /opt/mxcwpp
+USER mxcwpp
 
-WORKDIR /opt/mxsec-platform
+WORKDIR /opt/mxcwpp
 
 EXPOSE 8082
 
@@ -53,4 +53,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:8082/health || exit 1
 
 ENTRYPOINT ["/usr/bin/engine"]
-CMD ["-config", "/etc/mxsec-platform/server.yaml"]
+CMD ["-config", "/etc/mxcwpp/server.yaml"]

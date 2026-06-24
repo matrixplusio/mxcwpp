@@ -18,12 +18,12 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/agent/config"
-	"github.com/imkerbos/mxsec-platform/internal/agent/resource"
-	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
-	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/agent/config"
+	"github.com/matrixplusio/mxcwpp/internal/agent/resource"
+	agentrt "github.com/matrixplusio/mxcwpp/internal/agent/runtime"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
 )
 
 // Manager 是心跳管理器
@@ -285,7 +285,7 @@ func (m *Manager) sendHeartbeat() {
 	}
 
 	// 添加业务线信息（从环境变量读取）
-	businessLine := os.Getenv("MXSEC_BUSINESS_LINE")
+	businessLine := os.Getenv("MXCWPP_BUSINESS_LINE")
 	if businessLine != "" {
 		record.Data.Fields["business_line"] = businessLine
 		m.logger.Debug("business line from environment", zap.String("business_line", businessLine))

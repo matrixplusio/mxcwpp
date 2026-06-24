@@ -222,7 +222,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w kernel.randomize_va_space=2",
-        "command": "sysctl -w kernel.randomize_va_space=2 && (grep -q '^kernel.randomize_va_space' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^kernel.randomize_va_space.*|kernel.randomize_va_space = 2|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'kernel.randomize_va_space = 2' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w kernel.randomize_va_space=2 && (grep -q '^kernel.randomize_va_space' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^kernel.randomize_va_space.*|kernel.randomize_va_space = 2|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'kernel.randomize_va_space = 2' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {
@@ -444,7 +444,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv6.conf.all.disable_ipv6=1",
-        "command": "sysctl -w net.ipv6.conf.all.disable_ipv6=1 && (grep -q '^net.ipv6.conf.all.disable_ipv6' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv6.conf.all.disable_ipv6.*|net.ipv6.conf.all.disable_ipv6 = 1|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w net.ipv6.conf.all.disable_ipv6=1 && (grep -q '^net.ipv6.conf.all.disable_ipv6' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv6.conf.all.disable_ipv6.*|net.ipv6.conf.all.disable_ipv6 = 1|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {
@@ -490,7 +490,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.accept_source_route=0",
-        "command": "sysctl -w net.ipv4.conf.all.accept_source_route=0 && (grep -q '^net.ipv4.conf.all.accept_source_route' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_source_route.*|net.ipv4.conf.all.accept_source_route = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.accept_source_route = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w net.ipv4.conf.all.accept_source_route=0 && (grep -q '^net.ipv4.conf.all.accept_source_route' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_source_route.*|net.ipv4.conf.all.accept_source_route = 0|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'net.ipv4.conf.all.accept_source_route = 0' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {
@@ -513,7 +513,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0",
-        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && (grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && (grep -q '^net.ipv4.conf.all.accept_redirects' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'net.ipv4.conf.all.accept_redirects = 0' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {
@@ -536,7 +536,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.secure_redirects=0",
-        "command": "sysctl -w net.ipv4.conf.all.secure_redirects=0 && (grep -q '^net.ipv4.conf.all.secure_redirects' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.secure_redirects.*|net.ipv4.conf.all.secure_redirects = 0|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.secure_redirects = 0' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w net.ipv4.conf.all.secure_redirects=0 && (grep -q '^net.ipv4.conf.all.secure_redirects' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.secure_redirects.*|net.ipv4.conf.all.secure_redirects = 0|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'net.ipv4.conf.all.secure_redirects = 0' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {
@@ -559,7 +559,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.log_martians=1",
-        "command": "sysctl -w net.ipv4.conf.all.log_martians=1 && (grep -q '^net.ipv4.conf.all.log_martians' /etc/sysctl.d/90-mxsec-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.log_martians.*|net.ipv4.conf.all.log_martians = 1|' /etc/sysctl.d/90-mxsec-baseline.conf || echo 'net.ipv4.conf.all.log_martians = 1' >> /etc/sysctl.d/90-mxsec-baseline.conf)"
+        "command": "sysctl -w net.ipv4.conf.all.log_martians=1 && (grep -q '^net.ipv4.conf.all.log_martians' /etc/sysctl.d/90-mxcwpp-baseline.conf 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.log_martians.*|net.ipv4.conf.all.log_martians = 1|' /etc/sysctl.d/90-mxcwpp-baseline.conf || echo 'net.ipv4.conf.all.log_martians = 1' >> /etc/sysctl.d/90-mxcwpp-baseline.conf)"
       }
     },
     {

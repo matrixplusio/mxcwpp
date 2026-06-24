@@ -15,14 +15,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 const (
 	// 病毒库更新间隔（每 4 小时）
 	virusDBUpdateInterval = 4 * time.Hour
 	// 分布式锁 key
-	virusDBLockKey = "mxsec:virusdb:update:lock"
+	virusDBLockKey = "mxcwpp:virusdb:update:lock"
 	virusDBLockTTL = 10 * time.Minute
 	// 病毒库组件名称
 	virusDBComponentName = "virus-database"

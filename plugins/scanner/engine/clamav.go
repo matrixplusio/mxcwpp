@@ -290,14 +290,14 @@ func cgroupAvailableMB() int64 {
 
 // discoverCgroupDir returns the cgroup v2 directory for this process.
 // Tries /proc/self/cgroup to find the service-scoped path (e.g.
-// /sys/fs/cgroup/system.slice/mxsec-agent.service).
+// /sys/fs/cgroup/system.slice/mxcwpp-agent.service).
 func discoverCgroupDir() string {
 	data, err := os.ReadFile("/proc/self/cgroup")
 	if err != nil {
 		return ""
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		// cgroup v2 line: "0::/system.slice/mxsec-agent.service"
+		// cgroup v2 line: "0::/system.slice/mxcwpp-agent.service"
 		parts := strings.SplitN(line, ":", 3)
 		if len(parts) == 3 && parts[0] == "0" {
 			dir := "/sys/fs/cgroup" + strings.TrimSpace(parts[2])

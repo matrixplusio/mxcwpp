@@ -1,6 +1,6 @@
 //go:build linux
 
-// Package edr implements the built-in EDR engine for the MxSec Agent.
+// Package edr implements the built-in EDR engine for the MxCwpp Agent.
 //
 // The engine runs in the same process as the Agent (single-process architecture),
 // collecting kernel/userspace events and forwarding them to the Server via the
@@ -24,20 +24,20 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	agentrules "github.com/imkerbos/mxsec-platform/configs/agent-rules"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/bde"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/collector"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/container"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/ioc"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/isolate"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/memfd"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/rule"
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/storyline"
-	edryara "github.com/imkerbos/mxsec-platform/internal/agent/edr/yara"
-	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	agentrules "github.com/matrixplusio/mxcwpp/configs/agent-rules"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/bde"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/collector"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/container"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/ioc"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/isolate"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/memfd"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/rule"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/storyline"
+	edryara "github.com/matrixplusio/mxcwpp/internal/agent/edr/yara"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
 )
 
 // Task DataType constants for Server→Agent push (registered in docs/datatype-allocation.md).
@@ -81,7 +81,7 @@ type Engine struct {
 }
 
 // DefaultRuleDir is the default rule directory on Linux agents.
-const DefaultRuleDir = "/var/lib/mxsec/rules"
+const DefaultRuleDir = "/var/lib/mxcwpp/rules"
 
 // NewEngine creates a new EDR engine.
 // It auto-detects the best collector mode (eBPF or userspace) for the running kernel.

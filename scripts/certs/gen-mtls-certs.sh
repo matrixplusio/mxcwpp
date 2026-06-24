@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mxsec mTLS 证书生成 (P3-18).
+# mxcwpp mTLS 证书生成 (P3-18).
 #
 # 生成证书链:
 #   1. Root CA (10 年)
@@ -18,22 +18,22 @@
 #   agent-client.crt / agent-client.key
 #
 # 默认 CN:
-#   CA           : mxsec-root-ca
-#   Manager      : mxsec-manager (SAN: manager / *.svc.cluster.local / 127.0.0.1)
-#   AC           : mxsec-agentcenter (SAN: agentcenter / agent.svc.example.com / 127.0.0.1)
-#   Agent client : mxsec-agent (OU 用 Agent ID)
+#   CA           : mxcwpp-root-ca
+#   Manager      : mxcwpp-manager (SAN: manager / *.svc.cluster.local / 127.0.0.1)
+#   AC           : mxcwpp-agentcenter (SAN: agentcenter / agent.svc.example.com / 127.0.0.1)
+#   Agent client : mxcwpp-agent (OU 用 Agent ID)
 
 set -euo pipefail
 
 OUTPUT_DIR="${1:-deploy/certs}"
 COUNTRY="${COUNTRY:-CN}"
-ORG="${ORG:-mxsec}"
+ORG="${ORG:-mxcwpp}"
 ORG_UNIT="${ORG_UNIT:-Security}"
 
 # 自定义 SAN (默认覆盖典型部署场景)
-MANAGER_DNS="${MANAGER_DNS:-manager,mxsec-manager,mxsec-manager.default.svc,mxsec-manager.default.svc.cluster.local,localhost}"
+MANAGER_DNS="${MANAGER_DNS:-manager,mxcwpp-manager,mxcwpp-manager.default.svc,mxcwpp-manager.default.svc.cluster.local,localhost}"
 MANAGER_IP="${MANAGER_IP:-127.0.0.1}"
-AC_DNS="${AC_DNS:-agentcenter,mxsec-agentcenter,mxsec-agentcenter.default.svc.cluster.local,localhost}"
+AC_DNS="${AC_DNS:-agentcenter,mxcwpp-agentcenter,mxcwpp-agentcenter.default.svc.cluster.local,localhost}"
 AC_IP="${AC_IP:-127.0.0.1}"
 
 mkdir -p "$OUTPUT_DIR"
@@ -46,7 +46,7 @@ if [[ ! -f ca.crt ]]; then
   log "Generating Root CA (10 年有效)"
   openssl genrsa -out ca.key 4096
   openssl req -new -x509 -days 3650 -key ca.key -out ca.crt \
-    -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxsec-root-ca" \
+    -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxcwpp-root-ca" \
     -addext "basicConstraints=critical,CA:TRUE" \
     -addext "keyUsage=critical,keyCertSign,cRLSign"
   log "  ✓ ca.crt / ca.key"
@@ -64,7 +64,7 @@ keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth,clientAuth
 EOF
 openssl req -new -key manager.key -out manager.csr \
-  -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxsec-manager"
+  -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxcwpp-manager"
 openssl x509 -req -in manager.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out manager.crt -days 365 -sha256 -extfile manager.ext
 rm -f manager.csr manager.ext
@@ -80,7 +80,7 @@ keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth,clientAuth
 EOF
 openssl req -new -key ac.key -out ac.csr \
-  -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxsec-agentcenter"
+  -subj "/C=$COUNTRY/O=$ORG/OU=$ORG_UNIT/CN=mxcwpp-agentcenter"
 openssl x509 -req -in ac.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out ac.crt -days 365 -sha256 -extfile ac.ext
 rm -f ac.csr ac.ext
@@ -95,7 +95,7 @@ keyUsage = critical,digitalSignature
 extendedKeyUsage = clientAuth
 EOF
 openssl req -new -key agent-client.key -out agent-client.csr \
-  -subj "/C=$COUNTRY/O=$ORG/OU=Agent/CN=mxsec-agent-client"
+  -subj "/C=$COUNTRY/O=$ORG/OU=Agent/CN=mxcwpp-agent-client"
 openssl x509 -req -in agent-client.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out agent-client.crt -days 1095 -sha256 -extfile agent-client.ext
 rm -f agent-client.csr agent-client.ext

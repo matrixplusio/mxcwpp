@@ -1,4 +1,4 @@
-module github.com/imkerbos/mxsec-platform
+module github.com/matrixplusio/mxcwpp
 
 go 1.25.5
 

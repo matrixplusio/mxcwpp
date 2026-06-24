@@ -3,15 +3,15 @@
 // Package isolate provides host network isolation via iptables.
 //
 // Three isolation levels:
-//   - Selective: block individual IP:port pairs (MXSEC_BLOCK chain)
-//   - Standard: block all traffic except management + DNS (MXSEC_ISOLATE chain)
+//   - Selective: block individual IP:port pairs (MXCWPP_BLOCK chain)
+//   - Standard: block all traffic except management + DNS (MXCWPP_ISOLATE chain)
 //   - Complete: block all traffic except management channel only
 //
 // Safety measures:
 //   - Management channel (Server IP:port) always whitelisted
 //   - Timeout-based auto-release (default 4h, configurable)
 //   - Audit log of all isolate/release actions
-//   - Dedicated chains for clean teardown (MXSEC_ISOLATE, MXSEC_BLOCK)
+//   - Dedicated chains for clean teardown (MXCWPP_ISOLATE, MXCWPP_BLOCK)
 package isolate
 
 import (
@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	isolateChain   = "MXSEC_ISOLATE" // full host isolation chain
-	blockChain     = "MXSEC_BLOCK"   // selective IP blocking chain
+	isolateChain   = "MXCWPP_ISOLATE" // full host isolation chain
+	blockChain     = "MXCWPP_BLOCK"   // selective IP blocking chain
 	defaultTimeout = 4 * time.Hour
 )
 
@@ -45,7 +45,7 @@ type Manager struct {
 
 	// Selective blocking: active per-IP rules.
 	blockRules map[uint]*BlockRule // keyed by RuleID
-	blockReady bool                // true if MXSEC_BLOCK chain is installed
+	blockReady bool                // true if MXCWPP_BLOCK chain is installed
 }
 
 // NewManager creates a network isolation manager.
@@ -163,7 +163,7 @@ func (m *Manager) BlockIP(rule BlockRule) error {
 		return fmt.Errorf("block rule %d already exists", rule.RuleID)
 	}
 
-	// Ensure the MXSEC_BLOCK chain exists.
+	// Ensure the MXCWPP_BLOCK chain exists.
 	if err := m.ensureBlockChain(); err != nil {
 		return fmt.Errorf("ensure block chain: %w", err)
 	}
@@ -318,7 +318,7 @@ func (m *Manager) teardownIsolation() error {
 
 // --- iptables operations: selective blocking ---
 
-// ensureBlockChain creates the MXSEC_BLOCK chain and inserts it if not already present.
+// ensureBlockChain creates the MXCWPP_BLOCK chain and inserts it if not already present.
 func (m *Manager) ensureBlockChain() error {
 	if m.blockReady {
 		return nil
@@ -349,7 +349,7 @@ func (m *Manager) ensureBlockChain() error {
 	return nil
 }
 
-// teardownBlockChain removes the MXSEC_BLOCK chain entirely.
+// teardownBlockChain removes the MXCWPP_BLOCK chain entirely.
 func (m *Manager) teardownBlockChain() {
 	_ = runCmd("iptables", "-D", "INPUT", "-j", blockChain)
 	_ = runCmd("iptables", "-D", "OUTPUT", "-j", blockChain)

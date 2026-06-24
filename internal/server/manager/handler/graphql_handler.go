@@ -5,8 +5,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/api"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz/graphql"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/api"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz/graphql"
 )
 
 // GraphQLHandler 处理 POST /api/v2/graphql.

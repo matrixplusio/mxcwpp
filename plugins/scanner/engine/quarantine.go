@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const quarantineDir = "/var/mxsec/quarantine"
+const quarantineDir = "/var/mxcwpp/quarantine"
 
 // QuarantineManager 文件隔离管理器
 type QuarantineManager struct {
@@ -27,7 +27,7 @@ func NewQuarantineManager(logger *zap.Logger) *QuarantineManager {
 	}
 }
 
-// Quarantine 隔离文件：mv → /var/mxsec/quarantine/{sha256} + chmod 000
+// Quarantine 隔离文件：mv → /var/mxcwpp/quarantine/{sha256} + chmod 000
 func (m *QuarantineManager) Quarantine(filePath string) (*QuarantineResult, error) {
 	result := &QuarantineResult{
 		FilePath: filePath,

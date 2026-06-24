@@ -168,16 +168,16 @@ func (c *Config) WithACHTTPPort() *Config {
 
 func (c *Config) ApplyDefaults() {
 	if c.APIVersion == "" {
-		c.APIVersion = "mxsec.io/v1alpha1"
+		c.APIVersion = "mxcwpp.io/v1alpha1"
 	}
 	if c.Kind == "" {
 		c.Kind = "ClusterConfig"
 	}
 	if c.Release.InstallDir == "" {
-		c.Release.InstallDir = "/opt/mxsec-platform"
+		c.Release.InstallDir = "/opt/mxcwpp"
 	}
 	if c.Release.DataRoot == "" {
-		c.Release.DataRoot = "/data/mxsec"
+		c.Release.DataRoot = "/data/mxcwpp"
 	}
 	if c.Release.Timezone == "" {
 		c.Release.Timezone = "Asia/Shanghai"
@@ -229,10 +229,10 @@ func (c *Config) ApplyDefaults() {
 		c.App.PrometheusTimeout = "10s"
 	}
 	if c.Infrastructure.MySQL.Database == "" {
-		c.Infrastructure.MySQL.Database = "mxsec"
+		c.Infrastructure.MySQL.Database = "mxcwpp"
 	}
 	if c.Infrastructure.MySQL.User == "" {
-		c.Infrastructure.MySQL.User = "mxsec_user"
+		c.Infrastructure.MySQL.User = "mxcwpp_user"
 	}
 	if c.Infrastructure.MySQL.Port == 0 {
 		c.Infrastructure.MySQL.Port = 13306
@@ -241,7 +241,7 @@ func (c *Config) ApplyDefaults() {
 		c.Infrastructure.Redis.Port = 16379
 	}
 	if c.Infrastructure.ClickHouse.Database == "" {
-		c.Infrastructure.ClickHouse.Database = "mxsec"
+		c.Infrastructure.ClickHouse.Database = "mxcwpp"
 	}
 	if c.Infrastructure.ClickHouse.User == "" {
 		c.Infrastructure.ClickHouse.User = "default"

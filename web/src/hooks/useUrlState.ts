@@ -44,11 +44,15 @@ export function useUrlState<T extends Record<string, Primitive>>(
   const setState = useCallback((patch: Patch<T>) => {
     setStateRaw((prev) => {
       const resolved = typeof patch === "function" ? patch(prev) : patch;
-      const next = { ...prev, ...resolved };
-      writeToUrl(next, defaultsRef.current);
-      return next;
+      return { ...prev, ...resolved };
     });
   }, []);
+
+  // URL 同步放在 commit 后的 effect 中执行，避免在 render 阶段调用
+  // history.replaceState 触发 Router 更新（setState-in-render 报错）。
+  useEffect(() => {
+    writeToUrl(state, defaultsRef.current);
+  }, [state]);
 
   useEffect(() => {
     const onPop = () => setStateRaw(readFromUrl(defaultsRef.current));

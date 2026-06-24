@@ -5,7 +5,7 @@
 rule Webshell_ASPX_Eval {
     meta:
         description = "ASPX 一句话: eval + Request"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "webshell"
         attck = "T1505.003"
@@ -21,7 +21,7 @@ rule Webshell_ASPX_Eval {
 rule Webshell_Python_Reverse_Shell {
     meta:
         description = "Python 反弹 shell 典型 pattern"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "reverse_shell"
         attck = "T1059.006"
@@ -39,7 +39,7 @@ rule Webshell_Python_Reverse_Shell {
 rule Webshell_Perl_Eval {
     meta:
         description = "Perl 反弹 shell / 一句话"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "high"
         category = "reverse_shell"
         attck = "T1059.006"
@@ -56,7 +56,7 @@ rule Webshell_Perl_Eval {
 rule Webshell_Bash_Reverse {
     meta:
         description = "Bash 反弹 shell - /dev/tcp 经典 pattern"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "critical"
         category = "reverse_shell"
         attck = "T1059.004"
@@ -72,7 +72,7 @@ rule Webshell_Bash_Reverse {
 rule Webshell_Generic_Encoded_PHP {
     meta:
         description = "PHP 通用 obfuscated (chr/ord/str_replace 拼接)"
-        author = "mxsec"
+        author = "mxcwpp"
         severity = "medium"
         category = "webshell"
         attck = "T1027"

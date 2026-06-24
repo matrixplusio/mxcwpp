@@ -21,8 +21,8 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // setupTestDB 创建测试数据库（使用 MySQL 环境）
@@ -46,15 +46,15 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	}
 	testDBUser := os.Getenv("TEST_DB_USER")
 	if testDBUser == "" {
-		testDBUser = "mxsec_user"
+		testDBUser = "mxcwpp_user"
 	}
 	testDBPassword := os.Getenv("TEST_DB_PASSWORD")
 	if testDBPassword == "" {
-		testDBPassword = "mxsec_password"
+		testDBPassword = "mxcwpp_password"
 	}
 	testDBName := os.Getenv("TEST_DB_NAME")
 	if testDBName == "" {
-		testDBName = "mxsec_test"
+		testDBName = "mxcwpp_test"
 	}
 
 	// 构建 MySQL DSN

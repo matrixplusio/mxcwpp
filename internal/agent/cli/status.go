@@ -170,7 +170,7 @@ func countPlugins(dir string) int {
 // formatStatusText 把 StatusReport 渲染为人类可读文本
 func formatStatusText(r *StatusReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "mxsec-agent status\n")
+	fmt.Fprintf(&b, "mxcwpp-agent status\n")
 	fmt.Fprintf(&b, "  Version:        %s\n", r.Version)
 	if r.BuildTime != "" {
 		fmt.Fprintf(&b, "  Build time:     %s\n", r.BuildTime)

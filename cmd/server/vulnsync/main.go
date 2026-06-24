@@ -1,12 +1,15 @@
 // Package main 是 VulnSync 主程序入口。
 //
 // VulnSync 是 v2.0 六微服务架构中的漏洞情报融合服务,职责:
-//   - 定时同步 11+ 外部源(NVD/OSV/RHSA/USN/Debian/Alpine/SUSE/CISA KEV/ExploitDB/CNNVD/EPSS/信创 4 源)
-//   - PURL+NEVRA 双索引模型 + 3 级 confidence 仲裁
-//   - 推送 advisory 到 Kafka mxsec.vuln.advisory
-//   - Leader Election (避免重复抓取)
+//   - 定时同步 OS 厂商权威 advisory(RHSA/Rocky/USN/Debian/Alpine/CentOS + 信创 4 源)
+//   - 每条 advisory 带 NEVRA + fixed_version + OS gate,推送富 advisory 到 Kafka mxcwpp.vuln.advisory
+//   - Manager consumer 消费后用 Matcher 比对主机软件清单写 host_vulnerabilities
+//   - Leader Election (避免多副本重复抓取)
 //
-// 设计文档: docs/vulnsync-design.md
+// 注: OSV/语言包(PURL 驱动)与 NVD/KEV/EPSS 元数据 enrich 仍在 Manager 侧,
+// 非时间增量拉取,不归 VulnSync 调度。
+//
+// 设计文档: docs/architecture.md (VulnSync 节) + docs/vulnsync-migration.md
 package main
 
 import (
@@ -24,11 +27,11 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/leader"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/publisher"
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/sources"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/leader"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/publisher"
 )
 
 func main() {
@@ -37,11 +40,8 @@ func main() {
 	redisAddr := flag.String("redis-addr", "", "Redis 地址 (启用 Leader Election);空时跳过")
 	instanceID := flag.String("instance-id", "", "实例唯一 ID (默认 hostname+pid)")
 	kafkaBrokers := flag.String("kafka-brokers", "", "Kafka 地址 (启用 Publisher);空时跳过 advisory 推送")
-	advisoryTopic := flag.String("advisory-topic", "mxsec.vuln.advisory", "advisory 推送 topic")
-	nvdAPIKey := flag.String("nvd-api-key", "", "NVD API key (留空走 6s 无 key 限速)")
-	enabledSources := flag.String("sources", "nvd,osv,cisa_kev,exploitdb,epss,redhat,ubuntu,debian,alpine,suse", "启用的 source 列表(逗号分隔);留空启用所有")
-	cnnvdEndpoint := flag.String("cnnvd-endpoint", "", "CNNVD 商业 API 端点 (留空走占位)")
-	cnnvdAPIKey := flag.String("cnnvd-api-key", "", "CNNVD 商业 API key")
+	advisoryTopic := flag.String("advisory-topic", "mxcwpp.vuln.advisory", "advisory 推送 topic")
+	enabledSources := flag.String("sources", "", "启用的 source 列表(逗号分隔, 用 advisory Name: rhsa,rocky-apollo,usn,debian-tracker,alpine,centos);留空启用所有")
 	flag.Parse()
 
 	logger, err := zap.NewProduction()
@@ -59,19 +59,6 @@ func main() {
 		zap.String("http_addr", *httpAddr),
 		zap.String("version", vulnsync.Version),
 	)
-
-	server := &http.Server{
-		Addr:              *httpAddr,
-		Handler:           vulnsync.NewHTTPHandler(logger),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-
-	go func() {
-		logger.Info("VulnSync HTTP server listening", zap.String("addr", *httpAddr))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP server error", zap.Error(err))
-		}
-	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -99,7 +86,7 @@ func main() {
 		logger.Warn("Redis 未配置,单实例模式,跳过 Leader Election")
 	}
 
-	// Publisher (Kafka mxsec.vuln.advisory)
+	// Publisher (Kafka mxcwpp.vuln.advisory)
 	var pub *publisher.Publisher
 	if *kafkaBrokers != "" {
 		brokers := strings.Split(*kafkaBrokers, ",")
@@ -115,40 +102,52 @@ func main() {
 		logger.Warn("Kafka brokers 未配置,advisory 仅写入日志,不推 Topic")
 	}
 
-	// Sources Registry
-	reg := sources.NewRegistry()
+	// advisory.Source 池（OS 厂商权威源，产 NEVRA 匹配数据）
 	enabled := map[string]bool{}
 	for _, s := range strings.Split(*enabledSources, ",") {
-		enabled[strings.TrimSpace(s)] = true
+		if t := strings.TrimSpace(s); t != "" {
+			enabled[t] = true
+		}
 	}
+	srcs := buildAdvisorySources(enabled)
 
-	registerAll(reg, *nvdAPIKey, *cnnvdEndpoint, *cnnvdAPIKey, enabled, logger)
-
-	// Schedules
 	schedules := []vulnsync.SourceSchedule{
-		{Name: "nvd", Interval: 1 * time.Hour},
-		{Name: "osv", Interval: 1 * time.Hour},
-		{Name: "cisa_kev", Interval: 6 * time.Hour},
-		{Name: "exploitdb", Interval: 6 * time.Hour},
-		{Name: "epss", Interval: 24 * time.Hour},
-		{Name: "openeuler", Interval: 6 * time.Hour},
-		{Name: "anolis", Interval: 6 * time.Hour},
-		{Name: "kylin", Interval: 6 * time.Hour},
-		{Name: "uos", Interval: 6 * time.Hour},
-		{Name: "redhat", Interval: 4 * time.Hour},
-		{Name: "ubuntu", Interval: 4 * time.Hour},
-		{Name: "debian", Interval: 4 * time.Hour},
+		{Name: "rhsa", Interval: 4 * time.Hour},
+		{Name: "rocky-apollo", Interval: 4 * time.Hour},
+		{Name: "usn", Interval: 4 * time.Hour},
+		{Name: "debian-tracker", Interval: 4 * time.Hour},
 		{Name: "alpine", Interval: 4 * time.Hour},
-		{Name: "suse", Interval: 4 * time.Hour},
-		{Name: "cnnvd", Interval: 24 * time.Hour},
+		{Name: "centos", Interval: 6 * time.Hour},
+		{Name: "openeuler-sa", Interval: 6 * time.Hour},
+		{Name: "anolis-ansa", Interval: 6 * time.Hour},
+		{Name: "kylin-sa", Interval: 6 * time.Hour},
+		{Name: "uos-sa", Interval: 6 * time.Hour},
 	}
 
-	sch := vulnsync.NewScheduler(reg, pub, election, schedules, logger)
+	names := make([]string, 0, len(srcs))
+	for n := range srcs {
+		names = append(names, n)
+	}
+
+	sch := vulnsync.NewScheduler(srcs, pub, election, schedules, logger)
 	go sch.Run(ctx)
 	logger.Info("VulnSync Scheduler started",
 		zap.Int("schedules", len(schedules)),
-		zap.Strings("registered_sources", reg.Names()),
+		zap.Strings("registered_sources", names),
 	)
+
+	// HTTP server：/health /metrics + /sync(手动触发，绑定 scheduler.TriggerNow)
+	server := &http.Server{
+		Addr:              *httpAddr,
+		Handler:           vulnsync.NewHTTPHandler(logger, func() int { return sch.TriggerNow(ctx) }),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		logger.Info("VulnSync HTTP server listening", zap.String("addr", *httpAddr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTP server error", zap.Error(err))
+		}
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -162,54 +161,31 @@ func main() {
 	logger.Info("VulnSync stopped")
 }
 
-func registerAll(reg *sources.Registry, nvdAPIKey, cnnvdEndpoint, cnnvdAPIKey string, enabled map[string]bool, logger *zap.Logger) {
+// buildAdvisorySources 构造 OS 厂商 advisory 源池。
+//
+// enabled 为空 → 启用全部；否则仅启用 enabled[name] 命中的源。
+// 与 advisory.NewCoordinator 的源池对齐（去掉 OSV：OSV 走 PURL/host 驱动，
+// 不适合 VulnSync 时间增量调度，仍由 Manager 的语言包扫描负责）。
+func buildAdvisorySources(enabled map[string]bool) map[string]advisory.Source {
+	all := []advisory.Source{
+		advisory.NewRedHatSource(),
+		advisory.NewRockySource(),
+		advisory.NewUbuntuSource(),
+		advisory.NewDebianSource(),
+		advisory.NewAlpineSource(),
+		advisory.NewCentOSSource(),
+		// 信创 OS（当前 stub，Fetch 返空，待对接商业源）
+		advisory.NewOpenEulerSource(),
+		advisory.NewAnolisSource(),
+		advisory.NewKylinSource(),
+		advisory.NewUOSSource(),
+	}
 	allEnabled := len(enabled) == 0
-	if allEnabled || enabled["nvd"] {
-		_ = reg.Register(sources.NewNVDDriver("", nvdAPIKey))
+	out := make(map[string]advisory.Source, len(all))
+	for _, s := range all {
+		if allEnabled || enabled[s.Name()] {
+			out[s.Name()] = s
+		}
 	}
-	if allEnabled || enabled["osv"] {
-		_ = reg.Register(sources.NewOSVDriver(""))
-	}
-	if allEnabled || enabled["cisa_kev"] {
-		_ = reg.Register(sources.NewCISAKEVDriver())
-	}
-	if allEnabled || enabled["exploitdb"] {
-		_ = reg.Register(sources.NewExploitDBDriver())
-	}
-	if allEnabled || enabled["epss"] {
-		_ = reg.Register(sources.NewEPSSDriver())
-	}
-	if allEnabled || enabled["openeuler"] {
-		_ = reg.Register(sources.NewOpenEulerDriver())
-	}
-	if allEnabled || enabled["anolis"] {
-		_ = reg.Register(sources.NewAnolisDriver())
-	}
-	if allEnabled || enabled["kylin"] {
-		_ = reg.Register(sources.NewKylinDriver())
-	}
-	if allEnabled || enabled["uos"] {
-		_ = reg.Register(sources.NewUOSDriver())
-	}
-	if allEnabled || enabled["redhat"] {
-		_ = reg.Register(sources.NewRedHatDriver())
-	}
-	if allEnabled || enabled["ubuntu"] {
-		_ = reg.Register(sources.NewUbuntuDriver())
-	}
-	if allEnabled || enabled["debian"] {
-		_ = reg.Register(sources.NewDebianDriver())
-	}
-	if allEnabled || enabled["alpine"] {
-		_ = reg.Register(sources.NewAlpineDriver(""))
-	}
-	if allEnabled || enabled["suse"] {
-		_ = reg.Register(sources.NewSUSEDriver())
-	}
-	if allEnabled || enabled["cnnvd"] {
-		_ = reg.Register(sources.NewCNNVDDriver(cnnvdEndpoint, cnnvdAPIKey))
-	}
-	logger.Info("VulnSync sources 注册完成",
-		zap.Strings("names", reg.Names()),
-	)
+	return out
 }

@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
 )
 
 // SyncFromServer 从 Server 下发的 AgentConfig 同步配置
@@ -32,14 +32,14 @@ func (c *Config) SyncFromServer(agentConfig *grpc.AgentConfig) error {
 	if agentConfig.WorkDir != "" {
 		remote.WorkDir = agentConfig.WorkDir
 	} else {
-		remote.WorkDir = "/var/lib/mxsec-agent" // 默认值
+		remote.WorkDir = "/var/lib/mxcwpp-agent" // 默认值
 	}
 
 	// 产品名称
 	if agentConfig.Product != "" {
 		remote.Product = agentConfig.Product
 	} else {
-		remote.Product = "mxsec-agent" // 默认值
+		remote.Product = "mxcwpp-agent" // 默认值
 	}
 
 	// 版本

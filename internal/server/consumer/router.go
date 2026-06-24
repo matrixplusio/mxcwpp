@@ -12,14 +12,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/common/jsonx"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/anomaly"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/baseline"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/storyline"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/common/jsonx"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	consumermetrics "github.com/matrixplusio/mxcwpp/internal/server/consumer/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/writer"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/anomaly"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/baseline"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/storyline"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // agentACTTL 是 Redis 中 agent:ac:{agentID} key 的 TTL（3 倍心跳间隔）

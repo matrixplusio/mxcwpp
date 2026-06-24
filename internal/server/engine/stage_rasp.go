@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/rasp"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/rasp"
 )
 
 // RASPStage 处理 Agent 上报的 RASP 事件 (Java/PHP/Python/Node)。

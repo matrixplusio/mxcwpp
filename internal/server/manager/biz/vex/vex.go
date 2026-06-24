@@ -87,7 +87,7 @@ func NewGenerator(db *gorm.DB, logger *zap.Logger, vendor string) *Generator {
 		logger = zap.NewNop()
 	}
 	if vendor == "" {
-		vendor = "mxsec"
+		vendor = "mxcwpp"
 	}
 	return &Generator{db: db, logger: logger, vendor: vendor}
 }
@@ -179,7 +179,7 @@ func (g *Generator) MarshalCycloneDX(doc *Document) ([]byte, error) {
 		"metadata": map[string]any{
 			"timestamp": doc.GeneratedAt.Format(time.RFC3339),
 			"tools": []map[string]any{
-				{"vendor": g.vendor, "name": "mxsec-vex", "version": "1.0"},
+				{"vendor": g.vendor, "name": "mxcwpp-vex", "version": "1.0"},
 			},
 			"component": map[string]any{
 				"type":    "application",
@@ -240,7 +240,7 @@ func (g *Generator) MarshalCSAF(doc *Document) ([]byte, error) {
 			"publisher": map[string]any{
 				"category":  "vendor",
 				"name":      g.vendor,
-				"namespace": "https://mxsec.example.com",
+				"namespace": "https://mxcwpp.example.com",
 			},
 			"tracking": map[string]any{
 				"id":                   doc.ProductID + "-vex",

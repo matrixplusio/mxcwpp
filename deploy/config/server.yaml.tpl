@@ -75,20 +75,20 @@ metrics:
     timeout: "__PROMETHEUS_TIMEOUT__"
 
 mtls:
-  ca_cert: "/etc/mxsec-platform/certs/ca.crt"
-  server_cert: "/etc/mxsec-platform/certs/server.crt"
-  server_key: "/etc/mxsec-platform/certs/server.key"
+  ca_cert: "/etc/mxcwpp/certs/ca.crt"
+  server_cert: "/etc/mxcwpp/certs/server.crt"
+  server_key: "/etc/mxcwpp/certs/server.key"
 
 log:
   level: "__LOG_LEVEL__"
   format: "__LOG_FORMAT__"
-  file: "/var/log/mxsec-platform/server.log"
-  error_file: "/var/log/mxsec-platform/error.log"
+  file: "/var/log/mxcwpp/server.log"
+  error_file: "/var/log/mxcwpp/error.log"
   max_age: __LOG_MAX_AGE__
 
 agent:
   heartbeat_interval: __HEARTBEAT_INTERVAL__
-  work_dir: "/var/lib/mxsec-agent"
+  work_dir: "/var/lib/mxcwpp-agent"
 
 plugins:
   dir: "__PLUGINS_DIR__"

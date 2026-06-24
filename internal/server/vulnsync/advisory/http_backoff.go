@@ -10,7 +10,7 @@ import (
 )
 
 // UserAgent 上游请求统一 UA，便于上游侧识别 + 限流统计
-const UserAgent = "mxsec-vuln-sync/2.6 (+https://github.com/imkerbos/mxsec-platform)"
+const UserAgent = "mxcwpp-vuln-sync/2.6 (+https://github.com/matrixplusio/mxcwpp)"
 
 // DoWithBackoff 把请求加上 retry/退避，保护上游不被打挂、保护本端不因瞬时 429 整轮 sync 失败。
 //

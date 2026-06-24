@@ -32,7 +32,7 @@ agent:
         value: "0>&1"
     logic: and
 metadata:
-  author: mxsec-team
+  author: mxcwpp-team
   description: "Detects reverse shells via bash -i >& /dev/tcp/"
   confidence: 95
 `
@@ -303,7 +303,7 @@ agent:
         values: ["3333", "4444", "5555", "7777", "8888", "9999"]
       - field: exe
         op: not_equals
-        value: /usr/local/mxsec/mxsec-agent
+        value: /usr/local/mxcwpp/mxcwpp-agent
     logic: and
 `
 	var r Rule

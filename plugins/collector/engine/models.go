@@ -73,7 +73,7 @@ type SoftwareAsset struct {
 	// 用于追溯、误报排查与数据修订。
 	SourceHandler string `json:"source_handler,omitempty"`
 	// HostBinaryPath 仅对 scope=embedded 有效：宿主 binary 路径
-	// 例：mxsec-agent 内嵌 github.com/docker/docker → HostBinaryPath = /usr/local/bin/mxsec-agent
+	// 例：mxcwpp-agent 内嵌 github.com/docker/docker → HostBinaryPath = /usr/local/bin/mxcwpp-agent
 	// 用于排查"为什么这个 module 出现在该主机上"。
 	HostBinaryPath string `json:"host_binary_path,omitempty"`
 }

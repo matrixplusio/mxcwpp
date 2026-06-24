@@ -16,6 +16,7 @@ export default function KubeLayout({ children }: { children: React.ReactNode }) 
     { key: "baseline-rules", label: t("kube.tab.baselineRules"), href: "/kube/baseline-rules" },
     { key: "whitelist", label: t("kube.tab.whitelist"), href: "/kube/whitelist" },
     { key: "image-scan", label: t("kube.tab.imageScan"), href: "/kube/image-scan" },
+    { key: "registries", label: t("kube.tab.registries"), href: "/kube/registries" },
   ];
 
   return (

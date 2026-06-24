@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // BuildVersion 构建版本，通过 -ldflags "-X ...api.BuildVersion=x.x.x" 注入
@@ -66,7 +66,7 @@ func (h *HealthHandler) Version(c *gin.Context) {
 	SuccessWithMessage(c, "success", gin.H{
 		"version":   BuildVersion,
 		"timestamp": time.Now().Format(model.TimeFormat),
-		"component": "mxsec-manager",
+		"component": "mxcwpp-manager",
 	})
 }
 

@@ -25,7 +25,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
 )
 
 // KeyFunc 自定义 rate-limit key (默认按 tenant+route).

@@ -10,8 +10,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/setup"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/setup"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
 )
 
 var (
@@ -69,6 +69,6 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Println("mxsec-agentcenter version dev")
+	fmt.Println("mxcwpp-agentcenter version dev")
 	fmt.Println("Build time: unknown")
 }

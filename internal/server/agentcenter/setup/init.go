@@ -16,19 +16,19 @@ import (
 	"google.golang.org/grpc"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/commandsub"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/httptrans"
-	acmetrics "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/scheduler"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/sdclient"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/server"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/commandsub"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/httptrans"
+	acmetrics "github.com/matrixplusio/mxcwpp/internal/server/agentcenter/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/scheduler"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/sdclient"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/server"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	serverLogger "github.com/matrixplusio/mxcwpp/internal/server/logger"
 	"gorm.io/gorm"
 )
 
@@ -139,7 +139,7 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 	}
 
 	// 6.2 启动 Engine→AC 命令订阅消费者 (Sprint 2 PR37)
-	// 订阅 mxsec.engine.command Topic, 把 Engine 产出的命令推到 Agent gRPC stream。
+	// 订阅 mxcwpp.engine.command Topic, 把 Engine 产出的命令推到 Agent gRPC stream。
 	// transferService 满足 commandsub.AgentPusher interface (PR36 加 PushToAgent/PushToAgents)。
 	if cfg.Kafka.Enabled && len(cfg.Kafka.Brokers) > 0 {
 		csConsumer, err := commandsub.NewConsumer(cfg.Kafka.Brokers, transferService, logger)
@@ -153,7 +153,7 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 			_ = cancelCS
 			logger.Info("AC commandsub 已启动",
 				zap.Strings("brokers", cfg.Kafka.Brokers),
-				zap.String("topic", "mxsec.engine.command"),
+				zap.String("topic", "mxcwpp.engine.command"),
 			)
 		}
 	}

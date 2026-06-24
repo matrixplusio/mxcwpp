@@ -2,7 +2,7 @@
 //
 // 设计：
 //   - Prometheus 触发告警后通过 webhook (alerting.alertmanagers 配置) POST 到此端点
-//   - 入 alerts 表（source=prometheus_infra）复用 mxsec 现有告警系统
+//   - 入 alerts 表（source=prometheus_infra）复用 mxcwpp 现有告警系统
 //   - 持久化 / 去重 / 状态机 / UI / notification 全部走现有路径，不重复造轮子
 //
 // 不部署 Alertmanager 的原因（避免组件重叠）：
@@ -20,7 +20,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // PrometheusAlertsHandler 接收 Prometheus alerting webhook
@@ -101,7 +101,7 @@ func (h *PrometheusAlertsHandler) Ingest(c *gin.Context) {
 	})
 }
 
-// upsertAlert 将单条 Prometheus 告警入 mxsec alerts 表。
+// upsertAlert 将单条 Prometheus 告警入 mxcwpp alerts 表。
 //
 // result_id 用 Prometheus fingerprint（保证去重 + 同一告警跨多次 webhook 命中累加）。
 func (h *PrometheusAlertsHandler) upsertAlert(a promWebhookAlert, now time.Time) error {
@@ -179,13 +179,13 @@ func (h *PrometheusAlertsHandler) upsertAlert(a promWebhookAlert, now time.Time)
 	return h.db.Create(&alert).Error
 }
 
-// mapPromSeverity 将 Prometheus severity label 映射到 mxsec alerts.severity。
+// mapPromSeverity 将 Prometheus severity label 映射到 mxcwpp alerts.severity。
 func mapPromSeverity(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "critical", "fatal", "page":
 		return "critical"
 	case "warning", "warn":
-		return "high" // mxsec 没有 warning，映射到 high
+		return "high" // mxcwpp 没有 warning，映射到 high
 	case "info", "":
 		return "low"
 	default:

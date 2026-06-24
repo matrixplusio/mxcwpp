@@ -1,4 +1,4 @@
-name: mxsec-platform-dev
+name: mxcwpp-dev
 
 # 压测环境 compose 文件（独立，预构建镜像，多实例）
 # 启动：./scripts/pret-docker-start.sh
@@ -9,12 +9,12 @@ services:
   # ==================== 基础设施 ====================
   mysql:
     image: mysql:8.0
-    container_name: mxsec-mysql
+    container_name: mxcwpp-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-mxsec}
-      MYSQL_USER: ${MYSQL_USER:-mxsec_user}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mxcwpp}
+      MYSQL_USER: ${MYSQL_USER:-mxcwpp_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: ${TZ:-Asia/Shanghai}
     ports:
@@ -31,7 +31,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -39,7 +39,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mxsec-redis
+    container_name: mxcwpp-redis
     restart: always
     command: >
       sh -c '
@@ -62,11 +62,11 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   kafka-1:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxsec-kafka-1
+    container_name: mxcwpp-kafka-1
     restart: always
     ports:
       - "9092:9092"
@@ -100,11 +100,11 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   kafka-2:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxsec-kafka-2
+    container_name: mxcwpp-kafka-2
     restart: always
     ports:
       - "9094:9092"
@@ -138,11 +138,11 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   kafka-3:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxsec-kafka-3
+    container_name: mxcwpp-kafka-3
     restart: always
     ports:
       - "9095:9092"
@@ -176,11 +176,11 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
-    container_name: mxsec-clickhouse
+    container_name: mxcwpp-clickhouse
     restart: always
     cap_add:
       - SYS_NICE
@@ -188,7 +188,7 @@ services:
       - "8123:8123"
       - "9000:9000"
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxsec}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxcwpp}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
       TZ: ${TZ:-Asia/Shanghai}
@@ -203,7 +203,7 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -216,7 +216,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.agentcenter
       args:
         VERSION: ${VERSION:-dev}
-    image: mxsec-agentcenter:dev
+    image: mxcwpp-agentcenter:dev
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -235,10 +235,10 @@ services:
       kafka-3:
         condition: service_healthy
     volumes:
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
-      - ${DATA_DIR:-./data}/logs/agentcenter:/var/log/mxsec-platform
-      - ${DATA_DIR:-./data}/plugins:/opt/mxsec-platform/plugins
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
+      - ${DATA_DIR:-./data}/logs/agentcenter:/var/log/mxcwpp
+      - ${DATA_DIR:-./data}/plugins:/opt/mxcwpp/plugins
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
@@ -248,7 +248,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -260,7 +260,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.manager
       args:
         VERSION: ${VERSION:-dev}
-    image: mxsec-manager:dev
+    image: mxcwpp-manager:dev
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -275,11 +275,11 @@ services:
       clickhouse:
         condition: service_healthy
     volumes:
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
-      - ${DATA_DIR:-./data}/logs/manager:/var/log/mxsec-platform
-      - ${DATA_DIR:-./data}/plugins:/opt/mxsec-platform/plugins:ro
-      - ${DATA_DIR:-./data}/uploads:/opt/mxsec-platform/uploads
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
+      - ${DATA_DIR:-./data}/logs/manager:/var/log/mxcwpp
+      - ${DATA_DIR:-./data}/plugins:/opt/mxcwpp/plugins:ro
+      - ${DATA_DIR:-./data}/uploads:/opt/mxcwpp/uploads
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
@@ -289,7 +289,7 @@ services:
       retries: 5
       start_period: 60s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -301,7 +301,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.consumer
       args:
         VERSION: ${VERSION:-dev}
-    image: mxsec-consumer:dev
+    image: mxcwpp-consumer:dev
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -322,9 +322,9 @@ services:
       kafka-3:
         condition: service_healthy
     volumes:
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
-      - ${DATA_DIR:-./data}/logs/consumer:/var/log/mxsec-platform
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
+      - ${DATA_DIR:-./data}/logs/consumer:/var/log/mxcwpp
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
@@ -334,7 +334,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
@@ -343,11 +343,11 @@ services:
   ui:
     build:
       context: ..
-      dockerfile: deploy/docker/Dockerfile.ui
+      dockerfile: deploy/docker/Dockerfile.web
       args:
         VERSION: ${VERSION:-dev}
-    image: mxsec-ui:dev
-    container_name: mxsec-ui
+    image: mxcwpp-ui:dev
+    container_name: mxcwpp-ui
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -368,8 +368,8 @@ services:
       timeout: 10s
       retries: 3
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
 networks:
-  mxsec-net:
+  mxcwpp-net:
     driver: bridge

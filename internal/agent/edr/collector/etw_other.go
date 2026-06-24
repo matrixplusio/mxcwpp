@@ -44,7 +44,7 @@ type ETWConfig struct {
 }
 
 func DefaultETWConfig() ETWConfig {
-	return ETWConfig{SessionName: "mxsec-etw"}
+	return ETWConfig{SessionName: "mxcwpp-etw"}
 }
 
 func NewETWCollector(_ ETWConfig, _ *zap.Logger) *ETWCollector { return &ETWCollector{} }

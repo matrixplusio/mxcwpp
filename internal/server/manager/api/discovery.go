@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
 )
 
 // DiscoveryHandler 处理 AC 注册/心跳/注销 和服务发现查询

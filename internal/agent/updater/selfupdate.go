@@ -1,5 +1,5 @@
 // Package updater 实现 Agent 自更新功能
-// selfupdate.go 提供 CLI 主动更新能力（mxsec-agent --update）
+// selfupdate.go 提供 CLI 主动更新能力（mxcwpp-agent --update）
 package updater
 
 import (
@@ -188,7 +188,7 @@ func runRemoteUpdate(opts SelfUpdateOptions) error {
 		downloadURL = serverURL + downloadURL
 	}
 
-	pkgFileName := fmt.Sprintf("mxsec-agent-%s.%s", data.LatestVersion, data.PkgType)
+	pkgFileName := fmt.Sprintf("mxcwpp-agent-%s.%s", data.LatestVersion, data.PkgType)
 	pkgPath := filepath.Join(tmpDir, pkgFileName)
 
 	// 下载

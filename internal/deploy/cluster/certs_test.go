@@ -18,7 +18,7 @@ func buildTestConfig(dns []string, ips []string) *Config {
 }
 
 func TestServerCertNeedsReissue(t *testing.T) {
-	cfg := buildTestConfig([]string{"mxsec-ac.example.com"}, []string{"10.0.0.1"})
+	cfg := buildTestConfig([]string{"mxcwpp-ac.example.com"}, []string{"10.0.0.1"})
 	bundle, err := GenerateCertificates(cfg)
 	if err != nil {
 		t.Fatalf("GenerateCertificates: %v", err)
@@ -34,7 +34,7 @@ func TestServerCertNeedsReissue(t *testing.T) {
 	}
 
 	// cfg 增加新 SAN 后应需 reissue
-	cfgChanged := buildTestConfig([]string{"mxsec-ac.example.com", "new-host.example.com"}, []string{"10.0.0.1", "10.0.0.2"})
+	cfgChanged := buildTestConfig([]string{"mxcwpp-ac.example.com", "new-host.example.com"}, []string{"10.0.0.1", "10.0.0.2"})
 	need, err = ServerCertNeedsReissue(bundle, cfgChanged)
 	if err != nil {
 		t.Fatalf("ServerCertNeedsReissue changed: %v", err)
@@ -51,7 +51,7 @@ func TestServerCertNeedsReissue(t *testing.T) {
 }
 
 func TestSignAgentCert(t *testing.T) {
-	cfg := buildTestConfig([]string{"mxsec-ac.example.com"}, []string{"10.0.0.1"})
+	cfg := buildTestConfig([]string{"mxcwpp-ac.example.com"}, []string{"10.0.0.1"})
 	bundle, err := GenerateCertificates(cfg)
 	if err != nil {
 		t.Fatalf("GenerateCertificates: %v", err)
@@ -143,7 +143,7 @@ func TestReissueServerCertPreservesCAAndKey(t *testing.T) {
 	origAgentCert := append([]byte{}, bundle.AgentCert...)
 	origServerCert := append([]byte{}, bundle.ServerCert...)
 
-	cfgNew := buildTestConfig([]string{"mxsec-ac.example.com"}, []string{"10.0.0.2", "10.0.0.3"})
+	cfgNew := buildTestConfig([]string{"mxcwpp-ac.example.com"}, []string{"10.0.0.2", "10.0.0.3"})
 	if err := ReissueServerCert(bundle, cfgNew); err != nil {
 		t.Fatalf("ReissueServerCert: %v", err)
 	}
@@ -176,12 +176,12 @@ func TestReissueServerCertPreservesCAAndKey(t *testing.T) {
 	}
 	dnsFound := false
 	for _, name := range cert.DNSNames {
-		if name == "mxsec-ac.example.com" {
+		if name == "mxcwpp-ac.example.com" {
 			dnsFound = true
 		}
 	}
 	if !dnsFound {
-		t.Fatalf("新 server.crt DNS SAN 缺 mxsec-ac.example.com，实际: %v", cert.DNSNames)
+		t.Fatalf("新 server.crt DNS SAN 缺 mxcwpp-ac.example.com，实际: %v", cert.DNSNames)
 	}
 	ipFound := map[string]bool{}
 	for _, ip := range cert.IPAddresses {

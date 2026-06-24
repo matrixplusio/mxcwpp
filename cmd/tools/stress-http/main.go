@@ -1,4 +1,4 @@
-// stress-http 是 MxSec Manager HTTP API 压测工具
+// stress-http 是 MxCwpp Manager HTTP API 压测工具
 // 模拟 N 个并发用户持续请求 Manager API，验证读链路（MySQL/ClickHouse → Manager）
 //
 // 用法：
@@ -54,7 +54,7 @@ func main() {
 		log.Fatal("必须提供 --token 参数")
 	}
 
-	log.Printf("MxSec Manager HTTP API 压测工具启动")
+	log.Printf("MxCwpp Manager HTTP API 压测工具启动")
 	log.Printf("目标: %s | 并发: %d | 时长: %v", *baseURL, *concurrency, *duration)
 	log.Printf("端点: %v", endpoints)
 

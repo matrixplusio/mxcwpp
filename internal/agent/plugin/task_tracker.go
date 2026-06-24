@@ -12,7 +12,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 // TaskStatus represents the status of a task

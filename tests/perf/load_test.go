@@ -42,14 +42,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	bridgepb "github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/transfer"
-	managerAPI "github.com/imkerbos/mxsec-platform/internal/server/manager/api"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	bridgepb "github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	managerAPI "github.com/matrixplusio/mxcwpp/internal/server/manager/api"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ─────────────────────────────────────────────
@@ -57,9 +57,9 @@ import (
 // ─────────────────────────────────────────────
 
 const (
-	targetHosts   = 1000       // 目标主机数量
-	targetResults = 1_000_000  // 目标结果数量（百万级）
-	concurrency   = 100        // API 并发客户端数
+	targetHosts   = 1000      // 目标主机数量
+	targetResults = 1_000_000 // 目标结果数量（百万级）
+	concurrency   = 100       // API 并发客户端数
 )
 
 func envOr(key, def string) string {
@@ -76,7 +76,7 @@ func openDB(tb testing.TB) *gorm.DB {
 		envOr("TEST_DB_PASSWORD", "123456"),
 		envOr("TEST_DB_HOST", "127.0.0.1"),
 		envOr("TEST_DB_PORT", "3306"),
-		envOr("TEST_DB_NAME", "mxsec_perf"),
+		envOr("TEST_DB_NAME", "mxcwpp_perf"),
 	)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: logger.Discard, // 性能测试期间禁用 GORM 日志
@@ -143,7 +143,7 @@ func seedHosts(tb testing.TB, db *gorm.DB, n int) []string {
 
 		if len(batch) >= 500 || i == n-1 {
 			db.Clauses(
-				// ON DUPLICATE KEY UPDATE 幂等写入
+			// ON DUPLICATE KEY UPDATE 幂等写入
 			).Create(&batch)
 			batch = batch[:0]
 		}
@@ -434,10 +434,10 @@ func TestPerf_1000AgentConcurrentConnections(t *testing.T) {
 	const msgsPerAgent = 1
 
 	var (
-		wg          sync.WaitGroup
-		totalSent   atomic.Int64
-		connErrors  atomic.Int64
-		sendErrors  atomic.Int64
+		wg         sync.WaitGroup
+		totalSent  atomic.Int64
+		connErrors atomic.Int64
+		sendErrors atomic.Int64
 	)
 
 	start := time.Now()

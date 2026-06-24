@@ -3,12 +3,13 @@ package kube
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // DetectionRule 检测规则定义
@@ -94,6 +95,40 @@ func shouldExcludeEvent(e *model.AuditEvent) bool {
 // 全局排除已覆盖大部分情况，此函数作为规则级别的二次兜底。
 func isSystemUser(username string) bool {
 	return strings.HasPrefix(username, "system:")
+}
+
+// hasPublicSourceIP 判断源 IP 列表中是否存在公网地址。
+// 集群内 workload 调用 API 均为私网/回环地址；出现公网源 IP 说明 Token 在集群外被使用。
+func hasPublicSourceIP(ips []string) bool {
+	for _, s := range ips {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// humanClientPrefixes 人类/脚本客户端 UserAgent 前缀。
+// ServiceAccount 正常由集群组件以其自有 UserAgent 调用，不应出现交互式/脚本客户端。
+var humanClientPrefixes = []string{
+	"kubectl/", "kubectl ", "oc/", "curl/", "Wget", "wget",
+	"python-requests", "python-urllib", "Python-urllib",
+	"PostmanRuntime", "HTTPie", "okhttp", "Java/", "axios", "node-fetch",
+}
+
+// isHumanClientUA 判断 UserAgent 是否为人类/脚本客户端。
+func isHumanClientUA(ua string) bool {
+	for _, p := range humanClientPrefixes {
+		if strings.HasPrefix(ua, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsHighPrivilegeRole 检查 ClusterRoleBinding 的 requestObj 是否绑定高权限角色。
@@ -194,31 +229,21 @@ func (d *KubeDetector) registerRules() {
 			},
 		},
 		{
-			ID: "K8S-006", Name: "ServiceAccount Token 异常使用",
+			ID: "K8S-006", Name: "ServiceAccount Token 疑似盗用",
 			Severity: "high", AlarmType: model.KubeAlarmTypeAbnormalProcess,
-			Description: "检测到非标准工具使用 ServiceAccount Token 调用 K8s API。可能是攻击者窃取了 Pod 内的 SA Token 后从外部发起 API 请求，也可能是恶意程序在容器内横向探测。",
-			Remediation: "1. 检查 UserAgent 是否为已知的合法组件\n2. 确认对应的 ServiceAccount 是否需要 API 访问权限\n3. 对无需访问 API 的 Pod 设置 automountServiceAccountToken: false\n4. 限制 ServiceAccount 的 RBAC 权限范围",
+			Description: "检测到 ServiceAccount Token 被以异常方式使用：来自集群外的公网源 IP，或通过 kubectl/curl 等人类/脚本客户端调用。正常情况下 SA Token 仅由集群内的 workload（私网 IP + 组件自有 UserAgent）使用，外部或交互式使用是 Token 被盗用的强信号。",
+			Remediation: "1. 确认该 ServiceAccount Token 是否被泄露到集群外\n2. 核对源 IP 是否为预期的集群节点/Pod 网段\n3. 立即轮换对应 ServiceAccount 的 Token（删除关联 Secret 或重建 SA）\n4. 对无需访问 API 的 Pod 设置 automountServiceAccountToken: false\n5. 收紧该 SA 的 RBAC 权限",
 			Match: func(e *model.AuditEvent) bool {
-				if e.UserAgent == "" {
+				// 仅针对 ServiceAccount 身份（排除 kube-system 系统 SA 已由全局排除处理）
+				if !strings.HasPrefix(e.User.Username, "system:serviceaccount:") {
 					return false
 				}
-				knownAgents := []string{
-					"kubectl/", "kube-", "kubelet/",
-					"Go-http-client/",
-					"argo", "helm", "flux", // GitOps 工具
-					"prometheus/", "grafana/", // 监控组件
-					"cert-manager/", "coredns", // 集群组件
-					"rancher/", "velero/", // 集群管理
-					"calico/", "cilium", // CNI
-					"operator/", // 通用 Operator 前缀
+				// 信号一：SA Token 从集群外公网 IP 调用（正常 workload 都是私网 IP）
+				if hasPublicSourceIP(e.SourceIPs) {
+					return true
 				}
-				for _, agent := range knownAgents {
-					if strings.HasPrefix(e.UserAgent, agent) {
-						return false
-					}
-				}
-				// 非标准 UserAgent + ServiceAccount 用户
-				return strings.HasPrefix(e.User.Username, "system:serviceaccount:")
+				// 信号二：SA Token 通过人类/脚本客户端调用（SA 不应交互式使用）
+				return isHumanClientUA(e.UserAgent)
 			},
 		},
 		{
@@ -245,6 +270,67 @@ func (d *KubeDetector) registerRules() {
 					return false
 				}
 				return containsHostPathMount(e.RequestObj)
+			},
+		},
+		{
+			ID: "K8S-009", Name: "kubectl port-forward 端口转发",
+			Severity: "high", AlarmType: model.KubeAlarmTypeAbnormalNetwork,
+			Description: "检测到对 Pod 发起 port-forward。攻击者可借此把集群内部服务（数据库、内部 API）转发到本地，绕过网络策略进行数据窃取或横向移动。",
+			Remediation: "1. 确认操作者身份与目的端口是否合法\n2. 对非运维人员限制 pods/portforward 权限（RBAC）\n3. 审查被转发的目标服务是否含敏感数据",
+			Match: func(e *model.AuditEvent) bool {
+				return e.ObjectRef != nil && e.Verb == "create" && e.ObjectRef.Subresource == "portforward"
+			},
+		},
+		{
+			ID: "K8S-010", Name: "kubectl attach 接入容器",
+			Severity: "high", AlarmType: model.KubeAlarmTypeAbnormalProcess,
+			Description: "检测到通过 attach 接入运行中容器的主进程 stdio。与 exec 类似，可用于交互式入侵或窃取进程输出。",
+			Remediation: "1. 确认操作者身份与目的\n2. 限制 pods/attach 权限（RBAC）\n3. 检查目标容器是否存在异常",
+			Match: func(e *model.AuditEvent) bool {
+				return e.ObjectRef != nil && e.Verb == "create" && e.ObjectRef.Subresource == "attach"
+			},
+		},
+		{
+			ID: "K8S-011", Name: "注入临时调试容器 (ephemeralContainers)",
+			Severity: "high", AlarmType: model.KubeAlarmTypeAbnormalProcess,
+			Description: "检测到向运行中 Pod 注入 ephemeral container。该机制可在不重建 Pod 的情况下加入新容器，攻击者可借此植入调试/攻击工具且不改变原 Pod 定义，隐蔽性强。",
+			Remediation: "1. 确认是否为合法调试操作\n2. 限制 pods/ephemeralcontainers 权限\n3. 检查注入的镜像与命令",
+			Match: func(e *model.AuditEvent) bool {
+				return e.ObjectRef != nil && (e.Verb == "update" || e.Verb == "patch") && e.ObjectRef.Subresource == "ephemeralcontainers"
+			},
+		},
+		{
+			ID: "K8S-012", Name: "删除审计/事件资源 (反取证)",
+			Severity: "high", AlarmType: model.KubeAlarmTypeAbnormalProcess,
+			Description: "检测到删除 Event 资源（单条或批量）。攻击者常在入侵后清除 K8s Events 以销毁痕迹、对抗取证。",
+			Remediation: "1. 确认删除是否为正常清理（如 TTL 控制器）\n2. 非系统组件的批量删除 events 高度可疑\n3. 检查同期是否有其他攻击行为\n4. 将 Events 持久化导出到外部审计系统",
+			Match: func(e *model.AuditEvent) bool {
+				return e.ObjectRef != nil && (e.Verb == "delete" || e.Verb == "deletecollection") && e.ObjectRef.Resource == "events"
+			},
+		},
+		{
+			ID: "K8S-013", Name: "匿名访问 API Server",
+			Severity: "critical", AlarmType: model.KubeAlarmTypePrivilegeEscalation,
+			Description: "检测到以 system:anonymous 身份访问 API Server。若匿名用户被错误授予权限，攻击者无需任何凭据即可操作集群，是严重配置错误。",
+			Remediation: "1. 立即检查是否存在绑定到 system:anonymous / system:unauthenticated 的 RoleBinding/ClusterRoleBinding\n2. 关闭 API Server 的匿名认证（--anonymous-auth=false，托管集群需走云商配置）\n3. 审查该匿名请求访问的资源",
+			Match: func(e *model.AuditEvent) bool {
+				return e.User.Username == "system:anonymous" || e.User.Username == "system:unauthenticated"
+			},
+		},
+		{
+			ID: "K8S-014", Name: "篡改准入 Webhook 配置",
+			Severity: "critical", AlarmType: model.KubeAlarmTypePrivilegeEscalation,
+			Description: "检测到创建/修改/删除 Validating 或 Mutating WebhookConfiguration。攻击者可借此植入恶意准入控制器（拦截/篡改请求、窃取 Secret），或删除安全策略 webhook 使防护失效。",
+			Remediation: "1. 确认变更是否来自合法的策略组件（OPA/Kyverno/cert-manager）\n2. 核对 webhook 指向的服务地址是否可信\n3. 审查 webhook 的 rules 是否覆盖敏感资源（secrets/pods）\n4. 对 admissionregistration 资源收紧 RBAC",
+			Match: func(e *model.AuditEvent) bool {
+				if e.ObjectRef == nil {
+					return false
+				}
+				if e.Verb != "create" && e.Verb != "update" && e.Verb != "delete" {
+					return false
+				}
+				return e.ObjectRef.Resource == "validatingwebhookconfigurations" ||
+					e.ObjectRef.Resource == "mutatingwebhookconfigurations"
 			},
 		},
 	}
@@ -338,6 +424,18 @@ func buildAlarmMessage(ruleID string, e *model.AuditEvent) string {
 		return fmt.Sprintf("用户 %s 在%s容器 %s 内执行了 Shell 命令，疑似反弹 Shell 或交互式入侵", user, nsPart, name)
 	case "K8S-008":
 		return fmt.Sprintf("用户 %s 在%s创建了挂载宿主机敏感路径的 Pod %s，存在容器逃逸风险", user, nsPart, name)
+	case "K8S-009":
+		return fmt.Sprintf("用户 %s 对%sPod %s 发起了 port-forward 端口转发", user, nsPart, name)
+	case "K8S-010":
+		return fmt.Sprintf("用户 %s attach 接入了%s容器 %s 的主进程", user, nsPart, name)
+	case "K8S-011":
+		return fmt.Sprintf("用户 %s 向%sPod %s 注入了临时调试容器 (ephemeralContainers)", user, nsPart, name)
+	case "K8S-012":
+		return fmt.Sprintf("用户 %s 在%s%s 了 Event 资源 %s，疑似清除入侵痕迹", user, nsPart, e.Verb, name)
+	case "K8S-013":
+		return fmt.Sprintf("匿名用户 (%s) 访问了 API Server 资源 %s/%s，存在严重授权配置错误", user, resource, name)
+	case "K8S-014":
+		return fmt.Sprintf("用户 %s %s 了准入 Webhook 配置 %s，可能植入恶意准入控制器或破坏安全策略", user, e.Verb, name)
 	default:
 		return fmt.Sprintf("用户 %s 触发规则 %s，资源: %s/%s", user, ruleID, resource, name)
 	}

@@ -75,7 +75,7 @@ type ETWCollector struct {
 
 // ETWConfig 配置.
 type ETWConfig struct {
-	SessionName       string   // ETW session 名 (默认 mxsec-etw)
+	SessionName       string   // ETW session 名 (默认 mxcwpp-etw)
 	Providers         []string // GUID 列表 / 名称别名 (Sysmon / Kernel-Process / Kernel-Network)
 	BufferSize        int      // 单 buffer KB (默认 64)
 	MinBuffers        int      // (默认 4)
@@ -86,7 +86,7 @@ type ETWConfig struct {
 // DefaultETWConfig 默认值.
 func DefaultETWConfig() ETWConfig {
 	return ETWConfig{
-		SessionName: "mxsec-etw",
+		SessionName: "mxcwpp-etw",
 		Providers: []string{
 			"Microsoft-Windows-Kernel-Process",
 			"Microsoft-Windows-Kernel-Network",

@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // EnabledChecker 判断 source 是否启用 + 写回同步状态 + 管理增量 watermark。
@@ -185,7 +185,7 @@ func (c *Coordinator) Sync(ctx context.Context, since time.Time, hosts []HostSof
 				maxIssued = adv.IssuedAt
 			}
 			allAdvisories = append(allAdvisories, sourcedAdvisory{
-				src:        r.src,
+				sourceName: r.src.Name(),
 				advisory:   adv,
 				confidence: r.src.Confidence(),
 			})
@@ -236,6 +236,46 @@ func (c *Coordinator) Sync(ctx context.Context, since time.Time, hosts []HostSof
 	return vulnCount, hostVulnCount, nil
 }
 
+// IngestAdvisories 对一批「已拉取」的 advisory 做匹配 + 入库，不拉源。
+//
+// 供 Manager 的 Kafka consumer 复用：VulnSync 服务已从 advisory 源拉取并经 Kafka
+// 投递富 advisory，consumer 反序列化成 AdvisoryMessage 后调用本方法。
+// 走与 Sync 完全相同的 mergeByConfidence → upsertVuln → bulkUpsertAdvisoryPackages
+// 写路径，保证「消费路径」与「自拉路径」产出的 host_vuln 集合等价。
+//
+// 注：本方法不跑 host_vuln FP 清理（CleanupHostVulnFP / CleanupAlreadyPatched）。
+// 清理是全局操作，由调用方在批量 flush 后自行触发，避免逐消息重复全表扫描。
+func (c *Coordinator) IngestAdvisories(msgs []AdvisoryMessage, hosts []HostSoftware) (vulnCount, hostVulnCount int) {
+	items := make([]sourcedAdvisory, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Advisory == nil || !validateAdvisory(m.Advisory) {
+			continue
+		}
+		items = append(items, sourcedAdvisory{
+			sourceName: m.Source,
+			advisory:   m.Advisory,
+			confidence: m.Confidence,
+		})
+	}
+	if len(items) == 0 {
+		return 0, 0
+	}
+
+	merged := mergeByConfidence(items, c.matcher, hosts)
+	for cveID, entry := range merged {
+		if err := c.upsertVuln(cveID, entry); err != nil {
+			c.logger.Warn("ingest upsert vuln 失败", zap.String("cve", cveID), zap.Error(err))
+			continue
+		}
+		vulnCount++
+		hostVulnCount += len(entry.affectedHosts)
+	}
+	if apRows := c.bulkUpsertAdvisoryPackages(merged); apRows > 0 {
+		c.logger.Debug("ingest advisory_packages 批量 upsert", zap.Int("rows", apRows))
+	}
+	return vulnCount, hostVulnCount
+}
+
 // validateAdvisory 入库前严格校验，过滤无效 advisory。
 func validateAdvisory(adv *Advisory) bool {
 	if adv == nil || len(adv.CVEIDs) == 0 {
@@ -272,7 +312,7 @@ func containsCaseInsensitive(haystack, needle string) bool {
 }
 
 type sourcedAdvisory struct {
-	src        Source
+	sourceName string
 	advisory   *Advisory
 	confidence Confidence
 }
@@ -320,7 +360,7 @@ func mergeByConfidence(items []sourcedAdvisory, matcher Matcher, hosts []HostSof
 				out[cveID] = &mergedVuln{
 					advisory:      item.advisory,
 					confidence:    item.confidence,
-					source:        item.src.Name(),
+					source:        item.sourceName,
 					affectedHosts: needs,
 					allAdvisories: []sourcedAdvisory{item},
 				}
@@ -333,7 +373,7 @@ func mergeByConfidence(items []sourcedAdvisory, matcher Matcher, hosts []HostSof
 			if confidenceRank(item.confidence) > confidenceRank(existing.confidence) {
 				existing.advisory = item.advisory
 				existing.confidence = item.confidence
-				existing.source = item.src.Name()
+				existing.source = item.sourceName
 			}
 		}
 	}
@@ -540,14 +580,14 @@ func (c *Coordinator) bulkUpsertAdvisoryPackages(merged map[string]*mergedVuln) 
 					continue
 				}
 				// 同 sync 内 (cve,source,os,major,pkg,arch) 重复 fix 去重，避免 ON DUPLICATE 冲突
-				key := cveID + "|" + sa.src.Name() + "|" + adv.OSFamily + "|" + adv.OSMajorVer + "|" + fix.Name + "|" + fix.Arch
+				key := cveID + "|" + sa.sourceName + "|" + adv.OSFamily + "|" + adv.OSMajorVer + "|" + fix.Name + "|" + fix.Arch
 				if _, dup := seen[key]; dup {
 					continue
 				}
 				seen[key] = struct{}{}
 				rows = append(rows, model.AdvisoryPackage{
 					CveID:            cveID,
-					Source:           sa.src.Name(),
+					Source:           sa.sourceName,
 					SourceAdvisoryID: adv.AdvisoryID,
 					OSFamily:         adv.OSFamily,
 					OSMajor:          adv.OSMajorVer,
@@ -674,7 +714,7 @@ func (c *Coordinator) SyncByPURLs(ctx context.Context, sourceName string, purls 
 				confidence:    src.Confidence(),
 				source:        src.Name(),
 				affectedHosts: affected,
-				allAdvisories: []sourcedAdvisory{{src: src, advisory: adv, confidence: src.Confidence()}},
+				allAdvisories: []sourcedAdvisory{{sourceName: src.Name(), advisory: adv, confidence: src.Confidence()}},
 			}
 			purlCount++
 

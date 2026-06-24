@@ -72,7 +72,7 @@ var DefaultExcludePaths = []string{
 	"/dev",
 	"/run",
 	"/var/lib/clamav",
-	"/var/mxsec/quarantine",
+	"/var/mxcwpp/quarantine",
 }
 
 // ThreatSeverityMap 根据引擎和威胁类型映射严重级别

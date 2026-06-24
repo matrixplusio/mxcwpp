@@ -10,7 +10,7 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-root}"
 DB_PASS="${DB_PASS:-root123}"
-DB_NAME="${DB_NAME:-mxsec}"
+DB_NAME="${DB_NAME:-mxcwpp}"
 
 echo "1. 检查 G02-UAT 业务线下的主机"
 echo "================================"

@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/honeypot"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/honeypot"
 )
 
 // HoneypotStage 反勒索 honeypot 检测。

@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // SystemConfigHandler 是系统配置 API 处理器
@@ -56,7 +56,7 @@ func NewSystemConfigHandler(db *gorm.DB, logger *zap.Logger, uploadDir, staticPa
 func (h *SystemConfigHandler) GetKubernetesImageConfig(c *gin.Context) {
 	// 默认配置
 	defaultConfig := model.KubernetesImageConfig{
-		Repository:     "mxsec-platform/mxsec-agent",
+		Repository:     "mxcwpp/mxcwpp-agent",
 		Versions:       []string{"latest", "v1.0.0"},
 		DefaultVersion: "latest",
 	}

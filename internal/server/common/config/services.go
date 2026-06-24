@@ -122,7 +122,7 @@ func LoadManager(path string) (*ManagerConfig, error) {
 	v.SetDefault("otel.enabled", false)
 	v.SetDefault("otel.sample_rate", 0.1)
 
-	v.SetEnvPrefix("MXSEC_MANAGER")
+	v.SetEnvPrefix("MXCWPP_MANAGER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	_ = v.ReadInConfig() // 文件可选
@@ -153,7 +153,7 @@ func LoadAgentCenter(path string) (*AgentCenterConfig, error) {
 	v.SetDefault("database.max_open_conns", 50)
 	v.SetDefault("database.max_idle_conns", 10)
 
-	v.SetEnvPrefix("MXSEC_AC")
+	v.SetEnvPrefix("MXCWPP_AC")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	_ = v.ReadInConfig()
@@ -176,11 +176,11 @@ func LoadConsumer(path string) (*ConsumerConfig, error) {
 
 	v.SetDefault("http_addr", ":8081")
 	v.SetDefault("analysis_enabled", false)
-	v.SetDefault("consumer_group", "mxsec-consumer")
+	v.SetDefault("consumer_group", "mxcwpp-consumer")
 	v.SetDefault("batch_size", 500)
 	v.SetDefault("batch_timeout", "5s")
 
-	v.SetEnvPrefix("MXSEC_CONSUMER")
+	v.SetEnvPrefix("MXCWPP_CONSUMER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	_ = v.ReadInConfig()
@@ -203,14 +203,14 @@ func LoadVulnSync(path string) (*VulnSyncConfig, error) {
 
 	v.SetDefault("http_addr", ":8083")
 	v.SetDefault("sync_interval", "6h")
-	v.SetDefault("advisory_topic", "mxsec.vuln.advisory")
+	v.SetDefault("advisory_topic", "mxcwpp.vuln.advisory")
 	v.SetDefault("sources", []string{
 		"nvd", "osv", "cisa-kev", "epss",
 		"redhat", "ubuntu", "debian", "alpine", "suse",
 		"openeuler", "anolis", "kylin", "uos", "cnnvd", "edb",
 	})
 
-	v.SetEnvPrefix("MXSEC_VULNSYNC")
+	v.SetEnvPrefix("MXCWPP_VULNSYNC")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	_ = v.ReadInConfig()
@@ -235,7 +235,7 @@ func LoadLLMProxy(path string) (*LLMProxyConfig, error) {
 	v.SetDefault("quota.daily_tokens_per_tenant", 1000000)
 	v.SetDefault("quota.rps_per_tenant", 10)
 
-	v.SetEnvPrefix("MXSEC_LLMPROXY")
+	v.SetEnvPrefix("MXCWPP_LLMPROXY")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	_ = v.ReadInConfig()

@@ -64,7 +64,7 @@ func (c *AliyunSLSConnector) Send(ctx context.Context, ev *Event) error {
 
 	// 构造 SLS LogGroup protobuf
 	group := &slsLogGroup{
-		Topic:  "mxsec",
+		Topic:  "mxcwpp",
 		Source: ev.HostName,
 		Logs: []slsLog{
 			{

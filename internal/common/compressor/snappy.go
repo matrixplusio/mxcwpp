@@ -6,9 +6,9 @@
 //
 // 使用方式：
 //
-//	Agent 端: import _ "github.com/imkerbos/mxsec-platform/internal/common/compressor"
+//	Agent 端: import _ "github.com/matrixplusio/mxcwpp/internal/common/compressor"
 //	          client.Transfer(ctx, grpc.UseCompressor("snappy"))
-//	Server 端: import _ "github.com/imkerbos/mxsec-platform/internal/common/compressor"
+//	Server 端: import _ "github.com/matrixplusio/mxcwpp/internal/common/compressor"
 //	          （注册解压器，自动协商）
 package compressor
 

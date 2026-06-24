@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )

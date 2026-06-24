@@ -204,7 +204,7 @@ func (s *Scanner) Selfcheck(ctx context.Context, tmpDir string) error {
 		tmpDir = os.TempDir()
 	}
 	eicar := []byte(`X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*`)
-	path := filepath.Join(tmpDir, ".mxsec_av_selfcheck")
+	path := filepath.Join(tmpDir, ".mxcwpp_av_selfcheck")
 	if err := os.WriteFile(path, eicar, 0o600); err != nil {
 		return fmt.Errorf("selfcheck write: %w", err)
 	}

@@ -16,9 +16,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	agentrt "github.com/imkerbos/mxsec-platform/internal/agent/runtime"
-	"github.com/imkerbos/mxsec-platform/internal/common/fileutil"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	agentrt "github.com/matrixplusio/mxcwpp/internal/agent/runtime"
+	"github.com/matrixplusio/mxcwpp/internal/common/fileutil"
 )
 
 // --- 公共函数（供 gRPC push 和 CLI selfupdate 共用） ---
@@ -118,7 +118,7 @@ func RestartAgent() {
 			return
 		}
 
-		cmd := exec.Command("systemctl", "restart", "mxsec-agent")
+		cmd := exec.Command("systemctl", "restart", "mxcwpp-agent")
 		if err := cmd.Start(); err != nil {
 			// systemctl 失败，直接退出让 systemd 自动重启
 			os.Exit(0)
@@ -322,7 +322,7 @@ func (m *Manager) handleUpdate(ctx context.Context, update *grpc.AgentUpdate) {
 	)
 
 	// 重启 Agent
-	m.logger.Info("restarting mxsec-agent service...")
+	m.logger.Info("restarting mxcwpp-agent service...")
 	RestartAgent()
 }
 
@@ -336,7 +336,7 @@ func (m *Manager) doUpdate(ctx context.Context, update *grpc.AgentUpdate) error 
 	defer os.RemoveAll(tmpDir)
 
 	// 2. 确定包文件名
-	pkgFileName := fmt.Sprintf("mxsec-agent-%s.%s", update.Version, update.PkgType)
+	pkgFileName := fmt.Sprintf("mxcwpp-agent-%s.%s", update.Version, update.PkgType)
 	pkgPath := filepath.Join(tmpDir, pkgFileName)
 
 	// 3. 下载包文件
@@ -396,7 +396,7 @@ func (m *Manager) doUpdate(ctx context.Context, update *grpc.AgentUpdate) error 
 
 	// 5.5 临时解除文件保护（chattr +i），否则 rpm/dpkg 无法替换受保护的二进制
 	if m.protector != nil {
-		relock := m.protector.TemporaryUnlock("/usr/local/mxsec")
+		relock := m.protector.TemporaryUnlock("/usr/local/mxcwpp")
 		defer relock()
 	}
 
@@ -433,7 +433,7 @@ func (m *Manager) diagnoseSystemEnv(pkgType string) {
 	if uid != 0 {
 		m.logger.Warn("agent is not running as root, package installation may fail",
 			zap.Int("current_uid", uid),
-			zap.String("hint", "ensure mxsec-agent.service has User=root in systemd config"),
+			zap.String("hint", "ensure mxcwpp-agent.service has User=root in systemd config"),
 		)
 	}
 

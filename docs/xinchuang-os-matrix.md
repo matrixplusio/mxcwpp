@@ -1,4 +1,4 @@
-# mxsec 信创 OS 适配矩阵 (M1-7)
+# mxcwpp 信创 OS 适配矩阵 (M1-7)
 
 ## 覆盖范围
 
@@ -47,13 +47,13 @@
 
 ```yaml
 # nfpm.yaml (针对 Kylin V10 ARM64)
-name: mxsec-agent
+name: mxcwpp-agent
 arch: arm64
 platform: linux
 version: 2.0.0
 section: security
 priority: optional
-maintainer: mxsec dev team
+maintainer: mxcwpp dev team
 description: |
   Matrix Cloud Security Platform Agent
   适配 Kylin V10 / UOS / openEuler / Anolis 信创 OS

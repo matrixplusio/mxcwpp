@@ -21,7 +21,7 @@ var (
 	// Agent 连接指标
 	agentConnections = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "mxsec_agent_connections_total",
+			Name: "mxcwpp_agent_connections_total",
 			Help: "当前连接的 Agent 数量",
 		},
 		[]string{"status"}, // online, offline
@@ -30,7 +30,7 @@ var (
 	// 心跳指标
 	heartbeatTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "mxsec_heartbeat_total",
+			Name: "mxcwpp_heartbeat_total",
 			Help: "心跳总数",
 		},
 		[]string{"host_id"},
@@ -39,7 +39,7 @@ var (
 	// 基线检查结果指标
 	baselineResultsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "mxsec_baseline_results_total",
+			Name: "mxcwpp_baseline_results_total",
 			Help: "基线检查结果总数",
 		},
 		[]string{"host_id", "status", "severity"}, // status: pass, fail, error, na
@@ -48,7 +48,7 @@ var (
 	// 基线得分指标
 	baselineScore = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "mxsec_baseline_score",
+			Name: "mxcwpp_baseline_score",
 			Help: "主机基线得分（0-100）",
 		},
 		[]string{"host_id"},
@@ -57,7 +57,7 @@ var (
 	// 任务指标
 	tasksTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "mxsec_tasks_total",
+			Name: "mxcwpp_tasks_total",
 			Help: "扫描任务总数",
 		},
 		[]string{"status"}, // pending, running, completed, failed
@@ -66,7 +66,7 @@ var (
 	// 任务执行时间
 	taskDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "mxsec_task_duration_seconds",
+			Name:    "mxcwpp_task_duration_seconds",
 			Help:    "任务执行时间（秒）",
 			Buckets: prometheus.ExponentialBuckets(1, 2, 10), // 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s, 512s
 		},
@@ -76,7 +76,7 @@ var (
 	// HTTP 请求指标
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "mxsec_http_requests_total",
+			Name: "mxcwpp_http_requests_total",
 			Help: "HTTP 请求总数",
 		},
 		[]string{"method", "endpoint", "status_code"},
@@ -85,7 +85,7 @@ var (
 	// HTTP 请求延迟
 	httpRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "mxsec_http_request_duration_seconds",
+			Name:    "mxcwpp_http_request_duration_seconds",
 			Help:    "HTTP 请求延迟（秒）",
 			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		},
@@ -95,7 +95,7 @@ var (
 	// 数据库查询指标
 	dbQueryDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "mxsec_db_query_duration_seconds",
+			Name:    "mxcwpp_db_query_duration_seconds",
 			Help:    "数据库查询延迟（秒）",
 			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
 		},
@@ -105,7 +105,7 @@ var (
 	// ClickHouse 查询指标（OLAP 慢查询监控；buckets 覆盖 50ms~60s 以观察 P50/P99 与超时）
 	chQueryDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "mxsec_clickhouse_query_duration_seconds",
+			Name:    "mxcwpp_clickhouse_query_duration_seconds",
 			Help:    "ClickHouse 查询延迟（秒）",
 			Buckets: []float64{0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 30, 60},
 		},
@@ -113,10 +113,10 @@ var (
 	)
 
 	// buildInfo 进程 build 元信息：value=1，version + pid 入 labels
-	// monitor.go 通过 PromQL `mxsec_build_info{job="mxsec-manager"}` 拉取 labels.version + labels.pid
+	// monitor.go 通过 PromQL `mxcwpp_build_info{job="mxcwpp-manager"}` 拉取 labels.version + labels.pid
 	buildInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "mxsec_build_info",
+			Name: "mxcwpp_build_info",
 			Help: "进程 build 元信息（value=1，labels 含 version/pid/commit）",
 		},
 		[]string{"version", "pid", "commit"},
@@ -217,7 +217,7 @@ func RecordCHQueryDuration(operation, table, status string, duration float64) {
 }
 
 // SetBuildInfo 设置进程 build 元信息（Manager 启动时调一次）。
-// monitor.go 通过 PromQL `mxsec_build_info{job="mxsec-manager"}` 读 version + pid。
+// monitor.go 通过 PromQL `mxcwpp_build_info{job="mxcwpp-manager"}` 读 version + pid。
 func SetBuildInfo(version, commit string) {
 	if version == "" {
 		version = "dev"

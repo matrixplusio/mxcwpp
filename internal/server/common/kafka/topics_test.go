@@ -78,7 +78,7 @@ func TestIsEngineAlert(t *testing.T) {
 
 func TestDLQTopic_V2(t *testing.T) {
 	t.Parallel()
-	if got := DLQTopic(TopicEngineCommand); got != "mxsec.engine.command.dlq" {
-		t.Fatalf("DLQTopic: want mxsec.engine.command.dlq, got %s", got)
+	if got := DLQTopic(TopicEngineCommand); got != "mxcwpp.engine.command.dlq" {
+		t.Fatalf("DLQTopic: want mxcwpp.engine.command.dlq, got %s", got)
 	}
 }

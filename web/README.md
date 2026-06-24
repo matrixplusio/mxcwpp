@@ -1,4 +1,4 @@
-# MXSEC-PLATFORM Web (React)
+# MXCWPP-PLATFORM Web (React)
 
 P1 地基 + 安全概览。技术栈：Next.js 15 + Tailwind + Framer Motion + Zustand + TanStack Query + ECharts。
 

@@ -1,9 +1,9 @@
 // Command etl-storyline-events 一次性把 MySQL storyline_events 全表迁到
-// ClickHouse mxsec.storyline_events。
+// ClickHouse mxcwpp.storyline_events。
 //
 // 用法:
 //
-//	go run ./cmd/tools/etl-storyline-events -config /etc/mxsec-platform/server.yaml
+//	go run ./cmd/tools/etl-storyline-events -config /etc/mxcwpp/server.yaml
 //	# 可选: -batch 10000 -from-id 0 -dry-run
 //
 // 迁移逻辑:
@@ -30,9 +30,9 @@ import (
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 func main() {

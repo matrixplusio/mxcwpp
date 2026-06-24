@@ -3,7 +3,7 @@
 // 设计目的: 用一个统一抽象把后端 worker 写出来的"治理事件"丢到 Engine Pipeline,
 // 让所有事件 (含审计、隔离箱、CR) 都走告警生命周期 + Storyline 关联, 不绕过 Engine.
 //
-// Topic 复用: 仍用 mxsec.engine.alert 的输入侧 mxsec.engine.audit (新增).
+// Topic 复用: 仍用 mxcwpp.engine.alert 的输入侧 mxcwpp.engine.audit (新增).
 // DataType:
 //
 //	14501: 配置变更审计
@@ -42,7 +42,7 @@ func NewPipelineEmitter(producer KafkaProducer, topic string, logger *zap.Logger
 		logger = zap.NewNop()
 	}
 	if topic == "" {
-		topic = "mxsec.engine.audit"
+		topic = "mxcwpp.engine.audit"
 	}
 	return &PipelineEmitter{producer: producer, topic: topic, logger: logger}
 }

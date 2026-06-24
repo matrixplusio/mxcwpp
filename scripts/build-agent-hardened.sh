@@ -5,7 +5,7 @@
 #   - go build -trimpath -buildmode=pie
 #   - -ldflags '-s -w' 移除调试符号
 #
-# 输出: dist/agent/mxsec-agent-hardened-<arch>
+# 输出: dist/agent/mxcwpp-agent-hardened-<arch>
 #
 # 用法:
 #   ./scripts/build-agent-hardened.sh amd64        # 单架构
@@ -60,7 +60,7 @@ LDFLAGS=(
 )
 
 for arch in "${ARCHS[@]}"; do
-  bin="$OUTPUT_DIR/mxsec-agent-hardened-$arch"
+  bin="$OUTPUT_DIR/mxcwpp-agent-hardened-$arch"
   echo ""
   echo "=== Building hardened agent for linux/$arch ==="
 

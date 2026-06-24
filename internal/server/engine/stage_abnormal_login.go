@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/intrusion"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/intrusion"
 )
 
 // AbnormalLoginStage 异常登录检测 (地理 / 时间 / IP / 用户 四维)。

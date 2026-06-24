@@ -2,7 +2,7 @@
 //
 // 设计原则:
 //   - 单一来源: YAML 文件 (默认 configs/<service>.yaml)
-//   - 环境变量覆盖: MXSEC_<SERVICE>_<KEY> (e.g. MXSEC_ENGINE_HTTP_ADDR)
+//   - 环境变量覆盖: MXCWPP_<SERVICE>_<KEY> (e.g. MXCWPP_ENGINE_HTTP_ADDR)
 //   - flag 仍保留, 但仅作 path/dev 用 (--config / --dry-run)
 //   - 字段校验前置: 缺关键字段直接 Fatal, 不允许 silent fallback
 package config
@@ -67,7 +67,7 @@ type PipelineConfig struct {
 //
 //  1. 设置内置默认 (与历史 flag 一致, 兼容老部署)
 //  2. 读 YAML 文件
-//  3. 环境变量覆盖 (MXSEC_ENGINE_*)
+//  3. 环境变量覆盖 (MXCWPP_ENGINE_*)
 //  4. 反序列化 → 校验
 func LoadEngine(path string) (*EngineConfig, error) {
 	v := viper.New()
@@ -77,7 +77,7 @@ func LoadEngine(path string) (*EngineConfig, error) {
 	// 默认
 	v.SetDefault("http_addr", ":8082")
 	v.SetDefault("default_mode", "observe")
-	v.SetDefault("alert_topic", "mxsec.engine.alert")
+	v.SetDefault("alert_topic", "mxcwpp.engine.alert")
 	v.SetDefault("kafka.brokers", []string{})
 	v.SetDefault("database.dsn", "")
 	v.SetDefault("database.max_open_conns", 50)
@@ -90,8 +90,8 @@ func LoadEngine(path string) (*EngineConfig, error) {
 	v.SetDefault("pipeline.enabled_stages", []string{})
 	v.SetDefault("pipeline.workers", 4)
 
-	// env override: MXSEC_ENGINE_KAFKA_BROKERS=a,b,c → kafka.brokers
-	v.SetEnvPrefix("MXSEC_ENGINE")
+	// env override: MXCWPP_ENGINE_KAFKA_BROKERS=a,b,c → kafka.brokers
+	v.SetEnvPrefix("MXCWPP_ENGINE")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 

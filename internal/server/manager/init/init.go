@@ -10,13 +10,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
-	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/migration"
-	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	serverLogger "github.com/matrixplusio/mxcwpp/internal/server/logger"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/migration"
+	"github.com/matrixplusio/mxcwpp/internal/server/prometheus"
 )
 
 // ManagerServices 包含 Manager 服务所需的所有组件

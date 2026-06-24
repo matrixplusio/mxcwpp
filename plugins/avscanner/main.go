@@ -25,9 +25,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/plugins/avscanner/engine"
-	plugins "github.com/imkerbos/mxsec-platform/plugins/lib/go"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/plugins/avscanner/engine"
+	plugins "github.com/matrixplusio/mxcwpp/plugins/lib/go"
 )
 
 var (

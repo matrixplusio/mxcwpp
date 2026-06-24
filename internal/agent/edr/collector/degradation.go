@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/resource"
+	"github.com/matrixplusio/mxcwpp/internal/agent/resource"
 )
 
 // Degradation levels control event filtering in BPF programs via config_map.

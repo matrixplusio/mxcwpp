@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
 )
 
 // Engine is a stub on non-Linux platforms.

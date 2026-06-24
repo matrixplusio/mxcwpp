@@ -1,14 +1,14 @@
 // Package federation — 多集群联邦管理骨架 (C3).
 //
-// 场景: 客户在 3 个 K8s 集群部署 mxsec, 单一 Manager 控制台聚合管理.
+// 场景: 客户在 3 个 K8s 集群部署 mxcwpp, 单一 Manager 控制台聚合管理.
 //
 // 设计:
-//   - 子集群 mxsec 实例向中心 Manager 注册 (FederatedCluster 记录)
+//   - 子集群 mxcwpp 实例向中心 Manager 注册 (FederatedCluster 记录)
 //   - 子集群定期 push 摘要 (alert 数 / host 数 / 漏洞数 / 模式)
 //   - 中心 Manager pull 详情 (按需查具体告警 → reverse-call 子集群 API)
 //   - 跨集群告警聚合视图 (UI: ClusterFederationConsole)
 //
-// 不引 kubefed, 走 mxsec 自实现轻量 federation 协议.
+// 不引 kubefed, 走 mxcwpp 自实现轻量 federation 协议.
 package federation
 
 import (

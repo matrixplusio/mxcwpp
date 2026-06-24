@@ -23,8 +23,8 @@
 //   - 早退后 平均 ~0.6μs/pkt (非 HTTP 流量直接 1 指令返)
 //   - HTTP 包仍 ~3μs, 但 HTTP 占比 < 20% → 整体吞吐 +3-5x
 
-#ifndef MXSEC_NPATCH_COMMON_FASTPATH_H
-#define MXSEC_NPATCH_COMMON_FASTPATH_H
+#ifndef MXCWPP_NPATCH_COMMON_FASTPATH_H
+#define MXCWPP_NPATCH_COMMON_FASTPATH_H
 
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
@@ -61,4 +61,4 @@ static __always_inline int is_http_inbound(struct __sk_buff *skb) {
     return 1;
 }
 
-#endif // MXSEC_NPATCH_COMMON_FASTPATH_H
+#endif // MXCWPP_NPATCH_COMMON_FASTPATH_H

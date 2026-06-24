@@ -8,7 +8,7 @@ package engine
 //   - 入站 message 总数
 //   - 单条 message 流水线总延迟 (生产 SLO p99 < 10ms)
 //
-// 配合 Grafana dashboard mxsec-engine.json 监控.
+// 配合 Grafana dashboard mxcwpp-engine.json 监控.
 
 import (
 	"sync"
@@ -41,49 +41,49 @@ func Metrics() *PipelineMetrics {
 	once.Do(func() {
 		mtx = &PipelineMetrics{
 			MessageReceived: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "message_received_total",
 				Help: "Total messages received from Kafka",
 			}),
 			MessageProcessed: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "message_processed_total",
 				Help: "Total messages fully processed",
 			}),
 			MessageFailed: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "message_failed_total",
 				Help: "Messages failed processing by reason",
 			}, []string{"reason"}),
 			PipelineDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name:    "pipeline_duration_seconds",
 				Help:    "End-to-end pipeline processing duration",
 				Buckets: []float64{.001, .002, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
 			}, []string{"outcome"}), // success / failed
 			StageDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name:    "stage_duration_seconds",
 				Help:    "Per-stage processing duration",
 				Buckets: []float64{.0001, .0005, .001, .002, .005, .01, .025, .05, .1, .25},
 			}, []string{"stage_name"}),
 			StageAlerts: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "stage_alerts_total",
 				Help: "Alerts produced per stage",
 			}, []string{"stage_name", "severity"}),
 			AlertsProduced: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "alerts_total",
 				Help: "Alerts produced grouped by rule_id and severity",
 			}, []string{"rule_id", "severity"}),
 			StageErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "stage_errors_total",
 				Help: "Errors per stage",
 			}, []string{"stage_name"}),
 			BackpressureDrop: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: "mxsec", Subsystem: "engine",
+				Namespace: "mxcwpp", Subsystem: "engine",
 				Name: "backpressure_drop_total",
 				Help: "Messages dropped due to backpressure (producer queue full)",
 			}),

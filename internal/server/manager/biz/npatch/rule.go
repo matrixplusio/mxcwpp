@@ -1,4 +1,4 @@
-// Package npatch 是 mxsec 的虚拟补丁规则模型 (对标青藤云幕 NPatch)。
+// Package npatch 是 mxcwpp 的虚拟补丁规则模型 (对标青藤云幕 NPatch)。
 //
 // 设计文档: ref/06-漏洞.md §5 + ref/00-总体评估与商业化路线.md §3 C-9
 //

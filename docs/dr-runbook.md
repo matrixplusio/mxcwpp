@@ -1,4 +1,4 @@
-# mxsec 灾备运行手册 (DR Runbook, M1-5)
+# mxcwpp 灾备运行手册 (DR Runbook, M1-5)
 
 ## 目标 SLA
 
@@ -15,7 +15,7 @@
 ### MySQL (xtrabackup)
 
 ```
-全量: 每日 02:00 通过 mxsec-mysql-backup.timer
+全量: 每日 02:00 通过 mxcwpp-mysql-backup.timer
 增量: 每 5 分钟 cron (可选, 高 RPO 场景)
 压缩: pigz -9 并行 gzip
 上传: aws s3 cp (或 ossutil/gsutil)
@@ -25,37 +25,37 @@
 部署:
 ```sh
 # 复制脚本 + systemd unit
-cp deploy/backup/mysql-xtrabackup.sh /usr/local/bin/mxsec-mysql-xtrabackup.sh
-chmod +x /usr/local/bin/mxsec-mysql-xtrabackup.sh
-cp deploy/systemd/timers/mxsec-mysql-backup.* /etc/systemd/system/
+cp deploy/backup/mysql-xtrabackup.sh /usr/local/bin/mxcwpp-mysql-xtrabackup.sh
+chmod +x /usr/local/bin/mxcwpp-mysql-xtrabackup.sh
+cp deploy/systemd/timers/mxcwpp-mysql-backup.* /etc/systemd/system/
 
 # 环境配置
-cat > /etc/mxsec/backup.env <<'EOF'
-MYSQL_USER=mxsec_backup
+cat > /etc/mxcwpp/backup.env <<'EOF'
+MYSQL_USER=mxcwpp_backup
 MYSQL_PASSWORD=...
 MYSQL_DATA_DIR=/var/lib/mysql
-BACKUP_DIR=/var/lib/mxsec-backup/mysql
-OSS_BUCKET=s3://mxsec-backups/mysql
+BACKUP_DIR=/var/lib/mxcwpp-backup/mysql
+OSS_BUCKET=s3://mxcwpp-backups/mysql
 OSS_TOOL=aws s3
 PROM_PUSHGATEWAY=http://prometheus:9091
 RETENTION_DAYS=7
 EOF
-chmod 600 /etc/mxsec/backup.env
+chmod 600 /etc/mxcwpp/backup.env
 
 systemctl daemon-reload
-systemctl enable --now mxsec-mysql-backup.timer
+systemctl enable --now mxcwpp-mysql-backup.timer
 ```
 
 ### ClickHouse (内置 BACKUP)
 
-每日 03:00 全量 BACKUP DATABASE mxsec, 不阻塞读写。
+每日 03:00 全量 BACKUP DATABASE mxcwpp, 不阻塞读写。
 增量未实现 (CH 23.x 实验性 INCREMENTAL BACKUP, 风险待评估)。
 
 ### MySQL 主从复制 (热备)
 
 ```
 主节点: gtid_mode=ON + log_bin
-从节点: replicate-do-db=mxsec + read_only=1
+从节点: replicate-do-db=mxcwpp + read_only=1
 延迟: < 1s (典型)
 异地: GTID 跨 Region 复制 (mxctl deploy --topology=multi-region)
 ```
@@ -66,17 +66,17 @@ systemctl enable --now mxsec-mysql-backup.timer
 
 ```sh
 # 1. 停服
-systemctl stop mxsec-manager mxsec-consumer mxsec-engine mxsec-agentcenter mysql
+systemctl stop mxcwpp-manager mxcwpp-consumer mxcwpp-engine mxcwpp-agentcenter mysql
 
 # 2. 解压最新全量
-LATEST=$(ls -dt /var/lib/mxsec-backup/mysql/*-full.tar.gz | head -1)
+LATEST=$(ls -dt /var/lib/mxcwpp-backup/mysql/*-full.tar.gz | head -1)
 mkdir -p /tmp/restore
 tar -xzf "$LATEST" -C /tmp/restore
 
 # 3. (若需要应用增量)
 xtrabackup --prepare --target-dir=/tmp/restore/*-full
 # 增量
-for incr in $(ls -d /var/lib/mxsec-backup/mysql/*-incremental); do
+for incr in $(ls -d /var/lib/mxcwpp-backup/mysql/*-incremental); do
   xtrabackup --prepare --apply-log-only \
     --target-dir=/tmp/restore/*-full --incremental-dir="$incr"
 done
@@ -89,17 +89,17 @@ chown -R mysql:mysql /var/lib/mysql
 # 5. 启服
 systemctl start mysql
 mysql -e "FLUSH PRIVILEGES;"
-systemctl start mxsec-manager mxsec-agentcenter mxsec-consumer mxsec-engine
+systemctl start mxcwpp-manager mxcwpp-agentcenter mxcwpp-consumer mxcwpp-engine
 ```
 
 ### ClickHouse 全量恢复
 
 ```sh
 # 1. 下载备份
-aws s3 cp s3://mxsec-backups/clickhouse/mxsec_<date>.zip /tmp/
+aws s3 cp s3://mxcwpp-backups/clickhouse/mxcwpp_<date>.zip /tmp/
 
 # 2. 恢复
-clickhouse-client --query "RESTORE DATABASE mxsec FROM File('/tmp/mxsec_<date>.zip')"
+clickhouse-client --query "RESTORE DATABASE mxcwpp FROM File('/tmp/mxcwpp_<date>.zip')"
 ```
 
 ## 异地灾备 (Multi-Region)
@@ -144,14 +144,14 @@ mxctl region failover --to=cn-west-1 --confirm
 
 ```promql
 # 备份成功率 (期望 100%)
-rate(mxsec_backup_status_total{status="success"}[7d])
-  / rate(mxsec_backup_status_total[7d])
+rate(mxcwpp_backup_status_total{status="success"}[7d])
+  / rate(mxcwpp_backup_status_total[7d])
 
 # 最近备份时间距今超过 25h 告警
-time() - mxsec_backup_started_at > 25*3600
+time() - mxcwpp_backup_started_at > 25*3600
 
 # 备份大小异常 (突然下降 50% 告警)
-deriv(mxsec_backup_size_bytes[7d]) < -0.5
+deriv(mxcwpp_backup_size_bytes[7d]) < -0.5
 ```
 
 ## 待实现 (Sprint 5+)

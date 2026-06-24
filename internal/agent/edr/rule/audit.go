@@ -12,7 +12,7 @@ import (
 )
 
 // DefaultAuditLogPath is the default path for response audit logs.
-const DefaultAuditLogPath = "/var/log/mxsec/response_audit.log"
+const DefaultAuditLogPath = "/var/log/mxcwpp/response_audit.log"
 
 // AuditEntry records a single response action execution.
 type AuditEntry struct {

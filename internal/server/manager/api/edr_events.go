@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
 )
 
 // EDR 查询端到端超时策略：
@@ -49,7 +49,7 @@ func NewEDREventsHandler(logger *zap.Logger, chConn chdriver.Conn, redisClient *
 // 60s 命中后 stats endpoint <10ms,大幅降低 CH 端 GROUP BY 压力。
 const (
 	edrStatsCacheTTL = 60 * time.Second
-	edrStatsCacheKey = "mxsec:edr:events:stats:hours_%d"
+	edrStatsCacheKey = "mxcwpp:edr:events:stats:hours_%d"
 )
 
 // chEDREvent ClickHouse ebpf_events 行映射(完整列,详情接口用)

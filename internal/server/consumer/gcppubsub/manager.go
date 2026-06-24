@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // consumerEntry 一个活跃消费者的条目

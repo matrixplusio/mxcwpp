@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/imkerbos/mxsec-platform/internal/deploy/cluster"
+	"github.com/matrixplusio/mxcwpp/internal/deploy/cluster"
 )
 
 func main() {
@@ -260,7 +260,7 @@ func mustAbs(path string) string {
 }
 
 func usage() {
-	fmt.Print(`mxctl - MxSec 生产集群部署工具
+	fmt.Print(`mxctl - MxCwpp 生产集群部署工具
 
 用法:
   go build -o ./bin/mxctl ./cmd/tools/mxctl

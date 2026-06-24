@@ -19,16 +19,16 @@ JVM 内嵌探针, 实时捕获:
 ```
 JVM Process
   │
-  ├─→ -javaagent:libmxsec_rasp.so          (premain Attach API)
+  ├─→ -javaagent:libmxcwpp_rasp.so          (premain Attach API)
   │
-  └─→ libmxsec_rasp.so (Native Agent)
+  └─→ libmxcwpp_rasp.so (Native Agent)
         │
         ├─→ JVMTI: SetEventCallbacks(ClassFileLoadHook)
         ├─→ ASM / Javassist: 字节码插桩 sensitive sink
         │
         ├─→ 事件队列 (per-thread, lock-free ring)
         │
-        └─→ UnixDomainSocket → mxsec-agent (DataType 4000-4099)
+        └─→ UnixDomainSocket → mxcwpp-agent (DataType 4000-4099)
 ```
 
 ## 钩子表 (Sprint 5+ 启用 protect 时也兼容)
@@ -63,7 +63,7 @@ emit 实现走 lock-free ring + per-thread buffer, 避免锁等待。
 
 ## 与 Agent 主进程通信
 
-- 协议: UDS (`/var/run/mxsec-rasp.sock`)
+- 协议: UDS (`/var/run/mxcwpp-rasp.sock`)
 - 帧格式: 4 字节 BE 长度 + JSON
 - Agent 主进程收到 → 转 DataType 4000-4099 上报 AC
 
@@ -79,22 +79,22 @@ emit 实现走 lock-free ring + per-thread buffer, 避免锁等待。
 
 ```sh
 # 1. 复制 .so 到 Java 应用机
-scp libmxsec_rasp.so app-server:/opt/mxsec/rasp/
+scp libmxcwpp_rasp.so app-server:/opt/mxcwpp/rasp/
 
 # 2. JVM 启动加参数
-java -javaagent:/opt/mxsec/rasp/libmxsec_rasp.so \
-     -Dmxsec.rasp.uds=/var/run/mxsec-rasp.sock \
-     -Dmxsec.rasp.tenant=t-default \
+java -javaagent:/opt/mxcwpp/rasp/libmxcwpp_rasp.so \
+     -Dmxcwpp.rasp.uds=/var/run/mxcwpp-rasp.sock \
+     -Dmxcwpp.rasp.tenant=t-default \
      -jar app.jar
 
 # 3. 验证
 curl http://app/admin/exec?cmd=id      # 触发 Runtime.exec
-# Agent 应上报 DataType 4001, mxsec UI 看到 RASP 告警
+# Agent 应上报 DataType 4001, mxcwpp UI 看到 RASP 告警
 ```
 
 ## 不在本 PR
 
-- libmxsec_rasp.so 实际实现 (Sprint 5+ 单独工程, C/C++ + JVMTI)
+- libmxcwpp_rasp.so 实际实现 (Sprint 5+ 单独工程, C/C++ + JVMTI)
 - protect 模式拦截 (默认 observe)
 - 多 OpenJDK 版本兼容 (8/11/17/21 矩阵测试)
 
@@ -102,5 +102,5 @@ curl http://app/admin/exec?cmd=id      # 触发 Runtime.exec
 
 1. M1-2b: Server 端 AntiRootkitReport model + Stage 接 DataType 3006
 2. M1-2c: ant-rootkit Indicator 接入 storyline 故事线
-3. Sprint 5: libmxsec_rasp.so PoC (Runtime.exec hook)
+3. Sprint 5: libmxcwpp_rasp.so PoC (Runtime.exec hook)
 4. Sprint 5: Memshell ASM 字节码扫描

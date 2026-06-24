@@ -1,4 +1,4 @@
-# mxsec v2.0 Phase 1+2 完工 (27 新 PR)
+# mxcwpp v2.0 Phase 1+2 完工 (27 新 PR)
 
 **时间**: 2026-06-08
 **新增 PR**: #95-121 (27 个)
@@ -120,7 +120,7 @@ ref/00 目标 200+; **超额 95%** ✅
 - ClamAV clamd socket 实际部署验证
 
 ### 中优先 (功能完整性)
-- Java RASP libmxsec_rasp.so 实现 (JVMTI + ASM)
+- Java RASP libmxcwpp_rasp.so 实现 (JVMTI + ASM)
 - PHP Zend ext + Python audit hook 实际代码
 - garble + UPX 实测体积 + CPU benchmark
 - 阿里云 SLS protobuf 改写 (当前 JSON)
@@ -137,7 +137,7 @@ ref/00 目标 200+; **超额 95%** ✅
 - 50 YARA 规则 (当前 18)
 - 30 PoC eBPF NPatch 实现 (当前 Log4j PoC)
 - Watchdog systemd integration test
-- Java RASP libmxsec_rasp.so PoC + spring-boot 验证
+- Java RASP libmxcwpp_rasp.so PoC + spring-boot 验证
 
 ## PR 合并指引
 

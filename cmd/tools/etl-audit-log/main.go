@@ -1,4 +1,4 @@
-// Command etl-audit-log 一次性把 MySQL audit_logs 历史数据迁到 ClickHouse mxsec.audit_log。
+// Command etl-audit-log 一次性把 MySQL audit_logs 历史数据迁到 ClickHouse mxcwpp.audit_log。
 //
 // MySQL schema (model.AuditLog):
 //
@@ -18,7 +18,7 @@
 //
 // 用法:
 //
-//	go run ./cmd/tools/etl-audit-log -config /etc/mxsec-platform/server.yaml
+//	go run ./cmd/tools/etl-audit-log -config /etc/mxcwpp/server.yaml
 //	# 可选: -batch 1000 -from-id 0 -dry-run
 package main
 
@@ -34,9 +34,9 @@ import (
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 func main() {

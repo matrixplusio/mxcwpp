@@ -6,15 +6,15 @@ package cli
 
 const (
 	// DefaultLogFile Agent 默认日志路径（与 cmd/agent/main.go logger.Init 对齐）
-	DefaultLogFile = "/var/log/mxsec-agent/agent.log"
+	DefaultLogFile = "/var/log/mxcwpp-agent/agent.log"
 	// DefaultLogDir Agent 日志目录（轮转后的历史文件位于此处）
-	DefaultLogDir = "/var/log/mxsec-agent"
+	DefaultLogDir = "/var/log/mxcwpp-agent"
 	// DefaultIDFile Agent ID 文件
-	DefaultIDFile = "/var/lib/mxsec-agent/agent_id"
+	DefaultIDFile = "/var/lib/mxcwpp-agent/agent_id"
 	// DefaultWorkDir Agent 工作目录
-	DefaultWorkDir = "/var/lib/mxsec-agent"
+	DefaultWorkDir = "/var/lib/mxcwpp-agent"
 	// SystemdUnit systemd 单元名
-	SystemdUnit = "mxsec-agent"
+	SystemdUnit = "mxcwpp-agent"
 )
 
 // CommonOptions 各子命令共享的元数据（构建时嵌入值）

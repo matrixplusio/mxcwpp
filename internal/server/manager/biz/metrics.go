@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/prometheus"
+	"github.com/matrixplusio/mxcwpp/internal/server/prometheus"
 )
 
 var ErrPrometheusDatasourceNotConfigured = errors.New("找不到数据源，请配置 Prometheus 数据源")
@@ -124,53 +124,53 @@ func (s *MetricsService) getLatestMetricsFromPrometheus(ctx context.Context, lab
 	latest := &LatestMetrics{}
 	var firstErr error
 
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_cpu_usage", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_cpu_usage", labels); err == nil && v != nil {
 		latest.CPUUsage = v
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_mem_usage", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_mem_usage", labels); err == nil && v != nil {
 		latest.MemUsage = v
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_disk_usage", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_disk_usage", labels); err == nil && v != nil {
 		latest.DiskUsage = v
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_net_in", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_net_in", labels); err == nil && v != nil {
 		u := uint64(*v)
 		latest.NetBytesRecv = &u
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_net_out", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_net_out", labels); err == nil && v != nil {
 		u := uint64(*v)
 		latest.NetBytesSent = &u
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_disk_read_bytes", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_disk_read_bytes", labels); err == nil && v != nil {
 		u := uint64(*v)
 		latest.DiskReadBytes = &u
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_host_disk_write_bytes", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_host_disk_write_bytes", labels); err == nil && v != nil {
 		u := uint64(*v)
 		latest.DiskWriteBytes = &u
 	} else if err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_agent_cpu_usage", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_agent_cpu_usage", labels); err == nil && v != nil {
 		latest.AgentCPUUsage = v
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_agent_mem_rss", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_agent_mem_rss", labels); err == nil && v != nil {
 		u := uint64(*v)
 		latest.AgentMemRSS = &u
 	}
-	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxsec_agent_mem_percent", labels); err == nil && v != nil {
+	if v, err := s.prometheusClient.GetMetricValue(ctx, "mxcwpp_agent_mem_percent", labels); err == nil && v != nil {
 		latest.AgentMemPercent = v
 	}
 
@@ -205,45 +205,45 @@ func (s *MetricsService) getTimeSeriesFromPrometheus(ctx context.Context, labels
 		step = "1h" // 1 小时
 	}
 
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_cpu_usage", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_cpu_usage", labels, start, end, step); err == nil {
 		timeSeries.CPUUsage = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_mem_usage", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_mem_usage", labels, start, end, step); err == nil {
 		timeSeries.MemUsage = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_disk_usage", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_disk_usage", labels, start, end, step); err == nil {
 		timeSeries.DiskUsage = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_net_in", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_net_in", labels, start, end, step); err == nil {
 		timeSeries.NetIn = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_net_out", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_net_out", labels, start, end, step); err == nil {
 		timeSeries.NetOut = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_disk_read_bytes", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_disk_read_bytes", labels, start, end, step); err == nil {
 		timeSeries.DiskRead = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_host_disk_write_bytes", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_host_disk_write_bytes", labels, start, end, step); err == nil {
 		timeSeries.DiskWrite = convertToTimeSeriesPoints(pts)
 	} else if firstErr == nil {
 		firstErr = err
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_agent_cpu_usage", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_agent_cpu_usage", labels, start, end, step); err == nil {
 		timeSeries.AgentCPU = convertToTimeSeriesPoints(pts)
 	}
-	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxsec_agent_mem_rss", labels, start, end, step); err == nil {
+	if pts, err := s.prometheusClient.GetMetricRange(ctx, "mxcwpp_agent_mem_rss", labels, start, end, step); err == nil {
 		timeSeries.AgentMem = convertToTimeSeriesPoints(pts)
 	}
 

@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm/clause"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 const (

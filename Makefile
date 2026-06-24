@@ -1,4 +1,4 @@
-.PHONY: proto test test-ui test-all test-race security clean help build-server build-consumer build-engine build-vulnsync build-llmproxy build-all-services package-agent package-agent-all package-plugins package-plugins-all package-all package-all-arch dev-docker-up dev-docker-up-d dev-docker-down dev-docker-logs dev-docker-restart pret-docker-up pret-docker-up-d pret-docker-down
+.PHONY: proto test test-ui test-all test-race security clean help build-server build-consumer build-engine build-vulnsync build-llmproxy build-all-services package-agent package-agent-all package-plugins package-plugins-all package-all package-all-arch dev-docker-up dev-docker-up-d dev-docker-down dev-docker-logs dev-docker-restart web-dev pret-docker-up pret-docker-up-d pret-docker-down
 
 # 默认变量
 VERSION ?= 1.0.0
@@ -45,7 +45,11 @@ dev-docker-logs:
 
 dev-docker-restart:
 	@echo "Restarting services..."
-	@cd deploy && docker compose -f docker-compose.dev.yml restart manager ui
+	@cd deploy && docker compose -f docker-compose.dev.yml restart manager
+
+web-dev:
+	@echo "Starting web frontend on host (http://localhost:3000, proxy -> host:8080)..."
+	@cd web && API_TARGET=http://localhost:8080 pnpm dev
 
 pret-docker-up:
 	@echo "Starting Docker pret environment..."
@@ -122,7 +126,7 @@ test:
 	go test ./...
 
 test-ui:
-	cd ui && npm run test
+	cd web && pnpm test
 
 test-all: test test-ui
 
@@ -177,7 +181,7 @@ certs:
 # ============ 帮助 ============
 
 help:
-	@echo "MxSec Platform - Makefile Commands"
+	@echo "MxCwpp Platform - Makefile Commands"
 	@echo ""
 	@echo "代码生成:"
 	@echo "  make proto                  - 生成 Protobuf Go 代码"
@@ -187,7 +191,8 @@ help:
 	@echo "  make dev-docker-up-d        - 启动开发环境 (后台)"
 	@echo "  make dev-docker-down        - 停止开发环境"
 	@echo "  make dev-docker-logs        - 查看日志"
-	@echo "  make dev-docker-restart     - 重启服务 (manager + ui)"
+	@echo "  make dev-docker-restart     - 重启后端服务 (manager)"
+	@echo "  make web-dev                - 本机启动前端 (http://localhost:3000, 热更新快)"
 	@echo "  make pret-docker-up         - 启动压测环境 (前台, 带日志)"
 	@echo "  make pret-docker-up-d       - 启动压测环境 (后台)"
 	@echo "  make pret-docker-down       - 停止压测环境"

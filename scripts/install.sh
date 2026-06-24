@@ -5,7 +5,7 @@
 #   curl -sS http://SERVER_IP:8080/agent/install.sh | bash
 #
 # 或者通过环境变量自定义服务器地址:
-#   MXSEC_HTTP_SERVER=http://192.168.8.140:8080 MXSEC_AGENT_SERVER=192.168.8.140:6751 \
+#   MXCWPP_HTTP_SERVER=http://192.168.8.140:8080 MXCWPP_AGENT_SERVER=192.168.8.140:6751 \
 #   bash -c "$(curl -fsSL http://192.168.8.140:8080/agent/install.sh)"
 #
 # 可选参数:
@@ -27,15 +27,15 @@ NC='\033[0m' # No Color
 # 注意：优先使用环境变量，如果环境变量未设置，脚本中的占位符会被 Manager API 自动替换
 
 # 优先使用环境变量（即使占位符已被后端替换）
-if [ -n "$MXSEC_HTTP_SERVER" ]; then
-    SERVER_HOST="$MXSEC_HTTP_SERVER"
+if [ -n "$MXCWPP_HTTP_SERVER" ]; then
+    SERVER_HOST="$MXCWPP_HTTP_SERVER"
 else
     # 如果环境变量未设置，使用占位符（会被后端替换）
     SERVER_HOST="http://SERVER_HOST_PLACEHOLDER"
 fi
 
-if [ -n "$MXSEC_AGENT_SERVER" ]; then
-    AGENT_SERVER_HOST="$MXSEC_AGENT_SERVER"
+if [ -n "$MXCWPP_AGENT_SERVER" ]; then
+    AGENT_SERVER_HOST="$MXCWPP_AGENT_SERVER"
 else
     # 如果环境变量未设置，使用占位符（会被后端替换）
     AGENT_SERVER_HOST="AGENT_SERVER_PLACEHOLDER"
@@ -43,15 +43,15 @@ fi
 
 # 如果 SERVER_HOST 包含占位符或 0.0.0.0，说明环境变量未设置且后端替换失败，报错
 if [[ "$SERVER_HOST" == *"SERVER_HOST_PLACEHOLDER"* ]] || [[ "$SERVER_HOST" == *"0.0.0.0"* ]]; then
-    echo -e "${RED}Error: SERVER_HOST is not set correctly. Please set MXSEC_HTTP_SERVER environment variable.${NC}"
-    echo -e "${RED}Example: MXSEC_HTTP_SERVER=192.168.8.140:8080${NC}"
+    echo -e "${RED}Error: SERVER_HOST is not set correctly. Please set MXCWPP_HTTP_SERVER environment variable.${NC}"
+    echo -e "${RED}Example: MXCWPP_HTTP_SERVER=192.168.8.140:8080${NC}"
     exit 1
 fi
 
 # 如果 AGENT_SERVER_HOST 包含占位符或 0.0.0.0，说明环境变量未设置且后端替换失败，报错
 if [[ "$AGENT_SERVER_HOST" == *"AGENT_SERVER_PLACEHOLDER"* ]] || [[ "$AGENT_SERVER_HOST" == *"0.0.0.0"* ]]; then
-    echo -e "${RED}Error: AGENT_SERVER_HOST is not set correctly. Please set MXSEC_AGENT_SERVER environment variable.${NC}"
-    echo -e "${RED}Example: MXSEC_AGENT_SERVER=192.168.8.140:6751${NC}"
+    echo -e "${RED}Error: AGENT_SERVER_HOST is not set correctly. Please set MXCWPP_AGENT_SERVER environment variable.${NC}"
+    echo -e "${RED}Example: MXCWPP_AGENT_SERVER=192.168.8.140:6751${NC}"
     exit 1
 fi
 
@@ -59,9 +59,9 @@ fi
 if [[ "$SERVER_HOST" != http://* ]] && [[ "$SERVER_HOST" != https://* ]]; then
     SERVER_HOST="http://${SERVER_HOST}"
 fi
-BUSINESS_LINE="${MXSEC_BUSINESS_LINE:-}"
-ARCH="${MXSEC_ARCH:-$(uname -m)}"
-OS_TYPE="${MXSEC_OS_TYPE:-}"
+BUSINESS_LINE="${MXCWPP_BUSINESS_LINE:-}"
+ARCH="${MXCWPP_ARCH:-$(uname -m)}"
+OS_TYPE="${MXCWPP_OS_TYPE:-}"
 
 # 检测操作系统类型
 detect_os() {
@@ -129,7 +129,7 @@ download_package() {
     echo -e "${GREEN}Download URL: ${DOWNLOAD_URL}${NC}" >&2
     
     TEMP_DIR=$(mktemp -d)
-    PACKAGE_FILE="${TEMP_DIR}/mxsec-agent.${PKG_TYPE}"
+    PACKAGE_FILE="${TEMP_DIR}/mxcwpp-agent.${PKG_TYPE}"
     
     # 下载文件
     if command -v curl &> /dev/null; then
@@ -238,14 +238,14 @@ configure_business_line() {
         echo -e "${GREEN}Configuring business line: ${BUSINESS_LINE}${NC}"
         
         # 创建 systemd override 目录
-        OVERRIDE_DIR="/etc/systemd/system/mxsec-agent.service.d"
+        OVERRIDE_DIR="/etc/systemd/system/mxcwpp-agent.service.d"
         mkdir -p "$OVERRIDE_DIR"
         
         # 创建 override 配置文件
         OVERRIDE_FILE="$OVERRIDE_DIR/business-line.conf"
         cat > "$OVERRIDE_FILE" <<EOF
 [Service]
-Environment="MXSEC_BUSINESS_LINE=${BUSINESS_LINE}"
+Environment="MXCWPP_BUSINESS_LINE=${BUSINESS_LINE}"
 EOF
         
         echo -e "${GREEN}Business line configured in ${OVERRIDE_FILE}${NC}"
@@ -260,18 +260,18 @@ start_service() {
     configure_business_line
     
     systemctl daemon-reload
-    systemctl enable mxsec-agent
-    systemctl start mxsec-agent
+    systemctl enable mxcwpp-agent
+    systemctl start mxcwpp-agent
     
     # 等待服务启动
     sleep 2
     
-    if systemctl is-active --quiet mxsec-agent; then
+    if systemctl is-active --quiet mxcwpp-agent; then
         echo -e "${GREEN}Agent started successfully!${NC}"
-        echo -e "${GREEN}Status: $(systemctl status mxsec-agent --no-pager -l | head -n 3)${NC}"
+        echo -e "${GREEN}Status: $(systemctl status mxcwpp-agent --no-pager -l | head -n 3)${NC}"
     else
         echo -e "${YELLOW}Warning: Agent service may not have started properly${NC}"
-        echo -e "${YELLOW}Check logs: journalctl -u mxsec-agent${NC}"
+        echo -e "${YELLOW}Check logs: journalctl -u mxcwpp-agent${NC}"
     fi
 }
 

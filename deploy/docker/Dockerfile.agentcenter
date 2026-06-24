@@ -39,9 +39,9 @@ RUN apk add --no-cache ca-certificates tzdata netcat-openbsd
 
 COPY --from=builder /app/agentcenter /usr/bin/agentcenter
 
-RUN mkdir -p /etc/mxsec-platform/certs /var/log/mxsec-platform /opt/mxsec-platform/plugins
+RUN mkdir -p /etc/mxcwpp/certs /var/log/mxcwpp /opt/mxcwpp/plugins
 
-WORKDIR /opt/mxsec-platform
+WORKDIR /opt/mxcwpp
 
 EXPOSE 6751
 
@@ -52,4 +52,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
 # Docker 默认 user namespace 未映射，容器 root != 宿主 root，影响有限
 
 ENTRYPOINT ["/usr/bin/agentcenter"]
-CMD ["-config", "/etc/mxsec-platform/server.yaml"]
+CMD ["-config", "/etc/mxcwpp/server.yaml"]

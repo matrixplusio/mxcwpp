@@ -10,11 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// RuleSyncScheduler 把规则版本变更推送到 AC (通过 Kafka mxsec.engine.command)。
+// RuleSyncScheduler 把规则版本变更推送到 AC (通过 Kafka mxcwpp.engine.command)。
 //
 // 触发条件:
 //   - 周期 tick (默认 5min) 检查 detection_rules / agent_rules 表 updated_at > lastSyncAt
-//   - 命中变更时 → 推 mxsec.engine.command (type=rule_sync, payload=rule_id 列表)
+//   - 命中变更时 → 推 mxcwpp.engine.command (type=rule_sync, payload=rule_id 列表)
 //
 // AC 端 commandsub.Consumer (PR15) 接收 + transfer.PushToAgents 下发。
 type RuleSyncScheduler struct {
@@ -30,7 +30,7 @@ func NewRuleSyncScheduler(brokers []string, topic string, tick time.Duration, lo
 		return nil, fmt.Errorf("rule_sync: brokers must not be empty")
 	}
 	if topic == "" {
-		topic = "mxsec.engine.command"
+		topic = "mxcwpp.engine.command"
 	}
 	if tick <= 0 {
 		tick = 5 * time.Minute

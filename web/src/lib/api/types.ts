@@ -741,6 +741,50 @@ export interface KubeCluster {
   healthScore: number;
   apiServer: string;
   remark?: string;
+  auditToken?: string;
+  gcpEnabled?: boolean;
+  gcpProjectId?: string;
+  gcpSubscription?: string;
+  createdAt: string;
+  // getCluster 详情额外返回（列表接口无）
+  summary?: { nodes: number; pods: number; namespaces: number; deployments: number; services: number; alarms: number };
+  risks?: { alarms: number; baseline: number; events: number };
+  uptime?: string;
+  lastHeartbeat?: string;
+  webhookURL?: string;
+}
+
+export interface KubeNode {
+  name: string;
+  status: string;
+  roles: string;
+  ip: string;
+  os: string;
+  cpuPercent: number;
+  memoryPercent: number;
+  podCount: number;
+  kubeletVersion: string;
+}
+
+export interface KubePod {
+  name: string;
+  namespace: string;
+  status: string;
+  readyContainers: number;
+  totalContainers: number;
+  restarts: number;
+  nodeName: string;
+  podIp: string;
+  age: string;
+}
+
+export interface KubeWorkload {
+  name: string;
+  type: string;
+  namespace: string;
+  readyReplicas: number;
+  desiredReplicas: number;
+  images: string;
   createdAt: string;
 }
 export interface KubeClusterStats { total: number; running: number; nodes: number; pods: number; }
@@ -771,18 +815,38 @@ export interface KubeEvent {
   createdAt: string;
 }
 
+export interface KubeAffectedResource { kind: string; name: string; namespace: string }
 export interface KubeBaselineResult {
   id: number;
   checkId: string;
+  checkName?: string;
   category: string;
   title: string;
+  description?: string;
   severity: Severity;
   clusterName: string;
-  result: string; // pass / fail
+  result: string; // pass / fail / error
+  remediation?: string;
+  benchmark?: string;
+  affectedResources?: KubeAffectedResource[];
   checkedAt: string;
 }
 export interface KubeBaselineStats { totalChecks: number; passed: number; failed: number; passRate: number; }
 export interface KubeBaselineList { items: KubeBaselineResult[]; total: number; stats: KubeBaselineStats; }
+export interface KubeBaselineTask {
+  id: number;
+  clusterId: number;
+  clusterName: string;
+  status: string; // running / done / failed
+  total: number;
+  passed: number;
+  failed: number;
+  errorCnt: number;
+  passRate: number;
+  startedAt: string;
+  finishedAt?: string;
+  createdAt: string;
+}
 
 export interface KubeBaselineAlert {
   id: number;
@@ -839,6 +903,8 @@ export interface KubeWhitelist {
 export interface KubeImageScan {
   id: number;
   image: string;
+  clusterId?: number;
+  source: string; // manual / cluster / registry
   digest: string;
   os: string;
   totalVulns: number;
@@ -847,6 +913,17 @@ export interface KubeImageScan {
   status: string; // pending / scanning / completed / failed
   errorMsg?: string;
   scannedAt?: string;
+  createdAt: string;
+}
+export interface KubeImageRegistry {
+  id: number;
+  name: string;
+  type: string; // basic / gcr / gar / acr
+  url: string;
+  username: string;
+  insecure: boolean;
+  imageCount: number;
+  lastSyncAt?: string;
   createdAt: string;
 }
 export interface KubeImageVulnerability {
@@ -858,6 +935,25 @@ export interface KubeImageVulnerability {
   fixedVersion: string;
   severity: Severity;
   title: string;
+}
+
+// 集群内扫描器（trivy-operator）状态机
+export type KubeScannerState = "not_installed" | "installing" | "ready" | "degraded" | "uninstalling";
+export interface KubeScannerStatus {
+  state: KubeScannerState;
+  operatorVersion: string;
+  readyReplicas: number;
+  webhookEnabled: boolean;
+  lastSyncAt?: string;
+  lastReportCount: number;
+  lastError: string;
+}
+export interface KubeScannerPreflight {
+  k8sVersion: string;
+  canAutoInstall: boolean;
+  namespaceExists: boolean;
+  operatorExists: boolean;
+  reason: string;
 }
 
 export type ServiceAlertSeverity = "critical" | "warning" | "info";
@@ -944,6 +1040,41 @@ export interface BaselineTask {
   executed_at?: string;
   completed_at?: string;
   updated_at: string;
+}
+
+// 任务检查项 - 不通过的主机（受影响资源/不通过原因）
+export interface BaselineCheckAffectedHost {
+  host_id: string;
+  hostname: string;
+  actual: string; // 实际值
+}
+
+// 任务检查项（按规则聚合多台主机的合规结果）
+export interface BaselineTaskCheckItem {
+  rule_id: string;
+  title: string;
+  category: string;
+  severity: Severity;
+  description: string; // 说明
+  expected: string; // 检查依据（期望值）
+  remediation: string; // 修复建议
+  result: "pass" | "fail" | "error" | "na"; // 合规结果
+  host_total: number;
+  host_passed: number;
+  host_failed: number;
+  host_error: number;
+  affected_hosts: BaselineCheckAffectedHost[];
+}
+
+// 任务检查项明细响应
+export interface BaselineTaskChecks {
+  task: BaselineTask;
+  total: number;
+  passed: number;
+  failed: number;
+  error_cnt: number;
+  pass_rate: number; // 0-1
+  items: BaselineTaskCheckItem[];
 }
 
 // 可修复项（基线修复）

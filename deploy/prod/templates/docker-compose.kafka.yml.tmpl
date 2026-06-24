@@ -1,9 +1,9 @@
-name: mxsec-kafka
+name: mxcwpp-kafka
 
 services:
   kafka-1:
     image: {{ .KafkaImage }}
-    container_name: mxsec-kafka-1
+    container_name: mxcwpp-kafka-1
     restart: always
     network_mode: host
     environment:
@@ -38,7 +38,7 @@ services:
 
   kafka-2:
     image: {{ .KafkaImage }}
-    container_name: mxsec-kafka-2
+    container_name: mxcwpp-kafka-2
     restart: always
     network_mode: host
     environment:
@@ -73,7 +73,7 @@ services:
 
   kafka-3:
     image: {{ .KafkaImage }}
-    container_name: mxsec-kafka-3
+    container_name: mxcwpp-kafka-3
     restart: always
     network_mode: host
     environment:

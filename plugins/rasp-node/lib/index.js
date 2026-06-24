@@ -1,9 +1,9 @@
 /**
- * @mxsec/rasp — Node.js RASP entrypoint (P4-13).
+ * @mxcwpp/rasp — Node.js RASP entrypoint (P4-13).
  *
  * 用法:
- *   require('@mxsec/rasp').install({
- *     udsPath: '/var/run/mxsec/rasp-node.sock',
+ *   require('@mxcwpp/rasp').install({
+ *     udsPath: '/var/run/mxcwpp/rasp-node.sock',
  *     tenantId: 't-default',
  *   });
  *
@@ -24,7 +24,7 @@ const Reporter = require('./reporter');
 const Hooks = require('./hooks');
 
 const DEFAULT_CONFIG = {
-  udsPath: '/var/run/mxsec/rasp-node.sock',
+  udsPath: '/var/run/mxcwpp/rasp-node.sock',
   tenantId: 't-default',
   enabled: true,
   queueCapacity: 10000,

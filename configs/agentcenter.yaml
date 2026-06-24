@@ -1,4 +1,4 @@
-# mxsec AgentCenter 配置 (P1-5)
+# mxcwpp AgentCenter 配置 (P1-5)
 
 grpc_addr: ":6751"
 http_addr: ":6752"
@@ -7,9 +7,9 @@ manager_endpoint: "http://localhost:8080"
 internal_secret: ""
 
 # mTLS (PR4 推荐启用)
-tls_cert_file: "/var/lib/mxsec-ac/certs/server.crt"
-tls_key_file: "/var/lib/mxsec-ac/certs/server.key"
-ca_file: "/var/lib/mxsec-ac/certs/ca.crt"
+tls_cert_file: "/var/lib/mxcwpp-ac/certs/server.crt"
+tls_key_file: "/var/lib/mxcwpp-ac/certs/server.key"
+ca_file: "/var/lib/mxcwpp-ac/certs/ca.crt"
 
 database:
   dsn: ""

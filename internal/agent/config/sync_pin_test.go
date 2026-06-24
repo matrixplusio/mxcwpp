@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
 )
 
 func makeCAPEM(t *testing.T, cn string) []byte {

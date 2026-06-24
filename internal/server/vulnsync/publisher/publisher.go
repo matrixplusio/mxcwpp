@@ -1,16 +1,15 @@
-// Package publisher 把 Advisory 推送到 Kafka mxsec.vuln.advisory。
+// Package publisher 把 advisory.AdvisoryMessage 推送到 Kafka mxcwpp.vuln.advisory。
 package publisher
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/IBM/sarama"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/vulnsync/sources"
+	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
 
 // Publisher 包装 sarama.SyncProducer。
@@ -26,7 +25,7 @@ func New(brokers []string, topic string, logger *zap.Logger) (*Publisher, error)
 		return nil, fmt.Errorf("vulnsync publisher: brokers must not be empty")
 	}
 	if topic == "" {
-		topic = "mxsec.vuln.advisory"
+		topic = "mxcwpp.vuln.advisory"
 	}
 	if logger == nil {
 		logger = zap.NewNop()
@@ -46,32 +45,33 @@ func New(brokers []string, topic string, logger *zap.Logger) (*Publisher, error)
 	return &Publisher{producer: p, topic: topic, logger: logger}, nil
 }
 
-// PublishAdvisory 推送单条 advisory。
+// PublishAdvisory 推送单条富 advisory 消息。
 //
-// Partition Key = source:source_id 保证同源同 ID 的更新顺序一致。
-func (p *Publisher) PublishAdvisory(ctx context.Context, a sources.Advisory) error {
-	if a.ModifiedAt.IsZero() {
-		a.ModifiedAt = time.Now().UTC()
+// Partition Key = source:advisory_id，保证同源同 advisory 的更新顺序一致。
+// 富 payload（含 AffectedPkgs NEVRA/fixed_version + OS gate）由 Manager consumer
+// 反序列化后交给 Matcher 比对主机软件清单。
+func (p *Publisher) PublishAdvisory(ctx context.Context, msg advisory.AdvisoryMessage) error {
+	if msg.Advisory == nil {
+		return fmt.Errorf("vulnsync publisher: nil advisory payload")
 	}
-	body, err := json.Marshal(a)
+	body, err := msg.Marshal()
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	key := a.Source + ":" + a.SourceID
-	msg := &sarama.ProducerMessage{
+	pm := &sarama.ProducerMessage{
 		Topic: p.topic,
-		Key:   sarama.StringEncoder(key),
+		Key:   sarama.StringEncoder(msg.PartitionKey()),
 		Value: sarama.ByteEncoder(body),
 		Headers: []sarama.RecordHeader{
-			{Key: []byte("source"), Value: []byte(a.Source)},
-			{Key: []byte("cve"), Value: []byte(a.CVE)},
-			{Key: []byte("severity"), Value: []byte(a.Severity)},
+			{Key: []byte("source"), Value: []byte(msg.Source)},
+			{Key: []byte("cve"), Value: []byte(strings.Join(msg.Advisory.CVEIDs, ","))},
+			{Key: []byte("severity"), Value: []byte(string(msg.Advisory.Severity))},
 		},
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	part, off, err := p.producer.SendMessage(msg)
+	part, off, err := p.producer.SendMessage(pm)
 	if err != nil {
 		return fmt.Errorf("send: %w", err)
 	}
@@ -80,18 +80,18 @@ func (p *Publisher) PublishAdvisory(ctx context.Context, a sources.Advisory) err
 			zap.String("topic", p.topic),
 			zap.Int32("partition", part),
 			zap.Int64("offset", off),
-			zap.String("source", a.Source),
-			zap.String("source_id", a.SourceID),
+			zap.String("source", msg.Source),
+			zap.String("advisory_id", msg.Advisory.AdvisoryID),
 		)
 	}
 	return nil
 }
 
-// PublishBatch 批量推送。
-func (p *Publisher) PublishBatch(ctx context.Context, advs []sources.Advisory) (int, error) {
+// PublishBatch 批量推送。返回成功条数；遇错即停并返回已成功数。
+func (p *Publisher) PublishBatch(ctx context.Context, msgs []advisory.AdvisoryMessage) (int, error) {
 	succ := 0
-	for _, a := range advs {
-		if err := p.PublishAdvisory(ctx, a); err != nil {
+	for _, m := range msgs {
+		if err := p.PublishAdvisory(ctx, m); err != nil {
 			return succ, err
 		}
 		succ++

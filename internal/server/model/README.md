@@ -97,13 +97,13 @@
 
 ```go
 import (
-    "github.com/imkerbos/mxsec-platform/internal/server/model"
+    "github.com/matrixplusio/mxcwpp/internal/server/model"
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
 )
 
 // 连接数据库
-dsn := "user:password@tcp(localhost:3306)/mxsec?charset=utf8mb4&parseTime=True&loc=Local"
+dsn := "user:password@tcp(localhost:3306)/mxcwpp?charset=utf8mb4&parseTime=True&loc=Local"
 db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 if err != nil {
     panic(err)

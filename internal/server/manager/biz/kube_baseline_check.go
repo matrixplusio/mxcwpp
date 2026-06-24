@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // CheckFunc 基线检查函数签名
@@ -336,13 +336,25 @@ func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, e
 		return nil, fmt.Errorf("读取基线规则失败: %w", err)
 	}
 
-	// 先删除该集群旧的检查结果
-	c.db.Where("cluster_id = ?", clusterID).Delete(&model.KubeBaseline{})
+	// 清理 refactor 前遗留的无任务结果行
+	c.db.Where("cluster_id = ? AND (task_id IS NULL OR task_id = 0)", clusterID).Delete(&model.KubeBaseline{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	now := model.LocalTime(time.Now())
+
+	// 任务为指向：每次检测创建一个任务，结果挂在任务下（保留历史）
+	task := model.KubeBaselineTask{
+		ClusterID:   clusterID,
+		ClusterName: cluster.Name,
+		Status:      model.BaselineTaskRunning,
+		StartedAt:   now,
+	}
+	if err := c.db.Create(&task).Error; err != nil {
+		return nil, fmt.Errorf("创建基线任务失败: %w", err)
+	}
+
 	var results []model.KubeBaseline
 
 	for _, rule := range rules {
@@ -369,6 +381,7 @@ func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, e
 		baseline := model.KubeBaseline{
 			ClusterID:         clusterID,
 			ClusterName:       cluster.Name,
+			TaskID:            task.ID,
 			Category:          rule.Category,
 			CheckID:           rule.CheckID,
 			CheckName:         rule.CheckName,
@@ -389,9 +402,50 @@ func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, e
 		results = append(results, baseline)
 	}
 
+	// 统计并完成任务
+	passed, failed, errCnt := 0, 0, 0
+	for _, r := range results {
+		switch r.Result {
+		case "pass":
+			passed++
+		case "fail":
+			failed++
+		default:
+			errCnt++
+		}
+	}
+	rate := 0.0
+	if len(results) > 0 {
+		rate = float64(passed) / float64(len(results)) * 100
+	}
+	fin := model.LocalTime(time.Now())
+	c.db.Model(&task).Updates(map[string]any{
+		"status":      model.BaselineTaskDone,
+		"total":       len(results),
+		"passed":      passed,
+		"failed":      failed,
+		"error_cnt":   errCnt,
+		"pass_rate":   rate,
+		"finished_at": fin,
+	})
+	c.pruneOldTasks(clusterID, 10)
+
 	c.updateHealthScore(clusterID, results)
 	c.syncBaselineAlerts(clusterID, cluster.Name, results)
 	return results, nil
+}
+
+// pruneOldTasks 仅保留每集群最近 keep 个任务，删除更早的任务及其结果行
+func (c *KubeBaselineChecker) pruneOldTasks(clusterID uint, keep int) {
+	var ids []uint
+	c.db.Model(&model.KubeBaselineTask{}).
+		Where("cluster_id = ?", clusterID).
+		Order("id DESC").Offset(keep).Pluck("id", &ids)
+	if len(ids) == 0 {
+		return
+	}
+	c.db.Where("task_id IN ?", ids).Delete(&model.KubeBaseline{})
+	c.db.Where("id IN ?", ids).Delete(&model.KubeBaselineTask{})
 }
 
 // syncBaselineAlerts ��据检查结果同步基线告警（fail 创建/更新，pass 自动恢复）

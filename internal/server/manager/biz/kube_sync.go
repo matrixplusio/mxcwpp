@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/kube"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/kube"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // KubeSyncService 集群状态同步服务
@@ -17,6 +17,7 @@ type KubeSyncService struct {
 	logger       *zap.Logger
 	kubeClient   *KubeClientManager
 	alarmService *kube.KubeAlarmService
+	scanner      *KubeVulnOperator
 	interval     time.Duration
 	stopCh       chan struct{}
 }
@@ -28,6 +29,7 @@ func NewKubeSyncService(db *gorm.DB, logger *zap.Logger, kubeClient *KubeClientM
 		logger:       logger,
 		kubeClient:   kubeClient,
 		alarmService: alarmService,
+		scanner:      NewKubeVulnOperator(db, logger, kubeClient),
 		interval:     5 * time.Minute,
 		stopCh:       make(chan struct{}),
 	}
@@ -114,6 +116,30 @@ func (s *KubeSyncService) syncCluster(cluster model.KubeCluster) {
 	}
 
 	s.db.Model(&cluster).Updates(updates)
+
+	// 集群内扫描器：刷新状态（漂移检测）+ Pull 同步漏洞报告（Push 的兜底）
+	s.syncScanner(cluster.ID)
+}
+
+// syncScanner 刷新扫描器状态并 Pull 同步漏洞报告（仅对已安装扫描器的集群）
+func (s *KubeSyncService) syncScanner(clusterID uint) {
+	var rec model.KubeScanner
+	if err := s.db.Where("cluster_id = ?", clusterID).First(&rec).Error; err != nil {
+		return // 未安装扫描器
+	}
+	if rec.State == model.ScannerStateNotInstalled || rec.State == model.ScannerStateUninstalling {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if _, err := s.scanner.Status(ctx, clusterID); err != nil {
+		return
+	}
+	if _, err := s.scanner.SyncReports(ctx, clusterID); err != nil {
+		s.logger.Warn("扫描器报告同步失败", zap.Uint("clusterID", clusterID), zap.Error(err))
+	}
 }
 
 // createNodeNotReadyAlarm 为 NotReady 节点创建告警

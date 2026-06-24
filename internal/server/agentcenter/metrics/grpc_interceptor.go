@@ -13,9 +13,9 @@ import (
 )
 
 // BuildInfoGauge AC 进程 build 元信息（value=1，labels 含 version/pid/commit）
-// monitor.go 用 PromQL `mxsec_build_info{job="mxsec-agentcenter"}` 拉取 version + pid
+// monitor.go 用 PromQL `mxcwpp_build_info{job="mxcwpp-agentcenter"}` 拉取 version + pid
 var BuildInfoGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "mxsec_build_info",
+	Name: "mxcwpp_build_info",
 	Help: "AC 进程 build 元信息（value=1，labels 含 version/pid/commit）",
 }, []string{"version", "pid", "commit"})
 
@@ -32,28 +32,28 @@ func SetBuildInfo(version, commit string) {
 
 // gRPC server-side metrics（business RED 指标）
 //
-// Rate     → rate(mxsec_ac_grpc_handled_total[1m])
-// Errors   → rate(mxsec_ac_grpc_handled_total{code!="OK"}[1m])
-// Duration → histogram_quantile(0.99, rate(mxsec_ac_grpc_duration_seconds_bucket[5m]))
+// Rate     → rate(mxcwpp_ac_grpc_handled_total[1m])
+// Errors   → rate(mxcwpp_ac_grpc_handled_total{code!="OK"}[1m])
+// Duration → histogram_quantile(0.99, rate(mxcwpp_ac_grpc_duration_seconds_bucket[5m]))
 var (
 	grpcHandledTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "mxsec_ac_grpc_handled_total",
+		Name: "mxcwpp_ac_grpc_handled_total",
 		Help: "Total number of RPCs completed on the AgentCenter gRPC server, regardless of success or failure.",
 	}, []string{"grpc_type", "grpc_method", "grpc_code"})
 
 	grpcDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "mxsec_ac_grpc_duration_seconds",
+		Name:    "mxcwpp_ac_grpc_duration_seconds",
 		Help:    "Histogram of response latency (seconds) of gRPC handlers on AgentCenter, by method.",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	}, []string{"grpc_type", "grpc_method"})
 
 	grpcStreamMessagesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "mxsec_ac_grpc_msg_received_total",
+		Name: "mxcwpp_ac_grpc_msg_received_total",
 		Help: "Total number of stream messages received on AgentCenter (Agent → Server).",
 	}, []string{"grpc_method"})
 
 	grpcStreamMessagesSent = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "mxsec_ac_grpc_msg_sent_total",
+		Name: "mxcwpp_ac_grpc_msg_sent_total",
 		Help: "Total number of stream messages sent from AgentCenter (Server → Agent).",
 	}, []string{"grpc_method"})
 )

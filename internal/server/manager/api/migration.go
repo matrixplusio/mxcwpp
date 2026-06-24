@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/migration/mvp1"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/migration/mvp1"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // MigrationHandler 迁移助手 API 处理器

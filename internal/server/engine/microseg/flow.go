@@ -63,7 +63,7 @@ type FlowAggregate struct {
 
 // Collector 内存聚合 5min FlowEvent。
 //
-// Phase 1 目的: 周期性把聚合后的 FlowAggregate 推送到 Kafka mxsec.engine.feedback,
+// Phase 1 目的: 周期性把聚合后的 FlowAggregate 推送到 Kafka mxcwpp.engine.feedback,
 // Phase 2 拓扑/策略推荐时拉取分析。
 type Collector struct {
 	mu         sync.Mutex

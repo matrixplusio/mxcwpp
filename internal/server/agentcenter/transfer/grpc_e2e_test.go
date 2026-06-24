@@ -16,11 +16,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
-	"github.com/imkerbos/mxsec-platform/internal/deploy/cluster"
-	acserver "github.com/imkerbos/mxsec-platform/internal/server/agentcenter/server"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
+	"github.com/matrixplusio/mxcwpp/internal/deploy/cluster"
+	acserver "github.com/matrixplusio/mxcwpp/internal/server/agentcenter/server"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 )
 
 // enrollStub 用真实的 peerLeafCert / enrollTokenFromCtx / enrollTokenValid / certissue.SignAgentCert

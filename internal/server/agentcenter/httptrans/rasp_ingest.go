@@ -5,7 +5,7 @@
 //	业务进程 → 本地 UDS (rasp-java.sock / rasp-py.sock / rasp-php.sock / rasp-node.sock / rasp-go.sock)
 //	  → Agent rasp_uds.Listener 收 4 byte BE length + JSON 帧
 //	  → Agent 批量 POST 到本 endpoint
-//	  → AC 校验 + 落 Kafka topic mxsec.agent.rasp
+//	  → AC 校验 + 落 Kafka topic mxcwpp.agent.rasp
 //	  → Consumer/Engine RASPStage 消费 → Alert
 //
 // 严格 read-only RASP 哲学: 这里强制改 mode=observe, 不接受业务进程上报的 protect.
@@ -23,7 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 )
 
 // RaspEvent Agent 转发上来的 RASP 事件 (与 plugins/rasp-* 反序列化一致).

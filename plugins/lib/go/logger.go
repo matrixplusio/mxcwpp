@@ -7,7 +7,7 @@ import (
 )
 
 // NewPluginLogger 创建插件专用的 logger（所有插件统一使用）
-// 输出到 stderr，由 Agent 重定向到 /var/log/mxsec-agent/plugins/{plugin}.log
+// 输出到 stderr，由 Agent 重定向到 /var/log/mxcwpp-agent/plugins/{plugin}.log
 func NewPluginLogger() (*zap.Logger, error) {
 	config := zap.NewProductionConfig()
 	config.OutputPaths = []string{"stderr"}

@@ -119,8 +119,8 @@ func TestDeriveSubscope(t *testing.T) {
 		{"datadog", "/opt/datadog-agent/bin/agent", "embedded", "go_buildinfo", "x", SubscopeMonitoringAgent},
 		{"node_exporter", "/usr/local/bin/node_exporter", "embedded", "go_buildinfo", "x", SubscopeMonitoringAgent},
 
-		// 安全 agent (mxsec 自身)
-		{"mxsec-agent self", "/usr/bin/mxsec-agent", "embedded", "go_buildinfo", "golang.org/x/crypto", SubscopeSecurityAgent},
+		// 安全 agent (mxcwpp 自身)
+		{"mxcwpp-agent self", "/usr/bin/mxcwpp-agent", "embedded", "go_buildinfo", "golang.org/x/crypto", SubscopeSecurityAgent},
 
 		// 真业务 binary (路径不匹配系统)
 		{"business go", "/opt/app/myservice", "embedded", "go_buildinfo", "x", SubscopeBusinessBinary},

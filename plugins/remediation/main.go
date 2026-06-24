@@ -15,8 +15,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	plugins "github.com/imkerbos/mxsec-platform/plugins/lib/go"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	plugins "github.com/matrixplusio/mxcwpp/plugins/lib/go"
 )
 
 var (

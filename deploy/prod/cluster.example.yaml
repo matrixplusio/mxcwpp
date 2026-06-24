@@ -1,4 +1,4 @@
-api_version: mxsec.io/v1alpha1
+api_version: mxcwpp.io/v1alpha1
 kind: ClusterConfig
 
 metadata:
@@ -7,13 +7,13 @@ metadata:
 
 release:
   version: v1.0.0
-  install_dir: /opt/mxsec-platform
-  data_root: /data/mxsec
+  install_dir: /opt/mxcwpp
+  data_root: /data/mxcwpp
   timezone: Asia/Shanghai
 
 registry:
   domain: harbor.example.com
-  namespace: mxsec
+  namespace: mxcwpp
   username: deployer
   password: change-me
 
@@ -56,8 +56,8 @@ app:
 infrastructure:
   mysql:
     root_password: change-root-password
-    database: mxsec
-    user: mxsec_user
+    database: mxcwpp
+    user: mxcwpp_user
     password: change-mysql-password
     port: 13306
   redis:
@@ -65,7 +65,7 @@ infrastructure:
     port: 16379
     db: 0
   clickhouse:
-    database: mxsec
+    database: mxcwpp
     user: default
     password: change-clickhouse-password
     http_port: 8123

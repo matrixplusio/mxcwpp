@@ -13,17 +13,17 @@ import (
 	grpcLib "google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
-	"github.com/imkerbos/mxsec-platform/internal/agent/buffer"
-	"github.com/imkerbos/mxsec-platform/internal/agent/cache"
-	"github.com/imkerbos/mxsec-platform/internal/agent/config"
-	"github.com/imkerbos/mxsec-platform/internal/agent/connection"
-	"github.com/imkerbos/mxsec-platform/internal/agent/dependency"
-	"github.com/imkerbos/mxsec-platform/internal/agent/updater"
-	"github.com/imkerbos/mxsec-platform/internal/agent/wal"
-	"github.com/imkerbos/mxsec-platform/internal/common/certissue"
-	_ "github.com/imkerbos/mxsec-platform/internal/common/compressor" // 注册 Snappy 压缩器
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/agent/buffer"
+	"github.com/matrixplusio/mxcwpp/internal/agent/cache"
+	"github.com/matrixplusio/mxcwpp/internal/agent/config"
+	"github.com/matrixplusio/mxcwpp/internal/agent/connection"
+	"github.com/matrixplusio/mxcwpp/internal/agent/dependency"
+	"github.com/matrixplusio/mxcwpp/internal/agent/updater"
+	"github.com/matrixplusio/mxcwpp/internal/agent/wal"
+	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
+	_ "github.com/matrixplusio/mxcwpp/internal/common/compressor" // 注册 Snappy 压缩器
 )
 
 // sendInterval 批量发送间隔（与 Elkeid 一致）

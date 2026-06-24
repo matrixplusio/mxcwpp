@@ -5,7 +5,7 @@
 //   - 场景路由 (告警分析 / Storyline 总结 / 自然语言转查询 / 规则起草)
 //   - Redis 24h 缓存 (入参 SHA256 -> 响应)
 //   - 主厂商失败 Fallback (3 次失败黑名单 5min)
-//   - 租户级 token 上限 + 月度成本告警 + 审计入 mxsec.llm.audit
+//   - 租户级 token 上限 + 月度成本告警 + 审计入 mxcwpp.llm.audit
 //
 // 设计文档: docs/llmproxy-design.md
 package main
@@ -23,11 +23,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/provider"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/router"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/provider"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/redact"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/router"
 )
 
 func main() {

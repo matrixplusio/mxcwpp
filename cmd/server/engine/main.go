@@ -1,9 +1,9 @@
 // Package main 是 Engine 主程序入口。
 //
 // Engine 是 v2.0 六微服务架构中的检测分析引擎,职责:
-//   - 订阅 Kafka mxsec.agent.* (ConsumerGroup B "mxsec-engine")
+//   - 订阅 Kafka mxcwpp.agent.* (ConsumerGroup B "mxcwpp-engine")
 //   - 多层引擎: CEL 规则 + 序列检测 + ONNX ML + Storyline + K8s Audit
-//   - 产出 mxsec.engine.alert / storyline / feedback
+//   - 产出 mxcwpp.engine.alert / storyline / feedback
 //
 // PR67 起: 配置走 viper 统一加载, 仅保留 --config flag。
 // 兼容: 老部署 env 直接覆盖, 无 yaml 文件也能起 (走 default + env)。
@@ -24,13 +24,13 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/observability"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/celengine"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/storyline"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/observability"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/celengine"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/storyline"
 )
 
 func main() {

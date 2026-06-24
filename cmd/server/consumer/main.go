@@ -15,20 +15,20 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/gctune"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer"
-	consumermetrics "github.com/imkerbos/mxsec-platform/internal/server/consumer/metrics"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/siem"
-	"github.com/imkerbos/mxsec-platform/internal/server/consumer/writer"
-	"github.com/imkerbos/mxsec-platform/internal/server/database"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/anomaly"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/baseline"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/rulesync"
-	"github.com/imkerbos/mxsec-platform/internal/server/engine/storyline"
-	serverLogger "github.com/imkerbos/mxsec-platform/internal/server/logger"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer"
+	consumermetrics "github.com/matrixplusio/mxcwpp/internal/server/consumer/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/siem"
+	"github.com/matrixplusio/mxcwpp/internal/server/consumer/writer"
+	"github.com/matrixplusio/mxcwpp/internal/server/database"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/anomaly"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/baseline"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/rulesync"
+	"github.com/matrixplusio/mxcwpp/internal/server/engine/storyline"
+	serverLogger "github.com/matrixplusio/mxcwpp/internal/server/logger"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 	"gorm.io/gorm"
 )
 
@@ -60,7 +60,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Printf("mxsec-consumer %s\n", buildVersion)
+		fmt.Printf("mxcwpp-consumer %s\n", buildVersion)
 		return
 	}
 
@@ -197,7 +197,7 @@ func main() {
 	// 7. 创建消费路由器
 	router, err := consumer.NewRouter(
 		cfg.Kafka.Brokers,
-		"mxsec-consumer",
+		"mxcwpp-consumer",
 		cfg.Kafka.TopicPrefix,
 		mysqlWriter,
 		chWriter,

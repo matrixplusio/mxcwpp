@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mxsec-rasp-py"
+name = "mxcwpp-rasp-py"
 version = "0.1.0"
-description = "mxsec Python RASP — PEP 578 audit hook based runtime application self-protection"
-authors = [{name = "mxsec dev", email = "dev@mxsec.local"}]
+description = "mxcwpp Python RASP — PEP 578 audit hook based runtime application self-protection"
+authors = [{name = "mxcwpp dev", email = "dev@mxcwpp.local"}]
 license = {text = "Proprietary"}
 requires-python = ">=3.8"
-keywords = ["security", "rasp", "audit", "mxsec"]
+keywords = ["security", "rasp", "audit", "mxcwpp"]
 
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -24,4 +24,4 @@ classifiers = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mxsec_rasp_py*"]
+include = ["mxcwpp_rasp_py*"]

@@ -73,7 +73,7 @@ func (c *ClientGoKubeAPIClient) ApplyNetworkPolicy(ctx context.Context, ns, name
 	}
 
 	opts := metav1.ApplyOptions{
-		FieldManager: "mxsec-microseg",
+		FieldManager: "mxcwpp-microseg",
 		Force:        true,
 	}
 	if dryRun {

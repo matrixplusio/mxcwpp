@@ -3,7 +3,7 @@
 set -uo pipefail
 ROCKY_IP="${ROCKY_IP:-192.168.254.109}"
 MGR="${MGR:-http://localhost:8080}"
-JWT=$(/bin/cat /tmp/mxsec-jwt)
+JWT=$(/bin/cat /tmp/mxcwpp-jwt)
 CURL="/usr/bin/curl"
 JQ="/usr/bin/jq"
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
@@ -27,7 +27,7 @@ declare -a ROWS
 # === 1. 病毒文件自动隔离 ===
 echo "==== 病毒文件自动隔离 ===="
 EICAR='X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
-RSH "$ROCKY_IP" "echo '$EICAR' > /tmp/mxsec-l2-eicar.com"
+RSH "$ROCKY_IP" "echo '$EICAR' > /tmp/mxcwpp-l2-eicar.com"
 task=$($CURL -s -X POST -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
   -d "{\"name\":\"l2-quarantine\",\"scanType\":\"custom\",\"scanPaths\":[\"/tmp\"],\"hostIds\":[\"$HID\"],\"actions\":[\"quarantine\"]}" \
   "$MGR/api/v1/antivirus/tasks" | $JQ -r '.data.id')
@@ -45,7 +45,7 @@ else
   ROWS+=("| ClamAV 隔离 | EICAR + scan + actions=quarantine | quarantine 列表 = 0 (端点未对接) | PARTIAL |")
   SKIP=$((SKIP+1))
 fi
-RSH "$ROCKY_IP" "rm -f /tmp/mxsec-l2-eicar.com" >/dev/null 2>&1
+RSH "$ROCKY_IP" "rm -f /tmp/mxcwpp-l2-eicar.com" >/dev/null 2>&1
 
 # === 2. host 隔离 (iptables) ===
 echo "==== 主机隔离 ===="

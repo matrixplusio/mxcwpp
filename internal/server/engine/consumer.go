@@ -11,18 +11,18 @@ import (
 )
 
 // ConsumerGroupID 是 Engine 服务的 Kafka ConsumerGroup,
-// 与 Consumer 服务的 "mxsec-writers" 互不冲突,
-// 同一份 mxsec.agent.* 消息会被两个 group 各消费一次。
-const ConsumerGroupID = "mxsec-engine"
+// 与 Consumer 服务的 "mxcwpp-writers" 互不冲突,
+// 同一份 mxcwpp.agent.* 消息会被两个 group 各消费一次。
+const ConsumerGroupID = "mxcwpp-engine"
 
 // SubscribedTopics 是 Engine ConsumerGroup B 订阅的 Topic 集合。
 // 详见 docs/architecture.md §4.2 ConsumerGroup 拓扑。
 var SubscribedTopics = []string{
-	"mxsec.agent.ebpf",     // EDR 内核事件 (CEL 规则 / 序列 / ML)
-	"mxsec.agent.events",   // FIM 文件事件
-	"mxsec.agent.scanner",  // 病毒/漏洞扫描结果
-	"mxsec.agent.baseline", // 基线结果
-	"mxsec.vuln.advisory",  // 漏洞情报 (Engine 关联检测)
+	"mxcwpp.agent.ebpf",     // EDR 内核事件 (CEL 规则 / 序列 / ML)
+	"mxcwpp.agent.events",   // FIM 文件事件
+	"mxcwpp.agent.scanner",  // 病毒/漏洞扫描结果
+	"mxcwpp.agent.baseline", // 基线结果
+	"mxcwpp.vuln.advisory",  // 漏洞情报 (Engine 关联检测)
 }
 
 // MessageHandler 是单条 Kafka 消息的处理函数。

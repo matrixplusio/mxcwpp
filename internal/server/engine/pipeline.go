@@ -10,13 +10,13 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
-	"github.com/imkerbos/mxsec-platform/internal/common/jsonx"
-	"github.com/imkerbos/mxsec-platform/internal/server/common/mode"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/internal/common/jsonx"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
 )
 
 // Pipeline 把 Kafka 消息按"规则 → 序列 → ML → Storyline"4 层引擎处理,
-// 命中告警时通过 AlertProducer 发到 mxsec.engine.alert。
+// 命中告警时通过 AlertProducer 发到 mxcwpp.engine.alert。
 //
 // 设计文档: docs/engine-detection-design.md
 type Pipeline struct {
@@ -145,7 +145,7 @@ func (p *Pipeline) Handler() MessageHandler {
 	}
 }
 
-// emitAlert 把 Alert 转 AlertEnvelope 推到 mxsec.engine.alert,
+// emitAlert 把 Alert 转 AlertEnvelope 推到 mxcwpp.engine.alert,
 // 根据当前 mode 决定 Action vs WouldAction 字段。
 func (p *Pipeline) emitAlert(ctx context.Context, ev PipelineEvent, a Alert) error {
 	if p.producer == nil {
@@ -188,7 +188,7 @@ func (p *Pipeline) emitAlert(ctx context.Context, ev PipelineEvent, a Alert) err
 // 实际消息格式: Kafka msg.Value = JSON(kafka.MQMessage), MQMessage.Body = protobuf(bridge.Record).
 // 流程: JSON 解 MQMessage → 取 AgentID/DataType + 顶层字段 → protobuf 解 Body 拿 fields map.
 //
-// AgentID 在 mxsec 模型里 = HostID (单租户). HostID 字段同时填充供 ev.HostID 用.
+// AgentID 在 mxcwpp 模型里 = HostID (单租户). HostID 字段同时填充供 ev.HostID 用.
 func decodeEvent(msg *sarama.ConsumerMessage) (PipelineEvent, error) {
 	// 1. 顶层 MQMessage (JSON)
 	var mq struct {
@@ -204,7 +204,7 @@ func decodeEvent(msg *sarama.ConsumerMessage) (PipelineEvent, error) {
 
 	ev := PipelineEvent{
 		AgentID:  mq.AgentID,
-		HostID:   mq.AgentID, // mxsec: AgentID = HostID
+		HostID:   mq.AgentID, // mxcwpp: AgentID = HostID
 		DataType: mq.DataType,
 		Payload:  msg.Value,
 	}

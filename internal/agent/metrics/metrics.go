@@ -2,17 +2,17 @@
 //
 // ref/02-Agent M2-P2-3: Agent /metrics 端点暴露 CPU/RSS/心跳/任务指标。
 //
-// 默认端口 9100, 与 node_exporter 平行 (mxsec 用 9101 避撞):
+// 默认端口 9100, 与 node_exporter 平行 (mxcwpp 用 9101 避撞):
 //
 //	HTTP server :9101/metrics
 //
 // 指标分类:
-//   - mxsec_agent_* 健康 (build_info / start_time / uptime)
-//   - mxsec_agent_heartbeat_* (lastsuccess / count / duration)
-//   - mxsec_agent_task_* (received / completed / failed / inflight)
-//   - mxsec_agent_event_* (collected / sent / dropped)
-//   - mxsec_agent_plugin_* (alive / restart_count)
-//   - mxsec_agent_self_* (RSS / CPU / fd 数)
+//   - mxcwpp_agent_* 健康 (build_info / start_time / uptime)
+//   - mxcwpp_agent_heartbeat_* (lastsuccess / count / duration)
+//   - mxcwpp_agent_task_* (received / completed / failed / inflight)
+//   - mxcwpp_agent_event_* (collected / sent / dropped)
+//   - mxcwpp_agent_plugin_* (alive / restart_count)
+//   - mxcwpp_agent_self_* (RSS / CPU / fd 数)
 package metrics
 
 import (
@@ -30,7 +30,7 @@ import (
 
 const (
 	defaultListenAddr = ":9101" // 不撞 node_exporter 9100
-	namespace         = "mxsec"
+	namespace         = "mxcwpp"
 	subsystemAgent    = "agent"
 )
 

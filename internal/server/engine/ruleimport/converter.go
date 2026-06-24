@@ -1,4 +1,4 @@
-// Package ruleimport 把 Falco / Sigma / Tetragon 规则转成 mxsec CEL 规则。
+// Package ruleimport 把 Falco / Sigma / Tetragon 规则转成 mxcwpp CEL 规则。
 //
 // 设计文档: docs/falco-sigma-integration.md
 //
@@ -100,7 +100,7 @@ func ConvertSigma(r SigmaRule) ConvertedRule {
 	return out
 }
 
-// mapFalcoPriority Falco 优先级映射到 mxsec severity。
+// mapFalcoPriority Falco 优先级映射到 mxcwpp severity。
 func mapFalcoPriority(p string) string {
 	switch strings.ToLower(p) {
 	case "emergency", "alert", "critical":
@@ -116,7 +116,7 @@ func mapFalcoPriority(p string) string {
 	}
 }
 
-// mapSigmaLevel Sigma level 映射到 mxsec severity。
+// mapSigmaLevel Sigma level 映射到 mxcwpp severity。
 func mapSigmaLevel(l string) string {
 	switch strings.ToLower(l) {
 	case "critical":

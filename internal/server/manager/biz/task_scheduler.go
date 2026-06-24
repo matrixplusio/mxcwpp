@@ -11,15 +11,15 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/agentcenter/service"
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/sd"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/sd"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 const (
 	taskDispatchInterval = 5 * time.Second
 	// 分布式锁 key，同一时刻只有一个 Manager 实例执行调度
-	dispatchLockKey = "mxsec:task:dispatch:lock"
+	dispatchLockKey = "mxcwpp:task:dispatch:lock"
 	// 锁 TTL 略大于调度间隔，防止持锁实例宕机后锁不释放
 	dispatchLockTTL = 8 * time.Second
 	// FIM 周期策略检查间隔（避免每 5 秒都扫策略表）

@@ -15,15 +15,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // captchaStore 验证码内存存储（自带过期清理，默认 10 分钟过期，每分钟清理一次）
 var captchaStore = base64Captcha.DefaultMemStore
 
 const (
-	jwtIssuer = "mxsec-platform"
+	jwtIssuer = "mxcwpp"
 
 	// 登录安全策略
 	maxLoginFailCount = 5                // 最大连续失败次数（达到即锁定，硬底线）

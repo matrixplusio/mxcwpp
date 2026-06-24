@@ -10,9 +10,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy"
-	"github.com/imkerbos/mxsec-platform/internal/server/llmproxy/redact"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy"
+	"github.com/matrixplusio/mxcwpp/internal/server/llmproxy/redact"
 )
 
 // AlertAnalysisHandler LLM 告警分析 API 处理器 (P1-10: 异步队列模式).

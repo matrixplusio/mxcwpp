@@ -12,11 +12,11 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # 配置
-VERSION="${MXSEC_VERSION:-1.0.0}"
+VERSION="${MXCWPP_VERSION:-1.0.0}"
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ARCH="${GOARCH:-amd64}"
 OS="${GOOS:-linux}"
-DISTRO="${MXSEC_DISTRO:-}"  # 发行版：centos7, centos8, rocky8, rocky9, debian10, debian11, debian12 等
+DISTRO="${MXCWPP_DISTRO:-}"  # 发行版：centos7, centos8, rocky8, rocky9, debian10, debian11, debian12 等
 
 # 输出目录
 DIST_DIR="dist/server"
@@ -86,22 +86,22 @@ trap "rm -rf $TEMP_DIR" EXIT
 # 创建目录结构
 mkdir -p "$TEMP_DIR/usr/bin"
 mkdir -p "$TEMP_DIR/etc/systemd/system"
-mkdir -p "$TEMP_DIR/etc/mxsec-platform"
-mkdir -p "$TEMP_DIR/opt/mxsec-platform"
-mkdir -p "$TEMP_DIR/var/log/mxsec-platform"
+mkdir -p "$TEMP_DIR/etc/mxcwpp"
+mkdir -p "$TEMP_DIR/opt/mxcwpp"
+mkdir -p "$TEMP_DIR/var/log/mxcwpp"
 
 # 复制二进制文件
-cp "$DIST_DIR/agentcenter" "$TEMP_DIR/usr/bin/mxsec-agentcenter"
-cp "$DIST_DIR/manager" "$TEMP_DIR/usr/bin/mxsec-manager"
-chmod +x "$TEMP_DIR/usr/bin/mxsec-agentcenter"
-chmod +x "$TEMP_DIR/usr/bin/mxsec-manager"
+cp "$DIST_DIR/agentcenter" "$TEMP_DIR/usr/bin/mxcwpp-agentcenter"
+cp "$DIST_DIR/manager" "$TEMP_DIR/usr/bin/mxcwpp-manager"
+chmod +x "$TEMP_DIR/usr/bin/mxcwpp-agentcenter"
+chmod +x "$TEMP_DIR/usr/bin/mxcwpp-manager"
 
 # 复制 systemd service 文件
-cp deploy/systemd/mxsec-agentcenter.service "$TEMP_DIR/etc/systemd/system/mxsec-agentcenter.service"
-cp deploy/systemd/mxsec-manager.service "$TEMP_DIR/etc/systemd/system/mxsec-manager.service"
+cp deploy/systemd/mxcwpp-agentcenter.service "$TEMP_DIR/etc/systemd/system/mxcwpp-agentcenter.service"
+cp deploy/systemd/mxcwpp-manager.service "$TEMP_DIR/etc/systemd/system/mxcwpp-manager.service"
 
 # 复制配置文件示例
-cp configs/server.yaml.example "$TEMP_DIR/etc/mxsec-platform/server.yaml.example"
+cp configs/server.yaml.example "$TEMP_DIR/etc/mxcwpp/server.yaml.example"
 
 # 3. 创建安装脚本
 echo -e "${GREEN}[3/6] Creating install scripts...${NC}"
@@ -110,24 +110,24 @@ mkdir -p "$TEMP_DIR/scripts"
 cat > "$TEMP_DIR/scripts/postinstall.sh" <<'SCRIPT_EOF'
 #!/bin/bash
 systemctl daemon-reload
-systemctl enable mxsec-agentcenter || true
-systemctl enable mxsec-manager || true
+systemctl enable mxcwpp-agentcenter || true
+systemctl enable mxcwpp-manager || true
 echo ""
 echo "Matrix Cloud Security Platform Server installed successfully!"
 echo ""
 echo "Next steps:"
-echo "1. Copy /etc/mxsec-platform/server.yaml.example to /etc/mxsec-platform/server.yaml"
-echo "2. Edit /etc/mxsec-platform/server.yaml and configure database and certificates"
+echo "1. Copy /etc/mxcwpp/server.yaml.example to /etc/mxcwpp/server.yaml"
+echo "2. Edit /etc/mxcwpp/server.yaml and configure database and certificates"
 echo "3. Generate certificates: ./scripts/generate-certs.sh"
-echo "4. Start services: systemctl start mxsec-agentcenter mxsec-manager"
+echo "4. Start services: systemctl start mxcwpp-agentcenter mxcwpp-manager"
 SCRIPT_EOF
 
 cat > "$TEMP_DIR/scripts/postremove.sh" <<'SCRIPT_EOF'
 #!/bin/bash
-systemctl stop mxsec-agentcenter || true
-systemctl stop mxsec-manager || true
-systemctl disable mxsec-agentcenter || true
-systemctl disable mxsec-manager || true
+systemctl stop mxcwpp-agentcenter || true
+systemctl stop mxcwpp-manager || true
+systemctl disable mxcwpp-agentcenter || true
+systemctl disable mxcwpp-manager || true
 SCRIPT_EOF
 
 chmod +x "$TEMP_DIR/scripts/postinstall.sh"
@@ -166,61 +166,61 @@ fi
 
 # RPM 配置
 cat > "$TEMP_DIR/nfpm-rpm.yaml" <<EOF
-name: mxsec-server
+name: mxcwpp-server
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
 release: ${RPM_RELEASE}
 section: default
 priority: extra
-maintainer: Matrix Cloud Security Platform <dev@mxsec-platform.local>
+maintainer: Matrix Cloud Security Platform <dev@mxcwpp.local>
 description: |
   Matrix Cloud Security Platform Server
   Includes AgentCenter (gRPC) and Manager (HTTP API) services.
 vendor: Matrix Cloud Security Platform
-homepage: https://github.com/imkerbos/mxsec-platform
+homepage: https://github.com/matrixplusio/mxcwpp
 license: Apache-2.0
 contents:
-  - src: ${TEMP_DIR}/usr/bin/mxsec-agentcenter
-    dst: /usr/bin/mxsec-agentcenter
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-agentcenter
+    dst: /usr/bin/mxcwpp-agentcenter
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/usr/bin/mxsec-manager
-    dst: /usr/bin/mxsec-manager
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-manager
+    dst: /usr/bin/mxcwpp-manager
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-agentcenter.service
-    dst: /etc/systemd/system/mxsec-agentcenter.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-agentcenter.service
+    dst: /etc/systemd/system/mxcwpp-agentcenter.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-manager.service
-    dst: /etc/systemd/system/mxsec-manager.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-manager.service
+    dst: /etc/systemd/system/mxcwpp-manager.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/mxsec-platform/server.yaml.example
-    dst: /etc/mxsec-platform/server.yaml.example
+  - src: ${TEMP_DIR}/etc/mxcwpp/server.yaml.example
+    dst: /etc/mxcwpp/server.yaml.example
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - dst: /opt/mxsec-platform
+  - dst: /opt/mxcwpp
     type: dir
     file_info:
       mode: 0755
       owner: root
       group: root
-  - dst: /var/log/mxsec-platform
+  - dst: /var/log/mxcwpp
     type: dir
     file_info:
       mode: 0755
@@ -233,60 +233,60 @@ EOF
 
 # DEB 配置
 cat > "$TEMP_DIR/nfpm-deb.yaml" <<EOF
-name: mxsec-server
+name: mxcwpp-server
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
 section: default
 priority: extra
-maintainer: Matrix Cloud Security Platform <dev@mxsec-platform.local>
+maintainer: Matrix Cloud Security Platform <dev@mxcwpp.local>
 description: |
   Matrix Cloud Security Platform Server
   Includes AgentCenter (gRPC) and Manager (HTTP API) services.
 vendor: Matrix Cloud Security Platform
-homepage: https://github.com/imkerbos/mxsec-platform
+homepage: https://github.com/matrixplusio/mxcwpp
 license: Apache-2.0
 contents:
-  - src: ${TEMP_DIR}/usr/bin/mxsec-agentcenter
-    dst: /usr/bin/mxsec-agentcenter
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-agentcenter
+    dst: /usr/bin/mxcwpp-agentcenter
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/usr/bin/mxsec-manager
-    dst: /usr/bin/mxsec-manager
+  - src: ${TEMP_DIR}/usr/bin/mxcwpp-manager
+    dst: /usr/bin/mxcwpp-manager
     file_info:
       mode: 0755
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-agentcenter.service
-    dst: /etc/systemd/system/mxsec-agentcenter.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-agentcenter.service
+    dst: /etc/systemd/system/mxcwpp-agentcenter.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/systemd/system/mxsec-manager.service
-    dst: /etc/systemd/system/mxsec-manager.service
+  - src: ${TEMP_DIR}/etc/systemd/system/mxcwpp-manager.service
+    dst: /etc/systemd/system/mxcwpp-manager.service
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - src: ${TEMP_DIR}/etc/mxsec-platform/server.yaml.example
-    dst: /etc/mxsec-platform/server.yaml.example
+  - src: ${TEMP_DIR}/etc/mxcwpp/server.yaml.example
+    dst: /etc/mxcwpp/server.yaml.example
     type: config
     file_info:
       mode: 0644
       owner: root
       group: root
-  - dst: /opt/mxsec-platform
+  - dst: /opt/mxcwpp
     type: dir
     file_info:
       mode: 0755
       owner: root
       group: root
-  - dst: /var/log/mxsec-platform
+  - dst: /var/log/mxcwpp
     type: dir
     file_info:
       mode: 0755
@@ -311,9 +311,9 @@ fi
 
 # RPM 包名（包含发行版信息）
 if [ -n "$RPM_DISTRO" ]; then
-    RPM_PKG_NAME="mxsec-server-${VERSION}-${RPM_RELEASE}.${RPM_ARCH}.rpm"
+    RPM_PKG_NAME="mxcwpp-server-${VERSION}-${RPM_RELEASE}.${RPM_ARCH}.rpm"
 else
-    RPM_PKG_NAME="mxsec-server-${VERSION}-${RPM_ARCH}.rpm"
+    RPM_PKG_NAME="mxcwpp-server-${VERSION}-${RPM_ARCH}.rpm"
 fi
 
 $NFPM_CMD pkg --packager rpm --config "$TEMP_DIR/nfpm-rpm.yaml" --target "$PACKAGE_DIR/$RPM_PKG_NAME"
@@ -361,9 +361,9 @@ if [ -n "$DISTRO" ]; then
 fi
 
 if [ -n "$DEB_DISTRO" ]; then
-    DEB_PKG_NAME="mxsec-server_${VERSION}-${DEB_RELEASE}_${DEB_ARCH}.deb"
+    DEB_PKG_NAME="mxcwpp-server_${VERSION}-${DEB_RELEASE}_${DEB_ARCH}.deb"
 else
-    DEB_PKG_NAME="mxsec-server_${VERSION}_${DEB_ARCH}.deb"
+    DEB_PKG_NAME="mxcwpp-server_${VERSION}_${DEB_ARCH}.deb"
 fi
 
 $NFPM_CMD pkg --packager deb --config "$TEMP_DIR/nfpm-deb.yaml" --target "$PACKAGE_DIR/$DEB_PKG_NAME"
@@ -373,4 +373,4 @@ echo ""
 echo -e "${GREEN}=== 打包完成 ===${NC}"
 echo "RPM: $PACKAGE_DIR/$RPM_PKG_NAME"
 echo "DEB: $PACKAGE_DIR/$DEB_PKG_NAME"
-ls -lh "$PACKAGE_DIR"/mxsec-server*.{rpm,deb} 2>/dev/null || true
+ls -lh "$PACKAGE_DIR"/mxcwpp-server*.{rpm,deb} 2>/dev/null || true

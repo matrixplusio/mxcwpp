@@ -7,7 +7,7 @@ package buffer
 import (
 	"sync"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 const (

@@ -25,7 +25,7 @@ func generateTestCert(t *testing.T, dir string) (caPath, certPath, keyPath strin
 	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	caTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "mxsec-test-ca"},
+		Subject:               pkix.Name{CommonName: "mxcwpp-test-ca"},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour),
 		IsCA:                  true,
@@ -38,7 +38,7 @@ func generateTestCert(t *testing.T, dir string) (caPath, certPath, keyPath strin
 	clientKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	clientTmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "mxsec-ac-client"},
+		Subject:      pkix.Name{CommonName: "mxcwpp-ac-client"},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

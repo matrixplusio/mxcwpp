@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 func testLogger() *zap.Logger {

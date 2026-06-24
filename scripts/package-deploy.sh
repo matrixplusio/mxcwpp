@@ -4,12 +4,12 @@
 #
 # 使用方法:
 #   ./scripts/package-deploy.sh
-#   ./scripts/package-deploy.sh --version v1.0.0 --registry harbor.io/mxsec
+#   ./scripts/package-deploy.sh --version v1.0.0 --registry harbor.io/mxcwpp
 #
 # 流程:
 #   1. 开发机: ./scripts/build-images.sh --version v1.0.0 [--registry xxx --push]
 #   2. 开发机: ./scripts/package-deploy.sh --version v1.0.0 [--registry xxx]
-#   3. 生产机: tar -xzf mxsec-platform-v1.0.0.tar.gz && cd mxsec-platform-v1.0.0 && ./deploy.sh
+#   3. 生产机: tar -xzf mxcwpp-v1.0.0.tar.gz && cd mxcwpp-v1.0.0 && ./deploy.sh
 #
 
 set -e
@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-PACKAGE_NAME="mxsec-platform-${VERSION}"
+PACKAGE_NAME="mxcwpp-${VERSION}"
 PACKAGE_DIR="${OUTPUT_DIR}/${PACKAGE_NAME}"
 
 echo "========================================"
@@ -79,12 +79,12 @@ version: '3.8'
 services:
   mysql:
     image: mysql:8.0
-    container_name: mxsec-mysql
+    container_name: mxcwpp-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: \${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: \${MYSQL_DATABASE:-mxsec}
-      MYSQL_USER: \${MYSQL_USER:-mxsec_user}
+      MYSQL_DATABASE: \${MYSQL_DATABASE:-mxcwpp}
+      MYSQL_USER: \${MYSQL_USER:-mxcwpp_user}
       MYSQL_PASSWORD: \${MYSQL_PASSWORD}
       TZ: \${TZ:-Asia/Shanghai}
     volumes:
@@ -99,15 +99,15 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
           memory: 4G
 
   agentcenter:
-    image: ${IMAGE_PREFIX}mxsec-agentcenter:\${VERSION:-${VERSION}}
-    container_name: mxsec-agentcenter
+    image: ${IMAGE_PREFIX}mxcwpp-agentcenter:\${VERSION:-${VERSION}}
+    container_name: mxcwpp-agentcenter
     restart: always
     depends_on:
       mysql:
@@ -115,10 +115,10 @@ services:
     ports:
       - "\${GRPC_PORT:-6751}:6751"
     volumes:
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
-      - \${DATA_DIR}/logs/agentcenter:/var/log/mxsec-platform
-      - \${DATA_DIR}/plugins:/opt/mxsec-platform/plugins
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
+      - \${DATA_DIR}/logs/agentcenter:/var/log/mxcwpp
+      - \${DATA_DIR}/plugins:/opt/mxcwpp/plugins
     environment:
       TZ: \${TZ:-Asia/Shanghai}
     healthcheck:
@@ -128,15 +128,15 @@ services:
       retries: 5
       start_period: 60s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
           memory: 4G
 
   manager:
-    image: ${IMAGE_PREFIX}mxsec-manager:\${VERSION:-${VERSION}}
-    container_name: mxsec-manager
+    image: ${IMAGE_PREFIX}mxcwpp-manager:\${VERSION:-${VERSION}}
+    container_name: mxcwpp-manager
     restart: always
     depends_on:
       mysql:
@@ -146,11 +146,11 @@ services:
     ports:
       - "\${MANAGER_PORT:-8080}:8080"
     volumes:
-      - ./config/server.yaml:/etc/mxsec-platform/server.yaml:ro
-      - ./certs:/etc/mxsec-platform/certs:ro
-      - \${DATA_DIR}/logs/manager:/var/log/mxsec-platform
-      - \${DATA_DIR}/plugins:/opt/mxsec-platform/plugins:ro
-      - \${DATA_DIR}/uploads:/opt/mxsec-platform/uploads
+      - ./config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - ./certs:/etc/mxcwpp/certs:ro
+      - \${DATA_DIR}/logs/manager:/var/log/mxcwpp
+      - \${DATA_DIR}/plugins:/opt/mxcwpp/plugins:ro
+      - \${DATA_DIR}/uploads:/opt/mxcwpp/uploads
     environment:
       TZ: \${TZ:-Asia/Shanghai}
     healthcheck:
@@ -160,15 +160,15 @@ services:
       retries: 5
       start_period: 60s
     networks:
-      - mxsec-net
+      - mxcwpp-net
     deploy:
       resources:
         limits:
           memory: 4G
 
   ui:
-    image: ${IMAGE_PREFIX}mxsec-ui:\${VERSION:-${VERSION}}
-    container_name: mxsec-ui
+    image: ${IMAGE_PREFIX}mxcwpp-ui:\${VERSION:-${VERSION}}
+    container_name: mxcwpp-ui
     restart: always
     depends_on:
       manager:
@@ -188,10 +188,10 @@ services:
       timeout: 10s
       retries: 3
     networks:
-      - mxsec-net
+      - mxcwpp-net
 
 networks:
-  mxsec-net:
+  mxcwpp-net:
     driver: bridge
 EOF
 

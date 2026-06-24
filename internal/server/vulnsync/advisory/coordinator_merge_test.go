@@ -1,20 +1,8 @@
 package advisory
 
 import (
-	"context"
 	"testing"
-	"time"
 )
-
-// fakeSource 不发起网络调用，仅持有名字 + confidence
-type fakeSource struct {
-	name string
-	conf Confidence
-}
-
-func (f *fakeSource) Name() string                                              { return f.name }
-func (f *fakeSource) Confidence() Confidence                                    { return f.conf }
-func (f *fakeSource) Fetch(_ context.Context, _ time.Time) ([]*Advisory, error) { return nil, nil }
 
 // 主测：同 CVE 在 RHSA(rhel,10) 和 Rocky(rocky,9) 各自 match 不同 host 时，
 // 旧实现 affectedHosts 会被覆盖，新实现并集保留。
@@ -48,8 +36,8 @@ func TestMergeByConfidence_UnionAffectedHostsAcrossOSSources(t *testing.T) {
 	}
 
 	items := []sourcedAdvisory{
-		{src: &fakeSource{name: "rhsa", conf: ConfidenceHigh}, advisory: rhsaAdv, confidence: ConfidenceHigh},
-		{src: &fakeSource{name: "rocky-apollo", conf: ConfidenceHigh}, advisory: rockyAdv, confidence: ConfidenceHigh},
+		{sourceName: "rhsa", advisory: rhsaAdv, confidence: ConfidenceHigh},
+		{sourceName: "rocky-apollo", advisory: rockyAdv, confidence: ConfidenceHigh},
 	}
 	merged := mergeByConfidence(items, &DefaultMatcher{}, []HostSoftware{rhel10Host, rocky9Host})
 
@@ -90,8 +78,8 @@ func TestMergeByConfidence_DedupSameHostSameCVE(t *testing.T) {
 		PkgManager: "rpm",
 	}
 	items := []sourcedAdvisory{
-		{src: &fakeSource{name: "rhsa", conf: ConfidenceHigh}, advisory: adv, confidence: ConfidenceHigh},
-		{src: &fakeSource{name: "rhsa", conf: ConfidenceHigh}, advisory: adv, confidence: ConfidenceHigh}, // 重复
+		{sourceName: "rhsa", advisory: adv, confidence: ConfidenceHigh},
+		{sourceName: "rhsa", advisory: adv, confidence: ConfidenceHigh}, // 重复
 	}
 	merged := mergeByConfidence(items, &DefaultMatcher{}, []HostSoftware{host})
 	mv := merged[cve]

@@ -628,7 +628,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.ip_forward=0",
-        "command": "F=/etc/sysctl.d/90-mxsec-baseline.conf; sysctl -w net.ipv4.ip_forward=0 && touch $F && (grep -qE '^\\s*net.ipv4.ip_forward' $F && sed -ri 's|^\\s*net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' $F || echo 'net.ipv4.ip_forward = 0' >> $F)"
+        "command": "F=/etc/sysctl.d/90-mxcwpp-baseline.conf; sysctl -w net.ipv4.ip_forward=0 && touch $F && (grep -qE '^\\s*net.ipv4.ip_forward' $F && sed -ri 's|^\\s*net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' $F || echo 'net.ipv4.ip_forward = 0' >> $F)"
       }
     },
     {
@@ -651,7 +651,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.tcp_syncookies=1",
-        "command": "F=/etc/sysctl.d/90-mxsec-baseline.conf; sysctl -w net.ipv4.tcp_syncookies=1 && touch $F && (grep -qE '^\\s*net.ipv4.tcp_syncookies' $F && sed -ri 's|^\\s*net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' $F || echo 'net.ipv4.tcp_syncookies = 1' >> $F)"
+        "command": "F=/etc/sysctl.d/90-mxcwpp-baseline.conf; sysctl -w net.ipv4.tcp_syncookies=1 && touch $F && (grep -qE '^\\s*net.ipv4.tcp_syncookies' $F && sed -ri 's|^\\s*net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' $F || echo 'net.ipv4.tcp_syncookies = 1' >> $F)"
       }
     },
     {
@@ -674,7 +674,7 @@
       },
       "fix": {
         "suggestion": "sysctl -w net.ipv4.conf.all.accept_redirects=0",
-        "command": "F=/etc/sysctl.d/90-mxsec-baseline.conf; sysctl -w net.ipv4.conf.all.accept_redirects=0 && touch $F && (grep -qE '^\\s*net.ipv4.conf.all.accept_redirects' $F && sed -ri 's|^\\s*net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' $F || echo 'net.ipv4.conf.all.accept_redirects = 0' >> $F)"
+        "command": "F=/etc/sysctl.d/90-mxcwpp-baseline.conf; sysctl -w net.ipv4.conf.all.accept_redirects=0 && touch $F && (grep -qE '^\\s*net.ipv4.conf.all.accept_redirects' $F && sed -ri 's|^\\s*net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' $F || echo 'net.ipv4.conf.all.accept_redirects = 0' >> $F)"
       }
     },
     {
@@ -1011,7 +1011,7 @@
       },
       "fix": {
         "suggestion": "rsyslog 配置 authpriv.* /var/log/secure",
-        "command": "F=/etc/rsyslog.d/90-mxsec-authpriv.conf; printf 'authpriv.*\\t\\t\\t\\t/var/log/secure\\n' > $F && touch /var/log/secure && chmod 600 /var/log/secure",
+        "command": "F=/etc/rsyslog.d/90-mxcwpp-authpriv.conf; printf 'authpriv.*\\t\\t\\t\\t/var/log/secure\\n' > $F && touch /var/log/secure && chmod 600 /var/log/secure",
         "restart_services": [
           "rsyslog"
         ]

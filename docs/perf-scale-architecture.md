@@ -40,7 +40,7 @@ P0-1..P0-8 优化后, 单 Engine 实例支撑 30k EPS, 1k 主机正常吞吐 ~3k
 2. **Kafka 集群化 3 broker / 30 partition**
    - 按 tenant_id + host_id 一致性分区
    - 副本 RF=3, ISR=2 保证高可用
-   - Engine ConsumerGroup `mxsec-engine` 分配 30 partition 给 6 Engine 副本
+   - Engine ConsumerGroup `mxcwpp-engine` 分配 30 partition 给 6 Engine 副本
 
 3. **MySQL 读写分离 + 主从延迟监控**
    - Manager 读 hosts/alerts 走从库 (2 个读副本)
@@ -104,8 +104,8 @@ externalServices:
    - 心跳间隔从默认 60s → 自适应 (online 主机分批 90s, offline 主机退避到 5min)
 
 2. **Engine 流水线化分层 Topic**
-   - `mxsec.agent.events.l1` → 简单 stage (anomaly/intrusion 短路) 8 Engine
-   - `mxsec.agent.events.l2` → 复杂 stage (storyline/CEL) 16 Engine
+   - `mxcwpp.agent.events.l1` → 简单 stage (anomaly/intrusion 短路) 8 Engine
+   - `mxcwpp.agent.events.l2` → 复杂 stage (storyline/CEL) 16 Engine
    - 两级处理避免单 Topic 串行限制
 
 3. **Kafka 集群 5 broker / 100 partition**
@@ -147,9 +147,9 @@ engine:
 kafka:
   brokers: 5
   partitions:
-    "mxsec.agent.events.l1": 50
-    "mxsec.agent.events.l2": 100
-    "mxsec.engine.alert": 50
+    "mxcwpp.agent.events.l1": 50
+    "mxcwpp.agent.events.l2": 100
+    "mxcwpp.engine.alert": 50
 ```
 
 ## 3w+ 多 region 联邦 (Sprint 11+)

@@ -19,11 +19,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/agent/edr/event"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 const (
-	defaultRulesDir = "/var/lib/mxsec/yara-rules"
+	defaultRulesDir = "/var/lib/mxcwpp/yara-rules"
 	yaraBinary      = "yr"
 
 	// Scan dedup: skip files scanned within this window.
@@ -60,7 +60,7 @@ var preBlockWhitelist = map[string]bool{
 	"systemd":      true,
 	"init":         true,
 	"sshd":         true,
-	"mxsec-agent":  true,
+	"mxcwpp-agent": true,
 	"mxcsec-agent": true,
 	"dockerd":      true,
 	"containerd":   true,
@@ -482,9 +482,9 @@ func findBinary() string {
 			return local
 		}
 	}
-	// 2. /var/lib/mxsec/bin/yr
-	if _, err := os.Stat("/var/lib/mxsec/bin/yr"); err == nil {
-		return "/var/lib/mxsec/bin/yr"
+	// 2. /var/lib/mxcwpp/bin/yr
+	if _, err := os.Stat("/var/lib/mxcwpp/bin/yr"); err == nil {
+		return "/var/lib/mxcwpp/bin/yr"
 	}
 	// 3. System PATH.
 	if p, err := exec.LookPath(yaraBinary); err == nil {

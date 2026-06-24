@@ -13,9 +13,9 @@ import (
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/tenant"
-	"github.com/imkerbos/mxsec-platform/internal/server/config"
-	"github.com/imkerbos/mxsec-platform/internal/server/migration"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/migration"
 )
 
 // DB 是全局数据库实例
@@ -107,7 +107,7 @@ func Init(cfg config.DatabaseConfig, zapLogger *zap.Logger, logCfg ...config.Log
 	//
 	// 背景：mxctl deploy 同时启动 manager + agentcenter + consumer 3 进程，
 	// 各自 gorm.AutoMigrate 同表 ALTER → MySQL deadlock (Error 1213) → fatal exit。
-	// 解决：用 GET_LOCK('mxsec_migration', 120) 互斥，串行迁移；其他进程等待。
+	// 解决：用 GET_LOCK('mxcwpp_migration', 120) 互斥，串行迁移；其他进程等待。
 	// 仅 MySQL 支持 GET_LOCK；其他 driver 跳过。
 	if err := runMigrationWithLock(db, cfg.Type, zapLogger); err != nil {
 		return nil, fmt.Errorf("数据库迁移失败: %w", err)
@@ -165,7 +165,7 @@ func runMigrationWithLock(db *gorm.DB, dbType string, zapLogger *zap.Logger) err
 	}
 	defer lockConn.Close()
 
-	const lockName = "mxsec_migration"
+	const lockName = "mxcwpp_migration"
 	const lockTimeoutSec = 120
 
 	var got int

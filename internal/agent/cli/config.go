@@ -61,7 +61,7 @@ func hasCertBundle(dir string) bool {
 
 func formatConfigText(r *ConfigReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "mxsec-agent config\n")
+	fmt.Fprintf(&b, "mxcwpp-agent config\n")
 	fmt.Fprintf(&b, "  Build version: %s\n", r.BuildVersion)
 	if r.BuildTime != "" {
 		fmt.Fprintf(&b, "  Build time:    %s\n", r.BuildTime)

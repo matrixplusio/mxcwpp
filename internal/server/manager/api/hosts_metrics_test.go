@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 )
 
 func TestGetHostMetricsReturnsDatasourceConfigError(t *testing.T) {

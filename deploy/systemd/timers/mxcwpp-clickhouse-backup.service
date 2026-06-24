@@ -1,0 +1,13 @@
+[Unit]
+Description=mxcwpp ClickHouse backup
+After=clickhouse-server.service
+Wants=clickhouse-server.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mxcwpp/backup.env
+ExecStart=/usr/local/bin/mxcwpp-clickhouse-backup.sh
+StandardOutput=append:/var/log/mxcwpp-backup/clickhouse-systemd.log
+StandardError=append:/var/log/mxcwpp-backup/clickhouse-systemd.log
+TimeoutStartSec=2h
+Nice=10

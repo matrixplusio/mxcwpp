@@ -19,4 +19,4 @@ WORKDIR /workspace
 
 ENV TZ=Asia/Shanghai
 
-CMD ["sh", "-c", "go run ./cmd/server/consumer -config /etc/mxsec-platform/server.yaml"]
+CMD ["sh", "-c", "go run ./cmd/server/consumer -config /etc/mxcwpp/server.yaml"]

@@ -5,12 +5,20 @@ import type {
   KubeAlarmList,
   KubeEvent,
   KubeBaselineList,
+  KubeBaselineResult,
+  KubeBaselineTask,
   KubeBaselineAlertList,
   KubeBaselineRule,
   KubeBaselineRuleList,
   KubeWhitelist,
   KubeImageScan,
   KubeImageVulnerability,
+  KubeScannerStatus,
+  KubeScannerPreflight,
+  KubeNode,
+  KubePod,
+  KubeWorkload,
+  KubeImageRegistry,
   Paged,
 } from "./types";
 
@@ -24,6 +32,12 @@ export const kubeApi = {
   updateCluster: (id: number, body: Partial<KubeCluster>) => put<KubeCluster>(`/kube/clusters/${id}`, body),
   deleteCluster: (id: number) => del<void>(`/kube/clusters/${id}`),
   regenerateClusterToken: (id: number) => post<{ token: string }>(`/kube/clusters/${id}/regenerate-token`),
+  getClusterNodes: (id: number) => get<{ items: KubeNode[] }>(`/kube/clusters/${id}/nodes`),
+  getClusterPods: (id: number, params?: PageParams) => get<{ items: KubePod[]; total: number }>(`/kube/clusters/${id}/pods`, params),
+  getClusterWorkloads: (id: number) => get<{ items: KubeWorkload[] }>(`/kube/clusters/${id}/workloads`),
+  updateClusterGCP: (id: number, body: { projectId: string; subscription: string; credentialsJson?: string }) =>
+    put<{ gcpEnabled: boolean }>(`/kube/clusters/${id}/gcp-config`, body),
+  deleteClusterGCP: (id: number) => del<void>(`/kube/clusters/${id}/gcp-config`),
 
   // 安全告警
   listAlarms: (params?: PageParams) => get<KubeAlarmList>("/kube/alarms", params),
@@ -38,6 +52,9 @@ export const kubeApi = {
   // 基线检查
   listBaseline: (params?: PageParams) => get<KubeBaselineList>("/kube/baseline", params),
   runBaselineDetect: (body?: object) => post<void>("/kube/baseline/detect", body),
+  listBaselineTasks: (params?: PageParams) => get<Paged<KubeBaselineTask>>("/kube/baseline-tasks", params),
+  getBaselineTaskDetail: (id: number, params?: PageParams) =>
+    get<{ task: KubeBaselineTask; items: KubeBaselineResult[] }>(`/kube/baseline-tasks/${id}`, params),
   listBaselineAlerts: (params?: PageParams) => get<KubeBaselineAlertList>("/kube/baseline-alerts", params),
   ignoreBaselineAlert: (id: number, body?: object) => post<void>(`/kube/baseline-alerts/${id}/ignore`, body),
   batchIgnoreBaselineAlerts: (body: { ids: number[] }) => post<void>("/kube/baseline-alerts/batch-ignore", body),
@@ -61,4 +78,19 @@ export const kubeApi = {
   getImageScan: (id: number) => get<KubeImageScan>(`/images/scans/${id}`),
   getImageScanVulns: (id: number) => get<KubeImageVulnerability[]>(`/images/scans/${id}/vulns`),
   scanImage: (image: string) => post<KubeImageScan>("/images/scan", { image }),
+
+  // 镜像仓库接入
+  listRegistries: () => get<KubeImageRegistry[]>("/images/registries"),
+  createRegistry: (body: Partial<KubeImageRegistry> & { password?: string }) => post<KubeImageRegistry>("/images/registries", body),
+  updateRegistry: (id: number, body: Partial<KubeImageRegistry> & { password?: string }) => put<KubeImageRegistry>(`/images/registries/${id}`, body),
+  deleteRegistry: (id: number) => del<void>(`/images/registries/${id}`),
+  scanRegistry: (id: number) => post<{ message: string }>(`/images/registries/${id}/scan`),
+
+  // 集群内扫描器（trivy-operator）生命周期
+  scannerStatus: (clusterId: number) => get<KubeScannerStatus>(`/kube/clusters/${clusterId}/scanner/status`),
+  scannerPreflight: (clusterId: number) => get<KubeScannerPreflight>(`/kube/clusters/${clusterId}/scanner/preflight`),
+  scannerInstall: (clusterId: number, body?: { imageRegistry?: string }) =>
+    post<{ message: string; webhookEnabled: boolean }>(`/kube/clusters/${clusterId}/scanner/install`, body),
+  scannerSync: (clusterId: number) => post<{ reports: number }>(`/kube/clusters/${clusterId}/scanner/sync`),
+  scannerUninstall: (clusterId: number) => del<{ message: string }>(`/kube/clusters/${clusterId}/scanner`),
 };

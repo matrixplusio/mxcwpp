@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	grpcProto "github.com/imkerbos/mxsec-platform/api/proto/grpc"
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 )
 
 // P2-1: WAL record buffer pool 减 per-record make([]byte) GC 压力.

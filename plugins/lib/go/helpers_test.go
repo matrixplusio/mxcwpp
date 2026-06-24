@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/imkerbos/mxsec-platform/api/proto/bridge"
+	"github.com/matrixplusio/mxcwpp/api/proto/bridge"
 )
 
 // newTestClient 构造一对内存 pipe 的 Client，避开 fd 3/4

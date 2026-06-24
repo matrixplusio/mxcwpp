@@ -62,7 +62,7 @@ func NewSplunkHECBatchConnector(cfg SplunkHECBatchConfig, logger *zap.Logger) *S
 		cfg.BatchTimeout = 5 * time.Second
 	}
 	if cfg.Sourcetype == "" {
-		cfg.Sourcetype = "mxsec:alert"
+		cfg.Sourcetype = "mxcwpp:alert"
 	}
 	c := &SplunkHECBatchConnector{
 		url:          cfg.URL,
@@ -134,7 +134,7 @@ func (c *SplunkHECBatchConnector) flush() error {
 		hecEvent := map[string]any{
 			"time":       ev.Timestamp.Unix(),
 			"host":       ev.HostName,
-			"source":     "mxsec",
+			"source":     "mxcwpp",
 			"sourcetype": c.sourcetype,
 			"event":      ev,
 		}

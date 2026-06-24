@@ -163,7 +163,7 @@ func (c *Client) QueryRange(ctx context.Context, query string, start, end time.T
 }
 
 // GetMetricValue 获取单个指标的当前值
-// metricName 是指标名称，例如 "mxsec_host_cpu_usage"
+// metricName 是指标名称，例如 "mxcwpp_host_cpu_usage"
 // labels 是标签过滤，例如 map[string]string{"host_id": "host-uuid"}
 // 返回指标值，如果不存在则返回 nil
 func (c *Client) GetMetricValue(ctx context.Context, metricName string, labels map[string]string) (*float64, error) {

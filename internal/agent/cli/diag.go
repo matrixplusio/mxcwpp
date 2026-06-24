@@ -39,7 +39,7 @@ func RunDiag(opts CommonOptions, dopts DiagOptions, stdout, stderr io.Writer) (s
 	if outPath == "" {
 		host, _ := os.Hostname()
 		ts := time.Now().Format("20060102-150405")
-		outPath = fmt.Sprintf("/tmp/mxsec-agent-diag-%s-%s.tar.gz", sanitize(host), ts)
+		outPath = fmt.Sprintf("/tmp/mxcwpp-agent-diag-%s-%s.tar.gz", sanitize(host), ts)
 	}
 
 	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
@@ -177,7 +177,7 @@ func (m *diagManifest) recordError(item string, err error) {
 
 func (m *diagManifest) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "mxsec-agent diagnostic bundle\n")
+	fmt.Fprintf(&b, "mxcwpp-agent diagnostic bundle\n")
 	fmt.Fprintf(&b, "Generated at: %s\n", m.at.Format(time.RFC3339))
 	fmt.Fprintf(&b, "Hostname: %s\n", m.host)
 	fmt.Fprintf(&b, "Build version: %s\n", versionString(m.opts.BuildVersion))

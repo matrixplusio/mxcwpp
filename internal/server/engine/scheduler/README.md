@@ -30,7 +30,7 @@ Engine 决策 (调度器)
    │
    │ Kafka Produce
    v
-mxsec.engine.command  ─→ AC 订阅
+mxcwpp.engine.command  ─→ AC 订阅
                          │
                          v
                       transfer.Service
@@ -43,16 +43,16 @@ mxsec.engine.command  ─→ AC 订阅
 
 ```
 Engine.RuleSyncScheduler
-  └─→ kafka.Produce(Topic="mxsec.engine.command", Key=agent_id, Value=Command{...})
+  └─→ kafka.Produce(Topic="mxcwpp.engine.command", Key=agent_id, Value=Command{...})
 
-AC.CommandConsumer (订阅 mxsec-ac-command CG)
+AC.CommandConsumer (订阅 mxcwpp-ac-command CG)
   └─→ 解码 Command
        └─→ transfer.Service.PushToAgent(agent_id, command)
 ```
 
 ### 2.2 Topic 设计
 
-新增 `mxsec.engine.command` Topic (待 PR 在 `docs/datatype-allocation.md` 登记):
+新增 `mxcwpp.engine.command` Topic (待 PR 在 `docs/datatype-allocation.md` 登记):
 
 | 字段 | 值 |
 |------|------|
@@ -80,7 +80,7 @@ AC 端实现:`internal/server/agentcenter/command_consumer/kafka_consumer.go` (S
 
 | PR | 范围 | 依赖 |
 |----|------|------|
-| Sprint 2 PR1 | 新增 `mxsec.engine.command` Topic + DataType 登记 | - |
+| Sprint 2 PR1 | 新增 `mxcwpp.engine.command` Topic + DataType 登记 | - |
 | Sprint 2 PR2 | AC `command_consumer` 实现 EngineCommander interface | PR1 |
 | Sprint 2 PR3 | `alert_scheduler` 迁 engine/scheduler + AlarmNotifier 解耦 biz | PR2 |
 | Sprint 2 PR4 | `rule_sync_scheduler` 迁 engine/scheduler | PR2 |
@@ -130,7 +130,7 @@ AC 端实现:`internal/server/agentcenter/command_consumer/kafka_consumer.go` (S
 
 - [ ] AC `scheduler/` 目录只剩 `canary / heartbeat_timeout / task_timeout / plugin_update / agent_update / agent_restart` 等 AC 自身职责的 scheduler
 - [ ] Engine `scheduler/` 目录含 `alert / rule_sync / ioc_sync` 3 个
-- [ ] `mxsec.engine.command` Topic 在 docs/datatype-allocation.md 登记
+- [ ] `mxcwpp.engine.command` Topic 在 docs/datatype-allocation.md 登记
 - [ ] EngineCommander interface 有真实 AC 实现 + 单元测试
 - [ ] 端到端测试:Engine 推规则 → AC 收 Kafka → Agent gRPC 收到 → 应用规则
 - [ ] Prometheus 指标:engine_command_pushed_total / ac_command_consumed_total / agent_command_applied_total 全链路对账

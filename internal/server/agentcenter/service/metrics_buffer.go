@@ -10,14 +10,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/model"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // MetricsBuffer 监控指标缓冲区（批量插入优化）。
 //
 // 写入路径由 target 决定:
 //   - "mysql"（默认）→ host_metrics 表 (GORM CreateInBatches)
-//   - "ch"            → ClickHouse mxsec.host_metrics (PrepareBatch)
+//   - "ch"            → ClickHouse mxcwpp.host_metrics (PrepareBatch)
 //
 // chConn 为 nil 或 target 非 "ch" 时一律走 MySQL。
 type MetricsBuffer struct {
@@ -123,7 +123,7 @@ func (b *MetricsBuffer) flushMySQLLocked() error {
 	return nil
 }
 
-// flushCHLocked 批量写 ClickHouse mxsec.host_metrics。
+// flushCHLocked 批量写 ClickHouse mxcwpp.host_metrics。
 func (b *MetricsBuffer) flushCHLocked() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

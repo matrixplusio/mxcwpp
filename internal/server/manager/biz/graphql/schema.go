@@ -1,4 +1,4 @@
-// Package graphql 给 mxsec API 暴露 GraphQL 入口 (P4-7).
+// Package graphql 给 mxcwpp API 暴露 GraphQL 入口 (P4-7).
 //
 // 为避免引入重型依赖 (graphql-go/graphql 自带 parser + executor 数千行),
 // 当前实现走 "命名查询白名单" 模式:

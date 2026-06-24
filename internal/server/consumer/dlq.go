@@ -7,7 +7,7 @@ import (
 	"github.com/IBM/sarama"
 	"go.uber.org/zap"
 
-	"github.com/imkerbos/mxsec-platform/internal/server/common/kafka"
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 )
 
 // DLQHandler 将消费失败的消息写入 Dead Letter Queue Topic

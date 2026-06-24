@@ -5,7 +5,7 @@
 # 使用方法:
 #   ./scripts/build-images.sh                          # 构建到本地
 #   ./scripts/build-images.sh --push                   # 构建并推送
-#   ./scripts/build-images.sh --registry harbor.io/mxsec --push
+#   ./scripts/build-images.sh --registry harbor.io/mxcwpp --push
 #
 
 set -e
@@ -51,13 +51,13 @@ else
 fi
 
 IMAGES=(
-    "mxsec-agentcenter"
-    "mxsec-manager"
-    "mxsec-consumer"
-    "mxsec-engine"
-    "mxsec-llmproxy"
-    "mxsec-vulnsync"
-    "mxsec-ui"
+    "mxcwpp-agentcenter"
+    "mxcwpp-manager"
+    "mxcwpp-consumer"
+    "mxcwpp-engine"
+    "mxcwpp-llmproxy"
+    "mxcwpp-vulnsync"
+    "mxcwpp-ui"
 )
 
 echo "========================================"
@@ -75,8 +75,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.agentcenter \
-    -t "${PREFIX}mxsec-agentcenter:${VERSION}" \
-    -t "${PREFIX}mxsec-agentcenter:latest" \
+    -t "${PREFIX}mxcwpp-agentcenter:${VERSION}" \
+    -t "${PREFIX}mxcwpp-agentcenter:latest" \
     .
 
 # 构建 Manager
@@ -86,8 +86,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.manager \
-    -t "${PREFIX}mxsec-manager:${VERSION}" \
-    -t "${PREFIX}mxsec-manager:latest" \
+    -t "${PREFIX}mxcwpp-manager:${VERSION}" \
+    -t "${PREFIX}mxcwpp-manager:latest" \
     .
 
 echo ""
@@ -96,8 +96,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.consumer \
-    -t "${PREFIX}mxsec-consumer:${VERSION}" \
-    -t "${PREFIX}mxsec-consumer:latest" \
+    -t "${PREFIX}mxcwpp-consumer:${VERSION}" \
+    -t "${PREFIX}mxcwpp-consumer:latest" \
     .
 
 echo ""
@@ -106,8 +106,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.engine \
-    -t "${PREFIX}mxsec-engine:${VERSION}" \
-    -t "${PREFIX}mxsec-engine:latest" \
+    -t "${PREFIX}mxcwpp-engine:${VERSION}" \
+    -t "${PREFIX}mxcwpp-engine:latest" \
     .
 
 echo ""
@@ -116,8 +116,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.llmproxy \
-    -t "${PREFIX}mxsec-llmproxy:${VERSION}" \
-    -t "${PREFIX}mxsec-llmproxy:latest" \
+    -t "${PREFIX}mxcwpp-llmproxy:${VERSION}" \
+    -t "${PREFIX}mxcwpp-llmproxy:latest" \
     .
 
 echo ""
@@ -126,8 +126,8 @@ docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
     -f deploy/docker/Dockerfile.vulnsync \
-    -t "${PREFIX}mxsec-vulnsync:${VERSION}" \
-    -t "${PREFIX}mxsec-vulnsync:latest" \
+    -t "${PREFIX}mxcwpp-vulnsync:${VERSION}" \
+    -t "${PREFIX}mxcwpp-vulnsync:latest" \
     .
 
 # 构建 UI
@@ -136,9 +136,9 @@ echo "[7/7] 构建 UI..."
 docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
-    -f deploy/docker/Dockerfile.ui \
-    -t "${PREFIX}mxsec-ui:${VERSION}" \
-    -t "${PREFIX}mxsec-ui:latest" \
+    -f deploy/docker/Dockerfile.web \
+    -t "${PREFIX}mxcwpp-ui:${VERSION}" \
+    -t "${PREFIX}mxcwpp-ui:latest" \
     .
 
 echo ""
@@ -150,7 +150,7 @@ go build -o ./bin/mxctl ./cmd/tools/mxctl && ls -la ./bin/mxctl
 
 echo ""
 echo "构建完成!"
-docker images | grep mxsec
+docker images | grep mxcwpp
 
 # 推送
 if [ "$PUSH" = true ]; then

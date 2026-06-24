@@ -10,52 +10,52 @@ import (
 
 var (
 	hostCPUUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_cpu_usage",
+		Name: "mxcwpp_host_cpu_usage",
 		Help: "Host CPU usage percentage",
 	}, []string{"host_id", "hostname"})
 
 	hostMemUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_mem_usage",
+		Name: "mxcwpp_host_mem_usage",
 		Help: "Host memory usage percentage",
 	}, []string{"host_id", "hostname"})
 
 	hostDiskUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_disk_usage",
+		Name: "mxcwpp_host_disk_usage",
 		Help: "Host disk usage percentage",
 	}, []string{"host_id", "hostname"})
 
 	hostNetIn = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_net_in",
+		Name: "mxcwpp_host_net_in",
 		Help: "Host network inbound bytes per heartbeat interval",
 	}, []string{"host_id", "hostname"})
 
 	hostNetOut = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_net_out",
+		Name: "mxcwpp_host_net_out",
 		Help: "Host network outbound bytes per heartbeat interval",
 	}, []string{"host_id", "hostname"})
 
 	hostDiskRead = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_disk_read_bytes",
+		Name: "mxcwpp_host_disk_read_bytes",
 		Help: "Host disk read bytes per heartbeat interval",
 	}, []string{"host_id", "hostname"})
 
 	hostDiskWrite = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_host_disk_write_bytes",
+		Name: "mxcwpp_host_disk_write_bytes",
 		Help: "Host disk write bytes per heartbeat interval",
 	}, []string{"host_id", "hostname"})
 
 	agentCPUUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_agent_cpu_usage",
+		Name: "mxcwpp_agent_cpu_usage",
 		Help: "Agent process CPU usage percentage",
 	}, []string{"host_id", "hostname"})
 
 	agentMemRSS = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_agent_mem_rss",
+		Name: "mxcwpp_agent_mem_rss",
 		Help: "Agent process resident memory in bytes",
 	}, []string{"host_id", "hostname"})
 
 	agentMemPercent = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "mxsec_agent_mem_percent",
+		Name: "mxcwpp_agent_mem_percent",
 		Help: "Agent process memory usage as percentage of total system memory",
 	}, []string{"host_id", "hostname"})
 )
