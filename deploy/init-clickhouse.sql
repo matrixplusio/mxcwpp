@@ -1,6 +1,12 @@
 -- MxCwpp Platform - ClickHouse 初始化 DDL
 -- 对应设计文档: docs/design/ha-architecture.md § 3.4.2
 
+-- 显式建库并切入：docker initdb 脚本默认在 default 库执行，
+-- 若不 USE，下面所有 CREATE TABLE 会落到 default 而非 mxcwpp，
+-- 导致 consumer 写 mxcwpp.* 报 "table does not exist"。
+CREATE DATABASE IF NOT EXISTS mxcwpp;
+USE mxcwpp;
+
 -- ==================== 主机监控指标 ====================
 
 CREATE TABLE IF NOT EXISTS host_metrics (
