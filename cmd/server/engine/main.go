@@ -99,8 +99,9 @@ func main() {
 		resolver := mode.NewMemoryResolver(mode.Mode(cfg.DefaultMode))
 
 		var stages []engine.Stage
-		if cfg.Database.DSN != "" {
-			db, err := gorm.Open(mysql.Open(cfg.Database.DSN), &gorm.Config{})
+		dbDSN := cfg.Database.ResolveDSN()
+		if dbDSN != "" {
+			db, err := gorm.Open(mysql.Open(dbDSN), &gorm.Config{})
 			if err != nil {
 				logger.Warn("Engine DB 初始化失败, 跳过 stages", zap.Error(err))
 			} else {
