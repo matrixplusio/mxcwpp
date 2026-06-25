@@ -2,13 +2,16 @@
 
 // Package antidebug 实现 Agent 自我加固 (M1-6)。
 //
-// 4 类自我保护:
+// 3 类自我保护:
 //
 //  1. PR_SET_DUMPABLE=0 — 禁 core dump + 禁 /proc/<pid>/{mem,maps} 被外部读
 //  2. PR_SET_NO_NEW_PRIVS=1 — 禁后续 execve 提权 (LD_PRELOAD 等)
-//  3. 自挂 ptrace — 进程启动立刻 ptrace(PTRACE_TRACEME) 自挂,
-//     debugger 想 attach 会失败 (Linux 仅允许一个 tracer)
-//  4. ELF SHA256 自检 — 周期校验自身可执行文件未被换包/打补丁
+//  3. ELF SHA256 自检 — 周期校验自身可执行文件未被换包/打补丁
+//
+// 不做 PTRACE_TRACEME 自挂: 在 systemd 拉起的 Go 进程下, 父进程 (systemd)
+// 非 ptrace supervisor, Go runtime 的 SIGURG (异步抢占) 一旦触发即令本进程进入
+// signal-delivery-stop 且无人 PTRACE_CONT, 进程永久冻死。该技术与 Go+systemd
+// 根本不兼容, 收益 (挡 debugger attach) 远低于代价 (Agent 卡死)。
 //
 // 不做的事 (留 M2):
 //
@@ -55,14 +58,6 @@ func SelfProtect(logger *zap.Logger) error {
 		logger.Info("PR_SET_NO_NEW_PRIVS=1 已设置 (禁后续 exec 提权)")
 	}
 
-	// PTRACE_TRACEME 自挂
-	if err := ptraceTraceMe(); err != nil {
-		logger.Warn("PTRACE_TRACEME 失败 (yama ptrace_scope=0 时一般可用)", zap.Error(err))
-		errs = append(errs, fmt.Errorf("traceme: %w", err))
-	} else {
-		logger.Info("PTRACE_TRACEME 已自挂 (外部 debugger 无法 attach)")
-	}
-
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
@@ -77,18 +72,6 @@ func prctlSetDumpable() error {
 func prctlNoNewPrivs() error {
 	// PR_SET_NO_NEW_PRIVS=38
 	return unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
-}
-
-// ptraceTraceMe 自己 attach 自己, 外部 debugger 想再 attach 会 EPERM。
-//
-// 直接 ptrace syscall (golang.org/x/sys/unix 没暴露 PtraceTraceMe).
-func ptraceTraceMe() error {
-	// PTRACE_TRACEME = 0
-	_, _, errno := unix.Syscall(unix.SYS_PTRACE, 0, 0, 0)
-	if errno != 0 {
-		return errno
-	}
-	return nil
 }
 
 // ELFIntegrityMonitor 周期 SHA256 校验自身可执行文件。
