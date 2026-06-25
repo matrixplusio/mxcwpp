@@ -46,32 +46,46 @@ type usnListResponse struct {
 	Limit   int         `json:"limit"`
 }
 
+// usnNotice 对应 ubuntu.com USN list API 的当前 schema（2026 起）:
+//   - cves_ids:         扁平 CVE 编号数组
+//   - release_packages: {codename: [{name, version}]}，被修复的包及修复版本
+//   - releases:         [{codename, version}]，仅 release 元数据
 type usnNotice struct {
-	ID          string            `json:"id"` // USN-7890-1
-	Title       string            `json:"title"`
-	Published   string            `json:"published"`
-	Summary     string            `json:"summary"`
-	Description string            `json:"description"`
-	Type        string            `json:"type"`
-	CVEs        []string          `json:"cves"` // ["CVE-2024-1234"]
-	References  []string          `json:"references"`
-	Releases    map[string]usnRel `json:"releases"` // {"jammy": {...}, "noble": {...}}
-	Notes       string            `json:"notes"`
+	ID              string                 `json:"id"` // USN-7890-1
+	Title           string                 `json:"title"`
+	Published       string                 `json:"published"`
+	Summary         string                 `json:"summary"`
+	Description     string                 `json:"description"`
+	Type            string                 `json:"type"`
+	CVEIDs          []string               `json:"cves_ids"`
+	References      []string               `json:"references"`
+	Releases        []usnReleaseMeta       `json:"releases"`
+	ReleasePackages map[string][]usnRelPkg `json:"release_packages"`
 }
 
-type usnRel struct {
-	Codename string            `json:"codename"`
-	Version  string            `json:"version"`
-	Sources  map[string]usnSrc `json:"sources"`  // 源码包修复
-	Binaries map[string]usnBin `json:"binaries"` // 二进制包修复
+// usnReleaseMeta release 元数据 (codename → version)。
+type usnReleaseMeta struct {
+	Codename string `json:"codename"`
+	Version  string `json:"version"`
 }
 
-type usnSrc struct {
-	Version string `json:"version"` // 修复后版本
-}
-
-type usnBin struct {
+// usnRelPkg 某 release 下被修复的包 (name + 修复后 version)。
+type usnRelPkg struct {
+	Name    string `json:"name"`
 	Version string `json:"version"`
+}
+
+// versionFor 返回 codename 对应的 ubuntu 版本号，优先静态表，回退 notice.releases。
+func (n *usnNotice) versionFor(codename string) string {
+	if v := ubuntuCodenameToVersion(codename); v != "" {
+		return v
+	}
+	for _, r := range n.Releases {
+		if r.Codename == codename {
+			return r.Version
+		}
+	}
+	return ""
 }
 
 // Fetch 实现 Source。
@@ -121,8 +135,8 @@ func (u *UbuntuSource) Fetch(ctx context.Context, since time.Time) ([]*Advisory,
 					break
 				}
 			}
-			for codename, rel := range notice.Releases {
-				adv := u.parseNoticeForRelease(&notice, codename, &rel)
+			for codename, pkgs := range notice.ReleasePackages {
+				adv := u.buildAdvisory(&notice, codename, pkgs)
 				if adv != nil {
 					all = append(all, adv)
 					collected++
@@ -137,32 +151,20 @@ func (u *UbuntuSource) Fetch(ctx context.Context, since time.Time) ([]*Advisory,
 	return all, nil
 }
 
-func (u *UbuntuSource) parseNoticeForRelease(n *usnNotice, codename string, rel *usnRel) *Advisory {
-	if n == nil || rel == nil || n.Type != "USN" {
+func (u *UbuntuSource) buildAdvisory(n *usnNotice, codename string, pkgs []usnRelPkg) *Advisory {
+	if n == nil || n.Type != "USN" {
 		return nil
 	}
 
-	pkgFixes := make([]PkgFix, 0, len(rel.Binaries))
-	for pkgName, bin := range rel.Binaries {
-		if bin.Version == "" {
+	pkgFixes := make([]PkgFix, 0, len(pkgs))
+	for _, p := range pkgs {
+		if p.Name == "" || p.Version == "" {
 			continue
 		}
 		pkgFixes = append(pkgFixes, PkgFix{
-			Name:         pkgName,
-			FixedVersion: bin.Version,
+			Name:         p.Name,
+			FixedVersion: p.Version,
 		})
-	}
-	if len(pkgFixes) == 0 {
-		// fallback: 用 source pkg
-		for pkgName, src := range rel.Sources {
-			if src.Version == "" {
-				continue
-			}
-			pkgFixes = append(pkgFixes, PkgFix{
-				Name:         pkgName,
-				FixedVersion: src.Version,
-			})
-		}
 	}
 	if len(pkgFixes) == 0 {
 		return nil
@@ -178,15 +180,11 @@ func (u *UbuntuSource) parseNoticeForRelease(n *usnNotice, codename string, rel 
 		refURL = "https://ubuntu.com/security/notices/" + n.ID
 	}
 
-	// codename → version: jammy=22.04, noble=24.04
-	osMajor := ubuntuCodenameToVersion(codename)
-	if osMajor == "" {
-		osMajor = rel.Version
-	}
+	osMajor := n.versionFor(codename)
 
 	return &Advisory{
 		AdvisoryID:   n.ID + "/" + codename,
-		CVEIDs:       n.CVEs,
+		CVEIDs:       n.CVEIDs,
 		Severity:     severity,
 		Description:  firstNonEmpty(n.Summary, n.Description),
 		ReferenceURL: refURL,
