@@ -79,7 +79,7 @@ type usnBin struct {
 func (u *UbuntuSource) Fetch(ctx context.Context, since time.Time) ([]*Advisory, error) {
 	var all []*Advisory
 	offset := 0
-	const limit = 100
+	const limit = 20      // ubuntu.com USN API 上限为 20，超过返回 422 (HTML)
 	const maxNotices = 50 // 防初次全量过载
 
 	for collected := 0; collected < maxNotices; {
@@ -97,6 +97,12 @@ func (u *UbuntuSource) Fetch(ctx context.Context, since time.Time) ([]*Advisory,
 		resp, err := u.client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("USN HTTP: %w", err)
+		}
+		// 非 2xx 时响应体通常是 HTML 错误页，直接 JSON 解码会得到
+		// "invalid character '<'"，错误信息无意义。先按状态码短路。
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("USN HTTP status %d (url=%s)", resp.StatusCode, url)
 		}
 		var page usnListResponse
 		err = json.NewDecoder(resp.Body).Decode(&page)
