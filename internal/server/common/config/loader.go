@@ -10,6 +10,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -39,11 +40,50 @@ type KafkaConfig struct {
 }
 
 // DBConfig MySQL 连接参数。
+//
+// 支持两种写法: 显式 dsn 字符串 (优先)，或结构化 database.mysql.* 字段
+// (与 Manager/Consumer 共用的 server.yaml 同构)。用 ResolveDSN() 统一取值。
 type DBConfig struct {
-	DSN             string `mapstructure:"dsn"`
-	MaxOpenConns    int    `mapstructure:"max_open_conns"`
-	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime string `mapstructure:"conn_max_lifetime"` // duration string e.g. "1h"
+	DSN             string      `mapstructure:"dsn"`
+	Type            string      `mapstructure:"type"`
+	MySQL           MySQLParams `mapstructure:"mysql"`
+	MaxOpenConns    int         `mapstructure:"max_open_conns"`
+	MaxIdleConns    int         `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime string      `mapstructure:"conn_max_lifetime"` // duration string e.g. "1h"
+}
+
+// MySQLParams 结构化 MySQL 连接字段 (database.mysql.*)。
+type MySQLParams struct {
+	Host         string `mapstructure:"host"`
+	Port         int    `mapstructure:"port"`
+	User         string `mapstructure:"user"`
+	Password     string `mapstructure:"password"`
+	Database     string `mapstructure:"database"`
+	Charset      string `mapstructure:"charset"`
+	Loc          string `mapstructure:"loc"`
+	MaxOpenConns int    `mapstructure:"max_open_conns"`
+	MaxIdleConns int    `mapstructure:"max_idle_conns"`
+}
+
+// ResolveDSN 返回可用的 MySQL DSN: 优先显式 DSN，否则用结构化 mysql 字段拼接。
+// 无任何连接信息时返回空串 (调用方据此跳过 DB 初始化)。
+func (c DBConfig) ResolveDSN() string {
+	if c.DSN != "" {
+		return c.DSN
+	}
+	if c.MySQL.Host == "" {
+		return ""
+	}
+	charset := c.MySQL.Charset
+	if charset == "" {
+		charset = "utf8mb4"
+	}
+	loc := c.MySQL.Loc
+	if loc == "" {
+		loc = "Local"
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=true&loc=%s&allowNativePasswords=true",
+		c.MySQL.User, c.MySQL.Password, c.MySQL.Host, c.MySQL.Port, c.MySQL.Database, charset, url.QueryEscape(loc))
 }
 
 // OTelConfig OTel 追踪。
