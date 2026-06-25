@@ -31,6 +31,7 @@ type EngineConfig struct {
 // KafkaConfig Kafka 连接参数。
 type KafkaConfig struct {
 	Brokers     []string `mapstructure:"brokers"`
+	TopicPrefix string   `mapstructure:"topic_prefix"` // 与 AgentCenter / Consumer 一致 (如 "prod")
 	SASLEnabled bool     `mapstructure:"sasl_enabled"`
 	SASLUser    string   `mapstructure:"sasl_user"`
 	SASLPass    string   `mapstructure:"sasl_pass"`

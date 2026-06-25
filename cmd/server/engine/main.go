@@ -138,7 +138,7 @@ func main() {
 
 		pipeline := engine.NewPipeline(producer, resolver, stages, logger)
 
-		kc, err := engine.NewKafkaConsumer(cfg.Kafka.Brokers, pipeline.Handler(), logger)
+		kc, err := engine.NewKafkaConsumer(cfg.Kafka.Brokers, cfg.Kafka.TopicPrefix, pipeline.Handler(), logger)
 		if err != nil {
 			logger.Fatal("Kafka consumer 初始化失败", zap.Error(err))
 		}
