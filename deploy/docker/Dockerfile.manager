@@ -41,7 +41,7 @@ RUN apk add --no-cache ca-certificates tzdata curl clamav && \
     echo "DatabaseOwner root" >> /etc/clamav/freshclam.conf
 
 COPY --from=builder /app/manager /usr/bin/manager
-COPY --from=builder /app/plugins/baseline/config/examples /opt/mxcwpp/policies
+COPY --from=builder /app/plugins/baseline/config /opt/mxcwpp/policies
 COPY --from=builder /app/scripts /opt/mxcwpp/scripts
 
 RUN mkdir -p /etc/mxcwpp /var/log/mxcwpp /opt/mxcwpp/plugins /opt/mxcwpp/uploads
