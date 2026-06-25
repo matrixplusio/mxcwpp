@@ -3064,10 +3064,10 @@ data:
   trivy.supportedConfigAuditKinds: "Workload,Service,Role,ClusterRole,NetworkPolicy,Ingress,LimitRange,ResourceQuota"
   trivy.timeout: "5m0s"
   trivy.mode: "Standalone"
-  trivy.resources.requests.cpu: "100m"
-  trivy.resources.requests.memory: "100M"
-  trivy.resources.limits.cpu: "500m"
-  trivy.resources.limits.memory: "500M"
+  trivy.resources.requests.cpu: "250m"
+  trivy.resources.requests.memory: "2G"
+  trivy.resources.limits.cpu: "2"
+  trivy.resources.limits.memory: "4G"
 ---
 # Source: trivy-operator/templates/secrets/operator.yaml
 apiVersion: v1
@@ -3126,6 +3126,13 @@ spec:
         - name: "trivy-operator"
           image: "mirror.gcr.io/aquasec/trivy-operator:0.23.0"
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256M"
+            limits:
+              cpu: "1"
+              memory: "2G"
           env:
             - name: OPERATOR_NAMESPACE
               value: trivy-system
