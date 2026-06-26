@@ -31,37 +31,38 @@ type NodeBundle struct {
 }
 
 type nodeTemplateData struct {
-	ClusterName      string
-	Environment      string
-	Version          string
-	Config           *Config
-	Node             Node
-	Assignment       RoleAssignment
-	InstallDir       string
-	DataRoot         string
-	Timezone         string
-	Network          Network
-	App              App
-	ControlPlane     ControlPlane
-	ManagerImage     string
-	AgentCenterImage string
-	ConsumerImage    string
-	EngineImage      string
-	LLMProxyImage    string
-	VulnSyncImage    string
-	UIImage          string
-	MySQLImage       string
-	RedisImage       string
-	ClickHouseImage  string
-	KafkaImage       string
-	PrometheusImage  string
-	MySQLPort        int
-	RedisPort        int
-	ClickHouseHTTP   int
-	ClickHouseTCP    int
-	KafkaPorts       []int
-	KafkaHost        string
-	KafkaClusterID   string
+	ClusterName       string
+	Environment       string
+	Version           string
+	Config            *Config
+	Node              Node
+	Assignment        RoleAssignment
+	InstallDir        string
+	DataRoot          string
+	Timezone          string
+	Network           Network
+	App               App
+	ControlPlane      ControlPlane
+	ManagerImage      string
+	AgentCenterImage  string
+	ConsumerImage     string
+	EngineImage       string
+	LLMProxyImage     string
+	VulnSyncImage     string
+	UIImage           string
+	MySQLImage        string
+	RedisImage        string
+	ClickHouseImage   string
+	KafkaImage        string
+	PrometheusImage   string
+	AlertmanagerImage string
+	MySQLPort         int
+	RedisPort         int
+	ClickHouseHTTP    int
+	ClickHouseTCP     int
+	KafkaPorts        []int
+	KafkaHost         string
+	KafkaClusterID    string
 }
 
 type serverConfigDoc struct {
@@ -265,37 +266,38 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 	}
 
 	data := nodeTemplateData{
-		ClusterName:      cfg.Metadata.Name,
-		Environment:      cfg.Metadata.Environment,
-		Version:          cfg.Release.Version,
-		Config:           cfg,
-		Node:             assignment.Node,
-		Assignment:       assignment,
-		InstallDir:       assignment.Node.InstallDir,
-		DataRoot:         assignment.Node.DataRoot,
-		Timezone:         cfg.Release.Timezone,
-		Network:          cfg.Network,
-		App:              cfg.App,
-		ControlPlane:     cfg.ControlPlane,
-		ManagerImage:     cfg.ImageRef("mxcwpp-manager"),
-		AgentCenterImage: cfg.ImageRef("mxcwpp-agentcenter"),
-		ConsumerImage:    cfg.ImageRef("mxcwpp-consumer"),
-		EngineImage:      cfg.ImageRef("mxcwpp-engine"),
-		LLMProxyImage:    cfg.ImageRef("mxcwpp-llmproxy"),
-		VulnSyncImage:    cfg.ImageRef("mxcwpp-vulnsync"),
-		UIImage:          cfg.ImageRef("mxcwpp-ui"),
-		MySQLImage:       "mysql:8.0",
-		RedisImage:       "redis:7-alpine",
-		ClickHouseImage:  "clickhouse/clickhouse-server:24-alpine",
-		KafkaImage:       "confluentinc/cp-kafka:7.5.0",
-		PrometheusImage:  "prom/prometheus:v2.51.0",
-		MySQLPort:        cfg.Infrastructure.MySQL.Port,
-		RedisPort:        cfg.Infrastructure.Redis.Port,
-		ClickHouseHTTP:   cfg.Infrastructure.ClickHouse.HTTPPort,
-		ClickHouseTCP:    cfg.Infrastructure.ClickHouse.TCPPort,
-		KafkaPorts:       cfg.Infrastructure.Kafka.BrokerPorts,
-		KafkaHost:        cfg.KafkaHost(),
-		KafkaClusterID:   kafkaClusterID(cfg),
+		ClusterName:       cfg.Metadata.Name,
+		Environment:       cfg.Metadata.Environment,
+		Version:           cfg.Release.Version,
+		Config:            cfg,
+		Node:              assignment.Node,
+		Assignment:        assignment,
+		InstallDir:        assignment.Node.InstallDir,
+		DataRoot:          assignment.Node.DataRoot,
+		Timezone:          cfg.Release.Timezone,
+		Network:           cfg.Network,
+		App:               cfg.App,
+		ControlPlane:      cfg.ControlPlane,
+		ManagerImage:      cfg.ImageRef("mxcwpp-manager"),
+		AgentCenterImage:  cfg.ImageRef("mxcwpp-agentcenter"),
+		ConsumerImage:     cfg.ImageRef("mxcwpp-consumer"),
+		EngineImage:       cfg.ImageRef("mxcwpp-engine"),
+		LLMProxyImage:     cfg.ImageRef("mxcwpp-llmproxy"),
+		VulnSyncImage:     cfg.ImageRef("mxcwpp-vulnsync"),
+		UIImage:           cfg.ImageRef("mxcwpp-ui"),
+		MySQLImage:        "mysql:8.0",
+		RedisImage:        "redis:7-alpine",
+		ClickHouseImage:   "clickhouse/clickhouse-server:24-alpine",
+		KafkaImage:        "confluentinc/cp-kafka:7.5.0",
+		PrometheusImage:   "prom/prometheus:v2.51.0",
+		AlertmanagerImage: "prom/alertmanager:v0.27.0",
+		MySQLPort:         cfg.Infrastructure.MySQL.Port,
+		RedisPort:         cfg.Infrastructure.Redis.Port,
+		ClickHouseHTTP:    cfg.Infrastructure.ClickHouse.HTTPPort,
+		ClickHouseTCP:     cfg.Infrastructure.ClickHouse.TCPPort,
+		KafkaPorts:        cfg.Infrastructure.Kafka.BrokerPorts,
+		KafkaHost:         cfg.KafkaHost(),
+		KafkaClusterID:    kafkaClusterID(cfg),
 	}
 
 	installScript := filepath.Join(repoRoot, "scripts", "prod", "install-deps.sh")
@@ -319,6 +321,13 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 			return err
 		}
 		if err := writePrometheusConfig(filepath.Join(bundleDir, "config", "prometheus.yml"), cfg); err != nil {
+			return err
+		}
+		// 告警规则 + Alertmanager 配置（告警经 webhook 进 manager 服务告警）
+		if err := copyFile(filepath.Join(repoRoot, "deploy", "config", "prometheus-rules.yml"), filepath.Join(bundleDir, "config", "rules.yml"), 0o644); err != nil {
+			return err
+		}
+		if err := writeAlertmanagerConfig(filepath.Join(bundleDir, "config", "alertmanager.yml"), cfg); err != nil {
 			return err
 		}
 	}
@@ -641,7 +650,7 @@ func writePrometheusConfig(dst string, cfg *Config) error {
 
 	var buf strings.Builder
 	buf.WriteString(`# 由 mxctl 自动生成 — 请勿手动修改
-# 抓取 mxcwpp 自研服务 + Prometheus 自身
+# 抓取 mxcwpp 自研服务 + Prometheus 自身；告警规则 + Alertmanager 路由
 
 global:
   scrape_interval: 15s
@@ -649,6 +658,15 @@ global:
   external_labels:
     cluster: mxcwpp-prod
     env: prod
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - localhost:9093
 
 scrape_configs:
   - job_name: mxcwpp-manager
@@ -690,6 +708,39 @@ scrape_configs:
 	}
 
 	buf.WriteString("  - job_name: prometheus\n    scrape_interval: 30s\n    static_configs:\n      - targets:\n          - localhost:9090\n        labels:\n          service: prometheus\n")
+
+	return os.WriteFile(dst, []byte(buf.String()), 0o644)
+}
+
+// writeAlertmanagerConfig 渲染 Alertmanager 配置：所有告警经 webhook 推送到 manager
+// 的 /api/v1/internal/alerts/prometheus，入 alerts 表（category=service）→ 平台「系统监控-服务告警」。
+func writeAlertmanagerConfig(dst string, cfg *Config) error {
+	var controlHost string
+	for _, node := range cfg.Nodes {
+		if node.HasRole(RoleControl) {
+			controlHost = node.Host
+			break
+		}
+	}
+	if controlHost == "" {
+		return fmt.Errorf("未找到 control 节点，无法生成 Alertmanager 配置")
+	}
+	webhookURL := fmt.Sprintf("http://%s:%d/api/v1/internal/alerts/prometheus", controlHost, cfg.App.ManagerHTTPPort)
+
+	var buf strings.Builder
+	buf.WriteString("# 由 mxctl 自动生成 — 请勿手动修改\n")
+	buf.WriteString("# 告警经 webhook 推送到 manager 服务告警（系统监控-服务告警）\n")
+	buf.WriteString("route:\n")
+	buf.WriteString("  receiver: mxcwpp-manager\n")
+	buf.WriteString("  group_by: ['alertname', 'service']\n")
+	buf.WriteString("  group_wait: 10s\n")
+	buf.WriteString("  group_interval: 1m\n")
+	buf.WriteString("  repeat_interval: 1h\n\n")
+	buf.WriteString("receivers:\n")
+	buf.WriteString("  - name: mxcwpp-manager\n")
+	buf.WriteString("    webhook_configs:\n")
+	fmt.Fprintf(&buf, "      - url: %s\n", webhookURL)
+	buf.WriteString("        send_resolved: true\n")
 
 	return os.WriteFile(dst, []byte(buf.String()), 0o644)
 }

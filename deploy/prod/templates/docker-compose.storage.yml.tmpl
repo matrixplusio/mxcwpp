@@ -82,6 +82,7 @@ services:
     network_mode: host
     volumes:
       - {{ .InstallDir }}/current/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - {{ .InstallDir }}/current/config/rules.yml:/etc/prometheus/rules.yml:ro
       - {{ .DataRoot }}/prometheus:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -92,6 +93,25 @@ services:
       TZ: {{ .Timezone }}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  alertmanager:
+    image: {{ .AlertmanagerImage }}
+    container_name: mxcwpp-alertmanager
+    restart: always
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - {{ .DataRoot }}/alertmanager:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9093/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
