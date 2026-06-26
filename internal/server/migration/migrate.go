@@ -173,7 +173,28 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("低保真规则降级失败", zap.Error(err))
 	}
 
+	// 给存量检测规则回填 detect-only 观察期起点 effective_at = created_at
+	if err := migrateBackfillRuleEffectiveAt(db, logger); err != nil {
+		logger.Warn("回填规则 effective_at 失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
+	return nil
+}
+
+// migrateBackfillRuleEffectiveAt 给存量检测规则回填 effective_at = created_at。
+//
+// detect-only 上线观察期(P3)新增 effective_at 列：新规则上线起 ruleGraceWindow 内降级 indicator。
+// 存量规则早已上线、不应进入观察期，回填为创建时间使其立即过窗，避免加列后全量规则被静默。
+// 幂等：仅回填 NULL（AutoMigrate 新加列对存量行为 NULL；新增规则由 BeforeCreate 置当前时间）。
+func migrateBackfillRuleEffectiveAt(db *gorm.DB, logger *zap.Logger) error {
+	r := db.Exec("UPDATE detection_rules SET effective_at = created_at WHERE effective_at IS NULL")
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected > 0 {
+		logger.Info("回填检测规则 effective_at", zap.Int64("count", r.RowsAffected))
+	}
 	return nil
 }
 

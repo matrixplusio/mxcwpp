@@ -1,6 +1,8 @@
 // Package model 提供数据库模型定义
 package model
 
+import "gorm.io/gorm"
+
 // DetectionRule CEL 检测规则模型
 // 用于 Consumer 端基于 CEL 表达式对 Kafka 事件进行实时检测并生成告警
 type DetectionRule struct {
@@ -19,6 +21,18 @@ type DetectionRule struct {
 	UserModified bool        `gorm:"column:user_modified;default:false" json:"userModified"`
 	CreatedAt    LocalTime   `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt    LocalTime   `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	// EffectiveAt 规则上线时间，用户新增自定义规则的 detect-only 观察期(P3)起点。
+	// 内置规则不受观察期约束（见 celengine.graceDecision）。可空：存量规则由迁移回填为 created_at。
+	EffectiveAt *LocalTime `gorm:"column:effective_at;type:timestamp;null" json:"effectiveAt"`
+}
+
+// BeforeCreate 新增规则时若未显式指定上线时间，默认置为当前时间，作为 detect-only 观察期起点。
+func (r *DetectionRule) BeforeCreate(*gorm.DB) error {
+	if r.EffectiveAt == nil {
+		now := Now()
+		r.EffectiveAt = &now
+	}
+	return nil
 }
 
 // 规则保真度
