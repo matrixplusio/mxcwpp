@@ -16,6 +16,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
@@ -38,10 +39,9 @@ func NewHTTPHandler(logger *zap.Logger) http.Handler {
 		})
 	})
 
-	r.GET("/metrics", func(c *gin.Context) {
-		// Prometheus exporter 在后续 PR 加入。
-		c.String(http.StatusOK, "# engine metrics placeholder\n")
-	})
+	// 暴露默认 registry：engine pipeline 指标(metrics.go MustRegister)+ Go runtime
+	// (process_cpu_seconds_total / process_resident_memory_bytes / go_goroutines)。
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	r.NoRoute(func(c *gin.Context) {
 		payload, _ := json.Marshal(gin.H{
