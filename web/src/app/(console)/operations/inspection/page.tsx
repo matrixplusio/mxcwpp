@@ -160,7 +160,7 @@ export default function InspectionPage() {
         <StatCard label={t("operations.inspection.statPluginOutdated")} value={summary?.plugin_outdated_count ?? 0} icon={PackageX} tone="warning" />
       </div>
 
-      <Card>
+      <div className="space-y-4">
         <FilterBar>
           <SearchInput
             value={search}
@@ -171,14 +171,16 @@ export default function InspectionPage() {
           <Select value={agentFilter} onChange={setAgentFilter} options={agentOptions} />
           <Select value={blFilter} onChange={setBlFilter} options={businessLineOptions} />
         </FilterBar>
-        <DataTable
-          columns={columns}
-          rows={hosts}
-          rowKey={(r) => r.host_id}
-          loading={isLoading}
-          emptyText={t("operations.inspection.empty")}
-        />
-      </Card>
+        <Card>
+          <DataTable
+            columns={columns}
+            rows={hosts}
+            rowKey={(r) => r.host_id}
+            loading={isLoading}
+            emptyText={t("operations.inspection.empty")}
+          />
+        </Card>
+      </div>
 
       <ConfirmDialog
         open={!!restarting}
