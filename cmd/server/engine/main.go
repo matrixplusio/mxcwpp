@@ -118,6 +118,8 @@ func main() {
 				} else {
 					// v2 拆分: AlertGenerator 注入 stage, 命中规则直接 upsert alerts 表.
 					alertGen := celengine.NewAlertGenerator(db, logger.Named("alert"))
+					// P2-B: 周期 reload DB 告警白名单(自动调优采纳的 exception),原子快照零锁读热路径
+					alertGen.StartWhitelistReload(ctx)
 					stages = append(stages, engine.NewCelRuleStage(celEng, logger).WithAlertGenerator(alertGen))
 					stages = append(stages, engine.NewSequenceStage(
 						celengine.NewSequenceDetector(celEng, db, nil, logger.Named("seq")),

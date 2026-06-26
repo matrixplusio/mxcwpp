@@ -388,7 +388,8 @@
     "desc": "Security alert aggregation and handling",
     "tab": {
       "alerts": "Alert List",
-      "whitelist": "Whitelist"
+      "whitelist": "Whitelist",
+      "suggestions": "Tuning"
     },
     "status": {
       "active": "Pending",
@@ -454,6 +455,28 @@
       "empty": "No whitelist entries",
       "saved": "Saved",
       "deleted": "Deleted"
+    },
+    "suggestion": {
+      "intro": "Whitelist suggestions aggregated from analyst feedback (resolve/ignore). Adopting writes to the alert whitelist and takes effect in the detection engine; dismissing ignores the pattern.",
+      "statusPending": "Pending",
+      "statusAdopted": "Adopted",
+      "statusDismissed": "Dismissed",
+      "colRule": "Rule",
+      "colExe": "Process",
+      "colScope": "Scope",
+      "colHits": "Hits",
+      "colConfidence": "Confidence",
+      "colReason": "Sample reason",
+      "scopeFleet": "All hosts",
+      "adopt": "Adopt",
+      "dismiss": "Dismiss",
+      "adopted": "Adopted and added to whitelist",
+      "dismissed": "Dismissed",
+      "empty": "No suggestions",
+      "adoptTitle": "Adopt suggestion",
+      "adoptConfirmDesc": "Create an alert whitelist exception for process {{exe}} on rule \"{{rule}}\"; the detection engine will stop alerting on this pattern. Confirm?",
+      "dismissTitle": "Dismiss suggestion",
+      "dismissConfirmDesc": "Dismiss the whitelist suggestion for process {{exe}}; future aggregation will not resurface it. Confirm?"
     }
   },
   "vuln": {

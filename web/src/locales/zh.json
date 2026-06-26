@@ -388,7 +388,8 @@
     "desc": "安全告警聚合与处置",
     "tab": {
       "alerts": "告警列表",
-      "whitelist": "白名单"
+      "whitelist": "白名单",
+      "suggestions": "调优建议"
     },
     "status": {
       "active": "待处理",
@@ -454,6 +455,28 @@
       "empty": "暂无白名单",
       "saved": "已保存",
       "deleted": "已删除"
+    },
+    "suggestion": {
+      "intro": "自动调优分析师反馈（resolve/ignore）聚合出的白名单建议。采纳后写入告警白名单并在检测引擎生效；驳回则忽略该模式。",
+      "statusPending": "待审",
+      "statusAdopted": "已采纳",
+      "statusDismissed": "已驳回",
+      "colRule": "规则",
+      "colExe": "进程",
+      "colScope": "范围",
+      "colHits": "命中次数",
+      "colConfidence": "置信度",
+      "colReason": "代表性原因",
+      "scopeFleet": "全部主机",
+      "adopt": "采纳",
+      "dismiss": "驳回",
+      "adopted": "已采纳并写入白名单",
+      "dismissed": "已驳回",
+      "empty": "暂无建议",
+      "adoptTitle": "采纳建议",
+      "adoptConfirmDesc": "将为进程 {{exe}} 在规则「{{rule}}」上创建告警白名单豁免，检测引擎将不再为该模式产生告警。确认采纳？",
+      "dismissTitle": "驳回建议",
+      "dismissConfirmDesc": "驳回进程 {{exe}} 的白名单建议，后续聚合不再复现该建议。确认驳回？"
     }
   },
   "vuln": {

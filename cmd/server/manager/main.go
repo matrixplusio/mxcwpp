@@ -71,6 +71,8 @@ func main() {
 	go managerscheduler.StartAlertScheduler(services.DB, services.Logger)
 	// 漏洞通报升级调度器 (SLA 检查/升级通知/自动关闭),业务调度归 Manager
 	go managerscheduler.StartBulletinEscalationScheduler(services.DB, services.Logger)
+	// P2-B: 自动调优聚合调度器 (聚合 resolve/ignore 反馈 → 生成白名单建议,人审采纳)
+	go managerscheduler.StartAutoTuningScheduler(services.DB, services.Logger)
 
 	// 启动漏洞扫描定时调度器
 	vulnScanner := biz.NewVulnScanner(services.DB, services.Logger)
