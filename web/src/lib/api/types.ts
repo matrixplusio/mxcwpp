@@ -95,10 +95,15 @@ export interface SiteConfig { site_name: string; site_logo: string; site_domain:
 export interface RetentionPolicy { id: number; ch_table: string; display_name: string; description: string; retention_days: number; updated_by: string; updated_at: string; }
 export interface FeatureFlag { id: number; key: string; value: string; default_value: string; description: string; updated_by: string; updated_at: string; }
 
+export type AuditActorType = "user" | "system" | "agent";
+export type AuditOutcome = "success" | "failure";
+
 export interface AuditLog {
-  id: number; username: string; action: string;
-  resource_type: string; resource_id: string;
-  path: string; ip: string; status_code: number; created_at: string;
+  id: number; actor_type: AuditActorType; username: string; action: string;
+  outcome: AuditOutcome;
+  resource_type: string; resource_id: string; target_name: string;
+  path: string; ip: string; detail: string; change_detail: string;
+  status_code: number; created_at: string;
 }
 
 // ===== 运维中心（operations）=====

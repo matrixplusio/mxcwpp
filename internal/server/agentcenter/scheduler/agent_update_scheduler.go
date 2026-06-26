@@ -15,6 +15,7 @@ import (
 
 	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
@@ -325,6 +326,20 @@ func (s *AgentUpdateScheduler) processPushRecord(ctx context.Context, pushRecord
 	}
 
 	s.db.Model(pushRecord).Updates(updates)
+
+	outcome := model.OutcomeSuccess
+	if successCount == 0 {
+		outcome = model.OutcomeFailure
+	}
+	audit.Record(ctx, audit.Event{
+		ActorType:    model.ActorTypeSystem,
+		Username:     "agent-update-scheduler",
+		Action:       "agent.update_push",
+		Outcome:      outcome,
+		ResourceType: "agent",
+		TargetName:   "agent@" + latestVersion.Version,
+		Detail:       fmt.Sprintf("success=%d failed=%d", successCount, failedCount),
+	})
 
 	s.logger.Info("推送记录处理完成",
 		zap.Uint("record_id", pushRecord.ID),

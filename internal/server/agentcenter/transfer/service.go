@@ -26,6 +26,7 @@ import (
 	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/metrics"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
@@ -1712,6 +1713,17 @@ func (s *Service) checkAndSendAgentOnlineNotification(agentID string, conn *Conn
 		zap.Time("last_heartbeat", lastHeartbeat),
 		zap.Duration("offline_duration", time.Since(lastHeartbeat)),
 	)
+
+	audit.Record(context.Background(), audit.Event{
+		ActorType:    model.ActorTypeAgent,
+		Username:     agentID,
+		Action:       "agent.online",
+		Outcome:      model.OutcomeSuccess,
+		ResourceType: "host",
+		ResourceID:   agentID,
+		TargetName:   host.Hostname,
+		Detail:       fmt.Sprintf("offline_duration=%s", time.Since(lastHeartbeat).Round(time.Second)),
+	})
 
 	// 自动解决离线告警
 	s.resolveAgentOfflineAlert(agentID)

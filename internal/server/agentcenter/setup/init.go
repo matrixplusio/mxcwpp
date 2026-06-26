@@ -25,6 +25,7 @@ import (
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/server"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/database"
@@ -96,6 +97,9 @@ func Initialize(configPath string) (*AgentCenterServices, error) {
 		logger.Fatal("创建 gRPC Server 失败", zap.Error(err))
 		return nil, err
 	}
+
+	// 审计记录器：AgentCenter 进程独立初始化，供 agent 上线/离线/更新推送等事件落库
+	audit.Init(db, chConn, logger)
 
 	// 6. 注册 Transfer 服务
 	transferService := transfer.NewService(db, logger, cfg)

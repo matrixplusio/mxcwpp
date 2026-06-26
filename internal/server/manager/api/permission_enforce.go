@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
@@ -199,6 +200,18 @@ func (r *PermissionResolver) EnforcePermissions() gin.HandlerFunc {
 				zap.String("method", c.Request.Method),
 				zap.String("path", c.FullPath()),
 			)
+			username, _ := c.Get("username")
+			usernameStr, _ := username.(string)
+			audit.Record(c.Request.Context(), audit.Event{
+				ActorType:  model.ActorTypeUser,
+				Username:   usernameStr,
+				Action:     "access.denied",
+				Outcome:    model.OutcomeFailure,
+				Path:       c.Request.URL.Path,
+				IP:         c.ClientIP(),
+				StatusCode: http.StatusForbidden,
+				Detail:     "role=" + roleStr + " required_perm=" + code,
+			})
 			Forbidden(c, "无权限执行该操作，需要权限: "+code)
 			c.Abort()
 			return

@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
@@ -169,6 +170,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 需要认证的路由
 	apiV1Auth := apiV1.Group("")
 	apiV1Auth.Use(authHandler.AuthMiddleware())
+	audit.Init(db, chConn, logger)
 	apiV1Auth.Use(middleware.AuditLogWithCH(db, chConn, logger))
 	// RBAC：让 role_permissions 表参与放行——对写操作按所属模块校验权限（纵向越权防护）。
 	// 读操作放行；admin 角色恒通过；user 默认无写权。

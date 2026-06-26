@@ -2229,11 +2229,25 @@
     },
     "search": "Search username",
     "colTime": "Time",
-    "colUser": "User",
+    "colUser": "Actor",
+    "colActor": "Actor Type",
     "colAction": "Action",
+    "colOutcome": "Outcome",
     "colResource": "Resource",
+    "colTarget": "Target",
     "colPath": "Path",
     "colStatusCode": "Status Code",
+    "allActor": "All Actor Types",
+    "allOutcome": "All Outcomes",
+    "actor": {
+      "user": "User",
+      "system": "System",
+      "agent": "Agent"
+    },
+    "outcome": {
+      "success": "Success",
+      "failure": "Failure"
+    },
     "empty": "No audit records"
   }
 }

@@ -2229,11 +2229,25 @@
     },
     "search": "搜索用户名",
     "colTime": "时间",
-    "colUser": "用户",
+    "colUser": "操作者",
+    "colActor": "参与方",
     "colAction": "操作",
+    "colOutcome": "结果",
     "colResource": "资源",
+    "colTarget": "目标",
     "colPath": "路径",
     "colStatusCode": "状态码",
+    "allActor": "全部参与方",
+    "allOutcome": "全部结果",
+    "actor": {
+      "user": "用户",
+      "system": "系统",
+      "agent": "Agent"
+    },
+    "outcome": {
+      "success": "成功",
+      "failure": "失败"
+    },
     "empty": "暂无审计记录"
   }
 }

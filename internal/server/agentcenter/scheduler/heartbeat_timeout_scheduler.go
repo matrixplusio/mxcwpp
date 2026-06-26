@@ -2,6 +2,7 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
@@ -79,6 +81,16 @@ func checkHeartbeatTimeout(db *gorm.DB, logger *zap.Logger) {
 		if host.LastHeartbeat != nil {
 			lastHB = host.LastHeartbeat.Time()
 		}
+		audit.Record(context.Background(), audit.Event{
+			ActorType:    model.ActorTypeSystem,
+			Username:     "heartbeat-timeout-scheduler",
+			Action:       "agent.offline",
+			Outcome:      model.OutcomeSuccess,
+			ResourceType: "host",
+			ResourceID:   host.HostID,
+			TargetName:   host.Hostname,
+			Detail:       fmt.Sprintf("heartbeat timeout, last_heartbeat=%s", lastHB.Format(time.RFC3339)),
+		})
 		logger.Info("已将心跳超时主机标记为离线",
 			zap.String("host_id", host.HostID),
 			zap.String("hostname", host.Hostname),
