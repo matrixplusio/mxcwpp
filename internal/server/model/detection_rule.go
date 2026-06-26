@@ -12,7 +12,8 @@ type DetectionRule struct {
 	MitreID      string      `gorm:"type:varchar(50)" json:"mitreId"`
 	Category     string      `gorm:"type:varchar(100);index" json:"category"`
 	Description  string      `gorm:"type:text" json:"description"`
-	DataTypes    StringArray `gorm:"type:json" json:"dataTypes"` // 适用的 DataType 列表（如 "3000", "3001"）
+	DataTypes    StringArray `gorm:"type:json" json:"dataTypes"`                                     // 适用的 DataType 列表（如 "3000", "3001"）
+	Fidelity     string      `gorm:"type:varchar(16);not null;default:'high';index" json:"fidelity"` // high=直接告警；low=单信号低保真,降级为 indicator(不独立告警,仅喂关联)
 	Enabled      bool        `gorm:"default:true;index" json:"enabled"`
 	Builtin      bool        `gorm:"default:false" json:"builtin"`
 	UserModified bool        `gorm:"column:user_modified;default:false" json:"userModified"`
@@ -20,9 +21,20 @@ type DetectionRule struct {
 	UpdatedAt    LocalTime   `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
+// 规则保真度
+const (
+	RuleFidelityHigh = "high" // 高保真：命中即独立告警
+	RuleFidelityLow  = "low"  // 低保真：单信号噪声大，降级为 indicator，不独立告警，仅作为关联(anomaly/storyline)输入
+)
+
 // TableName 指定表名
 func (DetectionRule) TableName() string {
 	return "detection_rules"
+}
+
+// IsLowFidelity 判断规则是否为低保真(降级,不独立告警)。
+func (r *DetectionRule) IsLowFidelity() bool {
+	return r.Fidelity == RuleFidelityLow
 }
 
 // MatchesDataType 判断当前规则是否适用于指定 DataType

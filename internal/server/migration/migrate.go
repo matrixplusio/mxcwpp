@@ -168,7 +168,45 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("advisory_packages 回填失败", zap.Error(err))
 	}
 
+	// 把低保真单信号噪声规则降级（fidelity=low），不独立告警，仅喂关联（CrowdStrike IOA 模型）
+	if err := migrateMarkLowFidelityRules(db, logger); err != nil {
+		logger.Warn("低保真规则降级失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
+	return nil
+}
+
+// migrateMarkLowFidelityRules 把繁忙业务负载上必然刷屏、单信号、近零真阳价值的检测规则
+// 标记为 fidelity=low（降级 indicator，不独立告警，事件仍喂 anomaly/storyline 关联）。
+//
+// 依据 prod 实测：高频外连(hit 326k)/DNS(22w)/枚举(11w)/tmp/隐藏文件 等单信号规则在
+// db/mq/zookeeper/网关等正常业务上持续触发。对齐 Falco「少量精调规则 > 一堆噪声规则」+
+// CrowdStrike IOA「单信号不告警，多信号关联才告警」。幂等。
+//
+// 仅降级"低保真"规则名模式；高保真规则(反弹shell/CobaltStrike/memfd/真C2/横向)保持 high。
+func migrateMarkLowFidelityRules(db *gorm.DB, logger *zap.Logger) error {
+	lowFidelityPatterns := []string{
+		"高频外连%",
+		"DNS 查询%", // 非 DNS 工具 / 高频请求
+		"信息收集%",   // 主机/用户/进程/网络枚举
+		"发现 -%",   // net user/arp/ldap 等枚举（agent yaml 原始名）
+		"/tmp 目录可执行文件创建%",
+		"反检测 - 隐藏文件大量创建%",
+	}
+	var total int64
+	for _, p := range lowFidelityPatterns {
+		r := db.Model(&model.DetectionRule{}).
+			Where("name LIKE ? AND fidelity <> ?", p, model.RuleFidelityLow).
+			Update("fidelity", model.RuleFidelityLow)
+		if r.Error != nil {
+			return r.Error
+		}
+		total += r.RowsAffected
+	}
+	if total > 0 {
+		logger.Info("已降级低保真噪声规则为 indicator", zap.Int64("count", total))
+	}
 	return nil
 }
 
