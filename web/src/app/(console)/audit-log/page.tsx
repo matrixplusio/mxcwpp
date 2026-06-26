@@ -53,6 +53,14 @@ function actorTone(actor: string): Tone {
   if (actor === "agent") return "warning";
   return "neutral";
 }
+// 兜底：旧审计行无 actor_type/outcome 字段，缺失时归一为合理默认，避免渲染 i18n key。
+function normalizeActor(actor?: string): "user" | "system" | "agent" {
+  return actor === "system" || actor === "agent" ? actor : "user";
+}
+function normalizeOutcome(outcome: string | undefined, code: number): "success" | "failure" {
+  if (outcome === "success" || outcome === "failure") return outcome;
+  return code >= 400 ? "failure" : "success";
+}
 function statusTone(code: number): Tone {
   if (code === 0) return "neutral";
   if (code < 300) return "success";
@@ -99,7 +107,10 @@ export default function AuditLogPage() {
     {
       key: "actor_type",
       title: t("audit.colActor"),
-      render: (r) => <StatusTag tone={actorTone(r.actor_type)}>{t(`audit.actor.${r.actor_type}`)}</StatusTag>,
+      render: (r) => {
+        const actor = normalizeActor(r.actor_type);
+        return <StatusTag tone={actorTone(actor)}>{t(`audit.actor.${actor}`)}</StatusTag>;
+      },
     },
     { key: "username", title: t("audit.colUser"), render: (r) => <span className="font-medium text-ink">{r.username}</span> },
     {
@@ -110,9 +121,10 @@ export default function AuditLogPage() {
     {
       key: "outcome",
       title: t("audit.colOutcome"),
-      render: (r) => (
-        <StatusTag tone={r.outcome === "failure" ? "danger" : "success"}>{t(`audit.outcome.${r.outcome}`)}</StatusTag>
-      ),
+      render: (r) => {
+        const outcome = normalizeOutcome(r.outcome, r.status_code);
+        return <StatusTag tone={outcome === "failure" ? "danger" : "success"}>{t(`audit.outcome.${outcome}`)}</StatusTag>;
+      },
     },
     {
       key: "resource",
