@@ -86,14 +86,16 @@ groups:
           summary: "AgentCenter gRPC 错误率 > 5%"
           description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
 
+      # Transfer 是长生命周期双向流，grpc_handled_total 只在流结束才 +1，
+      # 用它判流量对长连接服务恒为 0（假阳）。改用 msg_received_total（流内每条消息计数）。
       - alert: MxCwppACNoTraffic
-        expr: sum(rate(mxcwpp_ac_grpc_handled_total[5m])) == 0
+        expr: sum(rate(mxcwpp_ac_grpc_msg_received_total[5m])) == 0
         for: 10m
         labels:
           severity: warning
           service: agentcenter
         annotations:
-          summary: "AgentCenter 10 分钟无任何 RPC 流量"
+          summary: "AgentCenter 10 分钟无 Agent 上行消息"
           description: "可能所有 Agent 离线，或 AC 实例不健康。"
 
   # ============ Consumer 处理能力 ============
