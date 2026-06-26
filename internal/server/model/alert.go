@@ -53,6 +53,7 @@ type Alert struct {
 	PolicyID       string      `gorm:"column:policy_id;type:varchar(64);index" json:"policy_id"`
 	Source         string      `gorm:"column:source;type:varchar(20);not null;default:'';index" json:"source"` // 告警来源: baseline, edr, agent, vulnerability, fim, virus, kube
 	Severity       string      `gorm:"column:severity;type:varchar(20);not null;index" json:"severity"`        // critical, high, medium, low
+	RiskScore      int         `gorm:"column:risk_score;type:int;not null;default:0;index" json:"risk_score"`  // 0-100 综合风险分(severity×保真×资产关键性×关联),供分级排序/过滤
 	Category       string      `gorm:"column:category;type:varchar(50);index" json:"category"`
 	Title          string      `gorm:"column:title;type:varchar(255);not null" json:"title"`
 	Description    string      `gorm:"column:description;type:text" json:"description"`

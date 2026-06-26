@@ -415,6 +415,7 @@
       "allType": "全部类型",
       "colTitle": "告警标题",
       "colSource": "来源",
+      "colRisk": "风险分",
       "colHost": "主机",
       "colLastSeen": "最近出现",
       "actionResolve": "解决",

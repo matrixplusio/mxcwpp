@@ -36,6 +36,7 @@ export interface Alert {
   policy_id: string;
   source: AlertSource;
   severity: Severity;
+  risk_score: number;
   category: string;
   title: string;
   description?: string;
