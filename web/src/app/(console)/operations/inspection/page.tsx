@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Server, Wifi, WifiOff, ArrowUpCircle, AlertTriangle, PackageX } from "lucide-react";
@@ -9,6 +9,9 @@ import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusTag } from "@/components/ui/Tag";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { Select } from "@/components/ui/Select";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
 
@@ -21,6 +24,10 @@ export default function InspectionPage() {
     queryFn: () => operationsApi.inspectionOverview(),
   });
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [blFilter, setBlFilter] = useState("");
   const [restarting, setRestarting] = useState<InspectionHostItem | null>(null);
 
   const restartMutation = useMutation({
@@ -35,6 +42,42 @@ export default function InspectionPage() {
 
   const summary = data?.summary;
   const latestAgentVersion = data?.latest_agent_version;
+
+  const allHosts = useMemo(() => data?.hosts ?? [], [data]);
+  const businessLineOptions = useMemo(() => {
+    const set = new Set<string>();
+    allHosts.forEach((h) => h.business_line && set.add(h.business_line));
+    return [
+      { label: t("operations.inspection.allBusinessLine"), value: "" },
+      ...Array.from(set).sort().map((bl) => ({ label: bl, value: bl })),
+    ];
+  }, [allHosts, t]);
+
+  const hosts = useMemo(() => {
+    const kw = search.trim().toLowerCase();
+    return allHosts.filter((h) => {
+      if (statusFilter && h.status !== statusFilter) return false;
+      if (blFilter && h.business_line !== blFilter) return false;
+      if (agentFilter === "outdated" && !(h.agent_version && latestAgentVersion && h.agent_version !== latestAgentVersion)) return false;
+      if (agentFilter === "latest" && h.agent_version !== latestAgentVersion) return false;
+      if (kw) {
+        const hay = `${h.hostname} ${h.host_id} ${h.ipv4?.join(" ") ?? ""}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+  }, [allHosts, search, statusFilter, agentFilter, blFilter, latestAgentVersion]);
+
+  const statusOptions = [
+    { label: t("operations.inspection.allStatus"), value: "" },
+    { label: t("common.online"), value: "online" },
+    { label: t("common.offline"), value: "offline" },
+  ];
+  const agentOptions = [
+    { label: t("operations.inspection.agentAll"), value: "" },
+    { label: t("operations.inspection.agentOutdated"), value: "outdated" },
+    { label: t("operations.inspection.agentLatest"), value: "latest" },
+  ];
 
   const columns: Column<InspectionHostItem>[] = [
     {
@@ -118,9 +161,19 @@ export default function InspectionPage() {
       </div>
 
       <Card>
+        <FilterBar>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t("operations.inspection.search")}
+          />
+          <Select value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
+          <Select value={agentFilter} onChange={setAgentFilter} options={agentOptions} />
+          <Select value={blFilter} onChange={setBlFilter} options={businessLineOptions} />
+        </FilterBar>
         <DataTable
           columns={columns}
-          rows={data?.hosts ?? []}
+          rows={hosts}
           rowKey={(r) => r.host_id}
           loading={isLoading}
           emptyText={t("operations.inspection.empty")}
