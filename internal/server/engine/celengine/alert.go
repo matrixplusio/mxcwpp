@@ -58,6 +58,12 @@ func (g *AlertGenerator) Generate(hostID string, matchedRules []model.DetectionR
 	now := time.Now()
 	for i := range matchedRules {
 		rule := &matchedRules[i]
+		// 低保真单信号规则降级为 indicator：不独立出告警(否则在繁忙业务负载上刷屏,
+		// 实测高频外连/DNS/枚举类单条 hit 数十万)。事件仍经 anomaly/storyline 关联,
+		// 多信号关联命中才升级为告警(CrowdStrike IOA 模型)。
+		if rule.IsLowFidelity() {
+			continue
+		}
 		if ok, reason := IsAlertWhitelisted(rule, fields); ok {
 			g.log.Debug("CEL 告警命中白名单已抑制",
 				zap.Uint("rule_id", rule.ID),
