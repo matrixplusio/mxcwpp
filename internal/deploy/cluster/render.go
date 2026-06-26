@@ -610,10 +610,13 @@ server {
 
 // writePrometheusConfig 渲染 Prometheus scrape 配置。
 //
-// 抓取 4 个自研服务（network_mode: host，端口直接绑宿主）：
+// 抓取自研服务（network_mode: host，端口直接绑宿主）：
 //   - mxcwpp-manager       :8080  /metrics
 //   - mxcwpp-agentcenter   :8081  /metrics
 //   - mxcwpp-consumer      :9100  /metrics  (独立 HTTP server)
+//   - mxcwpp-engine        :8082  /metrics
+//   - mxcwpp-vulnsync      :8083  /metrics
+//   - mxcwpp-llmproxy      :8085  /metrics
 //   - prometheus self     :9090  /metrics
 //
 // 不部署 mysql/redis/kafka/clickhouse 外部 exporter（与 mxcwpp driver 端检查重复）。
@@ -629,7 +632,12 @@ func writePrometheusConfig(dst string, cfg *Config) error {
 		return fmt.Errorf("未找到 control 节点，无法生成 Prometheus 配置")
 	}
 
-	const consumerMetricsPort = 9100
+	const (
+		consumerMetricsPort = 9100
+		engineMetricsPort   = 8082
+		vulnsyncMetricsPort = 8083
+		llmproxyMetricsPort = 8085
+	)
 
 	var buf strings.Builder
 	buf.WriteString(`# 由 mxctl 自动生成 — 请勿手动修改
@@ -664,6 +672,22 @@ scrape_configs:
 		fmt.Fprintf(&buf, "          - %s:%d\n", h, consumerMetricsPort)
 	}
 	buf.WriteString("        labels:\n          service: consumer\n\n")
+
+	// engine / vulnsync / llmproxy 也在 control 节点（host network），固定端口暴露 /metrics
+	for _, svc := range []struct {
+		name string
+		port int
+	}{
+		{"mxcwpp-engine", engineMetricsPort},
+		{"mxcwpp-vulnsync", vulnsyncMetricsPort},
+		{"mxcwpp-llmproxy", llmproxyMetricsPort},
+	} {
+		fmt.Fprintf(&buf, "  - job_name: %s\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n", svc.name)
+		for _, h := range controlHosts {
+			fmt.Fprintf(&buf, "          - %s:%d\n", h, svc.port)
+		}
+		fmt.Fprintf(&buf, "        labels:\n          service: %s\n\n", strings.TrimPrefix(svc.name, "mxcwpp-"))
+	}
 
 	buf.WriteString("  - job_name: prometheus\n    scrape_interval: 30s\n    static_configs:\n      - targets:\n          - localhost:9090\n        labels:\n          service: prometheus\n")
 
