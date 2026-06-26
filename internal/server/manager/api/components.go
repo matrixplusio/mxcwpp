@@ -593,9 +593,9 @@ func (h *ComponentsHandler) UploadPackage(c *gin.Context) {
 		return
 	}
 
-	// Plugin 只允许 binary
-	if component.Category == model.ComponentCategoryPlugin && pkgType != "binary" {
-		BadRequest(c, "插件包类型必须是 binary")
+	// Plugin 允许 binary 或 tgz（scanner 等 ClamAV/YARA bundle 走 tar.gz，agent 端自动解压）
+	if component.Category == model.ComponentCategoryPlugin && pkgType != "binary" && pkgType != "tgz" {
+		BadRequest(c, "插件包类型必须是 binary 或 tgz")
 		return
 	}
 
@@ -1026,13 +1026,15 @@ func (h *ComponentsHandler) DownloadPluginPackage(c *gin.Context) {
 		}
 	}
 
-	// 查找对应架构的二进制包（先查指定架构，再 fallback 到 arch=all）
+	// 查找对应架构的包（binary 或 tgz——scanner 等 tar.gz bundle 插件走 tgz，
+	// agent 端按 gzip magic 自动解压；先查指定架构，再 fallback 到 arch=all）
+	pkgTypes := []string{"binary", "tgz"}
 	var pkg model.ComponentPackage
-	if err := h.db.Where("version_id = ? AND pkg_type = ? AND arch = ? AND enabled = ?",
-		latestVersion.ID, "binary", arch, true).First(&pkg).Error; err != nil {
+	if err := h.db.Where("version_id = ? AND pkg_type IN ? AND arch = ? AND enabled = ?",
+		latestVersion.ID, pkgTypes, arch, true).First(&pkg).Error; err != nil {
 		// fallback: 查 arch=all（如 virus-database 等不分架构的包）
-		if err2 := h.db.Where("version_id = ? AND pkg_type = ? AND arch = ? AND enabled = ?",
-			latestVersion.ID, "binary", "all", true).First(&pkg).Error; err2 != nil {
+		if err2 := h.db.Where("version_id = ? AND pkg_type IN ? AND arch = ? AND enabled = ?",
+			latestVersion.ID, pkgTypes, "all", true).First(&pkg).Error; err2 != nil {
 			NotFound(c, fmt.Sprintf("插件 %s 没有 %s 架构的包", name, arch))
 			return
 		}
