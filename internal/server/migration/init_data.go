@@ -1678,14 +1678,33 @@ func initRBACPermissions(db *gorm.DB, logger *zap.Logger) error {
 		}
 	}
 
-	// admin 角色：确保拥有全部权限码（增量补齐，不删旧）
-	for _, code := range model.AllPermissionCodes {
-		rp := model.RolePermission{RoleCode: "admin", PermCode: string(code)}
-		if err := db.Where("role_code = ? AND perm_code = ?", "admin", string(code)).
-			Attrs(rp).
-			FirstOrCreate(&model.RolePermission{}).Error; err != nil {
-			logger.Warn("seed admin role_permission 失败", zap.String("perm", string(code)), zap.Error(err))
+	// 内置角色 seed：
+	//   - admin（平台超管）：每次启动确保拥有全部权限码（增量补齐，不删旧）。
+	//   - 其余内置角色（安全管理员/分析师/运维/审计员/只读用户）：仅首次 seed
+	//     （该角色尚无任何 role_permissions 行时），之后尊重管理员在 UI 上的定制。
+	for _, role := range model.BuiltinRoles {
+		if role.Code == "admin" {
+			for _, code := range role.Permissions {
+				if err := db.Where("role_code = ? AND perm_code = ?", role.Code, string(code)).
+					Attrs(model.RolePermission{RoleCode: role.Code, PermCode: string(code)}).
+					FirstOrCreate(&model.RolePermission{}).Error; err != nil {
+					logger.Warn("seed admin role_permission 失败", zap.String("perm", string(code)), zap.Error(err))
+				}
+			}
+			continue
 		}
+		var existing int64
+		db.Model(&model.RolePermission{}).Where("role_code = ?", role.Code).Count(&existing)
+		if existing > 0 {
+			continue // 已存在（含管理员定制），不覆盖
+		}
+		for _, code := range role.Permissions {
+			rp := model.RolePermission{RoleCode: role.Code, PermCode: string(code)}
+			if err := db.Create(&rp).Error; err != nil {
+				logger.Warn("seed 内置角色权限失败", zap.String("role", role.Code), zap.String("perm", string(code)), zap.Error(err))
+			}
+		}
+		logger.Info("内置角色已 seed", zap.String("role", role.Code), zap.String("name", role.Name), zap.Int("perms", len(role.Permissions)))
 	}
 	logger.Info("RBAC 权限元数据已初始化", zap.Int("permissions", len(permissionMeta)))
 	return nil

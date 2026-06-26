@@ -159,13 +159,30 @@ func requiredWriteCode(method, fullPath string) string {
 // 读操作（GET/HEAD/OPTIONS）与未登记模块放行。admin 角色恒通过。
 func (r *PermissionResolver) EnforceWritePermissions() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		code := requiredWriteCode(c.Request.Method, c.FullPath())
+		method := c.Request.Method
+		isWrite := method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
+
+		role, _ := c.Get("role")
+		roleStr, _ := role.(string)
+
+		// 只读角色（审计员/只读用户）：拦截全部写操作，无论是否登记模块。
+		// 其模块权限仅用于前端可见性。
+		if isWrite && model.IsReadOnlyRole(roleStr) {
+			r.logger.Warn("拒绝写操作：只读角色",
+				zap.String("role", roleStr),
+				zap.String("method", method),
+				zap.String("path", c.FullPath()),
+			)
+			Forbidden(c, "只读角色不可执行写操作")
+			c.Abort()
+			return
+		}
+
+		code := requiredWriteCode(method, c.FullPath())
 		if code == "" {
 			c.Next()
 			return
 		}
-		role, _ := c.Get("role")
-		roleStr, _ := role.(string)
 		if !r.Has(roleStr, code) {
 			r.logger.Warn("拒绝越权写操作：角色缺少模块权限",
 				zap.String("role", roleStr),

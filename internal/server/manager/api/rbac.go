@@ -118,13 +118,19 @@ func (h *RBACHandler) UpdateRolePermissions(c *gin.Context) {
 // ListRoles 获取所有角色及其权限
 // GET /api/v1/rbac/roles
 func (h *RBACHandler) ListRoles(c *gin.Context) {
-	// 获取所有角色码（从 role_permissions + 固定角色）
-	roleCodes := []string{"admin", "user"}
-
-	// 查找数据库中其他角色
+	// 角色码来源：内置角色（固定顺序）+ user + role_permissions 中的其他自定义角色。
+	roleCodes := make([]string, 0, len(model.BuiltinRoles)+2)
+	seen := map[string]bool{}
+	for _, r := range model.BuiltinRoles {
+		roleCodes = append(roleCodes, r.Code)
+		seen[r.Code] = true
+	}
+	if !seen["user"] {
+		roleCodes = append(roleCodes, "user")
+		seen["user"] = true
+	}
 	var dbRoles []string
 	h.db.Model(&model.RolePermission{}).Distinct("role_code").Pluck("role_code", &dbRoles)
-	seen := map[string]bool{"admin": true, "user": true}
 	for _, r := range dbRoles {
 		if !seen[r] {
 			roleCodes = append(roleCodes, r)
@@ -135,12 +141,9 @@ func (h *RBACHandler) ListRoles(c *gin.Context) {
 	type roleInfo struct {
 		Code        string   `json:"code"`
 		Name        string   `json:"name"`
+		ReadOnly    bool     `json:"read_only"`
+		Builtin     bool     `json:"builtin"`
 		Permissions []string `json:"permissions"`
-	}
-
-	roleNames := map[string]string{
-		"admin": "管理员",
-		"user":  "普通用户",
 	}
 
 	var roles []roleInfo
@@ -150,7 +153,11 @@ func (h *RBACHandler) ListRoles(c *gin.Context) {
 			Where("role_code = ?", code).
 			Pluck("perm_code", &permCodes)
 
-		name := roleNames[code]
+		name := model.BuiltinRoleName(code)
+		builtin := name != ""
+		if code == "user" {
+			name = "普通用户"
+		}
 		if name == "" {
 			name = code
 		}
@@ -158,6 +165,8 @@ func (h *RBACHandler) ListRoles(c *gin.Context) {
 		roles = append(roles, roleInfo{
 			Code:        code,
 			Name:        name,
+			ReadOnly:    model.IsReadOnlyRole(code),
+			Builtin:     builtin,
 			Permissions: permCodes,
 		})
 	}

@@ -49,3 +49,57 @@ type RolePermission struct {
 }
 
 func (RolePermission) TableName() string { return "role_permissions" }
+
+// BuiltinRole 内置角色定义：商业级 CWPP 的标准角色划分。
+//
+// 权限是模块级（拥有某模块即可读写该模块）。ReadOnly=true 的角色（审计员/只读用户）
+// 的模块权限仅用于前端菜单可见性，后端对其拦截全部写操作（见 EnforceWritePermissions），
+// 从而实现"全量可见、只读"。
+type BuiltinRole struct {
+	Code        string
+	Name        string
+	ReadOnly    bool
+	Permissions []PermissionCode
+}
+
+// BuiltinRoles 内置角色单一来源：seed、角色枚举、只读判定共用。
+var BuiltinRoles = []BuiltinRole{
+	{Code: "admin", Name: "平台超管", ReadOnly: false, Permissions: AllPermissionCodes},
+	{Code: "security_admin", Name: "安全管理员", ReadOnly: false, Permissions: []PermissionCode{
+		PermDashboard, PermAssets, PermAlerts, PermBaseline, PermFIM,
+		PermVirus, PermVuln, PermKube, PermDetection, PermMonitoring, PermAuditLog,
+	}},
+	{Code: "analyst", Name: "安全分析师", ReadOnly: false, Permissions: []PermissionCode{
+		PermDashboard, PermAssets, PermAlerts, PermVuln, PermMonitoring, PermAuditLog,
+	}},
+	{Code: "ops", Name: "运维", ReadOnly: false, Permissions: []PermissionCode{
+		PermDashboard, PermAssets, PermOperations, PermVuln, PermMonitoring, PermBaseline,
+	}},
+	{Code: "auditor", Name: "审计员", ReadOnly: true, Permissions: AllPermissionCodes},
+	{Code: "viewer", Name: "只读用户", ReadOnly: true, Permissions: []PermissionCode{
+		PermDashboard, PermAssets, PermAlerts, PermVuln,
+	}},
+}
+
+var readOnlyRoleSet = func() map[string]bool {
+	m := make(map[string]bool, len(BuiltinRoles))
+	for _, r := range BuiltinRoles {
+		if r.ReadOnly {
+			m[r.Code] = true
+		}
+	}
+	return m
+}()
+
+// IsReadOnlyRole 判断角色是否为只读角色（后端拦截其全部写操作）。
+func IsReadOnlyRole(role string) bool { return readOnlyRoleSet[role] }
+
+// BuiltinRoleName 返回内置角色显示名，非内置返回空串。
+func BuiltinRoleName(code string) string {
+	for _, r := range BuiltinRoles {
+		if r.Code == code {
+			return r.Name
+		}
+	}
+	return ""
+}
