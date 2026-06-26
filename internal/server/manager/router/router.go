@@ -702,6 +702,12 @@ func setupAlertWhitelistAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Lo
 	router.POST("/alerts/whitelist", handler.CreateWhitelist)
 	router.PUT("/alerts/whitelist/:id", handler.UpdateWhitelist)
 	router.DELETE("/alerts/whitelist/:id", handler.DeleteWhitelist)
+
+	// P2-B 自动调优建议（人审采纳/驳回）
+	sug := api.NewAlertWhitelistSuggestionHandler(db, logger)
+	router.GET("/alerts/whitelist/suggestions", sug.ListSuggestions)
+	router.POST("/alerts/whitelist/suggestions/:id/adopt", sug.AdoptSuggestion)
+	router.POST("/alerts/whitelist/suggestions/:id/dismiss", sug.DismissSuggestion)
 }
 
 // setupComponentsAPI 设置组件管理 API 路由

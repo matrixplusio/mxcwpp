@@ -67,9 +67,33 @@ export interface AlertWhitelist {
   host_id: string;
   category: string;
   severity: string;
+  exe: string;
+  cmdline: string;
   source_ip_cidr: string;
   reason: string;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertWhitelistSuggestion {
+  id: number;
+  signature: string;
+  rule_id: string;
+  rule_name: string;
+  host_id: string;
+  exe: string;
+  cmdline: string;
+  category: string;
+  severity: string;
+  hit_count: number;
+  confidence: number;
+  sample_alert_ids: string[] | null;
+  resolve_reason_sample: string;
+  status: "pending" | "adopted" | "dismissed";
+  decided_by: string;
+  decided_at: string | null;
+  whitelist_id: number;
   created_at: string;
   updated_at: string;
 }
