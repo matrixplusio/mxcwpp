@@ -2,7 +2,7 @@ export interface LoginRequest {
   username: string; password: string;
   captcha_id?: string; captcha_code?: string; device_id?: string;
 }
-export interface LoginUser { username: string; role: string; }
+export interface LoginUser { username: string; role: string; permissions?: string[]; read_only?: boolean; }
 export interface LoginResponse { token: string; user: LoginUser; need_change_password?: boolean; }
 
 export type Severity = "critical" | "high" | "medium" | "low";

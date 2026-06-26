@@ -228,8 +228,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	Success(c, gin.H{
 		"token": tokenString,
 		"user": gin.H{
-			"username": user.Username,
-			"role":     string(user.Role),
+			"username":    user.Username,
+			"role":        string(user.Role),
+			"permissions": h.resolveRolePermissions(string(user.Role)),
+			"read_only":   model.IsReadOnlyRole(string(user.Role)),
 		},
 		"need_change_password": user.ForceChangePassword,
 	})
@@ -315,9 +317,26 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	Success(c, gin.H{
-		"username": claims.Username,
-		"role":     claims.Role,
+		"username":    claims.Username,
+		"role":        claims.Role,
+		"permissions": h.resolveRolePermissions(claims.Role),
+		"read_only":   model.IsReadOnlyRole(claims.Role),
 	})
+}
+
+// resolveRolePermissions 返回角色拥有的模块权限码列表。admin（平台超管）拥有全部。
+// 前端据此控制菜单可见性；后端写权限另由 EnforceWritePermissions 强制。
+func (h *AuthHandler) resolveRolePermissions(role string) []string {
+	if role == string(model.UserRoleAdmin) {
+		out := make([]string, 0, len(model.AllPermissionCodes))
+		for _, code := range model.AllPermissionCodes {
+			out = append(out, string(code))
+		}
+		return out
+	}
+	perms := []string{}
+	h.db.Model(&model.RolePermission{}).Where("role_code = ?", role).Pluck("perm_code", &perms)
+	return perms
 }
 
 // AuthMiddleware JWT 认证中间件
