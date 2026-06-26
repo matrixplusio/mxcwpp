@@ -44,15 +44,17 @@ type CreateUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=64"`
 	Password string `json:"password" binding:"required,min=8"`
 	Email    string `json:"email" binding:"omitempty,email"`
-	Role     string `json:"role" binding:"required,oneof=admin user"`
-	Status   string `json:"status" binding:"omitempty,oneof=active inactive"`
+	// 角色不再写死 admin/user：内置二者 + 任意已在 role_permissions 中定义的自定义角色
+	// (如 auditor)，存在性在 handler 内用 roleExists 校验。
+	Role   string `json:"role" binding:"required"`
+	Status string `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
 // UpdateUserRequest 更新用户请求
 type UpdateUserRequest struct {
 	Password string `json:"password" binding:"omitempty,min=8"`
 	Email    string `json:"email" binding:"omitempty,email"`
-	Role     string `json:"role" binding:"omitempty,oneof=admin user"`
+	Role     string `json:"role" binding:"omitempty"`
 	Status   string `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
@@ -125,10 +127,25 @@ func (h *UsersHandler) GetUser(c *gin.Context) {
 
 // CreateUser 创建用户
 // POST /api/v1/users
+// roleExists 校验角色可用: 内置 admin/user 或已在 role_permissions 中定义的自定义角色 (如 auditor)。
+func (h *UsersHandler) roleExists(role string) bool {
+	if role == string(model.UserRoleAdmin) || role == string(model.UserRoleUser) {
+		return true
+	}
+	var n int64
+	h.db.Model(&model.RolePermission{}).Where("role_code = ?", role).Count(&n)
+	return n > 0
+}
+
 func (h *UsersHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "请求参数错误")
+		return
+	}
+
+	if !h.roleExists(req.Role) {
+		BadRequest(c, "角色不存在: "+req.Role)
 		return
 	}
 
@@ -211,6 +228,10 @@ func (h *UsersHandler) UpdateUser(c *gin.Context) {
 		user.Email = req.Email
 	}
 	if req.Role != "" {
+		if !h.roleExists(req.Role) {
+			BadRequest(c, "角色不存在: "+req.Role)
+			return
+		}
 		user.Role = model.UserRole(req.Role)
 	}
 	if req.Status != "" {
