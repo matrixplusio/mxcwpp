@@ -75,7 +75,7 @@ export interface AlertWhitelist {
 
 export interface User {
   id: number; username: string; email: string;
-  role: "admin" | "user"; status: "active" | "inactive";
+  role: string; status: "active" | "inactive";
   last_login?: string; created_at: string; updated_at: string;
 }
 export interface Permission { id: number; code: string; name: string; module: string; }
