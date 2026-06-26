@@ -128,6 +128,7 @@ func (g *AlertGenerator) upsertAlert(hostID string, rule *model.DetectionRule, f
 		RuleID:      fmt.Sprintf("cel-%d", rule.ID),
 		Source:      model.AlertSourceDetection,
 		Severity:    rule.Severity,
+		RiskScore:   g.computeRiskScore(hostID, rule),
 		Category:    categorize(rule),
 		Title:       rule.Name,
 		Description: rule.Description,
@@ -170,6 +171,8 @@ func (g *AlertGenerator) refreshExistingAlert(existing *model.Alert, now model.L
 		"last_seen_at": now,
 		"hit_count":    gorm.Expr("hit_count + 1"),
 		"actual":       detail,
+		// 重算风险分：关联升级(同主机多类告警)会随攻击链推进抬高分值(IOA)
+		"risk_score": g.computeRiskScoreForExisting(existing),
 	}
 	if existing.Status != model.AlertStatusActive {
 		updates["status"] = model.AlertStatusActive

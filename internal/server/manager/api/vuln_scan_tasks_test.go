@@ -56,6 +56,7 @@ func setupVulnScanAPITestDB(t *testing.T) *gorm.DB {
 			disk_info                 TEXT,
 			network_interfaces        TEXT,
 			business_line             TEXT,
+			criticality               TEXT,
 			system_boot_time          DATETIME,
 			agent_start_time          DATETIME,
 			last_active_time          DATETIME,

@@ -86,7 +86,8 @@ type Host struct {
 	// 网卡信息（JSON 格式，存储网卡列表）
 	NetworkInterfaces string `gorm:"column:network_interfaces;type:text" json:"network_interfaces"` // JSON 数组，包含网卡名称、MAC地址、IP地址、MTU、状态等信息
 	// 业务信息
-	BusinessLine string `gorm:"column:business_line;type:varchar(100)" json:"business_line"` // 业务线
+	BusinessLine string `gorm:"column:business_line;type:varchar(100)" json:"business_line"`                      // 业务线
+	Criticality  string `gorm:"column:criticality;type:varchar(16);not null;default:'normal'" json:"criticality"` // 资产关键性 low/normal/high/critical,供告警风险分级加权
 	// 时间信息
 	SystemBootTime *LocalTime `gorm:"column:system_boot_time;type:timestamp" json:"system_boot_time"` // 系统启动时间
 	AgentStartTime *LocalTime `gorm:"column:agent_start_time;type:timestamp" json:"agent_start_time"` // 客户端启动时间

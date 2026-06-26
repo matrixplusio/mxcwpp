@@ -415,6 +415,7 @@
       "allType": "All Types",
       "colTitle": "Alert Title",
       "colSource": "Source",
+      "colRisk": "Risk",
       "colHost": "Host",
       "colLastSeen": "Last Seen",
       "actionResolve": "Resolve",

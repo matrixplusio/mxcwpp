@@ -152,6 +152,15 @@ export default function AlertsPage() {
     },
     { key: "severity", title: t("common.level"), render: (r) => <SeverityTag level={r.severity} /> },
     {
+      key: "risk_score",
+      title: t("alerts.list.colRisk"),
+      render: (r) => {
+        const s = r.risk_score ?? 0;
+        const tone = s >= 70 ? "danger" : s >= 40 ? "warning" : "neutral";
+        return <StatusTag tone={tone}>{s}</StatusTag>;
+      },
+    },
+    {
       key: "host",
       title: t("alerts.list.colHost"),
       render: (r) => {
