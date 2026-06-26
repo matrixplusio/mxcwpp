@@ -268,6 +268,7 @@ var (
 		// 缺这两个 model 导致 /api/v1/rbac/permissions 直接 500（Table doesn't exist）
 		&Permission{},
 		&RolePermission{},
+		&Role{},
 		&LoginDevice{},
 
 		// v2.0 多租户: Tenant 必须放在 AllModels 前列实际无序，但

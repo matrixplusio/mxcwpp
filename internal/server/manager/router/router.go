@@ -174,7 +174,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 读操作放行；admin 角色恒通过；user 默认无写权。
 	permResolver := api.NewPermissionResolver(db, logger)
 	api.SetGlobalResolver(permResolver)
-	apiV1Auth.Use(permResolver.EnforceWritePermissions())
+	apiV1Auth.Use(permResolver.EnforcePermissions())
 
 	// 服务发现查询（需要认证，运维 / 前端监控页面调用）
 	apiV1Auth.GET("/discovery/agentcenter", discoveryHandler.ListACInstances)
@@ -330,6 +330,8 @@ func setupRBACAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	handler := api.NewRBACHandler(db, logger)
 	router.GET("/rbac/permissions", handler.ListPermissions)
 	router.GET("/rbac/roles", handler.ListRoles)
+	router.POST("/rbac/roles", handler.CreateRole)
+	router.DELETE("/rbac/roles/:role", handler.DeleteRole)
 	router.GET("/rbac/roles/:role/permissions", handler.GetRolePermissions)
 	router.PUT("/rbac/roles/:role/permissions", handler.UpdateRolePermissions)
 }

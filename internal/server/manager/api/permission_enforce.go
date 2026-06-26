@@ -100,9 +100,9 @@ type modulePrefix struct {
 	code   string
 }
 
-// writeModulePrefixes 覆盖 apiV1Auth 组下全部写操作所属模块。
+// modulePrefixes 把 apiV1Auth 组下的路由前缀映射到所属模块。
 // 更具体的前缀（如 /hosts/isolate）排在更泛的（/hosts）之前由排序保证。
-var writeModulePrefixes = func() []modulePrefix {
+var modulePrefixes = func() []modulePrefix {
 	ps := []modulePrefix{
 		{"/api/v1/vulnerabilities", "vuln"},
 		{"/api/v1/remediation-tasks", "vuln"},
@@ -141,12 +141,8 @@ var writeModulePrefixes = func() []modulePrefix {
 	return ps
 }()
 
-// requiredWriteCode 返回该请求路径所属模块的权限 code；非写操作或未登记模块返回 ""。
-func requiredWriteCode(method, fullPath string) string {
-	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
-		return ""
-	}
-	for _, mp := range writeModulePrefixes {
+func matchModule(fullPath string) string {
+	for _, mp := range modulePrefixes {
 		if fullPath == mp.prefix || strings.HasPrefix(fullPath, mp.prefix+"/") {
 			return mp.code
 		}
@@ -154,43 +150,56 @@ func requiredWriteCode(method, fullPath string) string {
 	return ""
 }
 
-// EnforceWritePermissions 是挂在 apiV1Auth 组上的中间件：
-// 对写操作按所属模块校验当前角色是否拥有对应权限 code，缺失则 403。
-// 读操作（GET/HEAD/OPTIONS）与未登记模块放行。admin 角色恒通过。
-func (r *PermissionResolver) EnforceWritePermissions() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		method := c.Request.Method
-		isWrite := method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
+// respondPathHints 命中即按「处置」动作鉴权（告警解决/忽略、主机隔离/解除、病毒隔离等）。
+var respondPathHints = []string{"/resolve", "/ignore", "/isolate", "/release", "/quarantine", "/dispose"}
 
-		role, _ := c.Get("role")
-		roleStr, _ := role.(string)
-
-		// 只读角色（审计员/只读用户）：拦截全部写操作，无论是否登记模块。
-		// 其模块权限仅用于前端可见性。
-		if isWrite && model.IsReadOnlyRole(roleStr) {
-			r.logger.Warn("拒绝写操作：只读角色",
-				zap.String("role", roleStr),
-				zap.String("method", method),
-				zap.String("path", c.FullPath()),
-			)
-			Forbidden(c, "只读角色不可执行写操作")
-			c.Abort()
-			return
+func isRespondPath(fullPath string) bool {
+	for _, h := range respondPathHints {
+		if strings.Contains(fullPath, h) {
+			return true
 		}
+	}
+	return false
+}
 
-		code := requiredWriteCode(method, c.FullPath())
+// requiredPerm 返回该请求所需的 module:action 权限码；未登记模块返回 ""（放行）。
+//
+//	读 (GET/HEAD/OPTIONS) → module:view
+//	处置 (resolve/ignore/isolate/...) → module:respond（模块支持时）
+//	其余写 → module:manage
+func requiredPerm(method, fullPath string) string {
+	module := matchModule(fullPath)
+	if module == "" {
+		return ""
+	}
+	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+		return model.Perm(module, model.ActionView)
+	}
+	if isRespondPath(fullPath) && model.ModuleHasAction(module, model.ActionRespond) {
+		return model.Perm(module, model.ActionRespond)
+	}
+	return model.Perm(module, model.ActionManage)
+}
+
+// EnforcePermissions 挂在 apiV1Auth 组上：按「模块 × 动作」校验当前角色权限。
+// 读→module:view，写→module:manage，处置→module:respond。admin 恒通过；未登记路由放行。
+func (r *PermissionResolver) EnforcePermissions() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		code := requiredPerm(c.Request.Method, c.FullPath())
 		if code == "" {
 			c.Next()
 			return
 		}
+		role, _ := c.Get("role")
+		roleStr, _ := role.(string)
 		if !r.Has(roleStr, code) {
-			r.logger.Warn("拒绝越权写操作：角色缺少模块权限",
+			r.logger.Warn("拒绝越权操作：角色缺少权限",
 				zap.String("role", roleStr),
 				zap.String("required_perm", code),
 				zap.String("method", c.Request.Method),
 				zap.String("path", c.FullPath()),
 			)
-			Forbidden(c, "无权限执行该操作，需要模块权限: "+code)
+			Forbidden(c, "无权限执行该操作，需要权限: "+code)
 			c.Abort()
 			return
 		}

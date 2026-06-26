@@ -1642,53 +1642,40 @@ func initKubeExpressionTemplates(db *gorm.DB, logger *zap.Logger) error {
 	return nil
 }
 
-// permissionMeta 内置权限元数据。code 与 model.AllPermissionCodes 一一对应。
-// 启动时 seed 到 permissions 表，handler 拿出来给 UI 渲染权限选择面板。
-var permissionMeta = []model.Permission{
-	{Code: model.PermDashboard, Name: "安全概览", Module: "dashboard", Description: "查看安全态势仪表盘"},
-	{Code: model.PermAssets, Name: "资产中心", Module: "assets", Description: "查看主机、容器、软件包等资产"},
-	{Code: model.PermAlerts, Name: "告警中心", Module: "alerts", Description: "查看与处置安全告警"},
-	{Code: model.PermBaseline, Name: "基线安全", Module: "baseline", Description: "主机/容器合规基线检查"},
-	{Code: model.PermFIM, Name: "文件完整性", Module: "fim", Description: "文件完整性监控与变更告警"},
-	{Code: model.PermVirus, Name: "病毒查杀", Module: "antivirus", Description: "病毒扫描任务与隔离区"},
-	{Code: model.PermVuln, Name: "漏洞管理", Module: "vuln", Description: "CVE 漏洞扫描与修复"},
-	{Code: model.PermKube, Name: "容器集群", Module: "kube", Description: "K8s 集群安全审计"},
-	{Code: model.PermDetection, Name: "威胁检测", Module: "detection", Description: "EDR / 入侵检测规则"},
-	{Code: model.PermMonitoring, Name: "系统监控", Module: "monitoring", Description: "主机指标、SLO、报警"},
-	{Code: model.PermOperations, Name: "运维中心", Module: "operations", Description: "插件版本、Agent 升级、备份"},
-	{Code: model.PermAuditLog, Name: "审计日志", Module: "audit_log", Description: "查看操作审计"},
-	{Code: model.PermUserManage, Name: "用户管理", Module: "user_manage", Description: "用户、角色、RBAC"},
-	{Code: model.PermSystemConfig, Name: "系统设置", Module: "system_config", Description: "全局配置与告警通道"},
-}
-
-// initRBACPermissions seed 内置权限码到 permissions 表（增量，不覆盖已有 Name/Description）。
-// 同时确保 admin 角色拥有全部权限（user 角色默认只读，由用户在 UI 上配置）。
+// initRBACPermissions seed 「模块×动作」权限到 permissions 表 + 内置角色到 role_permissions，
+// 并一次性把旧的模块级权限码（无冒号）迁移为 module:action。
 func initRBACPermissions(db *gorm.DB, logger *zap.Logger) error {
 	if db == nil {
 		return nil
 	}
-	for _, p := range permissionMeta {
-		// 按 code 增量：已存在不动（用户可能改过 Name），只插不存在的
-		var existing model.Permission
-		err := db.Where("code = ?", p.Code).First(&existing).Error
-		if err == gorm.ErrRecordNotFound {
-			if createErr := db.Create(&p).Error; createErr != nil {
-				logger.Warn("seed permission 失败", zap.String("code", string(p.Code)), zap.Error(createErr))
+
+	// 1) permissions 表：按 module:action seed（增量，已存在不动）。
+	actionName := map[model.Action]string{model.ActionView: "查看", model.ActionManage: "管理", model.ActionRespond: "处置"}
+	permCount := 0
+	for _, m := range model.Modules {
+		for _, a := range m.Actions {
+			code := model.Perm(m.Code, a)
+			permCount++
+			var existing model.Permission
+			if err := db.Where("code = ?", code).First(&existing).Error; err == gorm.ErrRecordNotFound {
+				if e := db.Create(&model.Permission{Code: code, Name: m.Name + " - " + actionName[a], Module: m.Code}).Error; e != nil {
+					logger.Warn("seed permission 失败", zap.String("code", code), zap.Error(e))
+				}
 			}
 		}
 	}
 
-	// 内置角色 seed：
-	//   - admin（平台超管）：每次启动确保拥有全部权限码（增量补齐，不删旧）。
-	//   - 其余内置角色（安全管理员/分析师/运维/审计员/只读用户）：仅首次 seed
-	//     （该角色尚无任何 role_permissions 行时），之后尊重管理员在 UI 上的定制。
+	// 2) 一次性迁移旧模块级权限码（无冒号）。
+	migrateLegacyRolePermissions(db, logger)
+
+	// 3) 内置角色 seed：admin 每次补齐全部；其余首次 seed（之后尊重 UI 定制）。
 	for _, role := range model.BuiltinRoles {
 		if role.Code == "admin" {
 			for _, code := range role.Permissions {
-				if err := db.Where("role_code = ? AND perm_code = ?", role.Code, string(code)).
-					Attrs(model.RolePermission{RoleCode: role.Code, PermCode: string(code)}).
+				if err := db.Where("role_code = ? AND perm_code = ?", role.Code, code).
+					Attrs(model.RolePermission{RoleCode: role.Code, PermCode: code}).
 					FirstOrCreate(&model.RolePermission{}).Error; err != nil {
-					logger.Warn("seed admin role_permission 失败", zap.String("perm", string(code)), zap.Error(err))
+					logger.Warn("seed admin role_permission 失败", zap.String("perm", code), zap.Error(err))
 				}
 			}
 			continue
@@ -1696,16 +1683,48 @@ func initRBACPermissions(db *gorm.DB, logger *zap.Logger) error {
 		var existing int64
 		db.Model(&model.RolePermission{}).Where("role_code = ?", role.Code).Count(&existing)
 		if existing > 0 {
-			continue // 已存在（含管理员定制），不覆盖
+			continue
 		}
 		for _, code := range role.Permissions {
-			rp := model.RolePermission{RoleCode: role.Code, PermCode: string(code)}
-			if err := db.Create(&rp).Error; err != nil {
-				logger.Warn("seed 内置角色权限失败", zap.String("role", role.Code), zap.String("perm", string(code)), zap.Error(err))
+			if err := db.Create(&model.RolePermission{RoleCode: role.Code, PermCode: code}).Error; err != nil {
+				logger.Warn("seed 内置角色权限失败", zap.String("role", role.Code), zap.String("perm", code), zap.Error(err))
 			}
 		}
 		logger.Info("内置角色已 seed", zap.String("role", role.Code), zap.String("name", role.Name), zap.Int("perms", len(role.Permissions)))
 	}
-	logger.Info("RBAC 权限元数据已初始化", zap.Int("permissions", len(permissionMeta)))
+	logger.Info("RBAC 权限已初始化", zap.Int("permissions", permCount))
 	return nil
+}
+
+// migrateLegacyRolePermissions 把旧的模块级权限码（无冒号，如 "alerts"）升级为
+// module:action（一次性、幂等）。自定义角色的旧码展开为 view+manage；内置角色的旧行
+// 删除后由 seed 按新模型重建。
+func migrateLegacyRolePermissions(db *gorm.DB, logger *zap.Logger) {
+	var legacy []model.RolePermission
+	db.Where("perm_code NOT LIKE ?", "%:%").Find(&legacy)
+	if len(legacy) == 0 {
+		return
+	}
+	builtin := map[string]bool{}
+	for _, r := range model.BuiltinRoles {
+		builtin[r.Code] = true
+	}
+	newCustom := map[string]map[string]bool{}
+	for _, row := range legacy {
+		if builtin[row.RoleCode] {
+			continue
+		}
+		if newCustom[row.RoleCode] == nil {
+			newCustom[row.RoleCode] = map[string]bool{}
+		}
+		newCustom[row.RoleCode][model.Perm(row.PermCode, model.ActionView)] = true
+		newCustom[row.RoleCode][model.Perm(row.PermCode, model.ActionManage)] = true
+	}
+	db.Where("perm_code NOT LIKE ?", "%:%").Delete(&model.RolePermission{})
+	for role, set := range newCustom {
+		for code := range set {
+			db.Create(&model.RolePermission{RoleCode: role, PermCode: code})
+		}
+	}
+	logger.Info("RBAC 旧权限码已迁移为 module:action", zap.Int("legacy_rows", len(legacy)))
 }
