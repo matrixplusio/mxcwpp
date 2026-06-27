@@ -187,70 +187,85 @@ func checkRunningTasksTimeout(db *gorm.DB, logger *zap.Logger) {
 	}
 }
 
-// handleRunningTaskTimeout 处理 running 任务超时
+// handleRunningTaskTimeout 处理 running 任务超时：
+//   - 全部主机已返回结果 → completed
+//   - 仍有未完成主机且重试未耗尽 → 回 pending，由调度器重排未完成主机（retry）
+//   - 重试耗尽：有部分结果 → partial（接受部分结果）；无任何结果 → failed
+//
+// 大批量并发扫描下，部分主机会非确定性地不返回结果。整任务直接判失败会丢弃已完成主机
+// 的有效结果且无自愈；改为自动重排未完成主机 + 接受部分结果，使重扫可最终收敛。
 func handleRunningTaskTimeout(db *gorm.DB, logger *zap.Logger, task *model.ScanTask) {
-	// 查询该任务的结果数量
 	var resultCount int64
 	db.Model(&model.ScanResult{}).Where("task_id = ?", task.TaskID).Count(&resultCount)
 
 	completedAt := model.Now()
 
-	if resultCount == 0 {
-		// 完全没有结果，标记为失败
-		logger.Warn("running 任务超时，没有任何结果，标记为失败",
-			zap.String("task_id", task.TaskID),
-			zap.Int("dispatched_host_count", task.DispatchedHostCount),
-		)
-
-		// 标记所有未完成的主机为超时
-		db.Model(&model.TaskHostStatus{}).
-			Where("task_id = ? AND status = ?", task.TaskID, model.TaskHostStatusDispatched).
-			Updates(map[string]interface{}{
-				"status":        model.TaskHostStatusTimeout,
-				"error_message": "任务执行超时：主机未返回结果",
-			})
-
-		db.Model(task).Updates(map[string]interface{}{
-			"status":        model.TaskStatusFailed,
-			"failed_reason": "任务执行超时：没有收到任何主机的结果",
-			"completed_at":  &completedAt,
-		})
-	} else if task.DispatchedHostCount > 0 && task.CompletedHostCount < task.DispatchedHostCount {
-		// 有部分结果，但不是所有主机都返回了，标记为失败
-		logger.Warn("running 任务超时，部分主机未返回结果，标记为失败",
-			zap.String("task_id", task.TaskID),
-			zap.Int("dispatched_host_count", task.DispatchedHostCount),
-			zap.Int("completed_host_count", task.CompletedHostCount),
-			zap.Int64("result_count", resultCount),
-		)
-
-		// 标记所有未完成的主机为超时
-		db.Model(&model.TaskHostStatus{}).
-			Where("task_id = ? AND status = ?", task.TaskID, model.TaskHostStatusDispatched).
-			Updates(map[string]interface{}{
-				"status":        model.TaskHostStatusTimeout,
-				"error_message": "任务执行超时：主机未返回结果",
-			})
-
-		failedHostCount := task.DispatchedHostCount - task.CompletedHostCount
-		db.Model(task).Updates(map[string]interface{}{
-			"status":        model.TaskStatusFailed,
-			"failed_reason": fmt.Sprintf("任务执行超时：%d 台主机未返回结果", failedHostCount),
-			"completed_at":  &completedAt,
-		})
-	} else {
-		// 所有主机都返回了结果，标记为完成
+	// 全部主机已返回结果 → 完成
+	if task.DispatchedHostCount > 0 && task.CompletedHostCount >= task.DispatchedHostCount {
 		logger.Info("running 任务超时，但所有主机都返回了结果，标记为完成",
 			zap.String("task_id", task.TaskID),
 			zap.Int("dispatched_host_count", task.DispatchedHostCount),
 			zap.Int("completed_host_count", task.CompletedHostCount),
 		)
-
 		db.Model(task).Updates(map[string]interface{}{
 			"status":       model.TaskStatusCompleted,
 			"completed_at": &completedAt,
 		})
+		return
 	}
+
+	// 仍有未完成主机，且重试未耗尽 → 回 pending，由 DispatchPendingTasks 重排未完成主机
+	if task.RetryCount < task.MaxRetries {
+		now := model.Now()
+		logger.Warn("running 任务超时，重排未完成主机",
+			zap.String("task_id", task.TaskID),
+			zap.Int("retry_count", task.RetryCount+1),
+			zap.Int("max_retries", task.MaxRetries),
+			zap.Int("dispatched_host_count", task.DispatchedHostCount),
+			zap.Int("completed_host_count", task.CompletedHostCount),
+		)
+		db.Model(task).Updates(map[string]interface{}{
+			"status":        model.TaskStatusPending,
+			"retry_count":   task.RetryCount + 1,
+			"executed_at":   &now, // 重置超时窗口，重排后重新计时
+			"failed_reason": "",
+		})
+		return
+	}
+
+	// 重试耗尽 → 标记未完成主机为 timeout，并据是否有结果定终态
+	db.Model(&model.TaskHostStatus{}).
+		Where("task_id = ? AND status = ?", task.TaskID, model.TaskHostStatusDispatched).
+		Updates(map[string]interface{}{
+			"status":        model.TaskHostStatusTimeout,
+			"error_message": "任务执行超时：主机未返回结果",
+		})
+
+	if resultCount == 0 {
+		logger.Warn("running 任务超时，重试耗尽且无任何结果，标记为失败",
+			zap.String("task_id", task.TaskID),
+			zap.Int("dispatched_host_count", task.DispatchedHostCount),
+		)
+		db.Model(task).Updates(map[string]interface{}{
+			"status":        model.TaskStatusFailed,
+			"failed_reason": "任务执行超时：没有收到任何主机的结果",
+			"completed_at":  &completedAt,
+		})
+		return
+	}
+
+	failedHostCount := task.DispatchedHostCount - task.CompletedHostCount
+	logger.Warn("running 任务超时，重试耗尽，部分主机未返回结果，标记为部分完成",
+		zap.String("task_id", task.TaskID),
+		zap.Int("dispatched_host_count", task.DispatchedHostCount),
+		zap.Int("completed_host_count", task.CompletedHostCount),
+		zap.Int64("result_count", resultCount),
+	)
+	db.Model(task).Updates(map[string]interface{}{
+		"status":        model.TaskStatusPartial,
+		"failed_reason": fmt.Sprintf("任务执行超时：%d 台主机未返回结果（已接受部分结果）", failedHostCount),
+		"completed_at":  &completedAt,
+	})
 }
 
 // fixTaskTimeoutMinutes 修复任务超时时间（分钟）
