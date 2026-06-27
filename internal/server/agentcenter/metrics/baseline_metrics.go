@@ -5,20 +5,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// 基线扫描任务管道指标。
-// 大批量并发扫描时，结果摄取与任务收敛此前不可观测（无指标、关键日志被日志级别吞掉），
-// 故障难定位。以下 Counter 暴露摄取速率、主机完成数与任务结局，供 Prometheus 抓取。
+// 基线任务结局指标（任务层）。
+//
+// 结果摄取/主机完成的可观测由 consumer 侧已有的 RecordProcessing 覆盖
+// （per topic+datatype+status，topic=mxcwpp.agent.baseline，datatype=8000/8001）：
+// kafka 启用时 8000/8001 走 consumer 落库，AC 内联路径不触发，故此处不再重复埋点。
+// 任务结局发生在 AC 的超时调度器（与管道无关），仍在此暴露。
 var (
-	baselineResultReceived = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "mxcwpp_baseline_result_received_total",
-		Help: "Total baseline check results (DataType 8000) received and persisted by agentcenter",
-	})
-
-	baselineHostCompleted = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "mxcwpp_baseline_host_completed_total",
-		Help: "Total baseline task host-completion signals processed by agentcenter",
-	})
-
 	// outcome: completed / partial / failed / retried
 	baselineTaskOutcome = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "mxcwpp_baseline_task_outcome_total",
@@ -33,12 +26,6 @@ const (
 	BaselineOutcomeFailed    = "failed"
 	BaselineOutcomeRetried   = "retried"
 )
-
-// IncBaselineResultReceived 记录一条基线结果被成功持久化。
-func IncBaselineResultReceived() { baselineResultReceived.Inc() }
-
-// IncBaselineHostCompleted 记录一台主机的完成信号被处理。
-func IncBaselineHostCompleted() { baselineHostCompleted.Inc() }
 
 // IncBaselineTaskOutcome 记录一次任务结局（completed/partial/failed/retried）。
 func IncBaselineTaskOutcome(outcome string) {

@@ -1018,6 +1018,13 @@ func parseFloat(s string) *float64 {
 	return &f
 }
 
+// isBaselineCompletionSignal 判断是否为基线任务完成信号
+// （DataType 8001 基线扫描任务完成 / 8004 基线修复任务完成）。
+// 这些是控制面关键低频消息，被丢弃会导致主机永不计完成、任务超时，需保证投递。
+func isBaselineCompletionSignal(dataType int32) bool {
+	return dataType == 8001 || dataType == 8004
+}
+
 // handleEncodedRecord 处理 EncodedRecord
 // 若 Kafka 生产者已注入，则将记录发布到对应 Topic（异步解耦，μs 级返回）；
 // 否则回退到直接写 MySQL（向后兼容）。
@@ -1042,6 +1049,17 @@ func (s *Service) handleEncodedRecord(ctx context.Context, record *grpcProto.Enc
 			ACID:         s.cfg.Server.InstanceID,
 		}
 		topic := kafka.RouteDataType(record.DataType, s.cfg.Kafka.TopicPrefix)
+		// 基线任务完成信号（8001/8004）是控制面关键低频消息：被丢弃会导致主机永不计完成、
+		// 任务超时。改用 SendReliable（Input 满时有界阻塞→退降级队列重试），避免 eBPF 高频
+		// 遥测 burst 把完成信号首先挤丢。其余高频遥测仍用 Send（非阻塞）。
+		if isBaselineCompletionSignal(record.DataType) {
+			if rs, ok := s.kafkaProducer.(interface {
+				SendReliable(topic, key string, msg *kafka.MQMessage) error
+			}); ok {
+				_ = rs.SendReliable(topic, conn.AgentID, msg)
+				return nil
+			}
+		}
 		// Send 失败（队列满/丢弃）已由 producer 内部聚合计数并周期汇总，
 		// 此处不再逐条记录——高频 eBPF 事件逐条打日志会撑爆磁盘（prod 实测 ~130GB/天）。
 		_ = s.kafkaProducer.Send(topic, conn.AgentID, msg)
@@ -1181,7 +1199,6 @@ func (s *Service) handleBaselineResult(ctx context.Context, record *grpcProto.En
 	}).Create(scanResult).Error; err != nil {
 		return fmt.Errorf("保存检测结果失败: %w", err)
 	}
-	metrics.IncBaselineResultReceived()
 
 	s.logger.Debug("检测结果已保存",
 		zap.String("agent_id", conn.AgentID),
@@ -1491,7 +1508,6 @@ func (s *Service) handleTaskCompletion(ctx context.Context, record *grpcProto.En
 		Update("completed_host_count", gorm.Expr("completed_host_count + 1")).Error; err != nil {
 		s.logger.Error("递增 completed_host_count 失败", zap.String("task_id", taskID), zap.Error(err))
 	}
-	metrics.IncBaselineHostCompleted()
 
 	// 3. 重新查询任务以获取最新的完成主机数
 	if err := s.db.Where("task_id = ?", taskID).First(&task).Error; err != nil {
