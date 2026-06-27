@@ -25,6 +25,20 @@ import (
 // agentACTTL 是 Redis 中 agent:ac:{agentID} key 的 TTL（3 倍心跳间隔）
 const agentACTTL = 180 * time.Second
 
+// coldStartBehaviorAlertMinScore 学习期(冷启动全局基线 5σ)落 behavior_alert 的最低 risk_score。
+// 低于此值的冷启动偏离视为噪声抑制(主机基线未就绪,全局基线在异构舰队误报多)；
+// 主机毕业(active)后用本机 3σ 基线，不受此限，照常全量落库。
+const coldStartBehaviorAlertMinScore = 85.0
+
+// shouldPersistBehaviorAlert 决定 BDE 偏离是否落 behavior_alert。
+// 学习期(冷启动)仅保留 risk_score≥阈值的高信号；毕业后(非冷启动)全量保留。
+func shouldPersistBehaviorAlert(coldStart bool, riskScore float64) bool {
+	if coldStart {
+		return riskScore >= coldStartBehaviorAlertMinScore
+	}
+	return true
+}
+
 // Router 订阅所有业务 Topic，根据 DataType 路由到对应写入器
 type Router struct {
 	//nolint:unused // 嵌入 sarama.ConsumerGroupHandler 空实现，避免每次重写 Setup/Cleanup
@@ -373,6 +387,13 @@ func (r *Router) evaluateBDE(msg *kafka.MQMessage) {
 
 	result := r.bdeEngine.Ingest(msg.AgentID, metrics)
 	if result == nil {
+		return
+	}
+
+	// 学习期降噪：主机基线未就绪时走全局基线冷启动(5σ),在异构舰队上误报多。
+	// prod 实测全队列 learning 期刷 ~1万/天 behavior_alert 且无人处置(纯噪声)。
+	// 冷启动告警仅保留高信号(risk_score≥阈值),其余抑制；per-host 基线就绪(active)后照常全量。
+	if !shouldPersistBehaviorAlert(result.ColdStart, result.RiskScore) {
 		return
 	}
 
