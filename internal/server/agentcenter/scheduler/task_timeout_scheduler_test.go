@@ -151,19 +151,51 @@ func TestHandleRunningTaskTimeout_RetryThenExhaust(t *testing.T) {
 		t.Fatalf("round1: status=%s retry=%d, want pending/1", s, r)
 	}
 
-	// 模拟重排后仍未补齐，再次进入 running 超时（retry=1<2）→ pending, retry=2
-	task.Status = model.TaskStatusRunning
-	task.RetryCount = 1
+	// 模拟 DispatchPendingTasks 重排后 CAS 回 running（守卫式更新依赖 DB 行 status）
+	reRunning := func(retry int) {
+		db.Model(&model.ScanTask{}).Where("task_id = ?", task.TaskID).
+			Updates(map[string]interface{}{"status": model.TaskStatusRunning, "retry_count": retry})
+		task.Status = model.TaskStatusRunning
+		task.RetryCount = retry
+	}
+
+	// 第 2 次超时（retry=1<2）→ pending, retry=2
+	reRunning(1)
 	handleRunningTaskTimeout(db, logger, &task)
 	if s, r := fetchStatus(t, db, task.TaskID); s != string(model.TaskStatusPending) || r != 2 {
 		t.Fatalf("round2: status=%s retry=%d, want pending/2", s, r)
 	}
 
 	// retry 耗尽（2==2）→ partial
-	task.Status = model.TaskStatusRunning
-	task.RetryCount = 2
+	reRunning(2)
 	handleRunningTaskTimeout(db, logger, &task)
 	if s, _ := fetchStatus(t, db, task.TaskID); s != string(model.TaskStatusPartial) {
 		t.Fatalf("round3: status=%s, want partial", s)
+	}
+}
+
+// TestHandleRunningTaskTimeout_RaceGuard 验证 CAS 守卫：当 consumer 已并发把任务标 completed，
+// 超时调度器的重排不得把它打回 pending（防止已完成任务被误判失败）。
+func TestHandleRunningTaskTimeout_RaceGuard(t *testing.T) {
+	logger := zap.NewNop()
+	db := setupTaskTimeoutTestDB(t)
+
+	// DB 行已是 completed（consumer 先赢），但传入的内存快照仍是 running + 未完成
+	task := model.ScanTask{TaskID: "t-race", Status: model.TaskStatusCompleted,
+		DispatchedHostCount: 5, CompletedHostCount: 5, RetryCount: 0, MaxRetries: 2}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	seedResults(db, task.TaskID, 30)
+
+	// 模拟调度器读到旧快照（running，completed<dispatched）后才进入处理
+	stale := task
+	stale.Status = model.TaskStatusRunning
+	stale.CompletedHostCount = 3
+	handleRunningTaskTimeout(db, logger, &stale)
+
+	// 守卫使更新影响 0 行 → DB 仍为 completed，未被打回 pending
+	if s, _ := fetchStatus(t, db, task.TaskID); s != string(model.TaskStatusCompleted) {
+		t.Fatalf("race guard failed: status=%s, want completed (must not flip to pending)", s)
 	}
 }

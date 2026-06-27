@@ -8,9 +8,27 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
+)
+
+// Kafka 生产者可靠性指标。
+// 此前消息丢弃（队列满/重试耗尽/过期）仅 30s 汇总打 Warn 日志，对监控不可见，
+// burst 下丢消息（含基线完成信号）无法被告警发现。暴露为 Prometheus 指标以便监控/告警。
+var (
+	// reason: fallback_full / retry_exhausted / expired
+	producerDropped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mxcwpp_kafka_producer_dropped_total",
+		Help: "Total messages dropped by the kafka async producer (never delivered)",
+	}, []string{"reason"})
+
+	producerFallbackLen = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "mxcwpp_kafka_producer_fallback_len",
+		Help: "Current length of the kafka producer in-memory fallback queue",
+	})
 )
 
 // Producer 是 Kafka 生产者接口
@@ -142,6 +160,42 @@ func (p *AsyncProducer) Send(topic, key string, msg *MQMessage) error {
 	}
 }
 
+// producerReliableSendTimeout 是 SendReliable 在 Kafka Input 满时的最长阻塞等待时间。
+// 为 var 以便测试压缩等待时间。
+var producerReliableSendTimeout = 3 * time.Second
+
+// SendReliable 发送控制面/关键低频消息（如任务完成信号）：Kafka Input 满时阻塞等待
+// （有界超时）而非像 Send 那样立即丢弃，超时后退降级队列（含重试）。避免高频遥测 burst
+// 把关键消息首先挤丢。仅用于低频消息——高频遥测仍用 Send（非阻塞）以免阻塞 Recv 循环。
+func (p *AsyncProducer) SendReliable(topic, key string, msg *MQMessage) error {
+	msg.SvrTime = time.Now().Unix()
+	msg.ReceivedAt = time.Now()
+
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("序列化 MQMessage 失败: %w", err)
+	}
+
+	pm := p.msgPool.Get().(*sarama.ProducerMessage)
+	pm.Topic = topic
+	pm.Key = sarama.StringEncoder(key)
+	pm.Value = sarama.ByteEncoder(body)
+
+	timer := time.NewTimer(producerReliableSendTimeout)
+	defer timer.Stop()
+	select {
+	case p.producer.Input() <- pm:
+		return nil
+	case <-timer.C:
+		// Input 持续满（Kafka 慢），退降级队列（有重试），不直接丢弃
+		p.msgPool.Put(pm)
+		return p.enqueueToFallback(topic, key, msg)
+	case <-p.closed:
+		p.msgPool.Put(pm)
+		return fmt.Errorf("producer 已关闭")
+	}
+}
+
 // enqueueToFallback 写入降级内存队列（首次入队）
 func (p *AsyncProducer) enqueueToFallback(topic, key string, msg *MQMessage) error {
 	return p.enqueueToFallbackWithRetry(topic, key, msg, 0)
@@ -152,6 +206,7 @@ func (p *AsyncProducer) enqueueToFallbackWithRetry(topic, key string, msg *MQMes
 	if retryCount >= fallbackMaxRetries {
 		// 只累加计数，由 dropSummaryLoop 周期汇总（逐条打日志会撑爆磁盘）。
 		atomic.AddInt64(&p.dropped, 1)
+		producerDropped.WithLabelValues("retry_exhausted").Inc()
 		return fmt.Errorf("kafka fallback max retries exceeded, message dropped")
 	}
 
@@ -162,6 +217,7 @@ func (p *AsyncProducer) enqueueToFallbackWithRetry(topic, key string, msg *MQMes
 	default:
 		// 只累加计数，由 dropSummaryLoop 周期汇总（逐条打日志会撑爆磁盘）。
 		atomic.AddInt64(&p.dropped, 1)
+		producerDropped.WithLabelValues("fallback_full").Inc()
 		return fmt.Errorf("kafka fallback queue full, message dropped")
 	}
 }
@@ -179,6 +235,7 @@ func (p *AsyncProducer) dropSummaryLoop() {
 			}
 			return
 		case <-ticker.C:
+			producerFallbackLen.Set(float64(atomic.LoadInt64(&p.fallbackLen)))
 			if n := atomic.SwapInt64(&p.dropped, 0); n > 0 {
 				p.logger.Warn("Kafka 降级队列丢弃消息汇总",
 					zap.Int64("dropped_last_30s", n),
@@ -200,6 +257,8 @@ func (p *AsyncProducer) replayLoop() {
 
 			// 检查消息是否已过期
 			if time.Since(pm.enqueuedAt) > fallbackMsgTTL {
+				atomic.AddInt64(&p.dropped, 1)
+				producerDropped.WithLabelValues("expired").Inc()
 				p.logger.Warn("Kafka 降级队列消息已过期，丢弃",
 					zap.String("topic", pm.topic),
 					zap.Duration("age", time.Since(pm.enqueuedAt)),
