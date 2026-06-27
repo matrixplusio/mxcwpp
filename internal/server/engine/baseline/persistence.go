@@ -34,6 +34,12 @@ func (e *Engine) loadFromDB() {
 			e.logger.Warn("解析基线 m2 失败", zap.String("host_id", s.HostID), zap.Error(err))
 			continue
 		}
+		// 时段分桶基线（P1-A）。旧行/空值容错：解析失败则桶留空，评估回退扁平，下次 checkpoint 重建。
+		if s.BSamplesJSON != "" {
+			_ = json.Unmarshal([]byte(s.BMeanJSON), &bl.bMean)
+			_ = json.Unmarshal([]byte(s.BM2JSON), &bl.bM2)
+			_ = json.Unmarshal([]byte(s.BSamplesJSON), &bl.bSamples)
+		}
 
 		// Re-check phase after restore (time may have passed while offline).
 		if bl.phase == PhaseLearning && bl.samples >= minSamples && time.Since(bl.firstSeen) >= learningPeriod {
@@ -81,14 +87,21 @@ func (e *Engine) checkpoint() {
 			d.bl.mu.Unlock()
 			continue
 		}
+		// 时段分桶基线（P1-A）：marshal 失败不阻断扁平持久化，置空即可。
+		bMeanJSON, _ := json.Marshal(d.bl.bMean)
+		bM2JSON, _ := json.Marshal(d.bl.bM2)
+		bSamplesJSON, _ := json.Marshal(d.bl.bSamples)
 
 		state := model.HostBaselineState{
-			HostID:    d.hostID,
-			Phase:     d.bl.phase,
-			Samples:   d.bl.samples,
-			FirstSeen: model.LocalTime(d.bl.firstSeen),
-			MeanJSON:  string(meanJSON),
-			M2JSON:    string(m2JSON),
+			HostID:       d.hostID,
+			Phase:        d.bl.phase,
+			Samples:      d.bl.samples,
+			FirstSeen:    model.LocalTime(d.bl.firstSeen),
+			MeanJSON:     string(meanJSON),
+			M2JSON:       string(m2JSON),
+			BMeanJSON:    string(bMeanJSON),
+			BM2JSON:      string(bM2JSON),
+			BSamplesJSON: string(bSamplesJSON),
 		}
 		d.bl.dirty = false
 		d.bl.mu.Unlock()
