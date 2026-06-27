@@ -389,7 +389,8 @@
     "tab": {
       "alerts": "告警列表",
       "whitelist": "白名单",
-      "suggestions": "调优建议"
+      "suggestions": "调优建议",
+      "incidents": "事件"
     },
     "status": {
       "active": "待处理",
@@ -477,6 +478,21 @@
       "adoptConfirmDesc": "将为进程 {{exe}} 在规则「{{rule}}」上创建告警白名单豁免，检测引擎将不再为该模式产生告警。确认采纳？",
       "dismissTitle": "驳回建议",
       "dismissConfirmDesc": "驳回进程 {{exe}} 的白名单建议，后续聚合不再复现该建议。确认驳回？"
+    },
+    "incident": {
+      "intro": "把同主机、近 24h 内的多源信号(CEL 告警 + 行为异常 + 故事线)关联成攻击链事件,按 ATT&CK 战术阶段排列。",
+      "statusActive": "活跃",
+      "statusResolved": "已关闭",
+      "colTitle": "事件",
+      "colRisk": "风险分",
+      "colTactics": "战术阶段",
+      "colSignals": "信号",
+      "colLastSeen": "最近活动",
+      "resolve": "关闭",
+      "resolved": "已关闭",
+      "resolveTitle": "关闭事件",
+      "resolveConfirmDesc": "确认关闭事件「{{title}}」?后续若该主机仍有活跃告警会重新生成。",
+      "empty": "暂无安全事件"
     }
   },
   "vuln": {

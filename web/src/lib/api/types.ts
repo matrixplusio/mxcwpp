@@ -98,6 +98,28 @@ export interface AlertWhitelistSuggestion {
   updated_at: string;
 }
 
+export interface Incident {
+  id: number;
+  incident_id: string;
+  host_id: string;
+  hostname: string;
+  status: "active" | "investigating" | "resolved";
+  severity: string;
+  risk_score: number;
+  tactics: string;
+  tactic_count: number;
+  alert_ids: string[] | null;
+  alert_count: number;
+  behavior_alert_count: number;
+  storyline_ids: string[] | null;
+  title: string;
+  summary: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+  resolved_by: string;
+}
+
 export interface User {
   id: number; username: string; email: string;
   role: string; status: "active" | "inactive";
