@@ -109,16 +109,30 @@ func NewAsyncProducer(cfg config.KafkaConfig, logger *zap.Logger) (*AsyncProduce
 	if cfg.Producer.RetryMax > 0 {
 		saramaCfg.Producer.Retry.Max = cfg.Producer.RetryMax
 	}
+	// ChannelBufferSize / Flush 直接吸收 burst 与加快排空，是抗 burst 丢弃的关键旋钮
+	if cfg.Producer.ChannelBufferSize > 0 {
+		saramaCfg.ChannelBufferSize = cfg.Producer.ChannelBufferSize
+	}
+	if cfg.Producer.FlushFrequency > 0 {
+		saramaCfg.Producer.Flush.Frequency = cfg.Producer.FlushFrequency
+	}
+	if cfg.Producer.FlushMessages > 0 {
+		saramaCfg.Producer.Flush.Messages = cfg.Producer.FlushMessages
+	}
 
 	producer, err := sarama.NewAsyncProducer(cfg.Brokers, saramaCfg)
 	if err != nil {
 		return nil, fmt.Errorf("创建 Kafka 生产者失败: %w", err)
 	}
 
+	fallbackSize := cfg.Producer.FallbackQueueSize
+	if fallbackSize <= 0 {
+		fallbackSize = 10000
+	}
 	p := &AsyncProducer{
 		producer: producer,
 		logger:   logger,
-		fallback: make(chan *pendingMsg, 10000),
+		fallback: make(chan *pendingMsg, fallbackSize),
 		closed:   make(chan struct{}),
 		msgPool: sync.Pool{
 			New: func() any { return &sarama.ProducerMessage{} },

@@ -277,6 +277,12 @@ type KafkaProducerConfig struct {
 	FlushMessages   int           `mapstructure:"flush_messages"`
 	FlushFrequency  time.Duration `mapstructure:"flush_frequency"`
 	RetryMax        int           `mapstructure:"retry_max"`
+	// ChannelBufferSize 是 sarama 生产者输入通道缓冲区大小（消息数）。
+	// 默认 256 太小，burst（agent 重连风暴/扫描叠加遥测）下秒满即丢；放大以吸收尖峰。
+	ChannelBufferSize int `mapstructure:"channel_buffer_size"`
+	// FallbackQueueSize 是 Kafka Input 满后的降级内存队列容量（消息数）。
+	// 内存占用 ≈ size × 单条消息字节数，需按内存权衡。
+	FallbackQueueSize int `mapstructure:"fallback_queue_size"`
 }
 
 // ClickHouseConfig 是 ClickHouse 配置
@@ -548,6 +554,12 @@ func setDefaults(cfg *Config, logFileSet bool) {
 	}
 	if cfg.Kafka.Producer.RetryMax == 0 {
 		cfg.Kafka.Producer.RetryMax = 3
+	}
+	if cfg.Kafka.Producer.ChannelBufferSize == 0 {
+		cfg.Kafka.Producer.ChannelBufferSize = 8192 // sarama 默认仅 256，放大吸收 burst
+	}
+	if cfg.Kafka.Producer.FallbackQueueSize == 0 {
+		cfg.Kafka.Producer.FallbackQueueSize = 50000 // 旧硬编码 10000，放大降级队列头寸
 	}
 
 	// ClickHouse 默认配置
