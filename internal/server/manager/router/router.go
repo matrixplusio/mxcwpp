@@ -278,6 +278,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupBusinessLinesAPI(router, db, logger)
 	setupAlertsAPI(router, db, logger)
 	setupAlertWhitelistAPI(router, db, logger)
+	setupIncidentAPI(router, db, logger)
 	setupPolicyImportExportAPI(router, db, logger)
 	setupInspectionAPI(router, db, logger)
 	setupFIMAPI(router, db, logger, chConn)
@@ -693,6 +694,14 @@ func setupAlertsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 func setupAuditLogAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	handler := api.NewAuditLogHandler(db, logger)
 	router.GET("/audit-logs", handler.ListAuditLogs)
+}
+
+// setupIncidentAPI 设置安全事件(Incident)API 路由（P2）
+func setupIncidentAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	handler := api.NewIncidentHandler(db, logger)
+	router.GET("/incidents", handler.ListIncidents)
+	router.GET("/incidents/:id", handler.GetIncident)
+	router.POST("/incidents/:id/resolve", handler.ResolveIncident)
 }
 
 // setupAlertWhitelistAPI 设置告警白名单 API 路由

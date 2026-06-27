@@ -73,6 +73,10 @@ func main() {
 	go managerscheduler.StartBulletinEscalationScheduler(services.DB, services.Logger)
 	// P2-B: 自动调优聚合调度器 (聚合 resolve/ignore 反馈 → 生成白名单建议,人审采纳)
 	go managerscheduler.StartAutoTuningScheduler(services.DB, services.Logger)
+	// P3: BDE 维护调度器 (stale 基线 GC + 过期 behavior_alerts 清理)
+	go managerscheduler.StartBaselineMaintenanceScheduler(services.DB, services.Logger)
+	// P2: Incident 关联调度器 (同主机多源信号 → 攻击链事件)
+	go managerscheduler.StartIncidentCorrelationScheduler(services.DB, services.Logger)
 
 	// 启动漏洞扫描定时调度器
 	vulnScanner := biz.NewVulnScanner(services.DB, services.Logger)

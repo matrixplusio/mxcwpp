@@ -188,6 +188,7 @@ var (
 		&Alert{},
 		&AlertWhitelist{},
 		&AlertWhitelistSuggestion{},
+		&Incident{},
 		&AuditLog{},
 		&PluginConfig{},
 		&Component{},

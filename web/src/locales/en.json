@@ -389,7 +389,8 @@
     "tab": {
       "alerts": "Alert List",
       "whitelist": "Whitelist",
-      "suggestions": "Tuning"
+      "suggestions": "Tuning",
+      "incidents": "Incidents"
     },
     "status": {
       "active": "Pending",
@@ -477,6 +478,21 @@
       "adoptConfirmDesc": "Create an alert whitelist exception for process {{exe}} on rule \"{{rule}}\"; the detection engine will stop alerting on this pattern. Confirm?",
       "dismissTitle": "Dismiss suggestion",
       "dismissConfirmDesc": "Dismiss the whitelist suggestion for process {{exe}}; future aggregation will not resurface it. Confirm?"
+    },
+    "incident": {
+      "intro": "Correlates multi-source signals (CEL alerts + behavior anomalies + storylines) on the same host within 24h into an attack-chain incident, ordered by ATT&CK tactic stage.",
+      "statusActive": "Active",
+      "statusResolved": "Resolved",
+      "colTitle": "Incident",
+      "colRisk": "Risk",
+      "colTactics": "Tactics",
+      "colSignals": "Signals",
+      "colLastSeen": "Last seen",
+      "resolve": "Resolve",
+      "resolved": "Resolved",
+      "resolveTitle": "Resolve incident",
+      "resolveConfirmDesc": "Resolve incident \"{{title}}\"? It will be regenerated if the host still has active alerts.",
+      "empty": "No incidents"
     }
   },
   "vuln": {
@@ -813,6 +829,7 @@
       "statusPending": "Pending",
       "statusRunning": "Running",
       "statusCompleted": "Completed",
+      "statusPartial": "Partial",
       "statusFailed": "Failed",
       "statusCancelled": "Cancelled",
       "colName": "Task Name",
