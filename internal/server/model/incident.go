@@ -16,7 +16,7 @@ const (
 type Incident struct {
 	TenantID   string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`
-	IncidentID string `gorm:"column:incident_id;type:varchar(64);uniqueIndex;not null" json:"incident_id"`
+	IncidentID string `gorm:"column:incident_id;type:varchar(128);uniqueIndex;not null" json:"incident_id"` // 格式 "inc-{64位host_id}-{unix秒}"，长 79 字符，需 >64
 
 	HostID    string  `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
 	Hostname  string  `gorm:"column:hostname;type:varchar(255)" json:"hostname"`

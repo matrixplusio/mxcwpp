@@ -59,6 +59,11 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("告警表result_id列扩展处理", zap.Error(err))
 	}
 
+	// 执行数据迁移：扩展 incidents 表 incident_id 列
+	if err := migrateIncidentIDColumn(db, logger); err != nil {
+		logger.Warn("事件表incident_id列扩展处理", zap.Error(err))
+	}
+
 	// 执行数据迁移：scan_results / fix_results 主键从 result_id 迁移到复合主键
 	if err := migrateScanResultsCompositeKey(db, logger); err != nil {
 		logger.Warn("scan_results 复合主键迁移处理", zap.Error(err))
@@ -774,6 +779,44 @@ func migrateAlertResultIDColumn(db *gorm.DB, logger *zap.Logger) error {
 		return err
 	}
 	logger.Info("扩展告警表result_id列成功", zap.String("old_type", columnType), zap.String("new_type", "varchar(128)"))
+
+	return nil
+}
+
+// migrateIncidentIDColumn 扩展 incidents 表的 incident_id 列从 varchar(64) 到 varchar(128)
+// incident_id 格式为 "inc-{64位host_id}-{unix秒}"，总长 79 字符，超过 varchar(64) 导致插入报
+// Error 1406 (Data too long)，攻击链关联事件无法落库。
+func migrateIncidentIDColumn(db *gorm.DB, logger *zap.Logger) error {
+	// 检查表是否存在
+	var exists bool
+	if err := db.Raw(
+		"SELECT COUNT(*) > 0 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'incidents'",
+	).Scan(&exists).Error; err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	// 检查当前列长度
+	var columnType string
+	if err := db.Raw(
+		"SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'incidents' AND column_name = 'incident_id'",
+	).Scan(&columnType).Error; err != nil {
+		return err
+	}
+
+	// 如果已经是 varchar(128) 或更大则跳过
+	if columnType == "varchar(128)" {
+		return nil
+	}
+
+	// 执行 ALTER TABLE
+	if err := db.Exec("ALTER TABLE `incidents` MODIFY COLUMN `incident_id` varchar(128) NOT NULL").Error; err != nil {
+		logger.Error("扩展事件表incident_id列失败", zap.String("old_type", columnType), zap.Error(err))
+		return err
+	}
+	logger.Info("扩展事件表incident_id列成功", zap.String("old_type", columnType), zap.String("new_type", "varchar(128)"))
 
 	return nil
 }
