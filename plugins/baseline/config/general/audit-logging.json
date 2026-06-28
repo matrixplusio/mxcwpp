@@ -580,11 +580,15 @@
       "description": "journald 应配置为持久化存储日志",
       "severity": "medium",
       "check": {
-        "condition": "all",
+        "condition": "any",
         "rules": [
           {
             "type": "file_line_match",
             "param": ["/etc/systemd/journald.conf", "^\\s*Storage\\s*=\\s*persistent", "match"]
+          },
+          {
+            "type": "file_exists",
+            "param": ["/var/log/journal"]
           }
         ]
       },
@@ -604,7 +608,7 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/systemd/journald.conf", "^\\s*Compress\\s*=\\s*yes", "match"]
+            "param": ["/etc/systemd/journald.conf", "^\\s*Compress\\s*=\\s*no", "not_match"]
           }
         ]
       },
@@ -624,7 +628,7 @@
         "rules": [
           {
             "type": "file_line_match",
-            "param": ["/etc/rsyslog.conf", "\\$FileCreateMode\\s+0[0-6][04]0", "match"]
+            "param": ["/etc/rsyslog.conf", "(?:\\$FileCreateMode\\s+|FileCreateMode\\s*=\\s*\")0[0-6][04]0", "match"]
           }
         ]
       },
