@@ -4,6 +4,7 @@ package model
 type KubeBaselineTaskStatus string
 
 const (
+	BaselineTaskPending KubeBaselineTaskStatus = "pending" // 已入队，等待 worker 执行
 	BaselineTaskRunning KubeBaselineTaskStatus = "running"
 	BaselineTaskDone    KubeBaselineTaskStatus = "done"
 	BaselineTaskFailed  KubeBaselineTaskStatus = "failed"

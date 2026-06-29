@@ -188,25 +188,16 @@ func (h *KubeBaselineHandler) RunBaselineCheck(c *gin.Context) {
 		return
 	}
 
-	results, err := h.checker.RunChecks(*req.ClusterID)
+	taskID, err := h.checker.EnqueueCheck(*req.ClusterID)
 	if err != nil {
-		h.logger.Error("执行基线检查失败", zap.Error(err))
+		h.logger.Error("入队基线检查失败", zap.Error(err))
 		InternalError(c, "内部服务错误")
 		return
 	}
 
-	passed := 0
-	for _, r := range results {
-		if r.Result == "pass" {
-			passed++
-		}
-	}
-
+	// 异步执行：立即返回 task_id，前端轮询 GET /kube/baseline-tasks/:id 取进度与结果
 	Success(c, gin.H{
-		"total":    len(results),
-		"passed":   passed,
-		"failed":   len(results) - passed,
-		"passRate": passed * 100 / max(len(results), 1),
-		"items":    results,
+		"taskId": taskID,
+		"status": model.BaselineTaskPending,
 	})
 }

@@ -25,8 +25,9 @@ type KubeBaselineChecker struct {
 	kubeClient     *KubeClientManager
 	ruleEngine     *kube.KubeRuleEngine
 	checkFuncs     map[string]CheckFunc
-	mu             sync.Mutex // 保护 currentCluster 防止并发 RunChecks 竞态
+	mu             sync.Mutex // 保护 currentCluster：worker 串行执行单个 task，防 currentCluster 竞态
 	currentCluster uint
+	notify         chan struct{} // 入队后唤醒 worker（缓冲 1，非阻塞）
 }
 
 // NewKubeBaselineChecker 创建基线检查器
@@ -36,9 +37,80 @@ func NewKubeBaselineChecker(db *gorm.DB, logger *zap.Logger, kubeClient *KubeCli
 		logger:     logger,
 		kubeClient: kubeClient,
 		ruleEngine: ruleEngine,
+		notify:     make(chan struct{}, 1),
 	}
 	c.checkFuncs = c.registerCheckFuncs()
 	return c
+}
+
+// Start 启动后台 worker：先把崩溃残留的 running/pending 任务复位，再循环消费 pending 队列。
+// 长任务在后台跑，HTTP 入队即返回，不再阻塞请求 / 超时。
+func (c *KubeBaselineChecker) Start(ctx context.Context) {
+	// 启动复位：上次进程崩溃时停在 running 的任务标记为 failed（结果不完整，不可信）
+	c.db.Model(&model.KubeBaselineTask{}).
+		Where("status = ?", model.BaselineTaskRunning).
+		Updates(map[string]any{"status": model.BaselineTaskFailed, "error_msg": "进程重启，任务中断"})
+	go c.worker(ctx)
+	// 启动时先排空可能遗留的 pending
+	c.signal()
+}
+
+// signal 非阻塞唤醒 worker
+func (c *KubeBaselineChecker) signal() {
+	select {
+	case c.notify <- struct{}{}:
+	default:
+	}
+}
+
+// worker 后台循环：被 notify 唤醒或定时兜底，排空 pending 队列
+func (c *KubeBaselineChecker) worker(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.notify:
+		case <-ticker.C:
+		}
+		c.drainPending(ctx)
+	}
+}
+
+// drainPending 逐个取出最早的 pending 任务执行，直到队列空
+func (c *KubeBaselineChecker) drainPending(ctx context.Context) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		var task model.KubeBaselineTask
+		err := c.db.Where("status = ?", model.BaselineTaskPending).
+			Order("id ASC").First(&task).Error
+		if err != nil {
+			return // 没有 pending（含 ErrRecordNotFound）
+		}
+		c.runTask(ctx, task)
+	}
+}
+
+// EnqueueCheck 入队一次基线检查，立即返回 task_id（异步执行）
+func (c *KubeBaselineChecker) EnqueueCheck(clusterID uint) (uint, error) {
+	var cluster model.KubeCluster
+	if err := c.db.First(&cluster, clusterID).Error; err != nil {
+		return 0, fmt.Errorf("集群不存在: %w", err)
+	}
+	task := model.KubeBaselineTask{
+		ClusterID:   clusterID,
+		ClusterName: cluster.Name,
+		Status:      model.BaselineTaskPending,
+		StartedAt:   model.LocalTime(time.Now()),
+	}
+	if err := c.db.Create(&task).Error; err != nil {
+		return 0, fmt.Errorf("创建基线任务失败: %w", err)
+	}
+	c.signal()
+	return task.ID, nil
 }
 
 // isSystemNamespace 判断是否为系统 Namespace
@@ -314,18 +386,39 @@ func (c *KubeBaselineChecker) GetRegisteredCheckIDs() []string {
 	return ids
 }
 
-// RunChecks 对指定集群执行所有基线检查（串行化防止 currentCluster 竞态）
-func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, error) {
+// runTask 执行单个 pending 基线任务：claim(pending->running) -> 跑规则 -> 完成/失败。
+// 串行化(mu)防 currentCluster 竞态；由后台 worker 调用，不阻塞 HTTP。
+func (c *KubeBaselineChecker) runTask(parent context.Context, task model.KubeBaselineTask) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var cluster model.KubeCluster
-	if err := c.db.First(&cluster, clusterID).Error; err != nil {
-		return nil, fmt.Errorf("集群不存在: %w", err)
+	clusterID := task.ClusterID
+
+	// claim：pending -> running（CAS，防重复执行）
+	claim := c.db.Model(&model.KubeBaselineTask{}).
+		Where("id = ? AND status = ?", task.ID, model.BaselineTaskPending).
+		Updates(map[string]any{"status": model.BaselineTaskRunning, "started_at": model.LocalTime(time.Now())})
+	if claim.Error != nil || claim.RowsAffected == 0 {
+		return // 已被其它流程处理/取消
 	}
 
+	failTask := func(msg string, err error) {
+		c.logger.Error("基线任务失败", zap.Uint("task_id", task.ID), zap.String("reason", msg), zap.Error(err))
+		c.db.Model(&model.KubeBaselineTask{}).Where("id = ?", task.ID).Updates(map[string]any{
+			"status":      model.BaselineTaskFailed,
+			"error_msg":   msg,
+			"finished_at": model.LocalTime(time.Now()),
+		})
+	}
+
+	var cluster model.KubeCluster
+	if err := c.db.First(&cluster, clusterID).Error; err != nil {
+		failTask("集群不存在", err)
+		return
+	}
 	if _, err := c.kubeClient.GetClient(clusterID); err != nil {
-		return nil, fmt.Errorf("连接集群失败: %w", err)
+		failTask("连接集群失败", err)
+		return
 	}
 
 	c.currentCluster = clusterID
@@ -333,28 +426,17 @@ func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, e
 	// 从数据库读取所有启用的规则
 	var rules []model.KubeBaselineRule
 	if err := c.db.Where("enabled = ?", true).Order("check_id ASC").Find(&rules).Error; err != nil {
-		return nil, fmt.Errorf("读取基线规则失败: %w", err)
+		failTask("读取基线规则失败", err)
+		return
 	}
 
 	// 清理 refactor 前遗留的无任务结果行
 	c.db.Where("cluster_id = ? AND (task_id IS NULL OR task_id = 0)", clusterID).Delete(&model.KubeBaseline{})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 180*time.Second)
 	defer cancel()
 
 	now := model.LocalTime(time.Now())
-
-	// 任务为指向：每次检测创建一个任务，结果挂在任务下（保留历史）
-	task := model.KubeBaselineTask{
-		ClusterID:   clusterID,
-		ClusterName: cluster.Name,
-		Status:      model.BaselineTaskRunning,
-		StartedAt:   now,
-	}
-	if err := c.db.Create(&task).Error; err != nil {
-		return nil, fmt.Errorf("创建基线任务失败: %w", err)
-	}
-
 	var results []model.KubeBaseline
 
 	for _, rule := range rules {
@@ -432,7 +514,6 @@ func (c *KubeBaselineChecker) RunChecks(clusterID uint) ([]model.KubeBaseline, e
 
 	c.updateHealthScore(clusterID, results)
 	c.syncBaselineAlerts(clusterID, cluster.Name, results)
-	return results, nil
 }
 
 // pruneOldTasks 仅保留每集群最近 keep 个任务，删除更早的任务及其结果行

@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"strings"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -811,8 +812,9 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 		logger.Error("初始化 K8s CEL 规则引擎失败", zap.Error(err))
 	}
 
-	// 基线检查
+	// 基线检查（异步：启动后台 worker 消费 pending 任务）
 	baselineChecker := biz.NewKubeBaselineChecker(db, logger, kubeClient, ruleEngine)
+	baselineChecker.Start(context.Background())
 	baselineHandler := api.NewKubeBaselineHandler(db, logger, baselineChecker)
 	router.GET("/kube/baseline", baselineHandler.ListBaseline)
 	router.GET("/kube/baseline/:id", baselineHandler.GetBaselineDetail)
