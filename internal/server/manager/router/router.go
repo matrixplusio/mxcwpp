@@ -981,6 +981,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	// 修复任务管理
 	taskHandler := api.NewRemediationTasksHandler(db, logger)
 	router.POST("/remediation-tasks", taskHandler.CreateTask)
+	router.POST("/remediation-tasks/host-update", taskHandler.CreateHostUpdateTask) // 主机级整机安全更新
 	router.GET("/remediation-tasks", taskHandler.ListTasks)
 	router.GET("/remediation-tasks/stats", taskHandler.GetTaskStats)
 	router.GET("/remediation-tasks/:id", taskHandler.GetTask)
