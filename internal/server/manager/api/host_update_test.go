@@ -17,8 +17,8 @@ func TestBuildHostUpdateCommand(t *testing.T) {
 		{"centos", "7.9", "security", "yum update --security -y"},
 		{"centos", "7", "all", "yum update -y"},
 		// deb
-		{"ubuntu", "22.04", "security", "apt-get update && apt-get upgrade -y"},
-		{"debian", "12", "all", "apt-get update && apt-get dist-upgrade -y"},
+		{"ubuntu", "22.04", "security", "apt-get upgrade -y"},
+		{"debian", "12", "all", "apt-get dist-upgrade -y"},
 	}
 	for _, c := range cases {
 		gotCmd, gotLabel := buildHostUpdateCommand(c.osFamily, c.osVer, c.scope)
