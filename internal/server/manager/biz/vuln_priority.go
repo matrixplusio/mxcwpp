@@ -181,13 +181,17 @@ func (p *PriorityCalculator) queryInternetFacing(vulnIDs []uint) map[uint]bool {
 	}
 	var rows []row
 
+	// ports 表不记录监听 bind 地址（无 listen_address 列），无法精确区分 loopback-only
+	// 与对外监听。用 state='LISTEN' 作暴露面近似：主机有监听服务即视为网络可达，
+	// over-count 偏保守（优先级偏高更安全），同时避免引用不存在的列导致整条查询
+	// 报 Error 1054 失败（exposure 评分此前长期失效）。
 	p.db.Raw(`
 		SELECT DISTINCT hv.vuln_id
 		FROM host_vulnerabilities hv
 		JOIN ports p ON p.host_id = hv.host_id
 		WHERE hv.vuln_id IN ?
 		  AND hv.status = 'unpatched'
-		  AND p.listen_address NOT IN ('127.0.0.1', '::1', '0.0.0.0', '::')
+		  AND p.state = 'LISTEN'
 	`, vulnIDs).Scan(&rows)
 
 	for _, r := range rows {

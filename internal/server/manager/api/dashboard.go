@@ -23,7 +23,11 @@ import (
 
 const (
 	dashboardCacheKey = "mxcwpp:cache:dashboard:stats"
-	dashboardCacheTTL = 30 * time.Second
+	// TTL 远大于刷新间隔：后台 warmer 每 dashboardWarmInterval 重算并续期，
+	// 用户请求始终命中热缓存（~1ms）。即便某次 warmer 失败，旧值仍可服务到 TTL，
+	// 不让用户撞上 2-3s 冷查询（computeStats 扫 scan_results 等大表）。
+	dashboardCacheTTL     = 5 * time.Minute
+	dashboardWarmInterval = 60 * time.Second
 )
 
 // DashboardHandler 是 Dashboard API 处理器
@@ -39,13 +43,42 @@ type DashboardHandler struct {
 
 // NewDashboardHandler 创建 Dashboard 处理器
 func NewDashboardHandler(db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client, acRegistry *sd.Registry, promClient *prometheus.Client) *DashboardHandler {
-	return &DashboardHandler{
+	h := &DashboardHandler{
 		db:          db,
 		logger:      logger,
 		chConn:      chConn,
 		redisClient: redisClient,
 		acRegistry:  acRegistry,
 		promClient:  promClient,
+	}
+	// 后台缓存预热：仅在 Redis 可用时启动。把 2-3s 的 computeStats 移出请求路径，
+	// 用户始终命中热缓存。进程级生命周期（退出即随进程结束）。
+	if redisClient != nil {
+		go h.cacheWarmLoop(context.Background())
+	}
+	return h
+}
+
+// cacheWarmLoop 周期性重算 Dashboard 统计并写入 Redis，使前端请求始终命中热缓存。
+func (h *DashboardHandler) cacheWarmLoop(ctx context.Context) {
+	warm := func() {
+		data, err := h.computeStats()
+		if err != nil {
+			h.logger.Warn("Dashboard 缓存预热失败", zap.Error(err))
+			return
+		}
+		h.redisClient.Set(ctx, dashboardCacheKey, data, dashboardCacheTTL)
+	}
+	warm() // 启动即预热一次，避免首请求冷查询
+	ticker := time.NewTicker(dashboardWarmInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			warm()
+		}
 	}
 }
 
@@ -561,6 +594,7 @@ func (h *DashboardHandler) getBaselineRisksTop3() []gin.H {
 		LowCount      int64  `gorm:"column:low_count"`
 	}
 
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
 	h.db.Raw(`
 		SELECT p.id AS policy_id, p.name,
 			SUM(CASE WHEN sr.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
@@ -569,14 +603,14 @@ func (h *DashboardHandler) getBaselineRisksTop3() []gin.H {
 			SUM(CASE WHEN sr.severity = 'low'      THEN 1 ELSE 0 END) AS low_count
 		FROM scan_results sr
 		INNER JOIN policies p ON p.id = sr.policy_id
-		WHERE sr.status = 'fail'
+		WHERE sr.status = 'fail' AND sr.checked_at >= ?
 		GROUP BY p.id, p.name
 		ORDER BY (SUM(CASE WHEN sr.severity = 'critical' THEN 4
 		               WHEN sr.severity = 'high'     THEN 3
 		               WHEN sr.severity = 'medium'   THEN 2
 		               ELSE 1 END)) DESC
 		LIMIT 3
-	`).Scan(&rows)
+	`, sevenDaysAgo).Scan(&rows)
 
 	top3 := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
