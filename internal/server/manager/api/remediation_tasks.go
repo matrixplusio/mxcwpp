@@ -368,10 +368,11 @@ func buildHostUpdateCommand(osFamily, osVersion, scope string) (cmd, label strin
 		}
 		return "yum update -y", "主机级全量更新(yum)"
 	case "deb":
+		// 单条命令（remediation 插件安全校验禁止 && 组合命令）；依赖近期 apt 缓存。
 		if secOnly {
-			return "apt-get update && apt-get upgrade -y", "主机级更新(apt)"
+			return "apt-get upgrade -y", "主机级更新(apt)"
 		}
-		return "apt-get update && apt-get dist-upgrade -y", "主机级全量更新(apt)"
+		return "apt-get dist-upgrade -y", "主机级全量更新(apt)"
 	}
 	return "", ""
 }
