@@ -169,6 +169,13 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 		return sendResult(client, payload.TaskID, 1, "", fmt.Sprintf("命令安全校验失败: %v", err), logger)
 	}
 
+	// 主机级整机更新任务（cve_id 以 HOST- 开头，如 HOST-SECURITY-UPDATE）：
+	// 命令已通过安全白名单校验；component 是中文标签而非包名，不适用 per-package 的
+	// 包名校验与 3 阶段预检（无单一目标包）。直接执行整机更新命令并回报。
+	if strings.HasPrefix(payload.CveID, "HOST-") {
+		return runHostUpdate(ctx, client, &payload, logger)
+	}
+
 	// Component 会被拼入仓库查询命令(checkPkgInstalled/checkPkgAvailable 的 sh -c)，
 	// 严格白名单防命令注入（与 precheck 一致），杜绝 "pkg; rm -rf /" 之类。
 	if payload.Component != "" && !validPkgName.MatchString(payload.Component) {
@@ -274,6 +281,48 @@ func handleTask(ctx context.Context, task *bridge.Task, client *plugins.Client, 
 		}
 	}
 
+	return sendResult(client, payload.TaskID, exitCode, stdout, stderr, logger)
+}
+
+// runHostUpdate 执行主机级整机更新命令（dnf/yum upgrade --security -y 等），不做 per-package
+// 预检（无单一目标包）。命令已由调用方 validateCommand 通过安全白名单校验。
+// 内核类更新需主机下次重启后完全生效，本函数不触发重启。
+func runHostUpdate(ctx context.Context, client *plugins.Client, payload *taskPayload, logger *zap.Logger) error {
+	logger.Info("[AUDIT] host-level update accepted",
+		zap.Uint("task_id", payload.TaskID),
+		zap.String("cve_id", payload.CveID),
+		zap.String("command", payload.Command),
+		zap.Bool("dry_run", payload.DryRun))
+
+	if payload.DryRun {
+		return sendResult(client, payload.TaskID, 0,
+			fmt.Sprintf("[DRY RUN] 主机级更新待执行: %s", payload.Command), "", logger)
+	}
+
+	execCtx, execCancel := context.WithTimeout(ctx, commandTimeout)
+	defer execCancel()
+
+	cmd := exec.CommandContext(execCtx, "/bin/sh", "-c", payload.Command)
+	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
+	output, err := cmd.CombinedOutput()
+	exitCode := 0
+	stdout := string(output)
+	stderr := ""
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() == context.DeadlineExceeded {
+			exitCode = 124
+			stderr = "命令执行超时（超过 10 分钟）"
+		} else {
+			exitCode = 1
+			stderr = err.Error()
+		}
+	}
+	logger.Info("host-level update completed",
+		zap.Uint("task_id", payload.TaskID),
+		zap.Int("exit_code", exitCode),
+		zap.Int("output_len", len(stdout)))
 	return sendResult(client, payload.TaskID, exitCode, stdout, stderr, logger)
 }
 
