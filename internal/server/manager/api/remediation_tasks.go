@@ -345,6 +345,119 @@ func (h *RemediationTasksHandler) GetTask(c *gin.Context) {
 	Success(c, task)
 }
 
+// hostUpdateCveSecurity / hostUpdateCveFull 是主机级更新任务的 cve_id 哨兵值
+// （这类任务不针对单个 CVE，而是整机 yum/dnf 更新）。
+const (
+	hostUpdateCveSecurity = "HOST-SECURITY-UPDATE"
+	hostUpdateCveFull     = "HOST-FULL-UPDATE"
+)
+
+// buildHostUpdateCommand 按 OS 包管理器生成整机更新命令。
+// scope=security 仅装安全 errata（低风险,推荐）；scope=all 全量升级。
+func buildHostUpdateCommand(osFamily, osVersion, scope string) (cmd, label string) {
+	secOnly := scope != "all"
+	switch detectPackageManager(osFamily, osVersion) {
+	case "rpm-dnf":
+		if secOnly {
+			return "dnf upgrade --security -y", "主机级安全更新(dnf --security)"
+		}
+		return "dnf upgrade -y", "主机级全量更新(dnf)"
+	case "rpm-yum":
+		if secOnly {
+			return "yum update --security -y", "主机级安全更新(yum --security)"
+		}
+		return "yum update -y", "主机级全量更新(yum)"
+	case "deb":
+		if secOnly {
+			return "apt-get update && apt-get upgrade -y", "主机级更新(apt)"
+		}
+		return "apt-get update && apt-get dist-upgrade -y", "主机级全量更新(apt)"
+	}
+	return "", ""
+}
+
+// CreateHostUpdateTask 创建主机级更新任务（整机 yum/dnf 安全更新，不针对单个 CVE）。
+// 走与 per-vuln 修复相同的 confirm→executor→agent→UI 链，但命令为整机更新，
+// 让包管理器自行选对包/版本，绕开 per-package 选包数据问题。
+// 更新在下次重启后完全生效（内核）；本任务不自动重启。
+// POST /api/v1/remediation-tasks/host-update  {hostIds:[...], scope:"security"|"all"}
+func (h *RemediationTasksHandler) CreateHostUpdateTask(c *gin.Context) {
+	var req struct {
+		HostIDs []string `json:"hostIds" binding:"required,min=1"`
+		Scope   string   `json:"scope"` // security(默认) | all
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数无效：需要 hostIds")
+		return
+	}
+	if req.Scope == "" {
+		req.Scope = "security"
+	}
+	if req.Scope != "security" && req.Scope != "all" {
+		BadRequest(c, "scope 仅支持 security 或 all")
+		return
+	}
+
+	var hosts []model.Host
+	h.db.Select("host_id, hostname, os_family, os_version").
+		Where("host_id IN ? AND status = ?", req.HostIDs, "online").Find(&hosts)
+	if len(hosts) == 0 {
+		BadRequest(c, "指定主机不存在或不在线")
+		return
+	}
+
+	username, _ := c.Get("username")
+	createdBy, _ := username.(string)
+	cveLabel := hostUpdateCveSecurity
+	if req.Scope == "all" {
+		cveLabel = hostUpdateCveFull
+	}
+
+	var tasks []model.RemediationTask
+	skippedNoCmd, skippedExisting := 0, 0
+	for _, host := range hosts {
+		cmd, label := buildHostUpdateCommand(host.OSFamily, host.OSVersion, req.Scope)
+		if cmd == "" {
+			skippedNoCmd++
+			continue
+		}
+		// 同主机已有进行中的整机更新任务则跳过，避免重复下发
+		var existing int64
+		h.db.Model(&model.RemediationTask{}).
+			Where("host_id = ? AND cve_id IN ? AND status IN ?",
+				host.HostID, []string{hostUpdateCveSecurity, hostUpdateCveFull},
+				[]string{"pending", "confirmed", "running"}).
+			Count(&existing)
+		if existing > 0 {
+			skippedExisting++
+			continue
+		}
+		t := model.RemediationTask{
+			VulnID:    0,
+			CveID:     cveLabel,
+			HostID:    host.HostID,
+			Hostname:  host.Hostname,
+			Component: label,
+			Command:   cmd,
+			Status:    "pending",
+			CreatedBy: createdBy,
+		}
+		if err := h.db.Create(&t).Error; err != nil {
+			h.logger.Error("创建主机更新任务失败", zap.String("host_id", host.HostID), zap.Error(err))
+			continue
+		}
+		tasks = append(tasks, t)
+	}
+
+	Success(c, gin.H{
+		"created":          len(tasks),
+		"skippedNoCommand": skippedNoCmd,
+		"skippedExisting":  skippedExisting,
+		"scope":            req.Scope,
+		"tasks":            tasks,
+	})
+}
+
 // ConfirmTask 用户确认执行修复任务
 // POST /api/v1/remediation-tasks/:id/confirm
 func (h *RemediationTasksHandler) ConfirmTask(c *gin.Context) {
