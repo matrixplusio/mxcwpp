@@ -397,9 +397,10 @@ func (f *Fixer) FixBatch(ctx context.Context, policies []*Policy, ruleIDs []stri
 	// 按 (task,host,rule) upsert）。
 	if f.verifier != nil {
 		for _, pv := range toVerify {
-			prev := pv.result.Status
 			f.finalizeStatus(ctx, pv.policy, pv.rule, pv.result)
-			if pv.result.Status != prev && onResult != nil {
+			// 复检后总是二次上报最终态：覆盖此前"待复检"暂态记录
+			// （fix_results 按 task/host/rule upsert，幂等）。
+			if onResult != nil {
 				onResult(pv.result)
 			}
 		}

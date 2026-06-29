@@ -594,7 +594,7 @@
       },
       "fix": {
         "suggestion": "配置 journald 持久化存储",
-        "command": "sed -i 's/^#*Storage=.*/Storage=persistent/' /etc/systemd/journald.conf && systemctl restart systemd-journald"
+        "command": "mkdir -p /etc/systemd/journald.conf.d && printf '[Journal]\\nStorage=persistent\\n' > /etc/systemd/journald.conf.d/99-mxcwpp-persistent.conf && mkdir -p /var/log/journal && systemctl restart systemd-journald"
       }
     },
     {

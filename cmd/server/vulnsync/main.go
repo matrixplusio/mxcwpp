@@ -28,6 +28,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/leader"
@@ -86,10 +87,22 @@ func main() {
 		logger.Warn("Redis 未配置,单实例模式,跳过 Leader Election")
 	}
 
+	// 解析 Kafka brokers：优先 --kafka-brokers flag；为空则回退 -config 指向的
+	// server.yaml 的 kafka.brokers（与 manager/consumer/engine 同一配置源，单一真源）。
+	var brokers []string
+	if *kafkaBrokers != "" {
+		brokers = strings.Split(*kafkaBrokers, ",")
+	} else if cfg, cErr := config.Load(*configPath); cErr != nil {
+		logger.Warn("加载 config 失败,无法从 server.yaml 取 kafka.brokers",
+			zap.String("config", *configPath), zap.Error(cErr))
+	} else if cfg.Kafka.Enabled && len(cfg.Kafka.Brokers) > 0 {
+		brokers = cfg.Kafka.Brokers
+		logger.Info("从 server.yaml 取得 kafka.brokers", zap.Strings("brokers", brokers))
+	}
+
 	// Publisher (Kafka mxcwpp.vuln.advisory)
 	var pub *publisher.Publisher
-	if *kafkaBrokers != "" {
-		brokers := strings.Split(*kafkaBrokers, ",")
+	if len(brokers) > 0 {
 		pub, err = publisher.New(brokers, *advisoryTopic, logger)
 		if err != nil {
 			logger.Fatal("VulnSync Publisher 初始化失败", zap.Error(err))
