@@ -9,6 +9,7 @@ func TestValidateCommand_HostUpdate(t *testing.T) {
 		"dnf upgrade -y",
 		"yum update --security -y",
 		"yum update -y",
+		"dnf upgrade -y --setopt=*.skip_if_unavailable=1",
 	}
 	for _, c := range ok {
 		if err := validateCommand(c); err != nil {

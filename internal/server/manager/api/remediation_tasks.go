@@ -356,17 +356,21 @@ const (
 // scope=security 仅装安全 errata（低风险,推荐）；scope=all 全量升级。
 func buildHostUpdateCommand(osFamily, osVersion, scope string) (cmd, label string) {
 	secOnly := scope != "all"
+	// skip_if_unavailable=1：单个第三方 repo(如 docker-ce-stable)metadata 拉取超时
+	// 不应阻断整机更新——否则一个不可达 repo 让 dnf/yum 整体 abort，OS 安全更新也装不上。
+	// 让包管理器跳过不可达 repo，仍用可达的 OS repo(BaseOS/AppStream)完成更新。
+	const skipOpt = " --setopt=*.skip_if_unavailable=1"
 	switch detectPackageManager(osFamily, osVersion) {
 	case "rpm-dnf":
 		if secOnly {
-			return "dnf upgrade --security -y", "主机级安全更新(dnf --security)"
+			return "dnf upgrade --security -y" + skipOpt, "主机级安全更新(dnf --security)"
 		}
-		return "dnf upgrade -y", "主机级全量更新(dnf)"
+		return "dnf upgrade -y" + skipOpt, "主机级全量更新(dnf)"
 	case "rpm-yum":
 		if secOnly {
-			return "yum update --security -y", "主机级安全更新(yum --security)"
+			return "yum update --security -y" + skipOpt, "主机级安全更新(yum --security)"
 		}
-		return "yum update -y", "主机级全量更新(yum)"
+		return "yum update -y" + skipOpt, "主机级全量更新(yum)"
 	case "deb":
 		// 单条命令（remediation 插件安全校验禁止 && 组合命令）；依赖近期 apt 缓存。
 		if secOnly {
