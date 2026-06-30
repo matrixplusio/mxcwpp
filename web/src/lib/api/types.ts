@@ -1648,6 +1648,12 @@ export interface BdeBaseline {
   progress_pct?: number;
   learning_ends?: string;
   blocking_reason?: string;
+  metrics?: BdeMetricStat[]; // 13 维学到的行为画像
+}
+export interface BdeMetricStat {
+  key: string;
+  mean: number;
+  stddev: number;
 }
 export interface BdeBaselineStats {
   total_hosts: number;
