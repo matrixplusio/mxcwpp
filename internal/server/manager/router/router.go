@@ -463,6 +463,7 @@ func setupHostsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, sco
 	router.POST("/hosts/batch-update-business-line", handler.BatchUpdateBusinessLine)
 	router.GET("/hosts/status-distribution", handler.GetHostStatusDistribution)
 	router.GET("/hosts/risk-distribution", handler.GetHostRiskDistribution)
+	router.GET("/hosts/os-distribution", handler.GetHostOSDistribution)
 }
 
 // setupPolicyGroupsAPI 设置策略组 API 路由

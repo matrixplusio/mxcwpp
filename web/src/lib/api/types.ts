@@ -347,6 +347,11 @@ export interface HostRiskDistribution {
   medium: number;
   low: number;
 }
+export interface HostOSDistributionItem {
+  os_family: string;
+  major: string; // os_version 主版本号（"9.6" → "9"）
+  count: number;
+}
 
 export interface AssetOverview {
   scope: "global" | "host";

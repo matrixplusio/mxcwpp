@@ -106,7 +106,8 @@ func (h *HostsHandler) ListHosts(c *gin.Context) {
 		return
 	}
 
-	// 计算每个主机的基线得分
+	// 计算每个主机的基线得分（依赖 idx_scan_results_host_rule_checked 索引，单台查询 ~13ms；
+	// 命中 5min 缓存后即时。系统分布卡片改走 os-distribution 端点，不再拉大页触发整页评分）。
 	items := make([]HostListItem, 0, len(hosts))
 	for _, host := range hosts {
 		item := HostListItem{
@@ -204,6 +205,32 @@ func (h *HostsHandler) GetHostRiskDistribution(c *gin.Context) {
 	}
 
 	Success(c, distribution)
+}
+
+// HostOSDistributionItem 主机操作系统分布项（os_family + 主版本号 + 数量）
+type HostOSDistributionItem struct {
+	OSFamily string `json:"os_family"`
+	Major    string `json:"major"` // os_version 主版本号（"9.6" → "9"），空版本为空串
+	Count    int64  `json:"count"`
+}
+
+// GetHostOSDistribution 获取主机操作系统分布
+// GET /api/v1/hosts/os-distribution
+//
+// 替代前端「拉全量主机客户端聚合」的旧实现：单条 GROUP BY 下推 DB，只回分布计数，
+// 避免 page_size=1000 触发整页基线得分 N+1（冷缓存曾 12.5s，导致系统分布卡片超时空白）。
+func (h *HostsHandler) GetHostOSDistribution(c *gin.Context) {
+	var items []HostOSDistributionItem
+	if err := h.db.Model(&model.Host{}).Scopes(tenant.GinScope(c)).
+		Select("os_family, SUBSTRING_INDEX(COALESCE(os_version,''), '.', 1) AS major, COUNT(*) AS count").
+		Group("os_family, major").
+		Order("count DESC").
+		Scan(&items).Error; err != nil {
+		h.logger.Error("查询主机系统分布失败", zap.Error(err))
+		InternalError(c, "查询主机系统分布失败")
+		return
+	}
+	Success(c, items)
 }
 
 // GetHost 获取主机详情

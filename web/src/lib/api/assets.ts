@@ -5,6 +5,7 @@ import type {
   HostPlugin,
   HostStatusDistribution,
   HostRiskDistribution,
+  HostOSDistributionItem,
   AssetOverview,
   AssetStatistics,
   AssetTopItem,
@@ -37,6 +38,7 @@ export const hostsApi = {
   plugins: (hostId: string) => get<HostPlugin[]>(`/hosts/${hostId}/plugins`),
   statusDistribution: () => get<HostStatusDistribution>("/hosts/status-distribution"),
   riskDistribution: () => get<HostRiskDistribution>("/hosts/risk-distribution"),
+  osDistribution: () => get<HostOSDistributionItem[]>("/hosts/os-distribution"),
   updateTags: (hostId: string, tags: string[]) => put<void>(`/hosts/${hostId}/tags`, { tags }),
   updateBusinessLine: (hostId: string, business_line: string) =>
     put<void>(`/hosts/${hostId}/business-line`, { business_line }),
