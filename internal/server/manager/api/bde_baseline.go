@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -11,6 +12,21 @@ import (
 
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
+
+// bdeMetricKeys 与 engine/baseline MetricNames 顺序严格一致（MeanJSON/M2JSON 为该顺序的 [13]float64）
+var bdeMetricKeys = [13]string{
+	"proc_exec_count", "proc_unique_exe", "proc_fork_rate",
+	"file_write_count", "file_unique_path", "file_sensitive_hits",
+	"net_connect_count", "net_unique_ip", "net_unique_port", "net_external_ratio",
+	"dns_query_count", "dns_unique_domain", "dns_nx_ratio",
+}
+
+// bdeMetricStat 单维行为画像：基线均值与标准差
+type bdeMetricStat struct {
+	Key    string  `json:"key"`
+	Mean   float64 `json:"mean"`
+	Stddev float64 `json:"stddev"`
+}
 
 // 学习毕业门槛，与 engine/baseline 引擎常量保持一致：
 // 需同时满足 samples>=bdeMinSamples 且 距 first_seen>=bdeLearningPeriod。
@@ -28,6 +44,23 @@ type baselineStateResp struct {
 	ProgressPct    float64         `json:"progress_pct"`
 	LearningEnds   model.LocalTime `json:"learning_ends"`
 	BlockingReason string          `json:"blocking_reason"`
+	Metrics        []bdeMetricStat `json:"metrics"` // 13 维学到的行为画像
+}
+
+// parseMetrics 从持久化的 MeanJSON/M2JSON 还原 13 维画像（mean ± stddev）
+func parseMetrics(s model.HostBaselineState) []bdeMetricStat {
+	var mean, m2 [13]float64
+	_ = json.Unmarshal([]byte(s.MeanJSON), &mean)
+	_ = json.Unmarshal([]byte(s.M2JSON), &m2)
+	out := make([]bdeMetricStat, len(bdeMetricKeys))
+	for i, key := range bdeMetricKeys {
+		sd := 0.0
+		if s.Samples >= 2 {
+			sd = math.Sqrt(m2[i] / float64(s.Samples-1))
+		}
+		out[i] = bdeMetricStat{Key: key, Mean: mean[i], Stddev: sd}
+	}
+	return out
 }
 
 func clampPct(v float64) float64 {
@@ -53,6 +86,7 @@ func buildBaselineProgress(s model.HostBaselineState) baselineStateResp {
 		SamplePct:         samplePct,
 		TimePct:           timePct,
 		LearningEnds:      model.ToLocalTime(learningEnds),
+		Metrics:           parseMetrics(s),
 	}
 
 	if s.Phase == "active" {
