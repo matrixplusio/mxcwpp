@@ -784,6 +784,7 @@
     "loadError": "数据加载失败，请重试",
     "policies": {
       "allOs": "全部系统",
+      "backToGroups": "返回策略组",
       "create": "新建基线",
       "colName": "基线名称",
       "colOs": "适用系统",
@@ -795,6 +796,12 @@
       "versionPlaceholder": "如 1.0.0",
       "fieldDescription": "描述",
       "fieldOsVersion": "系统版本",
+      "fieldOsRequirements": "系统版本要求",
+      "osReqEmpty": "未配置版本要求(适用所有版本)",
+      "osReqFamily": "系统(如 centos)",
+      "osReqMin": "最小版本",
+      "osReqMax": "最大版本",
+      "osReqAdd": "+ 添加系统",
       "fieldEnabled": "启用",
       "empty": "暂无基线",
       "deleteTitle": "删除基线",
@@ -802,6 +809,20 @@
       "saved": "已保存",
       "updated": "已更新",
       "deleted": "已删除"
+    },
+    "rules": {
+      "backToPolicies": "返回基线",
+      "colTitle": "规则",
+      "colCategory": "分类",
+      "colSeverity": "级别",
+      "colSource": "来源",
+      "builtin": "内置",
+      "custom": "自建",
+      "searchPlaceholder": "搜索规则名/分类/ID",
+      "totalCount": "共 {{count}} 条规则",
+      "empty": "暂无规则",
+      "noPolicy": "缺少策略参数",
+      "updated": "已更新"
     },
     "groups": {
       "create": "新建策略组",

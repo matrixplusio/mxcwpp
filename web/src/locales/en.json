@@ -784,6 +784,7 @@
     "loadError": "Failed to load data, please retry",
     "policies": {
       "allOs": "All Systems",
+      "backToGroups": "Back to Groups",
       "create": "New Baseline",
       "colName": "Baseline Name",
       "colOs": "Applicable Systems",
@@ -795,6 +796,12 @@
       "versionPlaceholder": "e.g. 1.0.0",
       "fieldDescription": "Description",
       "fieldOsVersion": "OS Version",
+      "fieldOsRequirements": "OS Version Requirements",
+      "osReqEmpty": "No version requirements (applies to all versions)",
+      "osReqFamily": "OS (e.g. centos)",
+      "osReqMin": "Min version",
+      "osReqMax": "Max version",
+      "osReqAdd": "+ Add OS",
       "fieldEnabled": "Enabled",
       "empty": "No baselines",
       "deleteTitle": "Delete Baseline",
@@ -802,6 +809,20 @@
       "saved": "Saved",
       "updated": "Updated",
       "deleted": "Deleted"
+    },
+    "rules": {
+      "backToPolicies": "Back to Baselines",
+      "colTitle": "Rule",
+      "colCategory": "Category",
+      "colSeverity": "Severity",
+      "colSource": "Source",
+      "builtin": "Built-in",
+      "custom": "Custom",
+      "searchPlaceholder": "Search rule name/category/ID",
+      "totalCount": "{{count}} rules",
+      "empty": "No rules",
+      "noPolicy": "Missing policy parameter",
+      "updated": "Updated"
     },
     "groups": {
       "create": "New Policy Group",
