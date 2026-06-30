@@ -256,6 +256,8 @@ var (
 		&RemediationPolicyExecution{},
 		&VulnBulletin{},
 		&IOCSnapshot{},
+		&IntelSyncSchedule{},
+		&IntelSyncExecution{},
 		&AgentRule{},
 		&SequenceRule{},
 		&BehaviorAlert{},

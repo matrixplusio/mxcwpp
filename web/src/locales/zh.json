@@ -1555,10 +1555,37 @@
       "edrEvents": "EDR 事件",
       "rules": "检测规则",
       "threatIntel": "威胁情报",
+      "intelSchedules": "情报同步计划",
       "storylines": "攻击故事线",
       "hunting": "威胁狩猎",
       "anomaly": "ML 异常检测",
       "bde": "行为基线"
+    },
+    "intelSchedules": {
+      "subtitle": "定时拉取威胁情报 IOC Feed",
+      "create": "新建同步计划",
+      "createTitle": "新建同步计划",
+      "editTitle": "编辑同步计划",
+      "colCronExpr": "Cron 表达式",
+      "colEnabled": "启用",
+      "colLastRunAt": "上次运行",
+      "colNextRunAt": "下次运行",
+      "fieldCronExpr": "Cron 表达式",
+      "fieldEnabled": "启用",
+      "cronHint": "6 段格式：秒 分 时 日 月 周。例：0 0 3 * * * 表示每天 03:00",
+      "runNow": "立即运行",
+      "history": "历史",
+      "historyTitle": "{{name}} - 执行历史",
+      "noHistory": "暂无执行记录",
+      "iocCount": "IOC 总数",
+      "duration": "耗时",
+      "empty": "暂无同步计划",
+      "saved": "已保存",
+      "deleted": "已删除",
+      "updated": "已更新",
+      "triggered": "已触发同步",
+      "deleteTitle": "删除同步计划",
+      "deleteConfirmDesc": "确认删除同步计划「{{name}}」？"
     },
     "edrEvents": {
       "statTotal": "总事件",
@@ -1673,7 +1700,9 @@
       "hit": "命中情报",
       "miss": "未命中",
       "empty": "暂无情报数据",
-      "syncTriggered": "已触发同步"
+      "syncTriggered": "已触发同步",
+      "syncDone": "同步完成,已刷新",
+      "syncFailed": "同步失败"
     },
     "hunting": {
       "mqlTitle": "MQL 查询",

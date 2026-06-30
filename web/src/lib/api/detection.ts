@@ -8,6 +8,8 @@ import type {
   ThreatIntelStats,
   ThreatIntelIocList,
   ThreatIntelCheckResult,
+  IntelSyncSchedule,
+  IntelSyncExecution,
   Storyline,
   StorylineDetail,
   StorylineStats,
@@ -59,6 +61,18 @@ export const detectionApi = {
   checkIoc: (type: string, value: string) => post<ThreatIntelCheckResult>("/threat-intel/check", { type, value }),
   syncThreatIntel: () => post<{ message: string }>("/threat-intel/sync"),
   threatIntelSyncStatus: () => get<{ status: string; message: string }>("/threat-intel/sync-status"),
+
+  // 威胁情报同步计划
+  listIntelSchedules: () => get<IntelSyncSchedule[]>("/threat-intel/schedules"),
+  createIntelSchedule: (body: { name: string; cronExpr: string }) =>
+    post<void>("/threat-intel/schedules", body),
+  updateIntelSchedule: (id: number, body: Partial<IntelSyncSchedule>) =>
+    put<void>(`/threat-intel/schedules/${id}`, body),
+  deleteIntelSchedule: (id: number) => del<void>(`/threat-intel/schedules/${id}`),
+  toggleIntelSchedule: (id: number) => post<void>(`/threat-intel/schedules/${id}/toggle`),
+  runIntelSchedule: (id: number) => post<void>(`/threat-intel/schedules/${id}/run`),
+  listIntelExecutions: (id: number, params: { page: number; pageSize: number }) =>
+    get<{ items: IntelSyncExecution[]; total: number; page: number }>(`/threat-intel/schedules/${id}/executions`, params),
 
   // 攻击故事线
   listStorylines: (params: { page: number; page_size: number; host_id?: string; severity?: string; status?: string }) =>

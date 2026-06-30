@@ -1119,6 +1119,23 @@ func setupThreatIntelAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	router.POST("/threat-intel/sync", handler.TriggerSync)
 	router.GET("/threat-intel/sync-status", handler.GetSyncStatus)
 	router.GET("/threat-intel/sync-history", handler.GetSyncHistory)
+
+	// 情报同步计划（定时拉取 IOC Feed）：单实例既驱动 cron 又服务 CRUD，
+	// 避免 handler 实例与运行实例分离导致新建计划重启前不生效。
+	intelScheduler := biz.NewIntelSyncScheduler(db, logger, service)
+	go func() {
+		if err := intelScheduler.Start(); err != nil {
+			logger.Error("威胁情报同步调度器启动失败", zap.Error(err))
+		}
+	}()
+	schedHandler := api.NewIntelSyncSchedulesHandler(db, logger, intelScheduler)
+	router.GET("/threat-intel/schedules", schedHandler.ListSchedules)
+	router.POST("/threat-intel/schedules", schedHandler.CreateSchedule)
+	router.PUT("/threat-intel/schedules/:id", schedHandler.UpdateSchedule)
+	router.DELETE("/threat-intel/schedules/:id", schedHandler.DeleteSchedule)
+	router.POST("/threat-intel/schedules/:id/toggle", schedHandler.ToggleSchedule)
+	router.POST("/threat-intel/schedules/:id/run", schedHandler.RunSchedule)
+	router.GET("/threat-intel/schedules/:id/executions", schedHandler.ListExecutions)
 }
 
 // setupDependencyAPI 设置依赖管理 API 路由

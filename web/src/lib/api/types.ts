@@ -1504,6 +1504,28 @@ export interface ThreatIntelStats { ip: number; hash: number; domain: number; ur
 export interface ThreatIntelIocList { items: string[]; total: number; type: string; }
 export interface ThreatIntelCheckResult { hit: boolean; type: string; value: string; }
 
+// 威胁情报同步计划
+export interface IntelSyncSchedule {
+  id: number;
+  name: string;
+  cronExpr: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface IntelSyncExecution {
+  id: number;
+  scheduleId: number;
+  status: string; // running / success / failed
+  errorMsg: string;
+  iocCount: number;
+  duration: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
 // 攻击故事线
 export interface Storyline {
   id: number;

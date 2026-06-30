@@ -1555,10 +1555,37 @@
       "edrEvents": "EDR Events",
       "rules": "Detection Rules",
       "threatIntel": "Threat Intelligence",
+      "intelSchedules": "Intel Sync Plans",
       "storylines": "Attack Storylines",
       "hunting": "Threat Hunting",
       "anomaly": "ML Anomaly Detection",
       "bde": "Behavior Baseline"
+    },
+    "intelSchedules": {
+      "subtitle": "Scheduled pulls of threat-intel IOC feeds",
+      "create": "New Sync Plan",
+      "createTitle": "New Sync Plan",
+      "editTitle": "Edit Sync Plan",
+      "colCronExpr": "Cron Expression",
+      "colEnabled": "Enabled",
+      "colLastRunAt": "Last Run",
+      "colNextRunAt": "Next Run",
+      "fieldCronExpr": "Cron Expression",
+      "fieldEnabled": "Enabled",
+      "cronHint": "6 fields: sec min hour dom mon dow. e.g. 0 0 3 * * * = daily at 03:00",
+      "runNow": "Run Now",
+      "history": "History",
+      "historyTitle": "{{name}} - Execution History",
+      "noHistory": "No executions yet",
+      "iocCount": "IOC Count",
+      "duration": "Duration",
+      "empty": "No sync plans",
+      "saved": "Saved",
+      "deleted": "Deleted",
+      "updated": "Updated",
+      "triggered": "Sync triggered",
+      "deleteTitle": "Delete Sync Plan",
+      "deleteConfirmDesc": "Delete sync plan \"{{name}}\"?"
     },
     "edrEvents": {
       "statTotal": "Total Events",
@@ -1673,7 +1700,9 @@
       "hit": "Hit",
       "miss": "No Match",
       "empty": "No intelligence data",
-      "syncTriggered": "Sync triggered"
+      "syncTriggered": "Sync triggered",
+      "syncDone": "Sync complete, refreshed",
+      "syncFailed": "Sync failed"
     },
     "hunting": {
       "mqlTitle": "MQL Query",
