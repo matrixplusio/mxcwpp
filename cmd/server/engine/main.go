@@ -120,6 +120,8 @@ func main() {
 					alertGen := celengine.NewAlertGenerator(db, logger.Named("alert"))
 					// P2-B: 周期 reload DB 告警白名单(自动调优采纳的 exception),原子快照零锁读热路径
 					alertGen.StartWhitelistReload(ctx)
+					// 周期 reload 主机 created_at 快照,消除 hostInGrace 每事件 DB 查(engine CPU 高根因)
+					alertGen.StartHostGraceReload(ctx)
 					stages = append(stages, engine.NewCelRuleStage(celEng, logger).WithAlertGenerator(alertGen))
 					stages = append(stages, engine.NewSequenceStage(
 						celengine.NewSequenceDetector(celEng, db, nil, logger.Named("seq")),

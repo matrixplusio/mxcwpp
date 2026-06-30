@@ -40,14 +40,19 @@ func graceDecision(rule *model.DetectionRule, hostGraced bool, now time.Time) (b
 
 // hostInGrace 主机是否处于上线观察期，基于 hosts.created_at 首见时间。
 // 用 created_at 而非 agent_start_time：后者每次 agent 重启都会重置，会让主机反复进窗。
-// 每次 Generate 仅查一次（单主机），查不到 / 零值按"非观察期"处理（不误抑制）。
+//
+// 读 hostCreatedAt 原子快照（每 5min 全量刷新，见 host_grace.go），热路径零 DB 零锁。
+// 快照未就绪 / 查不到（新主机尚未进快照）/ 零值，按"非观察期"处理（不误抑制；新主机至多
+// 5min 后进窗，相对 48h 窗口可忽略）。原实现每事件查一次 DB，高事件量打满 MySQL 致 engine
+// CPU 飙高，已废弃。
 func (g *AlertGenerator) hostInGrace(hostID string, now time.Time) bool {
-	var h model.Host
-	if err := g.db.Select("created_at").Where("host_id = ?", hostID).First(&h).Error; err != nil {
+	snap := g.hostCreatedAt.Load()
+	if snap == nil {
 		return false
 	}
-	if h.CreatedAt.IsZero() {
+	created, ok := (*snap)[hostID]
+	if !ok || created.IsZero() {
 		return false
 	}
-	return now.Sub(h.CreatedAt.Time()) < hostGraceWindow
+	return now.Sub(created) < hostGraceWindow
 }

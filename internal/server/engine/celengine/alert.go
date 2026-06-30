@@ -37,6 +37,9 @@ type AlertGenerator struct {
 	// dbWhitelist 是 alert_whitelists 表中 exe/cmdline/host 维度条目的原子快照，
 	// 由 StartWhitelistReload 周期刷新；热路径零锁读，承接 P2-B 自动调优采纳的 exception。
 	dbWhitelist atomic.Pointer[[]model.AlertWhitelist]
+	// hostCreatedAt 是 host_id → created_at 的原子快照，由 StartHostGraceReload 周期刷新。
+	// created_at 不可变，缓存即可消除 hostInGrace 每事件一次的 DB 查（详见 host_grace.go）。
+	hostCreatedAt atomic.Pointer[map[string]time.Time]
 }
 
 // NewAlertGenerator 创建 AlertGenerator
@@ -46,8 +49,9 @@ func NewAlertGenerator(db *gorm.DB, logger *zap.Logger) *AlertGenerator {
 		log:       logger,
 		throttler: NewHitThrottler(defaultHitBurstThreshold, defaultHitRefillWindow, defaultHitThrottleCapacity),
 	}
-	// 启动时立即加载一次，后续由 StartWhitelistReload 周期刷新
+	// 启动时立即加载一次，后续由 StartWhitelistReload / StartHostGraceReload 周期刷新
 	g.reloadDBWhitelist()
+	g.reloadHostCreatedAt()
 	return g
 }
 
