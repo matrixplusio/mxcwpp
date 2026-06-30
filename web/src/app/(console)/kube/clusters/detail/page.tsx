@@ -194,17 +194,21 @@ function GcpTab({ clusterId, onChanged }: { clusterId: number; onChanged: () => 
   const { data: c } = useQuery({ queryKey: ["kube-cluster", clusterId], queryFn: () => kubeApi.getCluster(clusterId) });
   const [projectId, setProjectId] = useState("");
   const [subscription, setSubscription] = useState("");
+  const [location, setLocation] = useState("");
+  const [clusterName, setClusterName] = useState("");
   const [credentialsJson, setCredentialsJson] = useState("");
 
   useEffect(() => {
     if (c) {
       setProjectId(c.gcpProjectId ?? "");
       setSubscription(c.gcpSubscription ?? "");
+      setLocation(c.gcpLocation ?? "");
+      setClusterName(c.gcpClusterName ?? "");
     }
   }, [c]);
 
   const saveMutation = useMutation({
-    mutationFn: () => kubeApi.updateClusterGCP(clusterId, { projectId, subscription, credentialsJson: credentialsJson || undefined }),
+    mutationFn: () => kubeApi.updateClusterGCP(clusterId, { projectId, subscription, location, clusterName, credentialsJson: credentialsJson || undefined }),
     onSuccess: () => { onChanged(); setCredentialsJson(""); toast.success(t("kube.detail.gcpSaved")); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -226,8 +230,14 @@ function GcpTab({ clusterId, onChanged }: { clusterId: number; onChanged: () => 
           <FormField label="GCP Project ID" required>
             <Input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="my-gcp-project" />
           </FormField>
-          <FormField label={t("kube.detail.gcpSubscription")} required>
-            <Input value={subscription} onChange={(e) => setSubscription(e.target.value)} placeholder="mxcwpp-gke-audit-sub" />
+          <FormField label={t("kube.detail.gcpSubscription")}>
+            <Input value={subscription} onChange={(e) => setSubscription(e.target.value)} placeholder="mxcwpp-gke-audit-sub（仅审计需要）" />
+          </FormField>
+          <FormField label={t("kube.detail.gcpLocation")}>
+            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="asia-east2 / asia-east2-a" />
+          </FormField>
+          <FormField label={t("kube.detail.gcpClusterName")}>
+            <Input value={clusterName} onChange={(e) => setClusterName(e.target.value)} placeholder="缺省取集群名" />
           </FormField>
         </div>
         <FormField label={t("kube.detail.gcpCreds")}>
@@ -240,7 +250,7 @@ function GcpTab({ clusterId, onChanged }: { clusterId: number; onChanged: () => 
           />
         </FormField>
         <div className="flex gap-2 border-t border-border pt-4">
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !projectId.trim() || !subscription.trim()}>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !projectId.trim()}>
             {saveMutation.isPending ? t("common.submitting") : t("common.save")}
           </Button>
           {c?.gcpEnabled && (

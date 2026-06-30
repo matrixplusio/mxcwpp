@@ -1502,6 +1502,8 @@
       "gcpOff": "Disabled",
       "gcpHint": "After configuring the GCP Cloud Audit Logs → Pub/Sub pipeline, the platform consumes this cluster's K8s audit events and runs threat detection.",
       "gcpSubscription": "Pub/Sub subscription",
+      "gcpLocation": "GKE cluster location (region/zone)",
+      "gcpClusterName": "GKE cluster name",
       "gcpCreds": "Service Account JSON key",
       "gcpCredsKeep": "Leave empty to keep existing credentials",
       "gcpCredsPlaceholder": "Paste GCP SA JSON key content",

@@ -146,6 +146,44 @@ func (h *KubeBaselineHandler) ListBaselineTasks(c *gin.Context) {
 	SuccessPaginated(c, total, tasks)
 }
 
+// GetBaselineTrend 合规趋势：返回某集群最近 N 次完成任务的通过率/加权分时间序列（用于趋势图）
+func (h *KubeBaselineHandler) GetBaselineTrend(c *gin.Context) {
+	clusterID := c.Query("cluster_id")
+	if clusterID == "" {
+		BadRequest(c, "cluster_id 必填")
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
+	if limit <= 0 || limit > 365 {
+		limit = 30
+	}
+
+	type trendPoint struct {
+		TaskID        uint             `json:"taskId"`
+		FinishedAt    *model.LocalTime `json:"finishedAt"`
+		Total         int              `json:"total"`
+		Passed        int              `json:"passed"`
+		Failed        int              `json:"failed"`
+		PassRate      float64          `json:"passRate"`
+		WeightedScore int              `json:"weightedScore"`
+	}
+
+	var points []trendPoint
+	if err := h.db.Model(&model.KubeBaselineTask{}).
+		Where("cluster_id = ? AND status = ?", clusterID, model.BaselineTaskDone).
+		Order("id DESC").Limit(limit).
+		Find(&points).Error; err != nil {
+		h.logger.Error("查询基线趋势失败", zap.Error(err))
+		InternalError(c, "查询基线趋势失败")
+		return
+	}
+	// 反转为时间正序，便于前端直接画图
+	for i, j := 0, len(points)-1; i < j; i, j = i+1, j-1 {
+		points[i], points[j] = points[j], points[i]
+	}
+	Success(c, points)
+}
+
 // GetBaselineTaskDetail 单次基线任务详情（任务信息 + 该次 checklist）
 func (h *KubeBaselineHandler) GetBaselineTaskDetail(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -188,25 +226,16 @@ func (h *KubeBaselineHandler) RunBaselineCheck(c *gin.Context) {
 		return
 	}
 
-	results, err := h.checker.RunChecks(*req.ClusterID)
+	taskID, err := h.checker.EnqueueCheck(*req.ClusterID)
 	if err != nil {
-		h.logger.Error("执行基线检查失败", zap.Error(err))
+		h.logger.Error("入队基线检查失败", zap.Error(err))
 		InternalError(c, "内部服务错误")
 		return
 	}
 
-	passed := 0
-	for _, r := range results {
-		if r.Result == "pass" {
-			passed++
-		}
-	}
-
+	// 异步执行：立即返回 task_id，前端轮询 GET /kube/baseline-tasks/:id 取进度与结果
 	Success(c, gin.H{
-		"total":    len(results),
-		"passed":   passed,
-		"failed":   len(results) - passed,
-		"passRate": passed * 100 / max(len(results), 1),
-		"items":    results,
+		"taskId": taskID,
+		"status": model.BaselineTaskPending,
 	})
 }

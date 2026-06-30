@@ -4,6 +4,7 @@ package model
 type KubeBaselineTaskStatus string
 
 const (
+	BaselineTaskPending KubeBaselineTaskStatus = "pending" // 已入队，等待 worker 执行
 	BaselineTaskRunning KubeBaselineTaskStatus = "running"
 	BaselineTaskDone    KubeBaselineTaskStatus = "done"
 	BaselineTaskFailed  KubeBaselineTaskStatus = "failed"
@@ -21,10 +22,12 @@ type KubeBaselineTask struct {
 	Failed      int                    `gorm:"column:failed;default:0" json:"failed"`
 	ErrorCnt    int                    `gorm:"column:error_cnt;default:0" json:"errorCnt"`
 	PassRate    float64                `gorm:"column:pass_rate;type:decimal(5,2);default:0" json:"passRate"`
-	ErrorMsg    string                 `gorm:"column:error_msg;type:text" json:"errorMsg"`
-	StartedAt   LocalTime              `gorm:"column:started_at;type:timestamp" json:"startedAt"`
-	FinishedAt  *LocalTime             `gorm:"column:finished_at;type:timestamp" json:"finishedAt"`
-	CreatedAt   LocalTime              `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	// WeightedScore 严重度加权合规分（critical 失败惩罚更重，比扁平通过率更贴近真实风险）
+	WeightedScore int        `gorm:"column:weighted_score;default:0" json:"weightedScore"`
+	ErrorMsg      string     `gorm:"column:error_msg;type:text" json:"errorMsg"`
+	StartedAt     LocalTime  `gorm:"column:started_at;type:timestamp" json:"startedAt"`
+	FinishedAt    *LocalTime `gorm:"column:finished_at;type:timestamp" json:"finishedAt"`
+	CreatedAt     LocalTime  `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
 }
 
 func (KubeBaselineTask) TableName() string {

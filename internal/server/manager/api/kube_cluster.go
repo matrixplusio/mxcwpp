@@ -277,10 +277,12 @@ func (h *KubeClusterHandler) GetCluster(c *gin.Context) {
 		},
 		"auditToken": cluster.AuditToken,
 		"webhookURL": h.buildWebhookURL(cluster.AuditToken),
-		// GCP Pub/Sub 配置
+		// GCP 配置（Pub/Sub 审计 + GKE 基线坐标）
 		"gcpEnabled":        cluster.GCPEnabled,
 		"gcpProjectId":      cluster.GCPProjectID,
 		"gcpSubscription":   cluster.GCPSubscription,
+		"gcpLocation":       cluster.GCPLocation,
+		"gcpClusterName":    cluster.GCPClusterName,
 		"gcpHasCredentials": cluster.GCPCredentialsJSON != "",
 	}
 
@@ -581,7 +583,9 @@ func (h *KubeClusterHandler) UpdateGCPConfig(c *gin.Context) {
 
 	var req struct {
 		ProjectID       string `json:"projectId" binding:"required"`
-		Subscription    string `json:"subscription" binding:"required"`
+		Subscription    string `json:"subscription"`    // Pub/Sub 审计订阅；仅做 GKE 基线时可留空
+		Location        string `json:"location"`        // GKE 集群 region/zone（基线检查用）
+		ClusterName     string `json:"clusterName"`     // GKE 集群 ID，缺省取集群名
 		CredentialsJSON string `json:"credentialsJson"` // SA JSON Key 内容，可选（GCE ADC / Workload Identity 时留空）
 	}
 
@@ -591,9 +595,11 @@ func (h *KubeClusterHandler) UpdateGCPConfig(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"gcp_enabled":      true,
+		"gcp_enabled":      req.Subscription != "", // 仅配置审计订阅时启用 Pub/Sub 消费
 		"gcp_project_id":   req.ProjectID,
 		"gcp_subscription": req.Subscription,
+		"gcp_location":     req.Location,
+		"gcp_cluster_name": req.ClusterName,
 	}
 	// 仅在请求中包含凭据时更新，允许保留已有凭据
 	if req.CredentialsJSON != "" {

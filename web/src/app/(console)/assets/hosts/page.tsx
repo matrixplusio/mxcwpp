@@ -81,21 +81,17 @@ export default function HostsPage() {
     ...(blList?.items ?? []).map((b) => ({ label: b.name, value: b.code })),
   ];
 
-  // 系统分布(客户端聚合:后端无 os-distribution 端点,拉全量主机按 os_family + 主版本号分组)
-  const { data: allHosts } = useQuery({
+  // 系统分布(后端 os-distribution 端点单条 GROUP BY,前端只做发行版 label + 主版本号拼接)
+  const { data: osDistRaw } = useQuery({
     queryKey: ["hosts-os-dist"],
-    queryFn: () => hostsApi.list({ page: 1, page_size: 1000 }),
+    queryFn: () => hostsApi.osDistribution(),
   });
-  const osDist = Object.entries(
-    (allHosts?.items ?? []).reduce<Record<string, number>>((acc, h) => {
-      // os_version 形如 "9.6" / "7" / "10.1"，取主版本号拼到发行版后（Rocky 9 / CentOS 7）
-      const major = (h.os_version || "").trim().split(".")[0];
-      const k = major ? `${osLabel(h.os_family)} ${major}` : osLabel(h.os_family);
-      acc[k] = (acc[k] ?? 0) + 1;
-      return acc;
-    }, {}),
-  )
-    .map(([name, value]) => ({ name, value }))
+  const osDist = (osDistRaw ?? [])
+    .map((d) => {
+      const major = (d.major || "").trim();
+      const name = major ? `${osLabel(d.os_family)} ${major}` : osLabel(d.os_family);
+      return { name, value: d.count };
+    })
     .sort((a, b) => b.value - a.value);
   // 类型过多时折叠尾部为「其他 N」,避免撑爆卡片
   const OS_MAX = 7;

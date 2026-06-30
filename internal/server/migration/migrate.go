@@ -69,6 +69,11 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("scan_results 复合主键迁移处理", zap.Error(err))
 	}
 
+	// 创建 scan_results dashboard 复合索引（host_id, rule_id, checked_at），加速窗口函数查询
+	if err := ensureScanResultsDashboardIndex(db, logger); err != nil {
+		logger.Warn("scan_results dashboard 索引创建失败", zap.Error(err))
+	}
+
 	// 执行数据迁移：为现有数据设置默认的运行时类型
 	if err := migrateRuntimeTypes(db, logger); err != nil {
 		logger.Warn("运行时类型迁移处理", zap.Error(err))

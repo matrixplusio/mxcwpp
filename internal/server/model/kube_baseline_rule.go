@@ -28,6 +28,7 @@ type KubeBaselineRule struct {
 	Description string           `gorm:"column:description;type:text" json:"description"`
 	Remediation string           `gorm:"column:remediation;type:text" json:"remediation"`
 	Benchmark   string           `gorm:"column:benchmark;type:varchar(255)" json:"benchmark"`
+	ControlRef  string           `gorm:"column:control_ref;type:varchar(255)" json:"controlRef"` // 框架条款映射(PSS/NSA/CIS 章节)
 	CheckConfig *KubeCheckConfig `gorm:"column:check_config;type:json" json:"checkConfig"`
 	Enabled     bool             `gorm:"column:enabled;type:boolean;default:true" json:"enabled"`
 	Builtin     bool             `gorm:"column:builtin;type:boolean;default:false" json:"builtin"`

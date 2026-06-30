@@ -347,6 +347,11 @@ export interface HostRiskDistribution {
   medium: number;
   low: number;
 }
+export interface HostOSDistributionItem {
+  os_family: string;
+  major: string; // os_version 主版本号（"9.6" → "9"）
+  count: number;
+}
 
 export interface AssetOverview {
   scope: "global" | "host";
@@ -812,6 +817,8 @@ export interface KubeCluster {
   gcpEnabled?: boolean;
   gcpProjectId?: string;
   gcpSubscription?: string;
+  gcpLocation?: string;
+  gcpClusterName?: string;
   createdAt: string;
   // getCluster 详情额外返回（列表接口无）
   summary?: { nodes: number; pods: number; namespaces: number; deployments: number; services: number; alarms: number };

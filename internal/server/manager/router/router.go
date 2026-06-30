@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"strings"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -462,6 +463,7 @@ func setupHostsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, sco
 	router.POST("/hosts/batch-update-business-line", handler.BatchUpdateBusinessLine)
 	router.GET("/hosts/status-distribution", handler.GetHostStatusDistribution)
 	router.GET("/hosts/risk-distribution", handler.GetHostRiskDistribution)
+	router.GET("/hosts/os-distribution", handler.GetHostOSDistribution)
 }
 
 // setupPolicyGroupsAPI 设置策略组 API 路由
@@ -811,14 +813,16 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 		logger.Error("初始化 K8s CEL 规则引擎失败", zap.Error(err))
 	}
 
-	// 基线检查
+	// 基线检查（异步：启动后台 worker 消费 pending 任务）
 	baselineChecker := biz.NewKubeBaselineChecker(db, logger, kubeClient, ruleEngine)
+	baselineChecker.Start(context.Background())
 	baselineHandler := api.NewKubeBaselineHandler(db, logger, baselineChecker)
 	router.GET("/kube/baseline", baselineHandler.ListBaseline)
 	router.GET("/kube/baseline/:id", baselineHandler.GetBaselineDetail)
 	router.POST("/kube/baseline/detect", baselineHandler.RunBaselineCheck)
 	router.GET("/kube/baseline-tasks", baselineHandler.ListBaselineTasks)
 	router.GET("/kube/baseline-tasks/:id", baselineHandler.GetBaselineTaskDetail)
+	router.GET("/kube/baseline/trend", baselineHandler.GetBaselineTrend)
 
 	// 基线规则管理
 	rulesHandler := api.NewKubeBaselineRulesHandler(db, logger, baselineChecker, ruleEngine)

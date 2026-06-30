@@ -557,12 +557,19 @@ func (h *DashboardHandler) calculateBaselinePercentages() (float64, float64) {
 		FailCount           int64 `gorm:"column:fail_count"`
 		MediumPlusFailCount int64 `gorm:"column:medium_plus_fail_count"`
 	}
+	// 合规率反映「当前状态」：每主机每规则只取最新一次扫描结果，避免历史复扫被重复计数
+	// （复合主键含 task_id，每次复扫追加整套新行；全表 SUM 会把同一主机扫 N 次算 N 倍）。
 	h.db.Raw(`
 		SELECT
 			SUM(CASE WHEN status = 'pass' THEN 1 ELSE 0 END) AS pass_count,
 			SUM(CASE WHEN status = 'fail' THEN 1 ELSE 0 END) AS fail_count,
 			SUM(CASE WHEN status = 'fail' AND severity IN ('medium','high','critical') THEN 1 ELSE 0 END) AS medium_plus_fail_count
-		FROM scan_results
+		FROM (
+			SELECT status, severity,
+				ROW_NUMBER() OVER (PARTITION BY host_id, rule_id ORDER BY checked_at DESC) AS rn
+			FROM scan_results
+		) ranked
+		WHERE rn = 1
 	`).Scan(&result)
 
 	totalResults := result.PassCount + result.FailCount
@@ -594,23 +601,28 @@ func (h *DashboardHandler) getBaselineRisksTop3() []gin.H {
 		LowCount      int64  `gorm:"column:low_count"`
 	}
 
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	// Top3 反映「当前失败状态」：每主机每规则取最新结果后过滤 fail，避免同一主机多次复扫
+	// 把同一失败项重复累加（旧实现按 7 天窗口 SUM 所有 fail 行，复扫越频繁数字越虚高）。
 	h.db.Raw(`
 		SELECT p.id AS policy_id, p.name,
-			SUM(CASE WHEN sr.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
-			SUM(CASE WHEN sr.severity = 'high'     THEN 1 ELSE 0 END) AS high_count,
-			SUM(CASE WHEN sr.severity = 'medium'   THEN 1 ELSE 0 END) AS medium_count,
-			SUM(CASE WHEN sr.severity = 'low'      THEN 1 ELSE 0 END) AS low_count
-		FROM scan_results sr
-		INNER JOIN policies p ON p.id = sr.policy_id
-		WHERE sr.status = 'fail' AND sr.checked_at >= ?
+			SUM(CASE WHEN t.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
+			SUM(CASE WHEN t.severity = 'high'     THEN 1 ELSE 0 END) AS high_count,
+			SUM(CASE WHEN t.severity = 'medium'   THEN 1 ELSE 0 END) AS medium_count,
+			SUM(CASE WHEN t.severity = 'low'      THEN 1 ELSE 0 END) AS low_count
+		FROM (
+			SELECT policy_id, severity, status,
+				ROW_NUMBER() OVER (PARTITION BY host_id, rule_id ORDER BY checked_at DESC) AS rn
+			FROM scan_results
+		) t
+		INNER JOIN policies p ON p.id = t.policy_id
+		WHERE t.rn = 1 AND t.status = 'fail'
 		GROUP BY p.id, p.name
-		ORDER BY (SUM(CASE WHEN sr.severity = 'critical' THEN 4
-		               WHEN sr.severity = 'high'     THEN 3
-		               WHEN sr.severity = 'medium'   THEN 2
+		ORDER BY (SUM(CASE WHEN t.severity = 'critical' THEN 4
+		               WHEN t.severity = 'high'     THEN 3
+		               WHEN t.severity = 'medium'   THEN 2
 		               ELSE 1 END)) DESC
 		LIMIT 3
-	`, sevenDaysAgo).Scan(&rows)
+	`).Scan(&rows)
 
 	top3 := make([]gin.H, 0, len(rows))
 	for _, r := range rows {

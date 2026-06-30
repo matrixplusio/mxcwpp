@@ -13,14 +13,18 @@ import (
 const (
 	baselineMaintInterval      = 12 * time.Hour // 维护周期
 	behaviorAlertRetentionDays = 30             // behavior_alerts 保留天数(瞬态异常快照,过期删)
+	scanResultRetentionDays    = 90             // scan_results 保留天数(基线扫描历史,过期删,与 CH scan_results_history 对齐)
+	scanResultDeleteBatch      = 5000           // scan_results 批量删除大小(避免长事务锁)
 )
 
 // StartBaselineMaintenanceScheduler 启动 BDE 维护调度器（P3）。
 //
-// 周期清理两类垃圾：
+// 周期清理三类垃圾：
 //   - stale 基线：host_baseline_states 中 host_id 已不在 hosts 表的残留行
 //     (agent host_id 重生留下的旧基线，prod 实测 256 行 > 232 主机)。
 //   - 过期 behavior_alerts：超保留期的行(瞬态异常快照，长期分析走 storyline_events)。
+//   - 过期 scan_results：超保留期的基线扫描历史。每次复扫追加整套新行(复合主键含 task_id)，
+//     无保留则无限增长，dashboard warmer 全表扫描随表膨胀。批量删避免长锁。
 func StartBaselineMaintenanceScheduler(db *gorm.DB, logger *zap.Logger) {
 	ticker := time.NewTicker(baselineMaintInterval)
 	defer ticker.Stop()
@@ -53,5 +57,25 @@ func processBaselineMaintenance(db *gorm.DB, logger *zap.Logger) {
 		logger.Info("已清理过期 behavior_alerts",
 			zap.Int64("deleted", baRes.RowsAffected),
 			zap.Int("retention_days", behaviorAlertRetentionDays))
+	}
+
+	// 3. 过期 scan_results 删除（批量，避免长事务锁大表）。
+	scanCutoff := model.ToLocalTime(time.Now().Add(-scanResultRetentionDays * 24 * time.Hour))
+	var scanDeleted int64
+	for {
+		res := db.Where("checked_at < ?", scanCutoff).Limit(scanResultDeleteBatch).Delete(&model.ScanResult{})
+		if res.Error != nil {
+			logger.Warn("过期 scan_results 清理失败", zap.Error(res.Error))
+			break
+		}
+		scanDeleted += res.RowsAffected
+		if res.RowsAffected < scanResultDeleteBatch {
+			break
+		}
+	}
+	if scanDeleted > 0 {
+		logger.Info("已清理过期 scan_results",
+			zap.Int64("deleted", scanDeleted),
+			zap.Int("retention_days", scanResultRetentionDays))
 	}
 }

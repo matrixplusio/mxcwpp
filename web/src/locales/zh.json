@@ -1502,6 +1502,8 @@
       "gcpOff": "未启用",
       "gcpHint": "配置 GCP Cloud Audit Logs → Pub/Sub 链路后，平台将消费该集群的 K8s 审计事件并进行威胁检测。",
       "gcpSubscription": "Pub/Sub 订阅名",
+      "gcpLocation": "GKE 集群位置 (region/zone)",
+      "gcpClusterName": "GKE 集群名",
       "gcpCreds": "Service Account JSON 凭证",
       "gcpCredsKeep": "留空则保留已有凭证",
       "gcpCredsPlaceholder": "粘贴 GCP SA JSON Key 内容",
