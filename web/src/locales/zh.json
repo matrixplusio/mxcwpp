@@ -415,6 +415,8 @@
       "allStatus": "全部状态",
       "allSeverity": "全部级别",
       "allType": "全部类型",
+      "allBusinessLine": "全部业务线",
+      "filterHostId": "按主机 ID 过滤",
       "colTitle": "告警标题",
       "colSource": "来源",
       "colRisk": "风险分",

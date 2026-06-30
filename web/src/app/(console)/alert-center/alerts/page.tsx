@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Bell, AlertTriangle, CheckCircle, EyeOff } from "lucide-react";
 import { useUrlState } from "@/hooks/useUrlState";
 import { alertsApi } from "@/lib/api/alerts";
+import { businessLinesApi } from "@/lib/api/assets";
 import type { Alert, AlertSource } from "@/lib/api/types";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -12,6 +13,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
@@ -85,7 +87,18 @@ export default function AlertsPage() {
     severity: "",
     alert_type: "",
     keyword: "",
+    host_id: "",
+    business_line: "",
   });
+
+  const { data: blData } = useQuery({
+    queryKey: ["business-lines-all"],
+    queryFn: () => businessLinesApi.list({ page: 1, page_size: 200 }),
+  });
+  const businessLineOptions = [
+    { label: t("alerts.list.allBusinessLine"), value: "" },
+    ...(blData?.items ?? []).map((b) => ({ label: b.name, value: b.name })),
+  ];
 
   const { data: stats } = useQuery({
     queryKey: ["alerts-stats"],
@@ -102,6 +115,8 @@ export default function AlertsPage() {
         severity: params.severity || undefined,
         alert_type: params.alert_type || undefined,
         keyword: params.keyword || undefined,
+        host_id: params.host_id || undefined,
+        business_line: params.business_line || undefined,
       }),
   });
 
@@ -239,6 +254,17 @@ export default function AlertsPage() {
             value={params.alert_type}
             onChange={(v) => setParams((p) => ({ ...p, alert_type: v, page: 1 }))}
             options={typeOptions}
+          />
+          <Select
+            value={params.business_line}
+            onChange={(v) => setParams((p) => ({ ...p, business_line: v, page: 1 }))}
+            options={businessLineOptions}
+          />
+          <Input
+            value={params.host_id}
+            onChange={(e) => setParams((p) => ({ ...p, host_id: e.target.value, page: 1 }))}
+            placeholder={t("alerts.list.filterHostId")}
+            className="w-56"
           />
         </FilterBar>
         <Card>

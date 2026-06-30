@@ -9,6 +9,7 @@ export interface ListAlertsParams {
   host_id?: string;
   alert_type?: string;
   category?: string;
+  business_line?: string;
   keyword?: string;
   start_time?: string;
   end_time?: string;
