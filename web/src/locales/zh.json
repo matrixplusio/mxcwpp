@@ -804,6 +804,20 @@
       "updated": "已更新",
       "deleted": "已删除"
     },
+    "rules": {
+      "backToPolicies": "返回基线",
+      "colTitle": "规则",
+      "colCategory": "分类",
+      "colSeverity": "级别",
+      "colSource": "来源",
+      "builtin": "内置",
+      "custom": "自建",
+      "searchPlaceholder": "搜索规则名/分类/ID",
+      "totalCount": "共 {{count}} 条规则",
+      "empty": "暂无规则",
+      "noPolicy": "缺少策略参数",
+      "updated": "已更新"
+    },
     "groups": {
       "create": "新建策略组",
       "totalCount": "共 {{count}} 个策略组",

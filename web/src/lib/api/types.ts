@@ -1065,6 +1065,21 @@ export interface BaselinePolicy {
 // /policies 返回 { items }，无 total
 export interface BaselinePolicyList { items: BaselinePolicy[]; }
 
+// 基线规则（策略下的检查项）
+export interface BaselineRule {
+  rule_id: string;
+  policy_id: string;
+  category: string;
+  title: string;
+  description: string;
+  severity: string;
+  enabled: boolean;
+  builtin: boolean;
+  runtime_types?: RuntimeType[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BaselinePolicyStatistics {
   policy_id: string;
   rule_count: number;

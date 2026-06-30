@@ -804,6 +804,20 @@
       "updated": "Updated",
       "deleted": "Deleted"
     },
+    "rules": {
+      "backToPolicies": "Back to Baselines",
+      "colTitle": "Rule",
+      "colCategory": "Category",
+      "colSeverity": "Severity",
+      "colSource": "Source",
+      "builtin": "Built-in",
+      "custom": "Custom",
+      "searchPlaceholder": "Search rule name/category/ID",
+      "totalCount": "{{count}} rules",
+      "empty": "No rules",
+      "noPolicy": "Missing policy parameter",
+      "updated": "Updated"
+    },
     "groups": {
       "create": "New Policy Group",
       "totalCount": "{{count}} policy groups",

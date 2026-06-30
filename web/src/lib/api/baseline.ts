@@ -4,6 +4,7 @@ import type {
   BaselinePolicy,
   BaselinePolicyList,
   BaselinePolicyStatistics,
+  BaselineRule,
   PolicyGroup,
   BaselineTask,
   BaselineTaskChecks,
@@ -26,6 +27,12 @@ export const baselineApi = {
   deletePolicy: (policyId: string) => del<void>(`/policies/${policyId}`),
   batchEnablePolicies: (policyIds: string[], enabled: boolean) =>
     post<{ updated: number }>("/policies/batch/enable", { policy_ids: policyIds, enabled }),
+
+  // ===== 基线规则（策略下的检查项）=====
+  listRules: (policyId: string) => get<Paged<BaselineRule>>(`/policies/${policyId}/rules`),
+  getRule: (ruleId: string) => get<BaselineRule>(`/rules/${ruleId}`),
+  updateRule: (ruleId: string, body: Partial<BaselineRule>) => put<BaselineRule>(`/rules/${ruleId}`, body),
+  deleteRule: (ruleId: string) => del<void>(`/rules/${ruleId}`),
 
   // ===== 策略组 =====
   listGroups: (params?: { with_policies?: boolean }) =>

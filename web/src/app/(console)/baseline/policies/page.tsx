@@ -140,7 +140,16 @@ function BaselinePoliciesContent() {
       title: t("baseline.policies.colName"),
       render: (r) => (
         <div>
-          <div className="font-medium text-ink">{r.name}</div>
+          <button
+            type="button"
+            className="font-medium text-ink transition-colors hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/baseline/rules?policy_id=${r.id}`);
+            }}
+          >
+            {r.name}
+          </button>
           {r.version && <div className="text-xs text-faint tabular-nums">v{r.version}</div>}
         </div>
       ),
