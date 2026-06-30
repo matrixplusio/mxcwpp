@@ -1,9 +1,9 @@
 "use client";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useUrlState } from "@/hooks/useUrlState";
-import { alertsApi } from "@/lib/api/alerts";
+import { alertsApi, whitelistApi } from "@/lib/api/alerts";
 import type { Alert, Severity } from "@/lib/api/types";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -11,9 +11,12 @@ import { Pagination } from "@/components/ui/Pagination";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StatusTag, SeverityTag } from "@/components/ui/Tag";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { toast } from "@/components/ui/toast";
 
 const isSeverity = (v: string): v is Severity => ["critical", "high", "medium", "low"].includes(v);
 
@@ -94,7 +97,44 @@ export default function ThreatAlertsPage() {
       }),
   });
 
+  const queryClient = useQueryClient();
   const [detail, setDetail] = useState<Alert | null>(null);
+  const [markingFp, setMarkingFp] = useState<Alert | null>(null);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["threat-alerts"] });
+
+  // 用户研判:确认真实威胁 → 标记已处置
+  const confirmRealMutation = useMutation({
+    mutationFn: (a: Alert) => alertsApi.resolve(a.id, "用户研判:真实威胁,已确认"),
+    onSuccess: () => {
+      invalidate();
+      setDetail(null);
+      toast.success(t("detection.threatAlerts.confirmedReal"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // 用户研判:误报 → 解决告警 + 加白名单(学习:同规则+主机不再告警)
+  const markFpMutation = useMutation({
+    mutationFn: async (a: Alert) => {
+      await whitelistApi.create({
+        name: `误报-${a.rule_id}-${(a.host?.hostname || a.host_id).slice(0, 16)}`,
+        rule_id: a.rule_id,
+        host_id: a.host_id,
+        category: a.category,
+        severity: a.severity,
+        reason: "用户研判:误报,自动加入白名单",
+      });
+      await alertsApi.resolve(a.id, "用户研判:误报");
+    },
+    onSuccess: () => {
+      invalidate();
+      setMarkingFp(null);
+      setDetail(null);
+      toast.success(t("detection.threatAlerts.markedFpLearned"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const columns: Column<Alert>[] = [
     { key: "last_seen_at", title: t("detection.threatAlerts.colTime"), render: (r) => <span className="text-faint tabular-nums">{r.last_seen_at}</span> },
@@ -166,7 +206,24 @@ export default function ThreatAlertsPage() {
         </Card>
       </div>
 
-      <Drawer open={!!detail} onClose={() => setDetail(null)} title={t("detection.threatAlerts.detailTitle")} width={560}>
+      <Drawer
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title={t("detection.threatAlerts.detailTitle")}
+        width={560}
+        footer={
+          detail?.status === "active" ? (
+            <>
+              <Button variant="ghost" onClick={() => detail && setMarkingFp(detail)}>
+                {t("detection.threatAlerts.markFp")}
+              </Button>
+              <Button onClick={() => detail && confirmRealMutation.mutate(detail)} disabled={confirmRealMutation.isPending}>
+                {t("detection.threatAlerts.confirmReal")}
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
         {detail && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -180,8 +237,11 @@ export default function ThreatAlertsPage() {
               const why = detail.description && detail.description.length > 0 ? detail.description : m.meaning;
               return (
                 <div className="rounded-md border border-line bg-surface-muted p-4">
-                  <div className="text-sm font-semibold text-ink">{t("detection.threatAlerts.verdict")}</div>
-                  <p className="mt-1 text-sm leading-relaxed text-ink">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">AI</span>
+                    {t("detection.threatAlerts.verdict")}
+                  </div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink">
                     {detail.host?.hostname || detail.host_id} 上检测到{m.name}:{detail.title}。{why}
                   </p>
                   <div className="mt-3 text-sm font-semibold text-ink">{t("detection.threatAlerts.recommendation")}</div>
@@ -209,6 +269,15 @@ export default function ThreatAlertsPage() {
           </div>
         )}
       </Drawer>
+
+      <ConfirmDialog
+        open={!!markingFp}
+        title={t("detection.threatAlerts.markFpTitle")}
+        desc={markingFp ? t("detection.threatAlerts.markFpDesc", { title: markingFp.title }) : undefined}
+        loading={markFpMutation.isPending}
+        onConfirm={() => markingFp && markFpMutation.mutate(markingFp)}
+        onCancel={() => setMarkingFp(null)}
+      />
     </>
   );
 }
