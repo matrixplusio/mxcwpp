@@ -32,7 +32,46 @@ function fmt(n: number): string {
 const buildStateColumns = (t: TFunction, phaseMeta: ReturnType<typeof buildPhaseMeta>): Column<BdeBaseline>[] => [
   { key: "host_id", title: t("detection.bde.colHostId"), render: (r) => <span className="font-mono text-xs text-ink">{r.host_id}</span> },
   { key: "phase", title: t("detection.bde.colPhase"), render: (r) => <StatusTag tone={phaseMeta[r.phase].tone}>{phaseMeta[r.phase].label}</StatusTag> },
-  { key: "samples", title: t("detection.bde.colSamples"), render: (r) => <span className="tabular-nums text-ink">{r.samples}</span> },
+  {
+    key: "progress",
+    title: t("detection.bde.colProgress"),
+    render: (r) => {
+      const pct = Math.round(r.progress_pct ?? (r.phase === "active" ? 100 : 0));
+      return (
+        <div className="w-40">
+          <div className="mb-1 flex justify-between text-xs">
+            <span className="text-faint">
+              {t("detection.bde.samplesShort")} {r.samples}/{r.required_min ?? 100}
+            </span>
+            <span className="tabular-nums text-muted">{pct}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+            <div
+              className={r.phase === "active" ? "h-full bg-success" : "h-full bg-warning"}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      );
+    },
+  },
+  {
+    key: "blocking_reason",
+    title: t("detection.bde.colStatusDetail"),
+    render: (r) =>
+      r.phase === "active" ? (
+        <span className="text-xs text-success">{t("detection.bde.graduated")}</span>
+      ) : (
+        <div className="text-xs">
+          <div className="text-muted">{r.blocking_reason || "—"}</div>
+          {r.learning_ends && (
+            <div className="text-faint">
+              {t("detection.bde.learningEnds")}: {r.learning_ends}
+            </div>
+          )}
+        </div>
+      ),
+  },
   { key: "first_seen", title: t("detection.bde.colFirstSeen"), render: (r) => <span className="tabular-nums text-faint">{r.first_seen}</span> },
 ];
 

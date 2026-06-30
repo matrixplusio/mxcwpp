@@ -1641,6 +1641,13 @@ export interface BdeBaseline {
   first_seen: string;
   created_at: string;
   updated_at: string;
+  // 学习进度（后端按 samples/门槛 与 first_seen/学习期 推导）
+  required_min?: number;
+  sample_pct?: number;
+  time_pct?: number;
+  progress_pct?: number;
+  learning_ends?: string;
+  blocking_reason?: string;
 }
 export interface BdeBaselineStats {
   total_hosts: number;

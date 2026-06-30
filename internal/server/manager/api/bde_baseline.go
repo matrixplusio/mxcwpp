@@ -1,12 +1,80 @@
 package api
 
 import (
+	"fmt"
+	"math"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
+
+// 学习毕业门槛，与 engine/baseline 引擎常量保持一致：
+// 需同时满足 samples>=bdeMinSamples 且 距 first_seen>=bdeLearningPeriod。
+const (
+	bdeMinSamples     = 100
+	bdeLearningPeriod = 7 * 24 * time.Hour
+)
+
+// baselineStateResp 在原始状态上附加学习进度，便于前端展示进度条与阻塞原因
+type baselineStateResp struct {
+	model.HostBaselineState
+	RequiredMin    int             `json:"required_min"`
+	SamplePct      float64         `json:"sample_pct"`
+	TimePct        float64         `json:"time_pct"`
+	ProgressPct    float64         `json:"progress_pct"`
+	LearningEnds   model.LocalTime `json:"learning_ends"`
+	BlockingReason string          `json:"blocking_reason"`
+}
+
+func clampPct(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return math.Round(v*10) / 10
+}
+
+// buildBaselineProgress 由 samples / first_seen 与门槛常量推导学习进度
+func buildBaselineProgress(s model.HostBaselineState) baselineStateResp {
+	firstSeen := s.FirstSeen.Time()
+	learningEnds := firstSeen.Add(bdeLearningPeriod)
+	samplePct := clampPct(float64(s.Samples) / float64(bdeMinSamples) * 100)
+	timePct := clampPct(float64(time.Since(firstSeen)) / float64(bdeLearningPeriod) * 100)
+
+	resp := baselineStateResp{
+		HostBaselineState: s,
+		RequiredMin:       bdeMinSamples,
+		SamplePct:         samplePct,
+		TimePct:           timePct,
+		LearningEnds:      model.ToLocalTime(learningEnds),
+	}
+
+	if s.Phase == "active" {
+		resp.ProgressPct = 100
+		return resp
+	}
+
+	// 学习中：两个门槛都要满足，进度取较小者
+	resp.ProgressPct = math.Min(samplePct, timePct)
+	samplesOk := s.Samples >= bdeMinSamples
+	timeOk := time.Since(firstSeen) >= bdeLearningPeriod
+	remainDays := max(int(math.Ceil(time.Until(learningEnds).Hours()/24)), 0)
+	switch {
+	case !samplesOk && !timeOk:
+		resp.BlockingReason = fmt.Sprintf("样本不足 %d/%d，学习期未满（还需 %d 天）", s.Samples, bdeMinSamples, remainDays)
+	case !samplesOk:
+		resp.BlockingReason = fmt.Sprintf("样本不足 %d/%d", s.Samples, bdeMinSamples)
+	case !timeOk:
+		resp.BlockingReason = fmt.Sprintf("学习期未满，还需 %d 天", remainDays)
+	}
+	return resp
+}
 
 // BDEBaselineHandler BDE 基线管理 API 处理器
 type BDEBaselineHandler struct {
@@ -46,7 +114,12 @@ func (h *BDEBaselineHandler) ListBaselineStates(c *gin.Context) {
 		return
 	}
 
-	SuccessPaginated(c, total, states)
+	items := make([]baselineStateResp, 0, len(states))
+	for _, s := range states {
+		items = append(items, buildBaselineProgress(s))
+	}
+
+	SuccessPaginated(c, total, items)
 }
 
 // GetBaselineStats 基线引擎统计概览
