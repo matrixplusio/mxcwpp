@@ -120,6 +120,20 @@ export interface Incident {
   resolved_by: string;
 }
 
+export interface IncidentStage {
+  category: string;
+  name: string;
+  alert_count: number;
+  examples: string[] | null;
+}
+export interface IncidentDetail {
+  incident: Incident;
+  alerts: Alert[];
+  stages: IncidentStage[] | null;
+  narrative: string;
+  recommendations: string[] | null;
+}
+
 export interface User {
   id: number; username: string; email: string;
   role: string; status: "active" | "inactive";

@@ -97,8 +97,18 @@ func (h *IncidentHandler) GetIncident(c *gin.Context) {
 	if len(inc.AlertIDs) > 0 {
 		h.db.Where("id IN ?", []string(inc.AlertIDs)).Find(&alerts)
 	}
+	sortAlertsByTime(alerts)
 
-	Success(c, gin.H{"incident": inc, "alerts": alerts})
+	// 生成攻击阶段叙事 + 处置建议(展示层"看得懂",而非堆元数据)
+	stages, narrative, recommendations := buildIncidentNarrative(inc, alerts)
+
+	Success(c, gin.H{
+		"incident":        inc,
+		"alerts":          alerts,
+		"stages":          stages,
+		"narrative":       narrative,
+		"recommendations": recommendations,
+	})
 }
 
 // ResolveIncident 人工关闭事件
