@@ -390,6 +390,7 @@ func (e *Engine) StartCheckpoint(done <-chan struct{}) {
 		ticker := time.NewTicker(checkpointInterval)
 		defer ticker.Stop()
 		e.sweepGraduations() // 启动即扫一次，毕业重启前已满足条件但无新快照的主机
+		e.checkpoint()       // 立即落库，避免毕业结果等到首个 5 分钟 ticker 才持久化
 		for {
 			select {
 			case <-done:
