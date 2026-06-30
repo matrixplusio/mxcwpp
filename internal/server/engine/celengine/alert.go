@@ -210,7 +210,8 @@ func (g *AlertGenerator) refreshExistingAlert(existing *model.Alert, now model.L
 		// 重算风险分：关联升级(同主机多类告警)会随攻击链推进抬高分值(IOA)
 		"risk_score": g.computeRiskScoreForExisting(existing),
 	}
-	if existing.Status != model.AlertStatusActive {
+	// 仅 resolved(已解决)再命中才重新激活；ignored(已忽略)语义=静音，用户主动忽略后不应被同类事件刷回 active
+	if existing.Status == model.AlertStatusResolved {
 		updates["status"] = model.AlertStatusActive
 		g.log.Info("CEL 告警重新激活",
 			zap.String("result_id", existing.ResultID),
