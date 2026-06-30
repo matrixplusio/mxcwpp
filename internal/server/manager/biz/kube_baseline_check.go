@@ -62,7 +62,11 @@ func (c *KubeBaselineChecker) Start(ctx context.Context) {
 const baselineScheduleInterval = 24 * time.Hour
 
 // scheduleLoop 周期性为所有集群入队基线检查；跳过已有 pending/running 任务的集群防堆积。
+//
+// 启动即先入队一轮：24h ticker 在重启时归零，若仅靠 ticker 则 manager 每次重启后 kube 基线
+// 24h 内不刷新；部署密集期(重启频率 > 24h/次)会导致永不自动复扫。已有 inflight 跳过防堆积。
 func (c *KubeBaselineChecker) scheduleLoop(ctx context.Context) {
+	c.enqueueAllClusters()
 	ticker := time.NewTicker(baselineScheduleInterval)
 	defer ticker.Stop()
 	for {
