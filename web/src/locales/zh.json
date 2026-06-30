@@ -1679,7 +1679,9 @@
       "hit": "命中情报",
       "miss": "未命中",
       "empty": "暂无情报数据",
-      "syncTriggered": "已触发同步"
+      "syncTriggered": "已触发同步",
+      "syncDone": "同步完成,已刷新",
+      "syncFailed": "同步失败"
     },
     "hunting": {
       "mqlTitle": "MQL 查询",

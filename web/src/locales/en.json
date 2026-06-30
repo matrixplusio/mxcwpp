@@ -1679,7 +1679,9 @@
       "hit": "Hit",
       "miss": "No Match",
       "empty": "No intelligence data",
-      "syncTriggered": "Sync triggered"
+      "syncTriggered": "Sync triggered",
+      "syncDone": "Sync complete, refreshed",
+      "syncFailed": "Sync failed"
     },
     "hunting": {
       "mqlTitle": "MQL Query",
