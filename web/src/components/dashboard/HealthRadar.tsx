@@ -28,8 +28,8 @@ export function HealthRadar({ s }: { s: DashboardStats }) {
       areaStyle: { opacity: 0.12 },
       data: [{
         value: [
-          100 - s.baselineHostPercent, 100 - s.hostAlertPercent, 100 - s.vulnHostPercent,
-          100 - s.detectionAlertPercent, 100 - s.virusHostPercent,
+          Math.round(100 - s.baselineHostPercent), Math.round(100 - s.hostAlertPercent), Math.round(100 - s.vulnHostPercent),
+          Math.round(100 - s.detectionAlertPercent), Math.round(100 - s.virusHostPercent),
         ],
         name: t("dashboard.health"),
       }],
