@@ -31,6 +31,7 @@ import (
 
 	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/leader"
@@ -124,10 +125,20 @@ func main() {
 			enabled[t] = true
 		}
 	}
+	// DB 连接（fleet 门控查询 + watermark 持久化共用）。失败时 db 为 nil，两者各自安全降级。
+	db := openVulnSyncDB(*configPath, logger)
+
 	// fleet-aware 源门控：只同步 fleet 实际存在的 OS 家族对应的源，避免拉/发无意义 advisory
 	// （全 RHEL fleet 不拉 debian/ubuntu/alpine）。DB 查失败或 fleet 空时不门控（安全兜底，宁可多拉不漏检）。
-	fleetFamilies := loadFleetOSFamilies(*configPath, logger)
+	fleetFamilies := loadFleetOSFamilies(db, logger)
 	srcs := buildAdvisorySources(enabled, fleetFamilies, logger)
+
+	// watermark 持久化：进程重启后按 vuln_data_sources.advisory_watermark 增量拉取，
+	// 不再 since=zero 全量重拉打爆 Kafka。db 为 nil 时 store 为 nil（退化纯内存态）。
+	var wmStore vulnsync.WatermarkStore
+	if db != nil {
+		wmStore = &dbWatermarkStore{db: db}
+	}
 
 	schedules := []vulnsync.SourceSchedule{
 		{Name: "rhsa", Interval: 4 * time.Hour},
@@ -147,7 +158,7 @@ func main() {
 		names = append(names, n)
 	}
 
-	sch := vulnsync.NewScheduler(srcs, pub, election, schedules, logger)
+	sch := vulnsync.NewScheduler(srcs, pub, election, schedules, logger, wmStore)
 	go sch.Run(ctx)
 	logger.Info("VulnSync Scheduler started",
 		zap.Int("schedules", len(schedules)),
@@ -209,25 +220,28 @@ func sourceServesFleet(sourceName string, fleet map[string]bool) bool {
 	return false
 }
 
-// loadFleetOSFamilies 只读查询 hosts 表的 distinct os_family（小写集合）。
-// 供 fleet-aware 源门控使用。查询失败返回 nil（调用方据此不门控，安全兜底）。
-func loadFleetOSFamilies(configPath string, logger *zap.Logger) map[string]bool {
+// openVulnSyncDB 打开一个只读用途的 gorm 连接（fleet 门控 + watermark 持久化共用）。
+// 失败返回 nil，调用方各自安全降级（不门控 / 纯内存 watermark）。不跑迁移。
+func openVulnSyncDB(configPath string, logger *zap.Logger) *gorm.DB {
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		logger.Warn("fleet-aware 门控：加载 config 失败，跳过门控（同步全部源）", zap.Error(err))
+		logger.Warn("vulnsync DB：加载 config 失败", zap.Error(err))
 		return nil
 	}
 	db, err := gorm.Open(mysql.Open(cfg.Database.MySQL.DSN()), &gorm.Config{})
 	if err != nil {
-		logger.Warn("fleet-aware 门控：连接 DB 失败，跳过门控（同步全部源）", zap.Error(err))
+		logger.Warn("vulnsync DB：连接失败", zap.Error(err))
 		return nil
 	}
-	sqlDB, _ := db.DB()
-	defer func() {
-		if sqlDB != nil {
-			_ = sqlDB.Close()
-		}
-	}()
+	return db
+}
+
+// loadFleetOSFamilies 只读查询 hosts 表的 distinct os_family（小写集合）。
+// 供 fleet-aware 源门控使用。db 为 nil 或查询失败返回 nil（调用方据此不门控，安全兜底）。
+func loadFleetOSFamilies(db *gorm.DB, logger *zap.Logger) map[string]bool {
+	if db == nil {
+		return nil
+	}
 	var families []string
 	if err := db.Table("hosts").Distinct().Pluck("os_family", &families).Error; err != nil {
 		logger.Warn("fleet-aware 门控：查询 host os_family 失败，跳过门控（同步全部源）", zap.Error(err))
@@ -240,6 +254,34 @@ func loadFleetOSFamilies(configPath string, logger *zap.Logger) map[string]bool 
 		}
 	}
 	return set
+}
+
+// dbWatermarkStore 用 vuln_data_sources.advisory_watermark 持久化各 source 的增量 watermark。
+type dbWatermarkStore struct{ db *gorm.DB }
+
+// Load 读取该 source 的持久 watermark。无记录/NULL 返回零值 + false。
+func (s *dbWatermarkStore) Load(source string) (time.Time, bool) {
+	var row model.VulnDataSource
+	if err := s.db.Select("advisory_watermark").
+		Where("name = ?", source).First(&row).Error; err != nil {
+		return time.Time{}, false
+	}
+	if row.AdvisoryWatermark == nil {
+		return time.Time{}, false
+	}
+	t := time.Time(*row.AdvisoryWatermark)
+	if t.IsZero() {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// Save 写入该 source 的 watermark（仅更新已存在行；source 未登记则忽略）。
+func (s *dbWatermarkStore) Save(source string, t time.Time) error {
+	lt := model.LocalTime(t)
+	return s.db.Model(&model.VulnDataSource{}).
+		Where("name = ?", source).
+		Update("advisory_watermark", &lt).Error
 }
 
 // buildAdvisorySources 构造 OS 厂商 advisory 源池。
