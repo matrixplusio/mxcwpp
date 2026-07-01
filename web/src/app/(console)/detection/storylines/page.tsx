@@ -153,13 +153,18 @@ export default function StorylinesPage() {
       title: t("common.actions"),
       align: "right",
       render: (r) => (
-        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" className="h-8 px-3" onClick={() => setDetail(r)}>
+        <div className="flex justify-end gap-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="text-sm text-muted transition-colors hover:text-ink" onClick={() => setDetail(r)}>
             {t("common.details")}
-          </Button>
-          <Button variant="ghost" className="h-8 px-3" disabled={r.status !== "active"} onClick={() => setResolving(r)}>
+          </button>
+          <button
+            type="button"
+            className="text-sm text-muted transition-colors hover:text-ink disabled:opacity-40"
+            disabled={r.status !== "active"}
+            onClick={() => setResolving(r)}
+          >
             {t("detection.storylines.actionResolve")}
-          </Button>
+          </button>
         </div>
       ),
     },
