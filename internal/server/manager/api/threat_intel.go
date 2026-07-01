@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
+	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
 // ThreatIntelHandler 威胁情报 API
@@ -115,6 +116,76 @@ func (h *ThreatIntelHandler) TriggerSync(c *gin.Context) {
 		}
 	}()
 	SuccessMessage(c, "IOC 同步已触发")
+}
+
+// ListLocalIOCs 列出自有情报
+func (h *ThreatIntelHandler) ListLocalIOCs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 20
+	}
+	items, total, err := h.service.ListLocalIOCs(c.Query("type"), page, pageSize)
+	if err != nil {
+		InternalError(c, "查询自有情报失败")
+		return
+	}
+	SuccessPaginated(c, total, items)
+}
+
+// CreateLocalIOC 人工录入一条自有情报
+func (h *ThreatIntelHandler) CreateLocalIOC(c *gin.Context) {
+	var req struct {
+		IOCType     string `json:"ioc_type" binding:"required"`
+		Value       string `json:"value" binding:"required"`
+		Severity    string `json:"severity"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	ioc := model.LocalIOC{
+		IOCType: req.IOCType, Value: req.Value, Source: "manual",
+		Severity: req.Severity, Description: req.Description, CreatedBy: c.GetString("username"),
+	}
+	if _, err := h.service.AddLocalIOC(c.Request.Context(), ioc); err != nil {
+		BadRequest(c, err.Error())
+		return
+	}
+	SuccessMessage(c, "已录入自有情报")
+}
+
+// DeleteLocalIOC 删除自有情报
+func (h *ThreatIntelHandler) DeleteLocalIOC(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if id == 0 {
+		BadRequest(c, "无效的 ID")
+		return
+	}
+	if err := h.service.DeleteLocalIOC(c.Request.Context(), uint(id)); err != nil {
+		InternalError(c, "删除失败: "+err.Error())
+		return
+	}
+	SuccessMessage(c, "已删除")
+}
+
+// ConfirmThreat 用户研判真实威胁:解决告警 + 提取 IOC 入自有情报库
+func (h *ThreatIntelHandler) ConfirmThreat(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("alert_id"), 10, 64)
+	if id == 0 {
+		BadRequest(c, "无效的告警 ID")
+		return
+	}
+	added, err := h.service.ConfirmThreatFromAlert(c.Request.Context(), uint(id), c.GetString("username"))
+	if err != nil {
+		InternalError(c, "确认失败: "+err.Error())
+		return
+	}
+	Success(c, gin.H{"extracted": added, "extracted_count": len(added)})
 }
 
 // GetSyncStatus 获取威胁情报最新同步状态

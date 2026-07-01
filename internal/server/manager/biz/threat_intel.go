@@ -205,6 +205,9 @@ func (t *ThreatIntel) doSyncIOCs(ctx context.Context) error {
 
 	t.logger.Info("威胁情报同步完成", zap.Int("total", totalCount))
 
+	// 合并自有情报(真实威胁研判提取 / 人工录入):feed set 有 TTL,每次同步需重新灌入。
+	t.loadLocalIOCsToRedis(ctx)
+
 	// Export snapshot to DB for AgentCenter to broadcast to agents.
 	if err := t.exportSnapshot(ctx); err != nil {
 		t.logger.Warn("IOC 快照导出失败", zap.Error(err))

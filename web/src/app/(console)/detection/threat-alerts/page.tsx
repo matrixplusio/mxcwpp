@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useUrlState } from "@/hooks/useUrlState";
 import { alertsApi, whitelistApi } from "@/lib/api/alerts";
+import { detectionApi } from "@/lib/api/detection";
 import type { Alert, Severity } from "@/lib/api/types";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -133,13 +134,14 @@ export default function ThreatAlertsPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["threat-alerts"] });
 
-  // 用户研判:确认真实威胁 → 标记已处置
+  // 用户研判:确认真实威胁 → 解决告警 + 提取 IOC 入自有情报库(学习:一处研判全网受益)
   const confirmRealMutation = useMutation({
-    mutationFn: (a: Alert) => alertsApi.resolve(a.id, "用户研判:真实威胁,已确认"),
-    onSuccess: () => {
+    mutationFn: (a: Alert) => detectionApi.confirmThreat(a.id),
+    onSuccess: (res) => {
       invalidate();
       setDetail(null);
-      toast.success(t("detection.threatAlerts.confirmedReal"));
+      const n = res?.extracted_count ?? 0;
+      toast.success(n > 0 ? t("detection.threatAlerts.confirmedRealLearned", { n }) : t("detection.threatAlerts.confirmedReal"));
     },
     onError: (e: Error) => toast.error(e.message),
   });

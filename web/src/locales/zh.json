@@ -1617,6 +1617,7 @@
       "markFp": "标记误报",
       "confirmReal": "确认真实威胁",
       "confirmedReal": "已确认为真实威胁",
+      "confirmedRealLearned": "已确认真实威胁,提取 {{n}} 条情报入库",
       "markedFpLearned": "已标记误报并加入白名单(学习)",
       "markFpTitle": "标记为误报",
       "markFpDesc": "确认「{{title}}」为误报?将解决该告警并把同规则+主机加入白名单,后续不再告警。",

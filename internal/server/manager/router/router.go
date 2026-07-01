@@ -1119,6 +1119,11 @@ func setupThreatIntelAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	router.POST("/threat-intel/sync", handler.TriggerSync)
 	router.GET("/threat-intel/sync-status", handler.GetSyncStatus)
 	router.GET("/threat-intel/sync-history", handler.GetSyncHistory)
+	// 自有情报库(独立于外部 feed):真实威胁研判提取 / 人工录入
+	router.GET("/threat-intel/local-iocs", handler.ListLocalIOCs)
+	router.POST("/threat-intel/local-iocs", handler.CreateLocalIOC)
+	router.DELETE("/threat-intel/local-iocs/:id", handler.DeleteLocalIOC)
+	router.POST("/threat-intel/confirm-threat/:alert_id", handler.ConfirmThreat)
 
 	// 情报同步计划（定时拉取 IOC Feed）：单实例既驱动 cron 又服务 CRUD，
 	// 避免 handler 实例与运行实例分离导致新建计划重启前不生效。

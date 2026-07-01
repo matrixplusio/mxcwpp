@@ -1518,6 +1518,19 @@ export interface DetectionRuleStats {
 export interface ThreatIntelStats { ip: number; hash: number; domain: number; url: number; total: number; }
 export interface ThreatIntelIocList { items: string[]; total: number; type: string; }
 export interface ThreatIntelCheckResult { hit: boolean; type: string; value: string; }
+// 自有情报库
+export interface LocalIOC {
+  id: number;
+  ioc_type: string; // ip/domain/hash/url
+  value: string;
+  source: string; // tp_extract/manual
+  severity: string;
+  description: string;
+  ref_type: string;
+  ref_id: string;
+  created_by: string;
+  created_at: string;
+}
 
 // 威胁情报同步计划
 export interface IntelSyncSchedule {

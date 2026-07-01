@@ -1617,6 +1617,7 @@
       "markFp": "Mark False Positive",
       "confirmReal": "Confirm Real Threat",
       "confirmedReal": "Confirmed as real threat",
+      "confirmedRealLearned": "Confirmed real threat, {{n}} IOC(s) extracted",
       "markedFpLearned": "Marked false positive and whitelisted (learned)",
       "markFpTitle": "Mark as False Positive",
       "markFpDesc": "Mark this detection ({{title}}) as false positive? Resolves the alert and whitelists this rule+host so it won't alert again.",
