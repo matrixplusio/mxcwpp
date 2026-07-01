@@ -1004,7 +1004,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/vulnerabilities/advisory-sync", vulnSyncHandler.SyncAdvisories)
 
 	// 漏洞数据源管理（UI「漏洞源管理」页面）
-	vdsHandler := api.NewVulnDataSourcesHandler(db, logger)
+	vdsHandler := api.NewVulnDataSourcesHandler(db, logger, vulnSyncURL)
 	router.GET("/vuln-data-sources", vdsHandler.List)
 	router.PUT("/vuln-data-sources/:id", vdsHandler.Update)
 	router.POST("/vuln-data-sources/:id/test", vdsHandler.TestConnection)

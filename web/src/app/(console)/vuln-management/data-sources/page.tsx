@@ -94,9 +94,10 @@ export default function DataSourcesPage() {
 
   const syncMutation = useMutation({
     mutationFn: (id: number) => vulnApi.syncDataSource(id),
-    onSuccess: (res) => {
+    // 后端 SuccessMessage 只回 {code,message}(无 data),unwrap 得 undefined;不读 res.message 避免崩
+    onSuccess: () => {
       invalidate();
-      toast.success(res.message || t("vuln.dataSources.syncTriggered"));
+      toast.success(t("vuln.dataSources.syncTriggered"));
     },
     onError: (e: Error) => toast.error(e.message),
   });

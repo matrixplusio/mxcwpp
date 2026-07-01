@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,17 +18,19 @@ import (
 
 // VulnDataSourcesHandler 漏洞数据源 admin 配置 API。
 type VulnDataSourcesHandler struct {
-	db     *gorm.DB
-	logger *zap.Logger
-	svc    *biz.VulnDataSourceService
+	db          *gorm.DB
+	logger      *zap.Logger
+	svc         *biz.VulnDataSourceService
+	vulnSyncURL string // VulnSync 服务地址(os_advisory 源同步经此触发)
 }
 
 // NewVulnDataSourcesHandler 构造。
-func NewVulnDataSourcesHandler(db *gorm.DB, logger *zap.Logger) *VulnDataSourcesHandler {
+func NewVulnDataSourcesHandler(db *gorm.DB, logger *zap.Logger, vulnSyncURL string) *VulnDataSourcesHandler {
 	return &VulnDataSourcesHandler{
-		db:     db,
-		logger: logger,
-		svc:    biz.NewVulnDataSourceService(db, logger),
+		db:          db,
+		logger:      logger,
+		svc:         biz.NewVulnDataSourceService(db, logger),
+		vulnSyncURL: vulnSyncURL,
 	}
 }
 
@@ -142,8 +146,23 @@ func (h *VulnDataSourcesHandler) TriggerSync(c *gin.Context) {
 		return
 	}
 
-	// 异步触发完整 sync 流程（含所有 enabled source）。
-	// MVP 不做单源精确触发；用户在 UI 看到 source 启用后调用 /vulnerabilities/sync 是等效的。
+	// os_advisory 源(rhsa/rocky/usn/debian 等)已剥离到 VulnSync(VulnSync→Kafka→consumer 匹配),
+	// 走 scanner.SyncOnly() 不会拉 advisory,必须触发 VulnSync /sync。
+	if src.Category == "os_advisory" {
+		if h.vulnSyncURL == "" {
+			InternalError(c, "VulnSync 服务地址未配置（vuln.vulnsync_url），无法同步 advisory 源")
+			return
+		}
+		go func() {
+			if err := triggerVulnSync(h.vulnSyncURL); err != nil {
+				h.logger.Error("触发 VulnSync 拉取失败", zap.String("source", src.Name), zap.Error(err))
+			}
+		}()
+		SuccessMessage(c, "已触发 VulnSync 拉取 advisory 源")
+		return
+	}
+
+	// CVE 元数据源(mitre/osv/nvd 等)走 vuln_scanner 同步。
 	scanner := biz.NewVulnScanner(h.db, h.logger)
 	go func() {
 		if err := scanner.SyncOnly(); err != nil {
@@ -151,4 +170,24 @@ func (h *VulnDataSourcesHandler) TriggerSync(c *gin.Context) {
 		}
 	}()
 	SuccessMessage(c, "同步任务已触发，将拉取全部启用的数据源")
+}
+
+// triggerVulnSync POST {vulnSyncURL}/sync 触发 VulnSync 立即拉取全源 advisory。
+func triggerVulnSync(vulnSyncURL string) error {
+	url := strings.TrimRight(vulnSyncURL, "/") + "/sync"
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("vulnsync /sync 返回 %d", resp.StatusCode)
+	}
+	return nil
 }

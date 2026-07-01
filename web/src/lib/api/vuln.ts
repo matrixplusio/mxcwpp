@@ -120,7 +120,7 @@ export const vulnApi = {
   updateDataSource: (id: number, body: { enabled?: boolean; baseUrl?: string }) =>
     put<VulnDataSource>(`/vuln-data-sources/${id}`, body),
   testDataSource: (id: number) => post<VulnDataSourceTestResult>(`/vuln-data-sources/${id}/test`),
-  syncDataSource: (id: number) => post<{ message: string }>(`/vuln-data-sources/${id}/sync`),
+  syncDataSource: (id: number) => post<void>(`/vuln-data-sources/${id}/sync`),
 
   // ---- SBOM 导入（GET → array | null）----
   listSbomProjects: () => get<SbomProject[] | null>("/sbom/projects"),
