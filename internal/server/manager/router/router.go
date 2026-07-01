@@ -719,6 +719,7 @@ func setupAlertWhitelistAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Lo
 	router.GET("/alerts/whitelist/suggestions", sug.ListSuggestions)
 	router.POST("/alerts/whitelist/suggestions/:id/adopt", sug.AdoptSuggestion)
 	router.POST("/alerts/whitelist/suggestions/:id/dismiss", sug.DismissSuggestion)
+	router.POST("/alerts/whitelist/suggestions/:id/revoke", sug.RevokeSuggestion)
 }
 
 // setupComponentsAPI 设置组件管理 API 路由

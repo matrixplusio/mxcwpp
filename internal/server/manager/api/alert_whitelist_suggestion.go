@@ -188,3 +188,62 @@ func (h *AlertWhitelistSuggestionHandler) DismissSuggestion(c *gin.Context) {
 	h.logger.Info("自动调优建议已驳回", zap.Uint64("id", id), zap.String("operator", operator))
 	SuccessWithMessage(c, "已驳回", nil)
 }
+
+// RevokeSuggestion 撤销已采纳的建议：删除对应白名单条目并将建议标记为 revoked。
+// 用于采纳后发现误判时即时回退（原本需手删 alert_whitelists 表）。
+// POST /api/v1/alerts/whitelist/suggestions/:id/revoke
+func (h *AlertWhitelistSuggestionHandler) RevokeSuggestion(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, "无效的建议ID")
+		return
+	}
+	operator := c.GetString("username")
+	if operator == "" {
+		operator = "unknown"
+	}
+
+	var s model.AlertWhitelistSuggestion
+	if err := h.db.First(&s, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			NotFound(c, "建议不存在")
+			return
+		}
+		InternalError(c, "查询建议失败")
+		return
+	}
+	if s.Status != model.SuggestionStatusAdopted {
+		BadRequest(c, "仅可撤销已采纳的建议")
+		return
+	}
+
+	now := model.ToLocalTime(time.Now())
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		// 删除采纳时生成的白名单条目（若已被手动删除则忽略）
+		if s.WhitelistID > 0 {
+			if err := tx.Delete(&model.AlertWhitelist{}, s.WhitelistID).Error; err != nil {
+				return err
+			}
+		}
+		// 标记为 revoked（终态，不复活；upsertSuggestion 只放行 pending）
+		return tx.Model(&model.AlertWhitelistSuggestion{}).Where("id = ?", s.ID).Updates(map[string]any{
+			"status":       model.SuggestionStatusRevoked,
+			"decided_by":   operator,
+			"decided_at":   now,
+			"whitelist_id": 0,
+		}).Error
+	})
+	if err != nil {
+		h.logger.Error("撤销建议失败", zap.Uint64("id", id), zap.Error(err))
+		InternalError(c, "撤销建议失败")
+		return
+	}
+
+	h.logger.Info("自动调优建议已撤销",
+		zap.Uint64("suggestion_id", id),
+		zap.Uint("whitelist_id", s.WhitelistID),
+		zap.String("rule_id", s.RuleID),
+		zap.String("operator", operator),
+	)
+	SuccessWithMessage(c, "已撤销，对应白名单已删除", nil)
+}

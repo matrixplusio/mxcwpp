@@ -6,6 +6,7 @@ const (
 	SuggestionStatusPending   = "pending"   // 待人审
 	SuggestionStatusAdopted   = "adopted"   // 已采纳（写入 AlertWhitelist）
 	SuggestionStatusDismissed = "dismissed" // 已驳回
+	SuggestionStatusRevoked   = "revoked"   // 已撤销（采纳后回退，删除对应白名单）
 )
 
 // AlertWhitelistSuggestion 自动调优建议（P2-B）。

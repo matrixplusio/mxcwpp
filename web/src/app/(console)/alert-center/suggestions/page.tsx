@@ -26,6 +26,7 @@ export default function SuggestionsPage() {
     { label: t("alerts.suggestion.statusPending"), value: "pending" },
     { label: t("alerts.suggestion.statusAdopted"), value: "adopted" },
     { label: t("alerts.suggestion.statusDismissed"), value: "dismissed" },
+    { label: t("alerts.suggestion.statusRevoked"), value: "revoked" },
     { label: t("common.all"), value: "all" },
   ];
 
@@ -41,6 +42,7 @@ export default function SuggestionsPage() {
 
   const [adopting, setAdopting] = useState<AlertWhitelistSuggestion | null>(null);
   const [dismissing, setDismissing] = useState<AlertWhitelistSuggestion | null>(null);
+  const [revoking, setRevoking] = useState<AlertWhitelistSuggestion | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["alert-whitelist-suggestions"] });
 
@@ -60,6 +62,16 @@ export default function SuggestionsPage() {
       invalidate();
       setDismissing(null);
       toast.success(t("alerts.suggestion.dismissed"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: number) => suggestionApi.revoke(id),
+    onSuccess: () => {
+      invalidate();
+      setRevoking(null);
+      toast.success(t("alerts.suggestion.revoked"));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -121,8 +133,19 @@ export default function SuggestionsPage() {
               {t("alerts.suggestion.dismiss")}
             </button>
           </div>
+        ) : r.status === "adopted" ? (
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-faint">{t("alerts.suggestion.statusAdopted")}</span>
+            <button
+              type="button"
+              className="text-sm text-danger transition-colors hover:opacity-80"
+              onClick={() => setRevoking(r)}
+            >
+              {t("alerts.suggestion.revoke")}
+            </button>
+          </div>
         ) : (
-          <span className="text-faint">{r.status === "adopted" ? t("alerts.suggestion.statusAdopted") : t("alerts.suggestion.statusDismissed")}</span>
+          <span className="text-faint">{r.status === "revoked" ? t("alerts.suggestion.statusRevoked") : t("alerts.suggestion.statusDismissed")}</span>
         ),
     },
   ];
@@ -170,6 +193,14 @@ export default function SuggestionsPage() {
         loading={dismissMutation.isPending}
         onConfirm={() => dismissing && dismissMutation.mutate(dismissing.id)}
         onCancel={() => setDismissing(null)}
+      />
+      <ConfirmDialog
+        open={!!revoking}
+        title={t("alerts.suggestion.revokeTitle")}
+        desc={revoking ? t("alerts.suggestion.revokeConfirmDesc", { exe: revoking.exe }) : undefined}
+        loading={revokeMutation.isPending}
+        onConfirm={() => revoking && revokeMutation.mutate(revoking.id)}
+        onCancel={() => setRevoking(null)}
       />
     </>
   );

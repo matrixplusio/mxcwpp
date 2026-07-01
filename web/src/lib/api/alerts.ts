@@ -48,4 +48,5 @@ export const suggestionApi = {
     get<Paged<AlertWhitelistSuggestion>>("/alerts/whitelist/suggestions", params),
   adopt: (id: number) => post(`/alerts/whitelist/suggestions/${id}/adopt`),
   dismiss: (id: number) => post(`/alerts/whitelist/suggestions/${id}/dismiss`),
+  revoke: (id: number) => post(`/alerts/whitelist/suggestions/${id}/revoke`),
 };
