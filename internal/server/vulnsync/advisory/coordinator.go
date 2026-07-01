@@ -564,18 +564,23 @@ func (c *Coordinator) upsertVuln(cveID string, entry *mergedVuln) error {
 
 	// 注：advisory_packages 改为 sync 末尾批量 upsert（一次 sync 可数十万行，单行 upsert 太慢）
 
-	// 关联 host
+	// 关联 host。写入 per-host 匹配到的真实包名 + 适用 fixed_version（a.PkgName/a.FixedVersion），
+	// 供下游 cleanup/precheck/remediation 按主机真值判定，不受 CVE 级塌缩 component/fixed_version 影响。
 	for _, a := range entry.affectedHosts {
 		hv := &model.HostVulnerability{
-			VulnID:         vuln.ID,
-			HostID:         a.HostID,
-			CurrentVersion: a.InstalledVer,
-			Status:         "unpatched",
+			VulnID:              vuln.ID,
+			HostID:              a.HostID,
+			CurrentVersion:      a.InstalledVer,
+			MatchedComponent:    a.PkgName,
+			MatchedFixedVersion: a.FixedVersion,
+			Status:              "unpatched",
 		}
 		if err := c.db.Where("vuln_id = ? AND host_id = ?", vuln.ID, a.HostID).
 			Assign(map[string]any{
-				"current_version": hv.CurrentVersion,
-				"status":          hv.Status,
+				"current_version":       hv.CurrentVersion,
+				"matched_component":     hv.MatchedComponent,
+				"matched_fixed_version": hv.MatchedFixedVersion,
+				"status":                hv.Status,
 			}).
 			FirstOrCreate(hv).Error; err != nil {
 			c.logger.Warn("upsert host_vuln 失败",

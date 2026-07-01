@@ -169,12 +169,14 @@ func cleanupCrossOSMajor(db *gorm.DB, logger *zap.Logger) {
 	rhelMajors := []string{"7", "8", "9", "10"}
 	var total int64
 	for _, major := range rhelMajors {
+		// 按 per-host 匹配到的 fixed_version(matched_fixed_version)判 OS-major；老数据空时回退
+		// v.fixed_version。避免 CVE 级 fixed_version 塌成异 major(如 el10)导致 el9 主机被误删。
 		r := db.Exec(`
 DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source IN ('rhsa','rocky-apollo','centos','osv')
-  AND v.fixed_version REGEXP CONCAT('[.+]el', ?, '([^0-9]|$)')
+  AND COALESCE(NULLIF(hv.matched_fixed_version, ''), v.fixed_version) REGEXP CONCAT('[.+]el', ?, '([^0-9]|$)')
   AND SUBSTRING_INDEX(h.os_version, '.', 1) <> ?`, major, major)
 		if r.Error == nil && r.RowsAffected > 0 {
 			total += r.RowsAffected
@@ -186,12 +188,15 @@ WHERE v.source IN ('rhsa','rocky-apollo','centos','osv')
 }
 
 func cleanupComponentNotInstalled(db *gorm.DB, logger *zap.Logger) {
+	// 按 per-host 匹配到的真实包名(matched_component)判是否安装；老数据 matched_component 空时
+	// 回退 v.component。避免 CVE 级 component 塌成主机未装的子包(如 glibc-langpack-el)导致误删。
 	r := db.Exec(`
 DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
-LEFT JOIN software s ON s.host_id = hv.host_id AND s.name = v.component
+LEFT JOIN software s ON s.host_id = hv.host_id
+  AND s.name = COALESCE(NULLIF(hv.matched_component, ''), v.component)
 WHERE v.source IN ('rhsa','rocky-apollo','centos','debian-tracker','usn','alpine','osv')
-  AND v.component <> ''
+  AND COALESCE(NULLIF(hv.matched_component, ''), v.component) <> ''
   AND s.id IS NULL`)
 	if r.Error == nil && r.RowsAffected > 0 {
 		logger.Info("component 未装 host_vuln 已清理", zap.Int64("deleted", r.RowsAffected))

@@ -76,6 +76,36 @@ func TestDefaultMatcher_OSStrict(t *testing.T) {
 	}
 }
 
+// TestDefaultMatcher_PerHostMatchedPkg 锁定：多包 advisory 下，AffectedHost 的 PkgName/FixedVersion
+// 必须是**该主机实际装的那个包**及其修复版本，而非 advisory 里任意第一个包/异 OS-major 版本。
+// 这是 host_vulnerabilities.matched_component/matched_fixed_version 正确性的根基——避免 CVE 级
+// 塌缩（如 glibc CVE 塌成 glibc-langpack-el/el10）导致 cleanup 误删。
+func TestDefaultMatcher_PerHostMatchedPkg(t *testing.T) {
+	adv := &Advisory{
+		OSFamily:   "rocky",
+		OSMajorVer: "9",
+		AffectedPkgs: []PkgFix{
+			// advisory 第一个包是主机没装的 langpack（模拟塌缩误取）
+			{Name: "glibc-langpack-el", Arch: "x86_64", FixedVersion: "0:2.34-270.el9_8"},
+			{Name: "glibc", Arch: "x86_64", FixedVersion: "0:2.34-270.el9_8"},
+		},
+	}
+	hosts := []HostSoftware{
+		{HostID: "h1", OSFamily: "centos", OSMajor: "9", PkgName: "glibc",
+			PkgArch: "x86_64", PkgVer: "2.34-270.el9"}, // 只装 glibc，没装 langpack-el
+	}
+	out := (&DefaultMatcher{}).Match(adv, hosts)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 match (glibc only), got %d: %+v", len(out), out)
+	}
+	if out[0].PkgName != "glibc" {
+		t.Errorf("matched PkgName should be host's real pkg 'glibc', got %q", out[0].PkgName)
+	}
+	if out[0].FixedVersion != "0:2.34-270.el9_8" || !out[0].NeedsUpdate {
+		t.Errorf("expected el9 fixed_version + NeedsUpdate, got %+v", out[0])
+	}
+}
+
 func TestValidateAdvisory_RejectWindowsCVEOnLinuxOS(t *testing.T) {
 	// 回归 CVE-2026-6482 bug：Rapid7 Insight Agent Windows 提权
 	// 被错关联到 Linux openssl，描述含 "Windows host"
