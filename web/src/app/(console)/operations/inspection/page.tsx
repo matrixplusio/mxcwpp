@@ -28,6 +28,7 @@ export default function InspectionPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [blFilter, setBlFilter] = useState("");
+  const [pluginFilter, setPluginFilter] = useState("");
   const [restarting, setRestarting] = useState<InspectionHostItem | null>(null);
 
   const restartMutation = useMutation({
@@ -53,6 +54,15 @@ export default function InspectionPage() {
     ];
   }, [allHosts, t]);
 
+  const pluginOptions = useMemo(() => {
+    const set = new Set<string>();
+    allHosts.forEach((h) => h.plugins?.forEach((p) => p.name && set.add(p.name)));
+    return [
+      { label: t("operations.inspection.allPlugins"), value: "" },
+      ...Array.from(set).sort().map((name) => ({ label: name, value: name })),
+    ];
+  }, [allHosts, t]);
+
   const hosts = useMemo(() => {
     const kw = search.trim().toLowerCase();
     return allHosts.filter((h) => {
@@ -60,13 +70,14 @@ export default function InspectionPage() {
       if (blFilter && h.business_line !== blFilter) return false;
       if (agentFilter === "outdated" && !(h.agent_version && latestAgentVersion && h.agent_version !== latestAgentVersion)) return false;
       if (agentFilter === "latest" && h.agent_version !== latestAgentVersion) return false;
+      if (pluginFilter && !h.plugins?.some((p) => p.name === pluginFilter)) return false;
       if (kw) {
         const hay = `${h.hostname} ${h.host_id} ${h.ipv4?.join(" ") ?? ""}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
       return true;
     });
-  }, [allHosts, search, statusFilter, agentFilter, blFilter, latestAgentVersion]);
+  }, [allHosts, search, statusFilter, agentFilter, blFilter, pluginFilter, latestAgentVersion]);
 
   const statusOptions = [
     { label: t("operations.inspection.allStatus"), value: "" },
@@ -169,6 +180,7 @@ export default function InspectionPage() {
           />
           <Select value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
           <Select value={agentFilter} onChange={setAgentFilter} options={agentOptions} />
+          <Select value={pluginFilter} onChange={setPluginFilter} options={pluginOptions} />
           <Select value={blFilter} onChange={setBlFilter} options={businessLineOptions} />
         </FilterBar>
         <Card>
