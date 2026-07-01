@@ -264,14 +264,30 @@ func (e *RemediationExecutor) HandleProgress(agentID string, data map[string]str
 			zap.Uint("task_id", taskID), zap.String("stage", stage), zap.Error(err))
 	}
 
-	// 同步 task 状态（仅当 stage 在已知 lifecycle 列表内）
-	if isValidLifecycleStage(stage) {
+	// 同步 task 状态（仅当 stage 在已知 lifecycle 列表内）。
+	// 终态守卫：绝不用 stage 覆盖已终结状态——9200 result 与 9201 progress 经 Kafka 异步到达，
+	// 若一条晚到的 progress（如 verifying）在 result 之后处理，会把 success_pending_verify/failed
+	// 覆盖回 stage，任务永远停在 stage（本次"卡 verifying"的另一半根因）。
+	if isValidLifecycleStage(stage) && !isTerminalRemediationStatus(task.Status) {
 		if err := e.db.Model(&task).Update("status", stage).Error; err != nil {
 			e.logger.Warn("同步 task status 失败",
 				zap.Uint("task_id", taskID), zap.String("stage", stage), zap.Error(err))
 		}
 	}
 	return nil
+}
+
+// isTerminalRemediationStatus 报告任务是否已进入终结/最终态（不应再被 stage 进度覆盖）。
+func isTerminalRemediationStatus(status string) bool {
+	switch status {
+	case model.RemTaskMainSuccess, model.RemTaskMainSuccessPendingVerify,
+		model.RemTaskMainVerifying, model.RemTaskMainVerified,
+		model.RemTaskMainVerifyFailed, model.RemTaskMainVerifyBlocked,
+		model.RemTaskMainCancelled, model.RemTaskStatusFailed,
+		model.RemTaskStatusCompleted, model.RemTaskStatusRolledBack:
+		return true
+	}
+	return false
 }
 
 func isValidLifecycleStage(s string) bool {
@@ -314,12 +330,7 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 	// installing / verifying），此时收到最终 result(9200) 必须处理——若沿用旧的
 	// `!= "running"` 判据，会因 status 已是 stage 名而丢弃结果，任务永远停在最后 stage，
 	// 掩盖 agent 早已回报的真实成败（本次 vim/ kernel 修复"看似 hang"的真因）。
-	switch task.Status {
-	case model.RemTaskMainSuccess, model.RemTaskMainSuccessPendingVerify,
-		model.RemTaskMainVerifying, model.RemTaskMainVerified,
-		model.RemTaskMainVerifyFailed, model.RemTaskMainVerifyBlocked,
-		model.RemTaskMainCancelled, model.RemTaskStatusFailed,
-		model.RemTaskStatusCompleted, model.RemTaskStatusRolledBack:
+	if isTerminalRemediationStatus(task.Status) {
 		e.logger.Warn("收到已终结任务的修复结果，忽略",
 			zap.Uint("task_id", taskID),
 			zap.String("current_status", task.Status))
