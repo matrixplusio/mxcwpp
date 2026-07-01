@@ -210,7 +210,8 @@ func (g *AlertGenerator) refreshExistingAlert(existing *model.Alert, now model.L
 		// 重算风险分：关联升级(同主机多类告警)会随攻击链推进抬高分值(IOA)
 		"risk_score": g.computeRiskScoreForExisting(existing),
 	}
-	if existing.Status != model.AlertStatusActive {
+	// 仅 resolved(已解决)再命中才重新激活；ignored(已忽略)语义=静音，用户主动忽略后不应被同类事件刷回 active
+	if existing.Status == model.AlertStatusResolved {
 		updates["status"] = model.AlertStatusActive
 		g.log.Info("CEL 告警重新激活",
 			zap.String("result_id", existing.ResultID),
@@ -290,6 +291,176 @@ func (g *AlertGenerator) forwardToSIEM(alert *model.Alert, fields map[string]str
 		RuleID:   alert.RuleID,
 		MITRE:    fields["mitre_id"],
 	})
+}
+
+// AttackChainCategory 攻击链(序列)命中的告警分类，供 incident 关联识别为强信号
+const AttackChainCategory = "attack_chain"
+
+// IOCHitCategory 威胁情报命中告警分类
+const IOCHitCategory = "ioc_hit"
+
+// iocHitTitle 按 IOC 类型给标题(与内置 CEL ioc_hit 规则语义一致)
+func iocHitTitle(iocType string) string {
+	switch iocType {
+	case "ip":
+		return "IOC 碰撞 - 恶意 IP 通信"
+	case "hash":
+		return "IOC 碰撞 - 恶意文件哈希"
+	case "url":
+		return "IOC 碰撞 - 恶意 URL 访问"
+	default:
+		return "IOC 碰撞 - 威胁情报命中"
+	}
+}
+
+// GenerateFromIOC 服务端 IOC 匹配命中 → 生成/更新 ioc_hit 告警。
+// 命中字段写入 ioc_match/ioc_type/ioc_value,前端研判可溯源命中来源。尊重白名单。
+func (g *AlertGenerator) GenerateFromIOC(hostID, iocType, iocValue string, fields map[string]string) {
+	ruleKey := "ioc-" + iocType
+	if ok, _ := g.matchDBWhitelist(ruleKey, hostID, IOCHitCategory, "critical", fields); ok {
+		return
+	}
+
+	masked := make(map[string]string, len(fields)+3)
+	for k, v := range fields {
+		masked[k] = v
+	}
+	masked["ioc_match"] = "true"
+	masked["ioc_type"] = iocType
+	masked["ioc_value"] = iocValue
+	sanitize.Fields(masked)
+	detail, _ := json.Marshal(masked)
+
+	resultID := fmt.Sprintf("ioc-%s-%s-%s", iocType, iocValue, hostID)
+	now := model.ToLocalTime(time.Now())
+
+	var existing model.Alert
+	err := g.db.Where("result_id = ?", resultID).First(&existing).Error
+	if err == nil {
+		_ = g.refreshExistingAlert(&existing, now, string(detail), masked)
+		return
+	}
+	if err != gorm.ErrRecordNotFound {
+		g.log.Warn("查询 IOC 告警失败", zap.String("result_id", resultID), zap.Error(err))
+		return
+	}
+
+	alert := model.Alert{
+		ResultID:       resultID,
+		HostID:         hostID,
+		RuleID:         ruleKey,
+		Source:         model.AlertSourceDetection,
+		Severity:       "critical",
+		RiskScore:      85,
+		Category:       IOCHitCategory,
+		ATTCKTechnique: "T1071",
+		Title:          iocHitTitle(iocType),
+		Description:    "外联/访问命中威胁情报库的恶意 " + iocType + ":" + iocValue,
+		Actual:         string(detail),
+		Status:         model.AlertStatusActive,
+		HitCount:       1,
+		FirstSeenAt:    now,
+		LastSeenAt:     now,
+	}
+	if err := g.db.Create(&alert).Error; err != nil {
+		if isDuplicateKeyErr(err) {
+			var raced model.Alert
+			if e := g.db.Where("result_id = ?", resultID).First(&raced).Error; e == nil {
+				_ = g.refreshExistingAlert(&raced, now, string(detail), masked)
+			}
+			return
+		}
+		g.log.Warn("写入 IOC 告警失败", zap.String("result_id", resultID), zap.Error(err))
+		return
+	}
+	g.log.Info("IOC 命中告警生成", zap.String("ioc_type", iocType), zap.String("ioc_value", iocValue), zap.String("host_id", hostID))
+	g.sendNotification(&alert)
+	g.forwardToSIEM(&alert, masked)
+}
+
+// sequenceRiskScore 攻击链命中风险分：多步关联=高置信，按严重度给高基线分
+func sequenceRiskScore(severity string) int {
+	switch severity {
+	case "critical":
+		return 90
+	case "high":
+		return 78
+	case "medium":
+		return 62
+	default:
+		return 50
+	}
+}
+
+// GenerateFromSequence 为攻击链(序列)命中生成/更新告警并落 alerts 表。
+// 攻击链是多步关联的高置信检测，以 category=attack_chain 标记，供 incident 关联识别为强 IOA 信号。
+// 仍尊重用户研判/调优学到的 DB 白名单(同规则+主机被判误报)→ 命中即抑制，使研判学习对攻击链同样闭环。
+func (g *AlertGenerator) GenerateFromSequence(hostID string, rule model.SequenceRule, fields map[string]string) {
+	seqRuleID := fmt.Sprintf("seq-%d", rule.ID)
+	if ok, reason := g.matchDBWhitelist(seqRuleID, hostID, AttackChainCategory, rule.Severity, fields); ok {
+		g.log.Debug("攻击链告警命中白名单已抑制(用户研判/调优学习)",
+			zap.String("rule", rule.Name), zap.String("host_id", hostID), zap.String("reason", reason))
+		return
+	}
+
+	masked := make(map[string]string, len(fields))
+	for k, v := range fields {
+		masked[k] = v
+	}
+	sanitize.Fields(masked)
+	detail, _ := json.Marshal(masked)
+
+	resultID := fmt.Sprintf("seq-%d-%s", rule.ID, hostID)
+	now := model.ToLocalTime(time.Now())
+
+	var existing model.Alert
+	err := g.db.Where("result_id = ?", resultID).First(&existing).Error
+	if err == nil {
+		_ = g.refreshExistingAlert(&existing, now, string(detail), masked)
+		return
+	}
+	if err != gorm.ErrRecordNotFound {
+		g.log.Warn("查询攻击链告警失败", zap.String("result_id", resultID), zap.Error(err))
+		return
+	}
+
+	alert := model.Alert{
+		ResultID:       resultID,
+		HostID:         hostID,
+		RuleID:         fmt.Sprintf("seq-%d", rule.ID),
+		Source:         model.AlertSourceDetection,
+		Severity:       rule.Severity,
+		RiskScore:      sequenceRiskScore(rule.Severity),
+		Category:       AttackChainCategory,
+		ATTCKTechnique: rule.MitreID,
+		Title:          rule.Name,
+		Description:    rule.Description,
+		Actual:         string(detail),
+		Status:         model.AlertStatusActive,
+		HitCount:       1,
+		FirstSeenAt:    now,
+		LastSeenAt:     now,
+	}
+	if err := g.db.Create(&alert).Error; err != nil {
+		if isDuplicateKeyErr(err) {
+			var raced model.Alert
+			if e := g.db.Where("result_id = ?", resultID).First(&raced).Error; e == nil {
+				_ = g.refreshExistingAlert(&raced, now, string(detail), masked)
+			}
+			return
+		}
+		g.log.Warn("写入攻击链告警失败", zap.String("result_id", resultID), zap.Error(err))
+		return
+	}
+
+	g.log.Info("攻击链告警生成",
+		zap.Uint("rule_id", rule.ID),
+		zap.String("rule_name", rule.Name),
+		zap.String("host_id", hostID),
+		zap.String("severity", rule.Severity),
+	)
+	g.sendNotification(&alert)
+	g.forwardToSIEM(&alert, masked)
 }
 
 // categorize 根据规则信息确定告警分类

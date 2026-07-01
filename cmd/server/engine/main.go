@@ -123,9 +123,20 @@ func main() {
 					// 周期 reload 主机 created_at 快照,消除 hostInGrace 每事件 DB 查(engine CPU 高根因)
 					alertGen.StartHostGraceReload(ctx)
 					stages = append(stages, engine.NewCelRuleStage(celEng, logger).WithAlertGenerator(alertGen))
-					stages = append(stages, engine.NewSequenceStage(
-						celengine.NewSequenceDetector(celEng, db, nil, logger.Named("seq")),
-						logger))
+					seqDetector := celengine.NewSequenceDetector(celEng, db, nil, logger.Named("seq"))
+					if err := seqDetector.ReloadRules(); err != nil {
+						logger.Warn("序列规则加载失败", zap.Error(err))
+					}
+					seqDetector.StartReload(ctx)
+					stages = append(stages, engine.NewSequenceStage(seqDetector, logger).WithAlertGenerator(alertGen))
+
+					// 服务端 IOC 匹配(网络事件外联 IP / hash / URL 对情报集匹配),不依赖给 agent 下发 IOC
+					iocMatcher := celengine.NewIOCMatcher(db, logger.Named("ioc"))
+					if err := iocMatcher.Reload(); err != nil {
+						logger.Warn("IOC 匹配集加载失败", zap.Error(err))
+					}
+					iocMatcher.StartReload(ctx)
+					stages = append(stages, engine.NewIOCStage(iocMatcher, alertGen, logger))
 				}
 				storyEng := storyline.NewEngine(db, logger.Named("story"))
 				stages = append(stages, engine.NewStorylineStage(storyEng, logger))

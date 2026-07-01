@@ -389,14 +389,44 @@ func (e *Engine) StartCheckpoint(done <-chan struct{}) {
 	go func() {
 		ticker := time.NewTicker(checkpointInterval)
 		defer ticker.Stop()
+		e.sweepGraduations() // 启动即扫一次，毕业重启前已满足条件但无新快照的主机
+		e.checkpoint()       // 立即落库，避免毕业结果等到首个 5 分钟 ticker 才持久化
 		for {
 			select {
 			case <-done:
 				e.checkpoint()
 				return
 			case <-ticker.C:
+				e.sweepGraduations()
 				e.checkpoint()
 			}
 		}
 	}()
+}
+
+// sweepGraduations 定时把已满足毕业条件（samples≥minSamples 且 学习期已满）的学习中主机
+// 转为 active。毕业转换原本仅在新快照到达时触发；主机停发快照（离线/低活跃）会导致
+// 已达标主机永久停留在学习中。本扫描使毕业改为时间驱动，不再依赖增量事件。
+func (e *Engine) sweepGraduations() {
+	e.mu.RLock()
+	baselines := make([]*HostBaseline, 0, len(e.baselines))
+	for _, b := range e.baselines {
+		baselines = append(baselines, b)
+	}
+	e.mu.RUnlock()
+
+	now := time.Now()
+	graduated := 0
+	for _, b := range baselines {
+		b.mu.Lock()
+		if b.phase == PhaseLearning && b.samples >= minSamples && now.Sub(b.firstSeen) >= learningPeriod {
+			b.phase = PhaseActive
+			b.dirty = true
+			graduated++
+		}
+		b.mu.Unlock()
+	}
+	if graduated > 0 {
+		e.logger.Info("行为基线定时毕业", zap.Int("graduated", graduated))
+	}
 }

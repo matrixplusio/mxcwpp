@@ -16,6 +16,15 @@ import { toast } from "@/components/ui/toast";
 
 type ResultRow = unknown[] | Record<string, unknown>;
 
+// MQL 示例查询(点击填入编辑器)。均符合引擎语法,可直接运行。
+const HUNT_EXAMPLES: Array<{ label: string; q: string }> = [
+  { label: "进程执行", q: `search events | where event_type == "process_exec" | limit 50` },
+  { label: "可疑下载", q: `search events | where exe contains "curl" || exe contains "wget" | limit 50` },
+  { label: "外网外联TopIP", q: `search events | where event_type == "tcp_connect" | where is_private_ip(remote_addr) == false | stats count() by remote_addr | sort count desc | limit 20` },
+  { label: "临时目录执行", q: `search events | where event_type == "process_exec" | where exe startswith "/tmp/" || exe startswith "/dev/shm/" | limit 50` },
+  { label: "近24h按主机统计", q: `search events | where timestamp > now()-24h | stats count() by host_id | sort count desc` },
+];
+
 function cellValue(row: ResultRow, col: string, idx: number): string {
   const cell = Array.isArray(row) ? row[idx] : (row as Record<string, unknown>)[col];
   if (cell === null || cell === undefined) return "—";
@@ -105,6 +114,31 @@ export default function HuntingPage() {
               <Button onClick={() => executeMutation.mutate()} disabled={!mql.trim() || executeMutation.isPending}>
                 {executeMutation.isPending ? t("detection.hunting.executing") : t("detection.hunting.execute")}
               </Button>
+            </div>
+
+            {/* 语法说明 + 示例(点击填入),解决"不知道怎么查" */}
+            <div className="rounded-md border border-line bg-surface-muted p-3 text-xs">
+              <div className="mb-1 font-medium text-ink">{t("detection.hunting.syntaxTitle")}</div>
+              <p className="mb-2 text-muted">
+                <code className="font-mono">search events | where &lt;条件&gt; | stats count() by &lt;字段&gt; | sort &lt;字段&gt; desc | limit N</code>
+              </p>
+              <p className="mb-2 text-faint">
+                {t("detection.hunting.syntaxFields")}: event_type, exe, cmdline, parent_exe, file_path, remote_addr, remote_port, dns_server, pid, uid, host_id, timestamp ·
+                操作符 == != contains startswith endswith matches in · 函数 is_private_ip() is_dns_tunnel() · 时间 now()-24h
+              </p>
+              <div className="space-y-1">
+                {HUNT_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex.q}
+                    type="button"
+                    className="block w-full truncate text-left font-mono text-faint transition-colors hover:text-primary"
+                    title={ex.q}
+                    onClick={() => setMql(ex.q)}
+                  >
+                    <span className="text-muted">{ex.label}:</span> {ex.q}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </Card>

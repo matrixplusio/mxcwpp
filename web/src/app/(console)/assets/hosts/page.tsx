@@ -10,6 +10,7 @@ import { useUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
@@ -212,7 +213,10 @@ export default function HostsPage() {
       render: (r) => (
         <div className="min-w-0">
           <div className="truncate font-medium text-ink">{r.hostname}</div>
-          <div className="truncate text-xs text-faint">{r.host_id}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-xs text-faint">{r.host_id}</span>
+            <CopyButton text={r.host_id} />
+          </div>
         </div>
       ),
     },

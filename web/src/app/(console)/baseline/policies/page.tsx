@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { baselineApi } from "@/lib/api/baseline";
-import type { BaselinePolicy } from "@/lib/api/types";
+import type { BaselinePolicy, OSRequirement } from "@/lib/api/types";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
@@ -37,24 +38,43 @@ interface PolicyForm {
   name: string;
   version: string;
   description: string;
-  os_version: string;
+  osRequirements: OSRequirement[];
   enabled: boolean;
 }
-const emptyForm: PolicyForm = { name: "", version: "", description: "", os_version: "", enabled: true };
+const emptyForm: PolicyForm = { name: "", version: "", description: "", osRequirements: [], enabled: true };
 
-export default function BaselinePoliciesPage() {
+// 旧策略只有单串 os_version + os_family 列表时，合成 per-family 要求供编辑
+function legacyToRequirements(p: BaselinePolicy): OSRequirement[] {
+  if (p.os_requirements?.length) return p.os_requirements;
+  const families = p.os_family ?? [];
+  const minV = (p.os_version || "").replace(/[^0-9.]/g, ""); // ">=7" → "7"
+  return families.map((f) => ({ os_family: f, min_version: minV || undefined }));
+}
+
+function BaselinePoliciesContent() {
   const { t } = useTranslation();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const groupId = searchParams.get("group_id") || "";
   const queryClient = useQueryClient();
   const osFamilyOptions = buildOsFamilyOptions(t);
   const enabledOptions = buildEnabledOptions(t);
   const [filters, setFilters] = useState<ListFilters>({ os_family: "", enabled: "" });
 
+  // 组钻取上下文：展示组名 + 返回链接，并把新建策略归入该组
+  const { data: group } = useQuery({
+    queryKey: ["bl-group", groupId],
+    queryFn: () => baselineApi.getGroup(groupId),
+    enabled: !!groupId,
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["bl-policies", filters],
+    queryKey: ["bl-policies", filters, groupId],
     queryFn: () =>
       baselineApi.listPolicies({
         os_family: filters.os_family || undefined,
         enabled: filters.enabled === "" ? undefined : filters.enabled === "true",
+        group_id: groupId || undefined,
       }),
   });
   const rows = data?.items ?? [];
@@ -71,27 +91,44 @@ export default function BaselinePoliciesPage() {
     setForm(emptyForm);
     setDrawerOpen(true);
   };
-  const openEdit = (p: BaselinePolicy) => {
+  const openEdit = async (p: BaselinePolicy) => {
     setEditing(p);
+    // 列表接口不返回 os_requirements，需单查完整策略
+    let full = p;
+    try {
+      full = await baselineApi.getPolicy(p.id);
+    } catch {
+      /* 退回列表数据 */
+    }
     setForm({
-      name: p.name,
-      version: p.version,
-      description: p.description,
-      os_version: p.os_version,
-      enabled: p.enabled,
+      name: full.name,
+      version: full.version,
+      description: full.description,
+      osRequirements: legacyToRequirements(full),
+      enabled: full.enabled,
     });
     setDrawerOpen(true);
   };
 
   const saveMutation = useMutation({
     mutationFn: () => {
+      const reqs = form.osRequirements
+        .map((r) => ({
+          os_family: r.os_family.trim(),
+          min_version: r.min_version?.trim() || undefined,
+          max_version: r.max_version?.trim() || undefined,
+        }))
+        .filter((r) => r.os_family);
       const body: Partial<BaselinePolicy> = {
         name: form.name,
         version: form.version,
         description: form.description,
-        os_version: form.os_version,
+        os_requirements: reqs,
+        // os_family 用于派发过滤，从详细要求派生保持同步
+        os_family: Array.from(new Set(reqs.map((r) => r.os_family))),
         enabled: form.enabled,
       };
+      if (!editing && groupId) body.group_id = groupId;
       return editing ? baselineApi.updatePolicy(editing.id, body) : baselineApi.createPolicy(body);
     },
     onSuccess: () => {
@@ -127,7 +164,16 @@ export default function BaselinePoliciesPage() {
       title: t("baseline.policies.colName"),
       render: (r) => (
         <div>
-          <div className="font-medium text-ink">{r.name}</div>
+          <button
+            type="button"
+            className="font-medium text-ink transition-colors hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/baseline/rules?policy_id=${r.id}`);
+            }}
+          >
+            {r.name}
+          </button>
           {r.version && <div className="text-xs text-faint tabular-nums">v{r.version}</div>}
         </div>
       ),
@@ -189,6 +235,16 @@ export default function BaselinePoliciesPage() {
   return (
     <>
       <div className="space-y-4">
+        {groupId && (
+          <button
+            type="button"
+            className="text-sm text-muted transition-colors hover:text-ink"
+            onClick={() => router.push("/baseline/groups")}
+          >
+            ← {t("baseline.policies.backToGroups")}
+            {group?.name ? `：${group.name}` : ""}
+          </button>
+        )}
         <FilterBar extra={<Button onClick={openCreate}>{t("baseline.policies.create")}</Button>}>
           <Select
             value={filters.os_family}
@@ -242,8 +298,59 @@ export default function BaselinePoliciesPage() {
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
           </FormField>
-          <FormField label={t("baseline.policies.fieldOsVersion")}>
-            <Input value={form.os_version} onChange={(e) => setForm((f) => ({ ...f, os_version: e.target.value }))} />
+          <FormField label={t("baseline.policies.fieldOsRequirements")}>
+            <div className="space-y-2">
+              {form.osRequirements.length === 0 && (
+                <p className="text-xs text-faint">{t("baseline.policies.osReqEmpty")}</p>
+              )}
+              {form.osRequirements.map((req, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    value={req.os_family}
+                    placeholder={t("baseline.policies.osReqFamily")}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        osRequirements: f.osRequirements.map((r, i) => (i === idx ? { ...r, os_family: e.target.value } : r)),
+                      }))
+                    }
+                  />
+                  <Input
+                    value={req.min_version ?? ""}
+                    placeholder={t("baseline.policies.osReqMin")}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        osRequirements: f.osRequirements.map((r, i) => (i === idx ? { ...r, min_version: e.target.value } : r)),
+                      }))
+                    }
+                  />
+                  <Input
+                    value={req.max_version ?? ""}
+                    placeholder={t("baseline.policies.osReqMax")}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        osRequirements: f.osRequirements.map((r, i) => (i === idx ? { ...r, max_version: e.target.value } : r)),
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-sm text-danger transition-colors hover:opacity-80"
+                    onClick={() => setForm((f) => ({ ...f, osRequirements: f.osRequirements.filter((_, i) => i !== idx) }))}
+                  >
+                    {t("common.delete")}
+                  </button>
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                onClick={() => setForm((f) => ({ ...f, osRequirements: [...f.osRequirements, { os_family: "" }] }))}
+              >
+                {t("baseline.policies.osReqAdd")}
+              </Button>
+            </div>
           </FormField>
           <FormField label={t("baseline.policies.fieldEnabled")}>
             <Switch checked={form.enabled} onChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
@@ -260,5 +367,13 @@ export default function BaselinePoliciesPage() {
         onCancel={() => setDeleting(null)}
       />
     </>
+  );
+}
+
+export default function BaselinePoliciesPage() {
+  return (
+    <Suspense fallback={null}>
+      <BaselinePoliciesContent />
+    </Suspense>
   );
 }

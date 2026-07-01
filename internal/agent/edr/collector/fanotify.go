@@ -140,6 +140,8 @@ func (l *fanotifyListener) handleEvent(meta *fanotifyEventMetadata) {
 
 	evt := event.NewFileEvent(evtType, pid, path)
 	evt.SetField("source", "fanotify")
+	// FIM 上下文增强(谁改的/谁登录的/改了什么);fanotify 只带 pid,uid/ppid 从 /proc 兜底
+	enrichFileEventContext(evt, pid, 0, 0, path)
 
 	select {
 	case l.eventCh <- evt:

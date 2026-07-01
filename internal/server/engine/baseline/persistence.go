@@ -42,8 +42,10 @@ func (e *Engine) loadFromDB() {
 		}
 
 		// Re-check phase after restore (time may have passed while offline).
+		// 标 dirty 让本次毕业落库，否则内存已 active 但 DB 永远 learning（UI 读 DB）。
 		if bl.phase == PhaseLearning && bl.samples >= minSamples && time.Since(bl.firstSeen) >= learningPeriod {
 			bl.phase = PhaseActive
+			bl.dirty = true
 		}
 
 		e.baselines[s.HostID] = bl

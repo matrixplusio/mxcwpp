@@ -153,22 +153,24 @@ func (h *FIMTasksHandler) RunFIMTask(c *gin.Context) {
 		return
 	}
 
-	if task.Status != "pending" {
-		BadRequest(c, "任务当前状态不允许执行")
+	// 正在执行中的不重复触发；其余(pending/completed/failed)均可(重)运行。
+	if task.Status == "running" {
+		BadRequest(c, "任务正在执行中")
 		return
 	}
 
-	now := model.Now()
+	// 置 pending 交由调度器 DispatchPendingFIMTasks 派发(派发时才置 running)。
+	// 直接置 running 会让调度器(只发 pending)跳过 → 任务永不下发。
 	if err := h.db.Model(&task).Updates(map[string]any{
-		"status":      "running",
-		"executed_at": now,
+		"status":      "pending",
+		"executed_at": nil,
 	}).Error; err != nil {
 		h.logger.Error("更新 FIM 任务状态失败", zap.Error(err))
 		InternalError(c, "执行失败")
 		return
 	}
 
-	task.Status = "running"
-	task.ExecutedAt = &now
+	task.Status = "pending"
+	task.ExecutedAt = nil
 	Success(c, task)
 }

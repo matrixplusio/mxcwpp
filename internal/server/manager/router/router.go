@@ -719,6 +719,7 @@ func setupAlertWhitelistAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Lo
 	router.GET("/alerts/whitelist/suggestions", sug.ListSuggestions)
 	router.POST("/alerts/whitelist/suggestions/:id/adopt", sug.AdoptSuggestion)
 	router.POST("/alerts/whitelist/suggestions/:id/dismiss", sug.DismissSuggestion)
+	router.POST("/alerts/whitelist/suggestions/:id/revoke", sug.RevokeSuggestion)
 }
 
 // setupComponentsAPI 设置组件管理 API 路由
@@ -1119,6 +1120,30 @@ func setupThreatIntelAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	router.POST("/threat-intel/sync", handler.TriggerSync)
 	router.GET("/threat-intel/sync-status", handler.GetSyncStatus)
 	router.GET("/threat-intel/sync-history", handler.GetSyncHistory)
+	// 自有情报库(独立于外部 feed):真实威胁研判提取 / 人工录入
+	router.GET("/threat-intel/local-iocs/stats", handler.GetLocalIOCStats)
+	router.GET("/threat-intel/ioc-source", handler.LookupIOCSource)
+	router.GET("/threat-intel/local-iocs", handler.ListLocalIOCs)
+	router.POST("/threat-intel/local-iocs", handler.CreateLocalIOC)
+	router.DELETE("/threat-intel/local-iocs/:id", handler.DeleteLocalIOC)
+	router.POST("/threat-intel/confirm-threat/:alert_id", handler.ConfirmThreat)
+
+	// 情报同步计划（定时拉取 IOC Feed）：单实例既驱动 cron 又服务 CRUD，
+	// 避免 handler 实例与运行实例分离导致新建计划重启前不生效。
+	intelScheduler := biz.NewIntelSyncScheduler(db, logger, service)
+	go func() {
+		if err := intelScheduler.Start(); err != nil {
+			logger.Error("威胁情报同步调度器启动失败", zap.Error(err))
+		}
+	}()
+	schedHandler := api.NewIntelSyncSchedulesHandler(db, logger, intelScheduler)
+	router.GET("/threat-intel/schedules", schedHandler.ListSchedules)
+	router.POST("/threat-intel/schedules", schedHandler.CreateSchedule)
+	router.PUT("/threat-intel/schedules/:id", schedHandler.UpdateSchedule)
+	router.DELETE("/threat-intel/schedules/:id", schedHandler.DeleteSchedule)
+	router.POST("/threat-intel/schedules/:id/toggle", schedHandler.ToggleSchedule)
+	router.POST("/threat-intel/schedules/:id/run", schedHandler.RunSchedule)
+	router.GET("/threat-intel/schedules/:id/executions", schedHandler.ListExecutions)
 }
 
 // setupDependencyAPI 设置依赖管理 API 路由

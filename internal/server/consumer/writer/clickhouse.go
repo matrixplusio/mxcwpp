@@ -65,6 +65,12 @@ type ebpfEventRow struct {
 	UID        string
 	GID        string
 	ReturnCode string
+	// FIM 上下文:谁改的(username)/谁登录的(login_uid/login_user)/改了什么(content_hash/file_size)
+	Username    string
+	LoginUID    string
+	LoginUser   string
+	ContentHash string
+	FileSize    string
 }
 
 // ClickHouseWriter 将监控指标批量写入 ClickHouse
@@ -440,7 +446,7 @@ func (w *ClickHouseWriter) flushFIMEvents(rows []fimEventRow) {
 func (w *ClickHouseWriter) flushEBPFEvents(rows []ebpfEventRow) {
 	ctx := context.Background()
 	batch, err := w.conn.PrepareBatch(ctx,
-		"INSERT INTO ebpf_events (timestamp, host_id, hostname, event_type, data_type, pid, ppid, exe, cmdline, parent_exe, file_path, remote_addr, remote_port, local_addr, local_port, protocol, uid, gid, return_code)",
+		"INSERT INTO ebpf_events (timestamp, host_id, hostname, event_type, data_type, pid, ppid, exe, cmdline, parent_exe, file_path, remote_addr, remote_port, local_addr, local_port, protocol, uid, gid, return_code, username, login_uid, login_user, content_hash, file_size)",
 	)
 	if err != nil {
 		w.logger.Error("ClickHouse PrepareBatch ebpf_events 失败", zap.Error(err))
@@ -453,6 +459,7 @@ func (w *ClickHouseWriter) flushEBPFEvents(rows []ebpfEventRow) {
 			r.PID, r.PPID, r.Exe, r.Cmdline, r.ParentExe,
 			r.FilePath, r.RemoteAddr, r.RemotePort, r.LocalAddr, r.LocalPort, r.Protocol,
 			r.UID, r.GID, r.ReturnCode,
+			r.Username, r.LoginUID, r.LoginUser, r.ContentHash, r.FileSize,
 		); err != nil {
 			w.logger.Warn("ClickHouse Append ebpf_events 失败", zap.Error(err))
 		}
@@ -496,6 +503,11 @@ func (w *ClickHouseWriter) parseEBPFEvent(msg *kafka.MQMessage) ebpfEventRow {
 			row.UID = fields["uid"]
 			row.GID = fields["gid"]
 			row.ReturnCode = fields["return_code"]
+			row.Username = fields["username"]
+			row.LoginUID = fields["login_uid"]
+			row.LoginUser = fields["login_user"]
+			row.ContentHash = fields["content_hash"]
+			row.FileSize = fields["file_size"]
 		}
 	}
 	return row

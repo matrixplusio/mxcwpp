@@ -28,6 +28,7 @@ export default function InspectionPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [blFilter, setBlFilter] = useState("");
+  const [pluginFilter, setPluginFilter] = useState("");
   const [restarting, setRestarting] = useState<InspectionHostItem | null>(null);
 
   const restartMutation = useMutation({
@@ -53,6 +54,12 @@ export default function InspectionPage() {
     ];
   }, [allHosts, t]);
 
+  const pluginOptions = [
+    { label: t("operations.inspection.pluginAll"), value: "" },
+    { label: t("operations.inspection.pluginError"), value: "error" },
+    { label: t("operations.inspection.pluginOutdated"), value: "outdated" },
+  ];
+
   const hosts = useMemo(() => {
     const kw = search.trim().toLowerCase();
     return allHosts.filter((h) => {
@@ -60,13 +67,15 @@ export default function InspectionPage() {
       if (blFilter && h.business_line !== blFilter) return false;
       if (agentFilter === "outdated" && !(h.agent_version && latestAgentVersion && h.agent_version !== latestAgentVersion)) return false;
       if (agentFilter === "latest" && h.agent_version !== latestAgentVersion) return false;
+      if (pluginFilter === "error" && !h.plugins?.some((p) => p.status === "error" || p.status === "stopped")) return false;
+      if (pluginFilter === "outdated" && !h.plugins?.some((p) => p.need_update)) return false;
       if (kw) {
         const hay = `${h.hostname} ${h.host_id} ${h.ipv4?.join(" ") ?? ""}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
       return true;
     });
-  }, [allHosts, search, statusFilter, agentFilter, blFilter, latestAgentVersion]);
+  }, [allHosts, search, statusFilter, agentFilter, blFilter, pluginFilter, latestAgentVersion]);
 
   const statusOptions = [
     { label: t("operations.inspection.allStatus"), value: "" },
@@ -169,6 +178,7 @@ export default function InspectionPage() {
           />
           <Select value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
           <Select value={agentFilter} onChange={setAgentFilter} options={agentOptions} />
+          <Select value={pluginFilter} onChange={setPluginFilter} options={pluginOptions} />
           <Select value={blFilter} onChange={setBlFilter} options={businessLineOptions} />
         </FilterBar>
         <Card>

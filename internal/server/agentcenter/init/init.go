@@ -107,6 +107,8 @@ func (s *AgentCenterServices) StartBackgroundServices() {
 	// 启动 IOC 同步调度器（定期广播威胁情报到 Agent EDR）
 	iocScheduler := scheduler.NewIOCSyncScheduler(s.DB, s.TransferService, s.Logger)
 	go iocScheduler.Start(s.StatusCtx)
+	// 连接即推:新连/重连 agent 立即收到全量 IOC(补齐 5min 版本门控广播的漏推,IOC 匹配才可靠)
+	s.TransferService.OnAgentConnect(iocScheduler.PushToAgent)
 
 	// 启动规则同步调度器（定期广播 Agent 检测规则）
 	ruleScheduler := scheduler.NewRuleSyncScheduler(s.DB, s.TransferService, s.Logger)

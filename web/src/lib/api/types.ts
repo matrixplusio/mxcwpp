@@ -44,6 +44,7 @@ export interface Alert {
   expected?: string;
   fix_suggestion?: string;
   status: "active" | "resolved" | "ignored";
+  hit_count?: number;
   first_seen_at: string;
   last_seen_at: string;
   resolved_at?: string;
@@ -90,7 +91,7 @@ export interface AlertWhitelistSuggestion {
   confidence: number;
   sample_alert_ids: string[] | null;
   resolve_reason_sample: string;
-  status: "pending" | "adopted" | "dismissed";
+  status: "pending" | "adopted" | "dismissed" | "revoked";
   decided_by: string;
   decided_at: string | null;
   whitelist_id: number;
@@ -118,6 +119,20 @@ export interface Incident {
   last_seen_at: string;
   resolved_at: string | null;
   resolved_by: string;
+}
+
+export interface IncidentStage {
+  category: string;
+  name: string;
+  alert_count: number;
+  examples: string[] | null;
+}
+export interface IncidentDetail {
+  incident: Incident;
+  alerts: Alert[];
+  stages: IncidentStage[] | null;
+  narrative: string;
+  recommendations: string[] | null;
 }
 
 export interface User {
@@ -198,7 +213,7 @@ export interface InspectionSummary {
   total_hosts: number; online_hosts: number; offline_hosts: number;
   agent_outdated_count: number; plugin_error_count: number; plugin_outdated_count: number;
 }
-export interface InspectionHostPlugin { name: string; version: string; status: string; }
+export interface InspectionHostPlugin { name: string; version: string; status: string; need_update?: boolean; }
 export interface InspectionHostItem {
   host_id: string; hostname: string; ipv4: string[];
   status: string; agent_version: string;
@@ -1048,6 +1063,13 @@ export interface ServiceAlertList { items: ServiceAlert[]; total: number; stats:
 // 注：字段名镜像后端（snake_case）。/policies 返回 { items }（无 total）；其余列表为 Paged<T>{ items, total }。
 
 // 基线检查策略
+// 详细 OS 版本要求：每个 OS 族各自的版本区间
+export interface OSRequirement {
+  os_family: string;
+  min_version?: string;
+  max_version?: string;
+}
+
 export interface BaselinePolicy {
   id: string;
   name: string;
@@ -1055,6 +1077,7 @@ export interface BaselinePolicy {
   description: string;
   os_family: string[];
   os_version: string;
+  os_requirements?: OSRequirement[];
   enabled: boolean;
   group_id?: string;
   runtime_types?: RuntimeType[];
@@ -1064,6 +1087,21 @@ export interface BaselinePolicy {
 }
 // /policies 返回 { items }，无 total
 export interface BaselinePolicyList { items: BaselinePolicy[]; }
+
+// 基线规则（策略下的检查项）
+export interface BaselineRule {
+  rule_id: string;
+  policy_id: string;
+  category: string;
+  title: string;
+  description: string;
+  severity: string;
+  enabled: boolean;
+  builtin: boolean;
+  runtime_types?: RuntimeType[];
+  created_at: string;
+  updated_at: string;
+}
 
 export interface BaselinePolicyStatistics {
   policy_id: string;
@@ -1441,6 +1479,12 @@ export interface EdrEvent {
   uid?: string;
   gid?: string;
   return_code?: string;
+  // FIM 上下文:谁改的(username)/谁登录的(login_uid/login_user)/改了什么(敏感文件 content_hash/file_size)
+  username?: string;
+  login_uid?: string;
+  login_user?: string;
+  content_hash?: string;
+  file_size?: string;
 }
 export interface EdrEventStats {
   total: number;
@@ -1480,6 +1524,51 @@ export interface DetectionRuleStats {
 export interface ThreatIntelStats { ip: number; hash: number; domain: number; url: number; total: number; }
 export interface ThreatIntelIocList { items: string[]; total: number; type: string; }
 export interface ThreatIntelCheckResult { hit: boolean; type: string; value: string; }
+// IOC 命中来源溯源
+export interface IOCSourceInfo {
+  hit: boolean;
+  origin: string; // local/external/none
+  source: string;
+  severity: string;
+  description: string;
+  ref_type: string;
+  ref_id: string;
+}
+// 自有情报库
+export interface LocalIOC {
+  id: number;
+  ioc_type: string; // ip/domain/hash/url
+  value: string;
+  source: string; // tp_extract/manual
+  severity: string;
+  description: string;
+  ref_type: string;
+  ref_id: string;
+  created_by: string;
+  created_at: string;
+}
+
+// 威胁情报同步计划
+export interface IntelSyncSchedule {
+  id: number;
+  name: string;
+  cronExpr: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface IntelSyncExecution {
+  id: number;
+  scheduleId: number;
+  status: string; // running / success / failed
+  errorMsg: string;
+  iocCount: number;
+  duration: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
 
 // 攻击故事线
 export interface Storyline {
@@ -1596,6 +1685,19 @@ export interface BdeBaseline {
   first_seen: string;
   created_at: string;
   updated_at: string;
+  // 学习进度（后端按 samples/门槛 与 first_seen/学习期 推导）
+  required_min?: number;
+  sample_pct?: number;
+  time_pct?: number;
+  progress_pct?: number;
+  learning_ends?: string;
+  blocking_reason?: string;
+  metrics?: BdeMetricStat[]; // 13 维学到的行为画像
+}
+export interface BdeMetricStat {
+  key: string;
+  mean: number;
+  stddev: number;
 }
 export interface BdeBaselineStats {
   total_hosts: number;

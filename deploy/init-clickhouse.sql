@@ -131,6 +131,13 @@ CREATE TABLE IF NOT EXISTS ebpf_events (
     gid           String,
     return_code   String,
 
+    -- FIM 上下文：谁改的(username) / 谁登录的(login_uid/login_user) / 改了什么(敏感文件 content_hash + file_size)
+    username      String,
+    login_uid     String,
+    login_user    String,
+    content_hash  String,
+    file_size     String,
+
     -- 跳数索引：加速 exe / cmdline / remote_addr 模糊查询
     INDEX idx_exe exe TYPE tokenbf_v1(10240, 3, 0) GRANULARITY 4,
     INDEX idx_cmdline cmdline TYPE tokenbf_v1(10240, 3, 0) GRANULARITY 4,

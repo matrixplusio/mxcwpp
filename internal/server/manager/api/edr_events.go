@@ -73,6 +73,12 @@ type chEDREvent struct {
 	UID        string    `json:"uid"`
 	GID        string    `json:"gid"`
 	ReturnCode string    `json:"return_code"`
+	// FIM 上下文:谁改的(username)/谁登录的(login_uid/login_user)/改了什么(content_hash/file_size)
+	Username    string `json:"username"`
+	LoginUID    string `json:"login_uid"`
+	LoginUser   string `json:"login_user"`
+	ContentHash string `json:"content_hash"`
+	FileSize    string `json:"file_size"`
 }
 
 // chEDREventLite 列表用精简行(8 关键列)。
@@ -389,6 +395,8 @@ func (h *EDREventsHandler) GetEDREventDetail(c *gin.Context) {
 	hostID := c.Query("host_id")
 	timestamp := c.Query("timestamp")
 	pid := c.Query("pid")
+	eventType := c.Query("event_type")
+	filePath := c.Query("file_path")
 	if hostID == "" || timestamp == "" {
 		BadRequest(c, "host_id 与 timestamp 必填")
 		return
@@ -403,13 +411,24 @@ func (h *EDREventsHandler) GetEDREventDetail(c *gin.Context) {
 	sql := `SELECT timestamp, host_id, hostname, event_type, data_type,
 	               pid, ppid, exe, cmdline, parent_exe,
 	               file_path, remote_addr, remote_port, local_addr, local_port,
-	               protocol, uid, gid, return_code
+	               protocol, uid, gid, return_code,
+	               username, login_uid, login_user, content_hash, file_size
 	        FROM ebpf_events
 	        WHERE host_id = ? AND timestamp = ?`
 	args := []interface{}{hostID, normalizeDateBound(timestamp, false)}
 	if pid != "" {
 		sql += " AND pid = ?"
 		args = append(args, pid)
+	}
+	// 同一 host+timestamp(ms)+pid 可能有多行(如 process_exec 与 file_open 同刻),
+	// 用 event_type / file_path 消歧,避免详情命中错行导致 FIM 上下文丢失。
+	if eventType != "" {
+		sql += " AND event_type = ?"
+		args = append(args, eventType)
+	}
+	if filePath != "" {
+		sql += " AND file_path = ?"
+		args = append(args, filePath)
 	}
 	sql += " LIMIT 1"
 
@@ -420,6 +439,7 @@ func (h *EDREventsHandler) GetEDREventDetail(c *gin.Context) {
 		&ev.PID, &ev.PPID, &ev.Exe, &ev.Cmdline, &ev.ParentExe,
 		&ev.FilePath, &ev.RemoteAddr, &ev.RemotePort, &ev.LocalAddr, &ev.LocalPort,
 		&ev.Protocol, &ev.UID, &ev.GID, &ev.ReturnCode,
+		&ev.Username, &ev.LoginUID, &ev.LoginUser, &ev.ContentHash, &ev.FileSize,
 	)
 	h.recordCHQuery("detail", "ebpf_events", start, err)
 	if err != nil {

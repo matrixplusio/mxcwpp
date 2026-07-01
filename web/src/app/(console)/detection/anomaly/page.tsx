@@ -12,11 +12,13 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusTag, SeverityTag } from "@/components/ui/Tag";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { toast } from "@/components/ui/toast";
 
 interface ListParams {
@@ -25,9 +27,41 @@ interface ListParams {
   severity: string;
   status: string;
   alert_type: string;
+  host_id: string;
 }
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+
+// 13 维行为指标中文名(与 BDE 一致),让"主要指标"可读
+const METRIC_LABEL: Record<string, string> = {
+  proc_exec_count: "进程执行次数", proc_unique_exe: "唯一程序数", proc_fork_rate: "进程派生速率",
+  file_write_count: "文件写入次数", file_unique_path: "写入路径数", file_sensitive_hits: "敏感文件命中",
+  net_connect_count: "网络连接数", net_unique_ip: "唯一对端IP", net_unique_port: "唯一端口数", net_external_ratio: "外网连接占比",
+  dns_query_count: "DNS查询数", dns_unique_domain: "唯一域名数", dns_nx_ratio: "DNS解析失败率",
+};
+const metricCn = (k: string) => METRIC_LABEL[k] ?? k;
+
+// 异常模式 → 人话研判 + 处置建议
+const PATTERN_VERDICT: Record<string, { verdict: string; action: string }> = {
+  c2_beacon: { verdict: "主机疑似 C2 回连:网络+DNS 活动异常升高,符合信标/隐蔽通道特征。", action: "隔离主机,核对外联进程链是否合法,封禁可疑外联 IP/域名。" },
+  data_exfiltration: { verdict: "疑似数据外传:外联与数据传输量异常,可能存在数据渗出。", action: "阻断外传通道,排查敏感数据访问,评估泄露范围。" },
+  privilege_escalation: { verdict: "疑似提权:进程/权限相关指标异常,可能存在提权尝试。", action: "核查 sudo/setuid 与内核提权痕迹,修补相关漏洞。" },
+  reconnaissance: { verdict: "疑似侦察:短时大量探测类行为,可能是攻击前置侦察。", action: "确认是否来自合法运维,核查来源进程。" },
+};
+
+// 由异常上下文生成升高指标列表 [{name,current,baseline,ratio}]
+function elevatedMetrics(ctx: unknown): Array<{ name: string; current: number; baseline: number; ratio: number }> {
+  if (!ctx || typeof ctx !== "object") return [];
+  const em = (ctx as Record<string, unknown>).elevated_metrics;
+  if (!Array.isArray(em)) return [];
+  return em
+    .map((m) => {
+      const o = m as Record<string, unknown>;
+      return { name: String(o.name ?? ""), current: Number(o.current ?? 0), baseline: Number(o.baseline ?? 0), ratio: Number(o.ratio ?? 0) };
+    })
+    .filter((m) => m.name)
+    .sort((a, b) => b.ratio - a.ratio);
+}
 
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
 
@@ -80,6 +114,7 @@ export default function AnomalyPage() {
     severity: "",
     status: "",
     alert_type: "",
+    host_id: "",
   });
 
   const { data: stats } = useQuery({
@@ -96,6 +131,7 @@ export default function AnomalyPage() {
         severity: params.severity || undefined,
         status: params.status || undefined,
         alert_type: params.alert_type || undefined,
+        host_id: params.host_id || undefined,
       }),
   });
 
@@ -208,6 +244,12 @@ export default function AnomalyPage() {
             onChange={(v) => setParams((p) => ({ ...p, alert_type: v, page: 1 }))}
             options={alertTypeOptions}
           />
+          <Input
+            value={params.host_id}
+            onChange={(e) => setParams((p) => ({ ...p, host_id: e.target.value, page: 1 }))}
+            placeholder={t("detection.anomaly.filterHostId")}
+            className="w-56"
+          />
         </FilterBar>
         <Card>
           <DataTable
@@ -254,25 +296,57 @@ export default function AnomalyPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Field label={t("detection.anomaly.fieldHostId")} value={detail.host_id} />
+              <Field label={t("detection.anomaly.fieldHostId")} value={<span className="inline-flex items-center gap-1.5">{detail.host_id}<CopyButton text={detail.host_id} /></span>} />
               <Field label={t("detection.anomaly.fieldPattern")} value={detail.pattern_name || "—"} />
               <Field label={t("detection.anomaly.fieldAnomalyScore")} value={<span className="tabular-nums">{detail.anomaly_score.toFixed(2)}</span>} />
               <Field label={t("detection.anomaly.fieldTopMetric")} value={<span className="font-mono">{detail.top_metric || "—"}</span>} />
               <Field label={t("detection.anomaly.fieldTopValue")} value={<span className="tabular-nums">{detail.top_value}</span>} />
               <Field label={t("detection.anomaly.fieldFoundAt")} value={<span className="tabular-nums">{detail.created_at}</span>} />
             </div>
-            {detail.description && (
+            {/* 研判与处置(人话,取代直接看元数据) */}
+            {(() => {
+              const v = PATTERN_VERDICT[detail.pattern_name ?? ""];
+              const elevated = elevatedMetrics(detail.trigger_context);
+              const verdict = v?.verdict
+                ?? (elevated.length > 0
+                  ? `检测到异常行为:${elevated.slice(0, 3).map((m) => `${metricCn(m.name)}升至基线 ${m.ratio.toFixed(1)} 倍`).join("、")}。`
+                  : detail.description || "检测到偏离基线的异常行为。");
+              const action = v?.action ?? "核查该主机近期进程/网络/文件行为是否为合法运维。";
+              return (
+                <div className="rounded-md border border-line bg-surface-muted p-4">
+                  <div className="mb-1.5 text-sm font-semibold text-ink">{t("detection.anomaly.verdict")}</div>
+                  <p className="text-sm leading-relaxed text-ink">{verdict}</p>
+                  <div className="mt-3 mb-1 text-sm font-semibold text-ink">{t("detection.anomaly.recommendation")}</div>
+                  <p className="text-sm leading-relaxed text-muted">{action}</p>
+                </div>
+              );
+            })()}
+
+            {/* 升高指标(中文+倍数) */}
+            {elevatedMetrics(detail.trigger_context).length > 0 && (
               <div>
-                <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.anomaly.description")}</div>
-                <p className="text-sm leading-relaxed text-muted">{detail.description}</p>
+                <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.anomaly.elevatedMetrics")}</div>
+                <div className="space-y-1.5">
+                  {elevatedMetrics(detail.trigger_context).slice(0, 8).map((m) => (
+                    <div key={m.name} className="flex items-center justify-between rounded-md border border-line px-3 py-1.5 text-sm">
+                      <span className="text-ink">{metricCn(m.name)}</span>
+                      <span className="tabular-nums text-muted">
+                        {m.current} <span className="text-faint">(基线 {m.baseline.toFixed(2)})</span>{" "}
+                        <span className="font-semibold text-danger">×{m.ratio.toFixed(1)}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-            <div>
-              <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.anomaly.triggerContext")}</div>
-              <pre className="overflow-x-auto rounded-control bg-surface-muted p-3 font-mono text-xs text-ink whitespace-pre-wrap break-all">
+
+            {/* 原始上下文折叠(给深度排查) */}
+            <details>
+              <summary className="cursor-pointer text-sm font-medium text-muted hover:text-ink">{t("detection.anomaly.triggerContext")}</summary>
+              <pre className="mt-2 overflow-x-auto rounded-control bg-surface-muted p-3 font-mono text-xs text-ink whitespace-pre-wrap break-all">
                 {renderContext(detail.trigger_context)}
               </pre>
-            </div>
+            </details>
           </div>
         )}
       </Drawer>

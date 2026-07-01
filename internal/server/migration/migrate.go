@@ -188,6 +188,11 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("回填规则 effective_at 失败", zap.Error(err))
 	}
 
+	// 种入内置多步攻击链(序列)规则：序列引擎已实现但表空,补齐 IOA 攻击链检测
+	if err := seedBuiltinSequenceRules(db, logger); err != nil {
+		logger.Warn("内置序列规则种入失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
 	return nil
 }

@@ -98,6 +98,10 @@ type Service struct {
 	connections map[string]*Connection
 	connMu      sync.RWMutex
 
+	// 连接即推钩子:agent 注册成功后异步触发(如推送 IOC/规则全量,补齐版本门控广播的漏推)。
+	// 启动期一次性注册,运行时不改,读无需锁。
+	connectHooks []func(agentID string)
+
 	// 优雅关闭标志：Server 自身重启时跳过离线通知，避免假告警
 	shutdownFlag atomic.Bool
 
@@ -1702,6 +1706,16 @@ func (s *Service) registerConnection(agentID string, conn *Connection) {
 	}
 
 	s.connections[agentID] = conn
+
+	// 连接即推:补齐 IOC/规则等版本门控广播对新连/重连 agent 的漏推。
+	for _, h := range s.connectHooks {
+		go h(agentID)
+	}
+}
+
+// OnAgentConnect 注册连接即推钩子(启动期调用)
+func (s *Service) OnAgentConnect(fn func(agentID string)) {
+	s.connectHooks = append(s.connectHooks, fn)
 }
 
 // checkAndSendAgentOnlineNotification 检查并发送 Agent 上线恢复通知

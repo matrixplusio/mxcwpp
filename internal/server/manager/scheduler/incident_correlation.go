@@ -30,12 +30,37 @@ var attckTacticOrder = map[string]int{
 
 var severityRank = map[string]int{"critical": 4, "high": 3, "medium": 2, "low": 1}
 
+// attackChainCategory 攻击链(序列)命中的告警分类，与 celengine.AttackChainCategory 一致。
+const attackChainCategory = "attack_chain"
+
 // incidentAlert 是关联用的告警精简视图。
 type incidentAlert struct {
 	ID          uint
 	Severity    string
 	RiskScore   float64
 	ATTCKTactic string
+	Category    string
+}
+
+// distinctCategoryCount 统计成员告警的不同分类数，作为攻击阶段数的回退度量。
+func distinctCategoryCount(alerts []incidentAlert) int {
+	seen := map[string]struct{}{}
+	for _, a := range alerts {
+		if a.Category != "" {
+			seen[a.Category] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
+// hasAttackChain 成员中是否含攻击链(多步关联)命中 —— 单条即视为强 IOA 信号。
+func hasAttackChain(alerts []incidentAlert) bool {
+	for _, a := range alerts {
+		if a.Category == attackChainCategory {
+			return true
+		}
+	}
+	return false
 }
 
 // orderTactics 去重 + 按 kill-chain 排序战术 ID。
@@ -67,16 +92,20 @@ func orderTactics(raw []string) []string {
 	return out
 }
 
-// isIncidentWorthy 判断一组告警是否够成事件：跨多战术(攻击链) 或 告警数达阈值。
-func isIncidentWorthy(alertCount, tacticCount int) bool {
-	return tacticCount >= incidentMinTactics || alertCount >= incidentMinAlerts
+// isIncidentWorthy 判断一组告警是否够成事件：跨多战术 / 告警数达阈值 / 含攻击链命中。
+// 攻击链是多步关联的高置信检测，单条即足以成事件(无需再凑战术或告警数)。
+func isIncidentWorthy(alertCount, tacticCount int, hasChain bool) bool {
+	return hasChain || tacticCount >= incidentMinTactics || alertCount >= incidentMinAlerts
 }
 
-// aggregateRisk 聚合风险：成员最高分，跨 ≥2 战术(攻击链推进)再 ×1.2，封顶 100。
-func aggregateRisk(maxRisk float64, tacticCount int) float64 {
+// aggregateRisk 聚合风险：成员最高分，跨 ≥2 战术(攻击链推进)×1.2，含攻击链命中再 ×1.3，封顶 100。
+func aggregateRisk(maxRisk float64, tacticCount int, hasChain bool) float64 {
 	r := maxRisk
 	if tacticCount >= incidentMinTactics {
 		r *= 1.2
+	}
+	if hasChain {
+		r *= 1.3
 	}
 	if r > incidentMultiBoostCap {
 		r = incidentMultiBoostCap
@@ -152,7 +181,7 @@ func processIncidentCorrelation(db *gorm.DB, logger *zap.Logger) {
 func upsertIncidentForHost(db *gorm.DB, logger *zap.Logger, hostID string, cutoff model.LocalTime) bool {
 	var rows []incidentAlert
 	if err := db.Model(&model.Alert{}).
-		Select("id, severity, risk_score, attck_tactic").
+		Select("id, severity, risk_score, attck_tactic, category").
 		Where("host_id = ? AND status = ? AND last_seen_at >= ?", hostID, model.AlertStatusActive, cutoff).
 		Scan(&rows).Error; err != nil {
 		logger.Warn("Incident 关联查询告警失败", zap.String("host_id", hostID), zap.Error(err))
@@ -162,8 +191,9 @@ func upsertIncidentForHost(db *gorm.DB, logger *zap.Logger, hostID string, cutof
 		return false
 	}
 
+	chain := hasAttackChain(rows)
 	maxSeverity, maxRisk, tactics, alertIDs := summarizeIncident(rows)
-	if !isIncidentWorthy(len(rows), len(tactics)) {
+	if !isIncidentWorthy(len(rows), len(tactics), chain) {
 		return false
 	}
 
@@ -179,8 +209,16 @@ func upsertIncidentForHost(db *gorm.DB, logger *zap.Logger, hostID string, cutof
 	db.Model(&model.Host{}).Select("hostname").Where("host_id = ?", hostID).Scan(&hostname)
 
 	now := model.ToLocalTime(time.Now())
-	risk := aggregateRisk(maxRisk, len(tactics))
-	title := fmt.Sprintf("主机 %s 检测到 %d 阶段攻击链(%d 告警)", hostnameOr(hostname, hostID), len(tactics), len(rows))
+	risk := aggregateRisk(maxRisk, len(tactics), chain)
+	// 阶段数优先用 ATT&CK 战术数；战术为空时回退用告警分类种类数（更可靠地反映攻击面）
+	stageCount := len(tactics)
+	if stageCount == 0 {
+		stageCount = distinctCategoryCount(rows)
+	}
+	title := fmt.Sprintf("主机 %s 检测到 %d 阶段攻击(%d 告警)", hostnameOr(hostname, hostID), stageCount, len(rows))
+	if chain {
+		title += "·含攻击链"
+	}
 
 	var existing model.Incident
 	err := db.Where("host_id = ? AND status = ?", hostID, model.IncidentStatusActive).First(&existing).Error

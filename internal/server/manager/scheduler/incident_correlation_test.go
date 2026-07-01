@@ -27,21 +27,24 @@ func TestIsIncidentWorthy(t *testing.T) {
 		{5, 0, true},
 	}
 	for _, c := range cases {
-		if got := isIncidentWorthy(c.alerts, c.tactics); got != c.want {
+		if got := isIncidentWorthy(c.alerts, c.tactics, false); got != c.want {
 			t.Errorf("isIncidentWorthy(a=%d,t=%d)=%v want %v", c.alerts, c.tactics, got, c.want)
 		}
 	}
 }
 
 func TestAggregateRisk_MultiTacticBoostAndCap(t *testing.T) {
-	if r := aggregateRisk(50, 1); r != 50 {
+	if r := aggregateRisk(50, 1, false); r != 50 {
 		t.Errorf("单战术不 boost: %v want 50", r)
 	}
-	if r := aggregateRisk(50, 2); r != 60 { // 50*1.2
+	if r := aggregateRisk(50, 2, false); r != 60 { // 50*1.2
 		t.Errorf("多战术 boost: %v want 60", r)
 	}
-	if r := aggregateRisk(90, 3); r != 100 { // 90*1.2=108 封顶 100
+	if r := aggregateRisk(90, 3, false); r != 100 { // 90*1.2=108 封顶 100
 		t.Errorf("封顶: %v want 100", r)
+	}
+	if r := aggregateRisk(50, 1, true); r != 65 { // 50*1.3 攻击链 boost
+		t.Errorf("攻击链 boost: %v want 65", r)
 	}
 }
 

@@ -297,6 +297,16 @@ func (h *HostsHandler) GetHost(c *gin.Context) {
 		"baseline_results": results,
 	}
 
+	// 基线评分（与 ListHosts 同源：scoreCache 基于 scan_results 加权算分，5min 缓存）
+	if h.scoreCache != nil {
+		if score, err := h.scoreCache.GetHostScore(hostID); err != nil {
+			h.logger.Warn("计算主机基线得分失败", zap.String("host_id", hostID), zap.Error(err))
+		} else if score != nil {
+			responseData["baseline_score"] = score.BaselineScore
+			responseData["baseline_pass_rate"] = score.PassRate
+		}
+	}
+
 	// 添加监控数据
 	if latestMetric.ID > 0 {
 		if latestMetric.CPUUsage != nil {
