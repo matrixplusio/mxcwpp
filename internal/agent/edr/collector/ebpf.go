@@ -591,24 +591,8 @@ func (c *ebpfCollector) decodeFileEvent(raw []byte) (*event.Event, error) {
 	evt.SetField("comm", comm)
 	evt.SetField("ktime_ns", fmt.Sprintf("%d", fe.StartTs))
 
-	// FIM 上下文增强:谁改的(username + 父进程 exe)/谁登录的(login_uid)。
-	if name := usernameFromUID(fe.Uid); name != "" {
-		evt.SetField("username", name)
-	}
-	if pexe := readProcExe(int(fe.Ppid)); pexe != "" {
-		evt.SetField("parent_exe", pexe)
-	}
-	if lu := readLoginUID(int(fe.Tgid)); lu != "" {
-		evt.SetField("login_uid", lu)
-		if lname := usernameFromUID(parseUID(lu)); lname != "" {
-			evt.SetField("login_user", lname)
-		}
-	}
-	// 改了什么:敏感文件(sshd/sudoers/passwd 等)记内容哈希 + 大小,篡改取证。
-	if hash, size := sensitiveFileHash(filePath); hash != "" {
-		evt.SetField("content_hash", hash)
-		evt.SetField("file_size", fmt.Sprintf("%d", size))
-	}
+	// FIM 上下文增强:谁改的(username+父进程)/谁登录的(login_uid)/改了什么(敏感文件哈希)。
+	enrichFileEventContext(evt, int(fe.Tgid), fe.Uid, int(fe.Ppid), filePath)
 
 	if fe.InContainer == 1 {
 		evt.SetField("in_container", "true")

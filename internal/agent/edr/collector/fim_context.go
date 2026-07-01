@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/event"
 )
 
 // parseUID 将数字字符串解析为 uid,失败返回 0。
@@ -53,6 +55,63 @@ func readLoginUID(pid int) string {
 		return ""
 	}
 	return s
+}
+
+// readProcUIDPPID 从 /proc/<pid>/status 解析真实 uid 与 ppid(fanotify 事件只带 pid,需补)。
+// ok=false 表示进程已退出/读不到 —— 此时不可把 uid 当 0(root),调用方应跳过。
+func readProcUIDPPID(pid int) (uid uint32, ppid int, ok bool) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0, 0, false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "Uid:") {
+			f := strings.Fields(line)
+			if len(f) >= 2 {
+				uid = parseUID(f[1]) // 第一列是 real uid
+			}
+		} else if strings.HasPrefix(line, "PPid:") {
+			f := strings.Fields(line)
+			if len(f) >= 2 {
+				if v, e := strconv.Atoi(f[1]); e == nil {
+					ppid = v
+				}
+			}
+		}
+	}
+	return uid, ppid, true
+}
+
+// enrichFileEventContext 给文件事件补 FIM 溯源上下文(username/parent_exe/login_uid/敏感文件哈希),
+// eBPF 与 fanotify 两条采集路径共用。uid/ppid 为 0 (fanotify 只带 pid) 时从 /proc/<pid> 兜底;
+// 兜底读失败(短命进程已退出)则不硬设 root,只补能拿到的字段。
+func enrichFileEventContext(evt *event.Event, pid int, uid uint32, ppid int, filePath string) {
+	haveActor := true
+	if uid == 0 && ppid == 0 && pid > 0 {
+		var ok bool
+		uid, ppid, ok = readProcUIDPPID(pid)
+		haveActor = ok
+	}
+	if haveActor {
+		if name := usernameFromUID(uid); name != "" {
+			evt.SetField("username", name)
+		}
+		if ppid > 0 {
+			if pexe := readProcExe(ppid); pexe != "" {
+				evt.SetField("parent_exe", pexe)
+			}
+		}
+	}
+	if lu := readLoginUID(pid); lu != "" {
+		evt.SetField("login_uid", lu)
+		if lname := usernameFromUID(parseUID(lu)); lname != "" {
+			evt.SetField("login_user", lname)
+		}
+	}
+	if hash, size := sensitiveFileHash(filePath); hash != "" {
+		evt.SetField("content_hash", hash)
+		evt.SetField("file_size", fmt.Sprintf("%d", size))
+	}
 }
 
 // sensitiveFilePrefixes 敏感文件路径前缀:仅对这些路径做内容哈希(防篡改取证),
