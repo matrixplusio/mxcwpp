@@ -247,18 +247,28 @@ func (h *HostVulnPreCheckHandler) dispatchPreCheck(hv *model.HostVulnerability) 
 		First(&vuln, hv.VulnID).Error; err != nil {
 		return fmt.Errorf("查询 vuln 失败: %w", err)
 	}
-	if vuln.Component == "" {
-		// 标 not_in_repo，避免反复 dispatch
+	// 优先用 per-host 匹配到的真实包名(matched_component)；老数据空时回退 CVE 级 component。
+	// 避免用塌缩的错包名(如 glibc-langpack-el)去 precheck 主机真实装的 glibc。
+	component := hv.MatchedComponent
+	if component == "" {
+		component = vuln.Component
+	}
+	if component == "" {
+		// 标 failed，避免反复 dispatch
 		h.db.Model(hv).Updates(map[string]any{
 			"precheck_status":     model.PreCheckStatusFailed,
-			"precheck_message":    "vuln.component 为空，无法 pre-check",
+			"precheck_message":    "component 为空，无法 pre-check",
 			"precheck_checked_at": model.Now(),
 		})
-		return fmt.Errorf("vuln.component 为空")
+		return fmt.Errorf("component 为空")
 	}
 
-	// 优先 advisory_packages 按 host OS 取 fixed_version，兜底退回 vulnerabilities.fixed_version
-	fixedVer := biz.ResolveFixedVersionForHost(h.db, vuln.CveID, vuln.Component, hv.HostID)
+	// fixed_version 优先 per-host matched_fixed_version；再 advisory_packages 按 host OS 解析；
+	// 兜底退回 vulnerabilities.fixed_version。
+	fixedVer := hv.MatchedFixedVersion
+	if fixedVer == "" {
+		fixedVer = biz.ResolveFixedVersionForHost(h.db, vuln.CveID, component, hv.HostID)
+	}
 	if fixedVer == "" {
 		fixedVer = vuln.FixedVersion
 	}
@@ -268,7 +278,7 @@ func (h *HostVulnPreCheckHandler) dispatchPreCheck(hv *model.HostVulnerability) 
 	payload := preCheckTaskPayload{
 		RequestID:              requestID,
 		HostVulnID:             hv.ID,
-		Component:              vuln.Component,
+		Component:              component,
 		FixedVersion:           fixedVer,
 		CheckAffectedProcesses: vuln.EffectiveCategory() == model.VulnCategorySharedLib,
 	}
