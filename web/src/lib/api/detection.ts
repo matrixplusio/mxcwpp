@@ -9,6 +9,7 @@ import type {
   ThreatIntelIocList,
   ThreatIntelCheckResult,
   LocalIOC,
+  IOCSourceInfo,
   IntelSyncSchedule,
   IntelSyncExecution,
   Storyline,
@@ -63,6 +64,7 @@ export const detectionApi = {
   syncThreatIntel: () => post<{ message: string }>("/threat-intel/sync"),
   // 自有情报库(独立于外部同步)
   localIocStats: () => get<ThreatIntelStats>("/threat-intel/local-iocs/stats"),
+  iocSource: (type: string, value: string) => get<IOCSourceInfo>("/threat-intel/ioc-source", { type, value }),
   listLocalIocs: (params: { type?: string; keyword?: string; page: number; page_size: number }) => get<Paged<LocalIOC>>("/threat-intel/local-iocs", params),
   createLocalIoc: (body: { ioc_type: string; value: string; severity?: string; description?: string }) => post<void>("/threat-intel/local-iocs", body),
   deleteLocalIoc: (id: number) => del<void>(`/threat-intel/local-iocs/${id}`),

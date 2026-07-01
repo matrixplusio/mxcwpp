@@ -46,8 +46,21 @@ const CATEGORY_META: Record<string, { name: string; meaning: string; action: str
 };
 const catMeta = (c: string) => CATEGORY_META[c] ?? { name: c || "未分类", meaning: "检测到可疑行为。", action: "核查该主机近期行为是否合法。" };
 
+// 从 actual 取字段值
+function fieldOf(actual: string | undefined, key: string): string {
+  if (!actual) return "";
+  try {
+    const o = JSON.parse(actual);
+    return o[key] != null ? String(o[key]) : "";
+  } catch {
+    return "";
+  }
+}
+
 // 命中字段 → 格式化证据(谁/什么进程/命令/文件/IP),取代裸 JSON
 const EVIDENCE_FIELDS: Array<[string, string]> = [
+  ["ioc_value", "命中情报IOC"],
+  ["ioc_type", "IOC类型"],
   ["event_type", "事件类型"],
   ["exe", "进程"],
   ["cmdline", "命令行"],
@@ -130,6 +143,15 @@ export default function ThreatAlertsPage() {
 
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<Alert | null>(null);
+
+  // 命中情报溯源:告警若含 ioc_match,查该 IOC 来自自有库还是外部 feed
+  const iocValue = fieldOf(detail?.actual, "ioc_value");
+  const iocType = fieldOf(detail?.actual, "ioc_type");
+  const { data: iocSource } = useQuery({
+    queryKey: ["ioc-source", iocType, iocValue],
+    queryFn: () => detectionApi.iocSource(iocType, iocValue),
+    enabled: !!iocValue && !!iocType,
+  });
   const [markingFp, setMarkingFp] = useState<Alert | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["threat-alerts"] });
@@ -281,6 +303,19 @@ export default function ThreatAlertsPage() {
                 </div>
               );
             })()}
+
+            {/* 威胁情报命中溯源:命中的是哪条 IOC、来自哪里 */}
+            {iocSource?.hit && (
+              <div className="rounded-md border border-danger/30 bg-danger/5 p-4">
+                <div className="text-sm font-semibold text-danger">{t("detection.threatAlerts.iocHitTitle")}</div>
+                <div className="mt-1.5 space-y-1 text-sm">
+                  <div className="flex gap-3"><span className="w-16 shrink-0 text-muted">{t("detection.threatAlerts.iocValue")}</span><span className="break-all font-mono text-xs text-ink">{iocValue} <span className="text-faint">({iocType})</span></span></div>
+                  <div className="flex gap-3"><span className="w-16 shrink-0 text-muted">{t("detection.threatAlerts.iocOrigin")}</span><span className="text-ink">{iocSource.origin === "local" ? (iocSource.source === "tp_extract" ? t("detection.threatAlerts.originTp") : t("detection.threatAlerts.originManual")) : t("detection.threatAlerts.originExternal")}</span></div>
+                  {iocSource.description && <div className="flex gap-3"><span className="w-16 shrink-0 text-muted">{t("detection.threatAlerts.iocDesc")}</span><span className="text-muted">{iocSource.description}</span></div>}
+                  {iocSource.ref_id && <div className="flex gap-3"><span className="w-16 shrink-0 text-muted">{t("detection.threatAlerts.iocRef")}</span><span className="font-mono text-xs text-faint">{iocSource.ref_id}</span></div>}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
             <Field label={t("detection.threatAlerts.colTitle")} value={detail.title} />

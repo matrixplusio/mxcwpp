@@ -108,6 +108,42 @@ func (t *ThreatIntel) ListLocalIOCs(iocType, keyword string, page, pageSize int)
 	return out, total, err
 }
 
+// IOCSourceInfo 命中 IOC 的来源溯源
+type IOCSourceInfo struct {
+	Hit         bool   `json:"hit"`
+	Origin      string `json:"origin"`      // local(自有) / external(外部feed) / none
+	Source      string `json:"source"`      // tp_extract / manual(仅 local)
+	Severity    string `json:"severity"`    // 仅 local
+	Description string `json:"description"`  // 仅 local
+	RefType     string `json:"ref_type"`    // alert(仅 local tp_extract)
+	RefID       string `json:"ref_id"`      // 来源告警(仅 local tp_extract)
+}
+
+// LookupIOCSource 溯源某 IOC 命中来源:先查自有库(有完整元数据),否则查 Redis 集(外部 feed)。
+// 让"情报命中"告警可回答:命中的是哪条情报、来自哪里、为什么恶意。
+func (t *ThreatIntel) LookupIOCSource(ctx context.Context, iocType, value string) IOCSourceInfo {
+	it := normalizeIOCType(iocType)
+	value = strings.TrimSpace(value)
+	if it == "" || value == "" {
+		return IOCSourceInfo{Hit: false, Origin: "none"}
+	}
+	// 自有库(有描述/来源/关联告警)
+	var local model.LocalIOC
+	if err := t.db.Where("ioc_type = ? AND value = ? AND enabled = ?", it, value, true).First(&local).Error; err == nil {
+		return IOCSourceInfo{
+			Hit: true, Origin: "local", Source: local.Source, Severity: local.Severity,
+			Description: local.Description, RefType: local.RefType, RefID: local.RefID,
+		}
+	}
+	// 外部 feed(仅在 Redis 集里,无 per-IOC 元数据)
+	if t.redisClient != nil {
+		if hit, _ := t.redisClient.SIsMember(ctx, iocRedisKeyPrefix+it, value).Result(); hit {
+			return IOCSourceInfo{Hit: true, Origin: "external", Description: "外部威胁情报 feed"}
+		}
+	}
+	return IOCSourceInfo{Hit: false, Origin: "none"}
+}
+
 // LocalIOCStats 自有情报按类型统计
 func (t *ThreatIntel) LocalIOCStats() map[string]int64 {
 	type row struct {

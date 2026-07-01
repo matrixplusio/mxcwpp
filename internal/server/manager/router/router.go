@@ -1121,6 +1121,7 @@ func setupThreatIntelAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	router.GET("/threat-intel/sync-history", handler.GetSyncHistory)
 	// 自有情报库(独立于外部 feed):真实威胁研判提取 / 人工录入
 	router.GET("/threat-intel/local-iocs/stats", handler.GetLocalIOCStats)
+	router.GET("/threat-intel/ioc-source", handler.LookupIOCSource)
 	router.GET("/threat-intel/local-iocs", handler.ListLocalIOCs)
 	router.POST("/threat-intel/local-iocs", handler.CreateLocalIOC)
 	router.DELETE("/threat-intel/local-iocs/:id", handler.DeleteLocalIOC)

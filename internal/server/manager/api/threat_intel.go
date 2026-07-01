@@ -123,6 +123,11 @@ func (h *ThreatIntelHandler) GetLocalIOCStats(c *gin.Context) {
 	Success(c, h.service.LocalIOCStats())
 }
 
+// LookupIOCSource 溯源某 IOC 命中来源(自有/外部)
+func (h *ThreatIntelHandler) LookupIOCSource(c *gin.Context) {
+	Success(c, h.service.LookupIOCSource(c.Request.Context(), c.Query("type"), c.Query("value")))
+}
+
 // ListLocalIOCs 列出自有情报
 func (h *ThreatIntelHandler) ListLocalIOCs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
