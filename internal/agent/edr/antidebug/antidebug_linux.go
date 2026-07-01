@@ -55,13 +55,16 @@ func SelfProtect(logger *zap.Logger) error {
 		logger.Info("PR_SET_NO_NEW_PRIVS=1 已设置 (禁后续 exec 提权)")
 	}
 
-	// PTRACE_TRACEME 自挂
-	if err := ptraceTraceMe(); err != nil {
-		logger.Warn("PTRACE_TRACEME 失败 (yama ptrace_scope=0 时一般可用)", zap.Error(err))
-		errs = append(errs, fmt.Errorf("traceme: %w", err))
-	} else {
-		logger.Info("PTRACE_TRACEME 已自挂 (外部 debugger 无法 attach)")
-	}
+	// PTRACE_TRACEME 自挂 — 暂时禁用，与 watchdog child 死锁：
+	// 父进程自挂 ptrace → 停在 ptrace_stop → 发不了心跳 → child 永远等不到。
+	// 修复方向：watchdog 应在 ptrace tracer 角色下主动 CONT 父进程，
+	// 或改用 seccomp filter 替代 ptrace 防 attach。
+	// if err := ptraceTraceMe(); err != nil {
+	// 	logger.Warn("PTRACE_TRACEME 失败 (yama ptrace_scope=0 时一般可用)", zap.Error(err))
+	// 	errs = append(errs, fmt.Errorf("traceme: %w", err))
+	// } else {
+	// 	logger.Info("PTRACE_TRACEME 已自挂 (外部 debugger 无法 attach)")
+	// }
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
