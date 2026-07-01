@@ -257,6 +257,7 @@ var (
 		&VulnBulletin{},
 		&IOCSnapshot{},
 		&LocalIOC{},
+		&IOCEntry{},
 		&IntelSyncSchedule{},
 		&IntelSyncExecution{},
 		&AgentRule{},

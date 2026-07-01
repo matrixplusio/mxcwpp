@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
@@ -142,12 +143,8 @@ func (t *ThreatIntel) SyncIOCs(ctx context.Context) error {
 	return err
 }
 
-// doSyncIOCs 遍历内置 + 自定义 Feed 列表，逐个拉取并写入 Redis
+// doSyncIOCs 遍历内置 + 自定义 Feed 列表，逐个拉取并持久化到 ioc_entries(DB 为真源;Redis 可选缓存)
 func (t *ThreatIntel) doSyncIOCs(ctx context.Context) error {
-	if t.redisClient == nil {
-		return fmt.Errorf("Redis 不可用")
-	}
-
 	// Merge built-in + custom feeds.
 	allFeeds := make([]feedSource, 0, len(builtinFeeds)+len(t.customFeeds))
 	allFeeds = append(allFeeds, builtinFeeds...)
@@ -199,18 +196,18 @@ func (t *ThreatIntel) doSyncIOCs(ctx context.Context) error {
 		}
 	}
 
-	if totalCount == 0 && lastErr != nil {
-		return fmt.Errorf("所有 Feed 拉取失败，最后错误: %w", lastErr)
-	}
-
 	t.logger.Info("威胁情报同步完成", zap.Int("total", totalCount))
 
-	// 合并自有情报(真实威胁研判提取 / 人工录入):feed set 有 TTL,每次同步需重新灌入。
-	t.loadLocalIOCsToRedis(ctx)
-
-	// Export snapshot to DB for AgentCenter to broadcast to agents.
+	// 关键(持久化韧性):即使本轮 feed 全失败,也要清理过期 + 从 DB 存量重建快照/Redis,
+	// 保证外部源断供时仍用最后已知集继续检测,不因一次拉取失败让匹配集变空。
+	t.cleanupExpiredIOCs(ctx)
 	if err := t.exportSnapshot(ctx); err != nil {
 		t.logger.Warn("IOC 快照导出失败", zap.Error(err))
+	}
+
+	// feed 全失败仍回报错误(供 UI 显示同步状态),但快照已用 DB 存量重建。
+	if totalCount == 0 && lastErr != nil {
+		return fmt.Errorf("所有 Feed 拉取失败(已用 DB 存量重建快照)，最后错误: %w", lastErr)
 	}
 
 	return nil
@@ -236,43 +233,31 @@ func (t *ThreatIntel) fetchOTX(ctx context.Context) (int, error) {
 		}
 
 		// Map OTX types to our IOC types.
-		var redisType string
+		var iocT string
 		switch iocType {
 		case "IPv4":
-			redisType = "ip"
+			iocT = "ip"
 		case "URL":
-			redisType = "url"
+			iocT = "url"
 		case "FileHash-MD5":
-			redisType = "hash"
+			iocT = "hash"
 		}
 
-		key := iocRedisKeyPrefix + redisType
-		pipe := t.redisClient.Pipeline()
-		count := 0
-
+		values := make([]string, 0, 4096)
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
 			if line == "" || strings.HasPrefix(line, "#") {
 				continue
 			}
-			pipe.SAdd(ctx, key, line)
-			count++
-			if count%1000 == 0 {
-				if _, err := pipe.Exec(ctx); err != nil {
-					resp.Body.Close()
-					return totalCount, err
-				}
-				pipe = t.redisClient.Pipeline()
-			}
+			values = append(values, line)
 		}
 		resp.Body.Close()
 
-		pipe.Expire(ctx, key, iocTTL)
-		if _, err := pipe.Exec(ctx); err != nil {
+		count, err := t.upsertIOCEntries(ctx, iocT, "AlienVault OTX", values)
+		if err != nil {
 			return totalCount, err
 		}
-
 		totalCount += count
 		t.logger.Info("OTX Feed 拉取完成",
 			zap.String("type", iocType),
@@ -306,51 +291,40 @@ func (t *ThreatIntel) fetchMISP(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("MISP HTTP %d", resp.StatusCode)
 	}
 
-	// MISP text output: one IOC per line.
-	pipe := t.redisClient.Pipeline()
-	count := 0
-
+	// MISP text output: one IOC per line;按类型分桶后批量 upsert。
+	byType := map[string][]string{"ip": nil, "hash": nil, "url": nil}
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
-
-		// Auto-detect IOC type.
-		var redisType string
+		var iocT string
 		switch {
 		case strings.Contains(line, "://"):
-			redisType = "url"
+			iocT = "url"
 		case len(line) == 32 && !strings.Contains(line, "."):
-			redisType = "hash"
+			iocT = "hash"
 		default:
-			redisType = "ip"
+			iocT = "ip"
 		}
-
-		key := iocRedisKeyPrefix + redisType
-		pipe.SAdd(ctx, key, line)
-		count++
-		if count%1000 == 0 {
-			if _, err := pipe.Exec(ctx); err != nil {
-				return count, err
-			}
-			pipe = t.redisClient.Pipeline()
-		}
+		byType[iocT] = append(byType[iocT], line)
 	}
 
-	for _, iocType := range []string{"ip", "hash", "url"} {
-		pipe.Expire(ctx, iocRedisKeyPrefix+iocType, iocTTL)
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return count, err
+	count := 0
+	for iocT, values := range byType {
+		n, err := t.upsertIOCEntries(ctx, iocT, "MISP", values)
+		if err != nil {
+			return count, err
+		}
+		count += n
 	}
 
 	t.logger.Info("MISP Feed 拉取完成", zap.Int("count", count))
 	return count, nil
 }
 
-// fetchFeed 拉取单个 Feed 并写入 Redis Set
+// fetchFeed 拉取单个 Feed 并 upsert 持久化到 ioc_entries(DB 为真源;Redis/snapshot 事后从 DB 派生)。
 func (t *ThreatIntel) fetchFeed(ctx context.Context, feed feedSource) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", feed.URL, nil)
 	if err != nil {
@@ -367,10 +341,7 @@ func (t *ThreatIntel) fetchFeed(ctx context.Context, feed feedSource) (int, erro
 		return 0, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	key := iocRedisKeyPrefix + feed.IOCType
-	pipe := t.redisClient.Pipeline()
-	count := 0
-
+	values := make([]string, 0, 4096)
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -378,29 +349,74 @@ func (t *ThreatIntel) fetchFeed(ctx context.Context, feed feedSource) (int, erro
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		pipe.SAdd(ctx, key, line)
-		count++
+		values = append(values, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("读取 Feed 响应失败: %w", err)
+	}
 
-		// 每 1000 条执行一次 pipeline
-		if count%1000 == 0 {
-			if _, err := pipe.Exec(ctx); err != nil {
-				return count, fmt.Errorf("Redis pipeline 写入失败: %w", err)
+	return t.upsertIOCEntries(ctx, feed.IOCType, feed.Name, values)
+}
+
+// upsertIOCEntries 批量 upsert 外部 IOC 到 ioc_entries。命中已存在则刷新 last_seen/expires_at/enabled(aging),
+// 新条目设 first_seen。分批 500 条避免超大 SQL。
+func (t *ThreatIntel) upsertIOCEntries(ctx context.Context, iocType, source string, values []string) (int, error) {
+	if len(values) == 0 {
+		return 0, nil
+	}
+	now := time.Now()
+	exp := now.Add(model.IOCTypeTTL(iocType))
+	const chunk = 500
+
+	total := 0
+	seen := make(map[string]struct{}, len(values))
+	batch := make([]model.IOCEntry, 0, chunk)
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		err := t.db.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "ioc_type"}, {Name: "value"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{
+				"last_seen":  now,
+				"expires_at": exp,
+				"enabled":    true,
+				"source":     source,
+				"updated_at": now,
+			}),
+		}).Create(&batch).Error
+		if err != nil {
+			return err
+		}
+		total += len(batch)
+		batch = batch[:0]
+		return nil
+	}
+
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" || len(v) > 512 {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		batch = append(batch, model.IOCEntry{
+			IOCType: iocType, Value: v, Source: source, Severity: "high",
+			FirstSeen: now, LastSeen: now, ExpiresAt: &exp, Enabled: true,
+		})
+		if len(batch) >= chunk {
+			if err := flush(); err != nil {
+				return total, err
 			}
-			pipe = t.redisClient.Pipeline()
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return count, fmt.Errorf("读取 Feed 响应失败: %w", err)
+	if err := flush(); err != nil {
+		return total, err
 	}
-
-	// 刷新剩余 + 设置 TTL
-	pipe.Expire(ctx, key, iocTTL)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return count, fmt.Errorf("Redis 最终写入失败: %w", err)
-	}
-
-	return count, nil
+	return total, nil
 }
 
 // GetLatestSyncStatus 查询最近一条同步记录
@@ -455,27 +471,15 @@ type iocData struct {
 // exportSnapshot reads all IOC data from Redis, computes diff against previous
 // snapshot, and writes a new IOCSnapshot record for AgentCenter to distribute.
 func (t *ThreatIntel) exportSnapshot(ctx context.Context) error {
-	if t.redisClient == nil {
-		return fmt.Errorf("Redis 不可用")
+	// 1. 从 DB 读全量有效 IOC:外部持久化(ioc_entries,未过期)∪ 自有情报(local_iocs)。
+	//    DB 为真源 → feed 断供也不丢;Redis 仅作派生缓存。
+	current, err := t.buildIOCDataFromDB(ctx)
+	if err != nil {
+		return err
 	}
 
-	// 1. Read all IOC sets from Redis.
-	current := iocData{}
-	for _, entry := range []struct {
-		key  string
-		dest *[]string
-	}{
-		{iocRedisKeyPrefix + "ip", &current.IP},
-		{iocRedisKeyPrefix + "hash", &current.Hash},
-		{iocRedisKeyPrefix + "url", &current.URL},
-	} {
-		members, err := t.redisClient.SMembers(ctx, entry.key).Result()
-		if err != nil {
-			return fmt.Errorf("读取 Redis Set %s 失败: %w", entry.key, err)
-		}
-		sort.Strings(members)
-		*entry.dest = members
-	}
+	// 用 DB 有效集重建 Redis 缓存(CheckIOC / 兼容用;DB 才是真源)。
+	t.rebuildRedisFromDB(ctx, current)
 
 	// 2. Serialize full data.
 	fullJSON, err := json.Marshal(current)
@@ -543,6 +547,103 @@ func (t *ThreatIntel) exportSnapshot(ctx context.Context) error {
 		zap.Int("removed", len(diffRemoved.IP)+len(diffRemoved.Hash)+len(diffRemoved.URL)),
 	)
 	return nil
+}
+
+// buildIOCDataFromDB 从 DB 组装有效 IOC 集:外部持久化(ioc_entries,enabled 且未过期)∪ 自有(local_iocs,enabled)。
+// 快照/agent 匹配当前支持 ip/hash/url;domain 暂不下发(engine stage_ioc 未匹配域名)。
+func (t *ThreatIntel) buildIOCDataFromDB(ctx context.Context) (iocData, error) {
+	out := iocData{}
+	now := time.Now()
+	type row struct {
+		IOCType string
+		Value   string
+	}
+
+	var ext []row
+	if err := t.db.WithContext(ctx).Model(&model.IOCEntry{}).
+		Select("ioc_type", "value").
+		Where("enabled = ? AND (expires_at IS NULL OR expires_at > ?)", true, now).
+		Find(&ext).Error; err != nil {
+		return out, fmt.Errorf("读取 ioc_entries 失败: %w", err)
+	}
+
+	var loc []row
+	if err := t.db.WithContext(ctx).Model(&model.LocalIOC{}).
+		Select("ioc_type", "value").Where("enabled = ?", true).Find(&loc).Error; err != nil {
+		return out, fmt.Errorf("读取 local_iocs 失败: %w", err)
+	}
+
+	seen := make(map[string]struct{}, len(ext)+len(loc))
+	add := func(iocType, value string) {
+		k := iocType + "|" + value
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		switch iocType {
+		case "ip":
+			out.IP = append(out.IP, value)
+		case "hash":
+			out.Hash = append(out.Hash, value)
+		case "url":
+			out.URL = append(out.URL, value)
+		}
+	}
+	for _, r := range ext {
+		add(r.IOCType, r.Value)
+	}
+	for _, r := range loc {
+		add(r.IOCType, r.Value)
+	}
+	sort.Strings(out.IP)
+	sort.Strings(out.Hash)
+	sort.Strings(out.URL)
+	return out, nil
+}
+
+// rebuildRedisFromDB 用 DB 有效集重建 Redis IOC set(纯派生缓存;DB 是真源)。
+func (t *ThreatIntel) rebuildRedisFromDB(ctx context.Context, data iocData) {
+	if t.redisClient == nil {
+		return
+	}
+	for _, e := range []struct {
+		typ  string
+		vals []string
+	}{{"ip", data.IP}, {"hash", data.Hash}, {"url", data.URL}} {
+		key := iocRedisKeyPrefix + e.typ
+		pipe := t.redisClient.Pipeline()
+		pipe.Del(ctx, key)
+		for i := 0; i < len(e.vals); i += 1000 {
+			end := i + 1000
+			if end > len(e.vals) {
+				end = len(e.vals)
+			}
+			args := make([]interface{}, 0, end-i)
+			for _, v := range e.vals[i:end] {
+				args = append(args, v)
+			}
+			if len(args) > 0 {
+				pipe.SAdd(ctx, key, args...)
+			}
+		}
+		pipe.Expire(ctx, key, iocTTL) // 缓存 TTL;过期后 sync 会重建,DB 不丢
+		if _, err := pipe.Exec(ctx); err != nil {
+			t.logger.Warn("重建 Redis IOC 缓存失败", zap.String("type", e.typ), zap.Error(err))
+		}
+	}
+}
+
+// cleanupExpiredIOCs 物理删除过期超 30 天的外部 IOC(bound 表大小);未过期/自有情报不动。
+func (t *ThreatIntel) cleanupExpiredIOCs(ctx context.Context) {
+	cutoff := time.Now().Add(-30 * 24 * time.Hour)
+	res := t.db.WithContext(ctx).Where("expires_at IS NOT NULL AND expires_at < ?", cutoff).Delete(&model.IOCEntry{})
+	if res.Error != nil {
+		t.logger.Warn("清理过期 IOC 失败", zap.Error(res.Error))
+		return
+	}
+	if res.RowsAffected > 0 {
+		t.logger.Info("清理过期 IOC", zap.Int64("deleted", res.RowsAffected))
+	}
 }
 
 // diffSets returns (added, removed) between old and new sorted string slices.

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
@@ -62,35 +61,6 @@ func (t *ThreatIntel) AddLocalIOC(ctx context.Context, ioc model.LocalIOC) (bool
 	return created, nil
 }
 
-// loadLocalIOCsToRedis 把所有启用的自有情报灌入 Redis(每次同步调用,因 feed set 有 TTL 会过期)。
-func (t *ThreatIntel) loadLocalIOCsToRedis(ctx context.Context) int {
-	if t.redisClient == nil {
-		return 0
-	}
-	var iocs []model.LocalIOC
-	if err := t.db.Where("enabled = ?", true).Find(&iocs).Error; err != nil {
-		t.logger.Warn("加载本地情报失败", zap.Error(err))
-		return 0
-	}
-	byType := map[string][]any{}
-	for _, i := range iocs {
-		byType[i.IOCType] = append(byType[i.IOCType], i.Value)
-	}
-	n := 0
-	for typ, vals := range byType {
-		if len(vals) == 0 {
-			continue
-		}
-		if err := t.redisClient.SAdd(ctx, iocRedisKeyPrefix+typ, vals...).Err(); err == nil {
-			n += len(vals)
-		}
-	}
-	if n > 0 {
-		t.logger.Info("本地情报已合并进 IOC 集", zap.Int("count", n))
-	}
-	return n
-}
-
 // ListLocalIOCs 分页列出自有情报(支持类型 + 值/描述关键词)
 func (t *ThreatIntel) ListLocalIOCs(iocType, keyword string, page, pageSize int) ([]model.LocalIOC, int64, error) {
 	q := t.db.Model(&model.LocalIOC{})
@@ -114,7 +84,7 @@ type IOCSourceInfo struct {
 	Origin      string `json:"origin"`      // local(自有) / external(外部feed) / none
 	Source      string `json:"source"`      // tp_extract / manual(仅 local)
 	Severity    string `json:"severity"`    // 仅 local
-	Description string `json:"description"`  // 仅 local
+	Description string `json:"description"` // 仅 local
 	RefType     string `json:"ref_type"`    // alert(仅 local tp_extract)
 	RefID       string `json:"ref_id"`      // 来源告警(仅 local tp_extract)
 }
@@ -135,7 +105,18 @@ func (t *ThreatIntel) LookupIOCSource(ctx context.Context, iocType, value string
 			Description: local.Description, RefType: local.RefType, RefID: local.RefID,
 		}
 	}
-	// 外部 feed(仅在 Redis 集里,无 per-IOC 元数据)
+	// 外部 feed:查持久化的 ioc_entries(有 per-IOC 溯源:来自哪个 feed / 首见时间 / 是否过期)。
+	var ext model.IOCEntry
+	if err := t.db.WithContext(ctx).Where("ioc_type = ? AND value = ? AND enabled = ?", it, value, true).
+		First(&ext).Error; err == nil {
+		expired := ext.ExpiresAt != nil && ext.ExpiresAt.Before(time.Now())
+		desc := fmt.Sprintf("外部威胁情报 feed:%s(首见 %s)", ext.Source, ext.FirstSeen.Format("2006-01-02"))
+		if expired {
+			desc += "（已过期）"
+		}
+		return IOCSourceInfo{Hit: !expired, Origin: "external", Source: ext.Source, Severity: ext.Severity, Description: desc}
+	}
+	// 兜底:Redis 缓存(DB 未命中但缓存可能有,罕见)
 	if t.redisClient != nil {
 		if hit, _ := t.redisClient.SIsMember(ctx, iocRedisKeyPrefix+it, value).Result(); hit {
 			return IOCSourceInfo{Hit: true, Origin: "external", Description: "外部威胁情报 feed"}
