@@ -129,6 +129,14 @@ func main() {
 					}
 					seqDetector.StartReload(ctx)
 					stages = append(stages, engine.NewSequenceStage(seqDetector, logger).WithAlertGenerator(alertGen))
+
+					// 服务端 IOC 匹配(网络事件外联 IP / hash / URL 对情报集匹配),不依赖给 agent 下发 IOC
+					iocMatcher := celengine.NewIOCMatcher(db, logger.Named("ioc"))
+					if err := iocMatcher.Reload(); err != nil {
+						logger.Warn("IOC 匹配集加载失败", zap.Error(err))
+					}
+					iocMatcher.StartReload(ctx)
+					stages = append(stages, engine.NewIOCStage(iocMatcher, alertGen, logger))
 				}
 				storyEng := storyline.NewEngine(db, logger.Named("story"))
 				stages = append(stages, engine.NewStorylineStage(storyEng, logger))
