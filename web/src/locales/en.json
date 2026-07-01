@@ -1623,7 +1623,8 @@
       "firstSeen": "First Seen",
       "lastSeen": "Last Seen",
       "desc": "Description",
-      "matched": "Matched Fields"
+      "matched": "Raw Matched Fields (JSON)",
+      "evidence": "Evidence"
     },
     "edrEvents": {
       "statTotal": "Total Events",
@@ -1687,8 +1688,10 @@
       "fieldLastSeen": "Last Seen",
       "summary": "Summary",
       "ruleNames": "Matched Rules",
+      "eventChain": "Event Chain",
+      "noEvents": "No related events",
       "resolveTitle": "Resolve Storyline",
-      "resolveConfirmDesc": "Resolve storyline \"{{id}}\"?",
+      "resolveConfirmDesc": "Mark storyline \"{{id}}\" as handled (investigated/mitigated). Status only; no active response like host isolation.",
       "resolved": "Resolved"
     },
     "rules": {

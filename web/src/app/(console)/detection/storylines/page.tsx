@@ -110,6 +110,13 @@ export default function StorylinesPage() {
   const [detail, setDetail] = useState<Storyline | null>(null);
   const [resolving, setResolving] = useState<Storyline | null>(null);
 
+  // 拉故事线完整内容(关联事件链)
+  const { data: detailData } = useQuery({
+    queryKey: ["storyline-detail", detail?.story_id],
+    queryFn: () => detectionApi.getStoryline(detail!.story_id, { page: 1, page_size: 100 }),
+    enabled: !!detail,
+  });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["storylines"] });
     queryClient.invalidateQueries({ queryKey: ["storyline-stats"] });
@@ -239,18 +246,41 @@ export default function StorylinesPage() {
               </div>
             )}
 
-            <div>
-              <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.storylines.ruleNames")}</div>
-              {ruleList(detail.rule_names).length > 0 ? (
+            {ruleList(detail.rule_names).length > 0 && (
+              <div>
+                <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.storylines.ruleNames")}</div>
                 <ul className="space-y-1">
                   {ruleList(detail.rule_names).map((name, i) => (
-                    <li key={i} className="rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">
-                      {name}
-                    </li>
+                    <li key={i} className="rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">{name}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* 关联事件链(实际内容) */}
+            <div>
+              <div className="mb-1.5 text-sm font-medium text-ink">
+                {t("detection.storylines.eventChain")} ({detailData?.events_total ?? 0})
+              </div>
+              {(detailData?.events?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted">{t("detection.storylines.noEvents")}</p>
               ) : (
-                <p className="text-sm text-muted">—</p>
+                <div className="space-y-2">
+                  {detailData!.events.map((ev) => (
+                    <div key={ev.id} className="rounded-md border border-line p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <StatusTag tone="neutral">{ev.event_type}</StatusTag>
+                        <span className="text-faint tabular-nums">{ev.timestamp}</span>
+                      </div>
+                      {ev.rule_name && <div className="mt-1 text-xs text-danger">{ev.rule_name}</div>}
+                      <div className="mt-1.5 space-y-0.5 rounded bg-surface-muted px-2 py-1.5 text-xs">
+                        {ev.exe && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">进程</span><span className="min-w-0 break-all font-mono text-ink">{ev.exe}</span></div>}
+                        {ev.pid && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">PID</span><span className="font-mono text-ink">{ev.pid}</span></div>}
+                        {ev.detail && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">详情</span><span className="min-w-0 break-all font-mono text-ink">{ev.detail}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

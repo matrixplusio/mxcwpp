@@ -45,6 +45,36 @@ const CATEGORY_META: Record<string, { name: string; meaning: string; action: str
 };
 const catMeta = (c: string) => CATEGORY_META[c] ?? { name: c || "未分类", meaning: "检测到可疑行为。", action: "核查该主机近期行为是否合法。" };
 
+// 命中字段 → 格式化证据(谁/什么进程/命令/文件/IP),取代裸 JSON
+const EVIDENCE_FIELDS: Array<[string, string]> = [
+  ["event_type", "事件类型"],
+  ["exe", "进程"],
+  ["cmdline", "命令行"],
+  ["comm", "进程名"],
+  ["file_path", "文件"],
+  ["remote_addr", "外联IP"],
+  ["remote_port", "端口"],
+  ["dns_server", "DNS"],
+  ["pid", "PID"],
+  ["ppid", "父PID"],
+  ["parent_exe", "父进程"],
+  ["cwd", "工作目录"],
+  ["uid", "UID"],
+  ["username", "用户"],
+  ["agent_mitre_technique", "ATT&CK技术"],
+];
+function evidenceOf(actual: string | undefined): Array<{ k: string; v: string }> {
+  if (!actual) return [];
+  let o: Record<string, unknown>;
+  try { o = JSON.parse(actual); } catch { return []; }
+  const out: Array<{ k: string; v: string }> = [];
+  for (const [key, label] of EVIDENCE_FIELDS) {
+    const val = o[key];
+    if (val !== undefined && val !== null && String(val) !== "") out.push({ k: label, v: String(val) });
+  }
+  return out;
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-3 text-sm">
@@ -259,11 +289,28 @@ export default function ThreatAlertsPage() {
             <Field label={t("detection.threatAlerts.firstSeen")} value={<span className="tabular-nums">{detail.first_seen_at}</span>} />
             <Field label={t("detection.threatAlerts.lastSeen")} value={<span className="tabular-nums">{detail.last_seen_at}</span>} />
             {detail.description && <Field label={t("detection.threatAlerts.desc")} value={detail.description} />}
+            {(() => {
+              const ev = evidenceOf(detail.actual);
+              if (ev.length === 0) return null;
+              return (
+                <div>
+                  <div className="mb-1.5 mt-2 text-sm font-medium text-ink">{t("detection.threatAlerts.evidence")}</div>
+                  <div className="space-y-1 rounded-control bg-surface-muted p-3">
+                    {ev.map((e) => (
+                      <div key={e.k} className="flex gap-3 text-sm">
+                        <span className="w-20 shrink-0 text-muted">{e.k}</span>
+                        <span className="min-w-0 break-all font-mono text-xs text-ink">{e.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {detail.actual && (
-              <div>
-                <div className="mb-1.5 mt-2 text-sm font-medium text-ink">{t("detection.threatAlerts.matched")}</div>
-                <pre className="overflow-x-auto rounded-control bg-surface-muted p-3 font-mono text-xs text-ink whitespace-pre-wrap break-all">{detail.actual}</pre>
-              </div>
+              <details>
+                <summary className="cursor-pointer text-xs text-faint hover:text-ink">{t("detection.threatAlerts.matched")}</summary>
+                <pre className="mt-1.5 overflow-x-auto rounded-control bg-surface-muted p-3 font-mono text-xs text-ink whitespace-pre-wrap break-all">{detail.actual}</pre>
+              </details>
             )}
             </div>
           </div>

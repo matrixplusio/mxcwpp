@@ -1623,7 +1623,8 @@
       "firstSeen": "首次发现",
       "lastSeen": "最近发现",
       "desc": "描述",
-      "matched": "命中字段"
+      "matched": "原始命中字段(JSON)",
+      "evidence": "证据"
     },
     "edrEvents": {
       "statTotal": "总事件",
@@ -1687,8 +1688,10 @@
       "fieldLastSeen": "最近出现",
       "summary": "概述",
       "ruleNames": "命中规则",
+      "eventChain": "关联事件链",
+      "noEvents": "暂无关联事件",
       "resolveTitle": "处置故事线",
-      "resolveConfirmDesc": "确认处置故事线「{{id}}」？",
+      "resolveConfirmDesc": "标记故事线「{{id}}」为已处置(已调查/已缓解)。仅更新状态,不执行主机隔离等主动响应。",
       "resolved": "已处置"
     },
     "rules": {
