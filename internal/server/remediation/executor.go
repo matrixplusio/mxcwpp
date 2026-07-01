@@ -309,9 +309,18 @@ func (e *RemediationExecutor) HandleResult(agentID string, data map[string]strin
 		return fmt.Errorf("agent %s 无权上报任务 %d 的结果（目标主机为 %s）", agentID, taskID, task.HostID)
 	}
 
-	// 状态校验：只处理 running 状态的任务，避免重复处理
-	if task.Status != "running" {
-		e.logger.Warn("收到非 running 状态的修复结果，忽略",
+	// 状态校验：只忽略「已终结」任务的重复结果。任务在 agent 执行期间，status 会被 9201
+	// 进度事件推进为各 stage 名（detect_os / check_installed / check_available / downloading /
+	// installing / verifying），此时收到最终 result(9200) 必须处理——若沿用旧的
+	// `!= "running"` 判据，会因 status 已是 stage 名而丢弃结果，任务永远停在最后 stage，
+	// 掩盖 agent 早已回报的真实成败（本次 vim/ kernel 修复"看似 hang"的真因）。
+	switch task.Status {
+	case model.RemTaskMainSuccess, model.RemTaskMainSuccessPendingVerify,
+		model.RemTaskMainVerifying, model.RemTaskMainVerified,
+		model.RemTaskMainVerifyFailed, model.RemTaskMainVerifyBlocked,
+		model.RemTaskMainCancelled, model.RemTaskStatusFailed,
+		model.RemTaskStatusCompleted, model.RemTaskStatusRolledBack:
+		e.logger.Warn("收到已终结任务的修复结果，忽略",
 			zap.Uint("task_id", taskID),
 			zap.String("current_status", task.Status))
 		return nil
