@@ -168,6 +168,24 @@ func precheckConfirmedInstallable(status string) bool {
 	return status == model.PreCheckStatusAvailable || status == model.PreCheckStatusAvailableEPEL
 }
 
+// effectiveComponent/effectiveFixedVersion 取 per-host 匹配到的真实包名/版本（matched_*），
+// 老数据为空时回退 CVE 级 vulnerabilities 值。remediation task 的 Component 会被 agent 用于
+// check_installed 预检——必须是主机实际装的包（如 vim-enhanced），而非 CVE 级塌缩值（如 vim-X11），
+// 否则 agent 查错包→"未安装"→修复失败。
+func effectiveComponent(hv model.HostVulnerability, vulnComponent string) string {
+	if hv.MatchedComponent != "" {
+		return hv.MatchedComponent
+	}
+	return vulnComponent
+}
+
+func effectiveFixedVersion(hv model.HostVulnerability, vulnFixed string) string {
+	if hv.MatchedFixedVersion != "" {
+		return hv.MatchedFixedVersion
+	}
+	return vulnFixed
+}
+
 // RemediationTasksHandler 修复任务 API 处理器
 type RemediationTasksHandler struct {
 	db     *gorm.DB
@@ -266,8 +284,8 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 			HostID:       hv.HostID,
 			Hostname:     hv.Hostname,
 			IP:           hv.IP,
-			Component:    vuln.Component,
-			FixedVersion: vuln.FixedVersion,
+			Component:    effectiveComponent(hv, vuln.Component),
+			FixedVersion: effectiveFixedVersion(hv, vuln.FixedVersion),
 			Command:      cmd,
 			Status:       "pending",
 			CreatedBy:    createdBy,
@@ -734,8 +752,8 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 				HostID:       hv.HostID,
 				Hostname:     hv.Hostname,
 				IP:           hv.IP,
-				Component:    vuln.Component,
-				FixedVersion: vuln.FixedVersion,
+				Component:    effectiveComponent(hv, vuln.Component),
+				FixedVersion: effectiveFixedVersion(hv, vuln.FixedVersion),
 				Command:      cmd,
 				Status:       "pending",
 				CreatedBy:    createdBy,
@@ -873,8 +891,8 @@ func (h *RemediationTasksHandler) CreateForHost(c *gin.Context) {
 			HostID:       hv.HostID,
 			Hostname:     hv.Hostname,
 			IP:           hv.IP,
-			Component:    v.Component,
-			FixedVersion: v.FixedVersion,
+			Component:    effectiveComponent(hv, v.Component),
+			FixedVersion: effectiveFixedVersion(hv, v.FixedVersion),
 			Command:      cmd,
 			Status:       "pending",
 			CreatedBy:    createdBy,
