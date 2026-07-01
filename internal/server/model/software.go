@@ -5,9 +5,11 @@ package model
 type Software struct {
 	TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
 	ID       string `gorm:"primaryKey;column:id;type:varchar(128);not null" json:"id"`
-	HostID   string `gorm:"column:host_id;type:varchar(64);not null;index" json:"host_id"`
-	Name     string `gorm:"column:name;type:varchar(255);not null" json:"name"`
-	Version  string `gorm:"column:version;type:varchar(100)" json:"version"`
+	HostID   string `gorm:"column:host_id;type:varchar(64);not null;index;index:idx_sw_host_name,priority:1" json:"host_id"`
+	// idx_sw_host_name：cleanup/CleanupAlreadyPatched/precheck 均按 (host_id,name) join software 判包
+	// 是否安装；仅 host_id 单列索引时每主机需内存扫全部包(~800)，20k host_vuln 全表 anti-join 达 74s。
+	Name    string `gorm:"column:name;type:varchar(255);not null;index:idx_sw_host_name,priority:2" json:"name"`
+	Version string `gorm:"column:version;type:varchar(100)" json:"version"`
 	// Epoch RPM 的 EPOCH 字段（不存在则为空或 "0"）。NEVRA 比较时若 epoch 不同则直接定胜负。
 	Epoch string `gorm:"column:epoch;type:varchar(16)" json:"epoch"`
 	// Release RPM 的 RELEASE 字段（如 "284.11.1.el9_2"）。NEVRA 比较 release 段。
