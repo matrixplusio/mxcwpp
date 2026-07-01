@@ -156,7 +156,16 @@ func handlePreCheck(ctx context.Context, task *bridge.Task, client *plugins.Clie
 
 		switch {
 		case availVer == "":
-			detail.Action = "not_available"
+			// 仓库无可升级版本。区分两种情况（否则 verify 复测把「已修复」误判为 outdated_repo→verify_blocked）：
+			//   已装 >= 修复版 → 已修复（视同已最新，清 allOutdated → not_in_repo → verify=verified）
+			//   已装 < 修复版  → 仓库确实没有修复版（outdated_repo）
+			if p.FixedVersion != "" && fixedVersionValidStr(p.FixedVersion) &&
+				versionCompare(pkgMgr, installedVer, p.FixedVersion) >= 0 {
+				detail.Action = "already_fixed"
+				allOutdated = false
+			} else {
+				detail.Action = "not_available"
+			}
 		case versionCompare(pkgMgr, installedVer, availVer) >= 0:
 			// 已装 >= 可用 = 已最新
 			detail.Action = "already_latest"
