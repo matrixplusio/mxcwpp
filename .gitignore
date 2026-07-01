@@ -195,3 +195,4 @@ data/
 /tools/
 # 本地临时目录（评估文档/大命令输出/调试 dump，不入库）
 .scratch/
+local-reports/

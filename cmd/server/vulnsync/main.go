@@ -26,6 +26,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 
 	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
@@ -122,7 +124,10 @@ func main() {
 			enabled[t] = true
 		}
 	}
-	srcs := buildAdvisorySources(enabled)
+	// fleet-aware 源门控：只同步 fleet 实际存在的 OS 家族对应的源，避免拉/发无意义 advisory
+	// （全 RHEL fleet 不拉 debian/ubuntu/alpine）。DB 查失败或 fleet 空时不门控（安全兜底，宁可多拉不漏检）。
+	fleetFamilies := loadFleetOSFamilies(*configPath, logger)
+	srcs := buildAdvisorySources(enabled, fleetFamilies, logger)
 
 	schedules := []vulnsync.SourceSchedule{
 		{Name: "rhsa", Interval: 4 * time.Hour},
@@ -174,12 +179,77 @@ func main() {
 	logger.Info("VulnSync stopped")
 }
 
+// sourceOSFamilies 记录每个 OS-distro advisory 源服务的 host OS 家族（小写）。
+// 用于 fleet-aware 门控：fleet 无对应家族的主机则不同步该源。
+var sourceOSFamilies = map[string][]string{
+	"rhsa":           {"rhel", "centos", "centos-stream", "rocky", "almalinux", "oraclelinux"},
+	"rocky-apollo":   {"rocky", "centos", "centos-stream", "rhel", "almalinux"},
+	"centos":         {"centos", "centos-stream"},
+	"usn":            {"ubuntu"},
+	"debian-tracker": {"debian"},
+	"alpine":         {"alpine"},
+	"openeuler-sa":   {"openeuler", "anolis", "openanolis"},
+	"anolis-ansa":    {"anolis", "openanolis"},
+	"kylin-sa":       {"kylin"},
+	"uos-sa":         {"uos"},
+}
+
+// sourceServesFleet 判断某源服务的 OS 家族是否与 fleet 在场家族有交集。
+func sourceServesFleet(sourceName string, fleet map[string]bool) bool {
+	fams, ok := sourceOSFamilies[sourceName]
+	if !ok {
+		// 未登记映射的源（如未来新增）→ 保守放行，避免漏检。
+		return true
+	}
+	for _, f := range fams {
+		if fleet[f] {
+			return true
+		}
+	}
+	return false
+}
+
+// loadFleetOSFamilies 只读查询 hosts 表的 distinct os_family（小写集合）。
+// 供 fleet-aware 源门控使用。查询失败返回 nil（调用方据此不门控，安全兜底）。
+func loadFleetOSFamilies(configPath string, logger *zap.Logger) map[string]bool {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		logger.Warn("fleet-aware 门控：加载 config 失败，跳过门控（同步全部源）", zap.Error(err))
+		return nil
+	}
+	db, err := gorm.Open(mysql.Open(cfg.Database.MySQL.DSN()), &gorm.Config{})
+	if err != nil {
+		logger.Warn("fleet-aware 门控：连接 DB 失败，跳过门控（同步全部源）", zap.Error(err))
+		return nil
+	}
+	sqlDB, _ := db.DB()
+	defer func() {
+		if sqlDB != nil {
+			_ = sqlDB.Close()
+		}
+	}()
+	var families []string
+	if err := db.Table("hosts").Distinct().Pluck("os_family", &families).Error; err != nil {
+		logger.Warn("fleet-aware 门控：查询 host os_family 失败，跳过门控（同步全部源）", zap.Error(err))
+		return nil
+	}
+	set := make(map[string]bool, len(families))
+	for _, f := range families {
+		if t := strings.ToLower(strings.TrimSpace(f)); t != "" {
+			set[t] = true
+		}
+	}
+	return set
+}
+
 // buildAdvisorySources 构造 OS 厂商 advisory 源池。
 //
-// enabled 为空 → 启用全部；否则仅启用 enabled[name] 命中的源。
+// 优先级：显式 -sources(enabled) 命中 → 直接启用（人工覆盖）；否则走 fleet-aware 门控——
+// 仅启用 fleet 实际存在的 OS 家族对应的源。fleetFamilies 为空(DB 查失败) → 不门控，启用全部（兜底）。
+//
 // 与 advisory.NewCoordinator 的源池对齐（去掉 OSV：OSV 走 PURL/host 驱动，
 // 不适合 VulnSync 时间增量调度，仍由 Manager 的语言包扫描负责）。
-func buildAdvisorySources(enabled map[string]bool) map[string]advisory.Source {
+func buildAdvisorySources(enabled map[string]bool, fleetFamilies map[string]bool, logger *zap.Logger) map[string]advisory.Source {
 	all := []advisory.Source{
 		advisory.NewRedHatSource(),
 		advisory.NewRockySource(),
@@ -193,12 +263,32 @@ func buildAdvisorySources(enabled map[string]bool) map[string]advisory.Source {
 		advisory.NewKylinSource(),
 		advisory.NewUOSSource(),
 	}
-	allEnabled := len(enabled) == 0
+	explicit := len(enabled) > 0
+	gate := len(fleetFamilies) > 0
 	out := make(map[string]advisory.Source, len(all))
+	var skipped []string
 	for _, s := range all {
-		if allEnabled || enabled[s.Name()] {
-			out[s.Name()] = s
+		name := s.Name()
+		switch {
+		case explicit:
+			// 人工 -sources 覆盖优先
+			if enabled[name] {
+				out[name] = s
+			}
+		case gate && !sourceServesFleet(name, fleetFamilies):
+			skipped = append(skipped, name)
+		default:
+			out[name] = s
 		}
+	}
+	if len(skipped) > 0 {
+		fleet := make([]string, 0, len(fleetFamilies))
+		for f := range fleetFamilies {
+			fleet = append(fleet, f)
+		}
+		logger.Info("fleet-aware 源门控：跳过无对应主机 OS 的源",
+			zap.Strings("fleet_os_families", fleet),
+			zap.Strings("skipped_sources", skipped))
 	}
 	return out
 }

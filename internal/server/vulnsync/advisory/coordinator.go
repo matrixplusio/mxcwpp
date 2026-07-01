@@ -246,9 +246,16 @@ func (c *Coordinator) Sync(ctx context.Context, since time.Time, hosts []HostSof
 // 注：本方法不跑 host_vuln FP 清理（CleanupHostVulnFP / CleanupAlreadyPatched）。
 // 清理是全局操作，由调用方在批量 flush 后自行触发，避免逐消息重复全表扫描。
 func (c *Coordinator) IngestAdvisories(msgs []AdvisoryMessage, hosts []HostSoftware) (vulnCount, hostVulnCount int) {
+	// fleet 在场的 OS 家族集合：对之无任何主机的 OS-family advisory（如全 RHEL fleet 上的
+	// debian/ubuntu/alpine）在昂贵匹配前直接跳过——纯浪费的匹配 + Kafka 积压主因。
+	// 语言/生态 advisory（OSFamily 空）不受影响；host 快照为空时不过滤（安全兜底，避免漏检）。
+	present := presentOSFamilies(hosts)
 	items := make([]sourcedAdvisory, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Advisory == nil || !validateAdvisory(m.Advisory) {
+			continue
+		}
+		if len(present) > 0 && !osFamilyCoversAnyHost(m.Advisory.OSFamily, present) {
 			continue
 		}
 		items = append(items, sourcedAdvisory{
@@ -274,6 +281,43 @@ func (c *Coordinator) IngestAdvisories(msgs []AdvisoryMessage, hosts []HostSoftw
 		c.logger.Debug("ingest advisory_packages 批量 upsert", zap.Int("rows", apRows))
 	}
 	return vulnCount, hostVulnCount
+}
+
+// presentOSFamilies 收集当前 fleet 快照里出现的 OS 家族（小写）。
+func presentOSFamilies(hosts []HostSoftware) map[string]bool {
+	fams := make(map[string]bool)
+	for _, h := range hosts {
+		if h.OSFamily != "" {
+			fams[strings.ToLower(h.OSFamily)] = true
+		}
+	}
+	return fams
+}
+
+// osFamilyCoversAnyHost 判断某 OS-family advisory 是否可能命中任一在场主机家族（rhel 家族互兼容）。
+// advFamily 为空 = 语言/生态 advisory（按 PURL/ecosystem gate，与 OS 无关）→ 恒放行。
+// 仅做家族级判断（不比 major，major 交给 matcher），用于匹配前快速剔除注定 0 命中的跨家族 advisory。
+func osFamilyCoversAnyHost(advFamily string, present map[string]bool) bool {
+	if advFamily == "" {
+		return true
+	}
+	advFamily = strings.ToLower(advFamily)
+	rhel := map[string]bool{
+		"rhel": true, "rocky": true, "centos": true,
+		"centos-stream": true, "almalinux": true, "oraclelinux": true,
+	}
+	for fam := range present {
+		if fam == advFamily {
+			return true
+		}
+		if rhel[advFamily] && rhel[fam] {
+			return true
+		}
+		if advFamily == "openeuler" && (fam == "openeuler" || fam == "anolis" || fam == "openanolis") {
+			return true
+		}
+	}
+	return false
 }
 
 // validateAdvisory 入库前严格校验，过滤无效 advisory。

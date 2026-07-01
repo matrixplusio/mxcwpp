@@ -156,6 +156,18 @@ func buildCommandFromPreCheck(hv *model.HostVulnerability, osFamily, osVersion s
 	return ""
 }
 
+// precheckConfirmedInstallable 报告 agent pre-check 是否已在主机本地确认「包已装 + 仓库有可
+// 升级版本」。为 true 时，该主机本地真值优先于 VulnApplicableToHost 的 OS-source 启发式闸。
+//
+// 背景：VulnApplicableToHost 基于 vuln.Source 判 OS 归属，比 advisory matcher 的 osCompatible
+// 更严——例如 rocky-apollo advisory 经 rhel-compat 本应覆盖 CentOS，但该闸的 rocky 分支排除
+// CentOS，导致合法的 per-OS 修复被误拒。且多发行版 CVE 的 vuln.Source 会被跨发行版覆盖（如
+// rocky 匹配的链被标 debian-tracker），进一步放大误拒。命令生成本身已依赖同一份 pre-check 包
+// （buildCommandFromPreCheck），故以 pre-check 结果为闸是自洽的。
+func precheckConfirmedInstallable(status string) bool {
+	return status == model.PreCheckStatusAvailable || status == model.PreCheckStatusAvailableEPEL
+}
+
 // RemediationTasksHandler 修复任务 API 处理器
 type RemediationTasksHandler struct {
 	db     *gorm.DB
@@ -223,8 +235,9 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 	skippedNoCommand := 0
 	for _, hv := range hostVulns {
 		os := osMap[hv.HostID]
-		// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
-		if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+		// vuln source 须适用于 host OS family（防 Debian 包给 CentOS）；但 pre-check 已在主机
+		// 本地确认可升级时，以主机真值为准，绕过更严的 source 闸（修 rocky↔centos 等误拒）。
+		if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(vuln.Source, os.Family) {
 			skippedNotApplicable++
 			continue
 		}
@@ -700,8 +713,8 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 			}
 
 			os := osMap[hv.HostID]
-			// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
-			if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+			// source 闸；pre-check 已本地确认可升级时以主机真值为准，绕过更严的 source 闸
+			if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(vuln.Source, os.Family) {
 				skipped++
 				continue
 			}
@@ -839,8 +852,8 @@ func (h *RemediationTasksHandler) CreateForHost(c *gin.Context) {
 			skipped++
 			continue
 		}
-		// P0 fix: vuln source 必须适用于 host OS family，否则跳过（防 Debian 包给 CentOS）
-		if !biz.VulnApplicableToHost(v.Source, host.OSFamily) {
+		// source 闸；pre-check 已本地确认可升级时以主机真值为准，绕过更严的 source 闸
+		if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(v.Source, host.OSFamily) {
 			skippedNotApplicable++
 			continue
 		}

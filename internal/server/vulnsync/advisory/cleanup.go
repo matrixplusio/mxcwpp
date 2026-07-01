@@ -131,6 +131,22 @@ func cleanupCrossOSFamily(db *gorm.DB, logger *zap.Logger) {
 		{"rocky-apollo", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
 		{"centos", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
 	}
+	// 守卫：多发行版 CVE 的 vulnerabilities.source 会被 mergeByConfidence 按全局
+	// confidence 覆盖成异 OS 源（如 rocky 匹配的 CentOS 链被标 debian-tracker），若仅按
+	// v.source 判跨 OS 会误删合法链。故仅当该 CVE 对本机 OS **无任何覆盖性 advisory_packages
+	// 行**时才删——advisory_packages 是 per-OS 修复权威源，rhel 家族互兼容。
+	const hasCoveringAdvisory = `
+  AND NOT EXISTS (
+    SELECT 1 FROM advisory_packages ap
+    WHERE ap.cve_id = v.cve_id
+      AND ap.pkg_name = v.component
+      AND ap.os_major = SUBSTRING_INDEX(h.os_version, '.', 1)
+      AND (
+        LOWER(ap.os_family) = LOWER(h.os_family)
+        OR (LOWER(ap.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
+            AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux'))
+      )
+  )`
 	var total int64
 	for _, rule := range xrefRules {
 		sql := fmt.Sprintf(`
@@ -138,7 +154,7 @@ DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source = ?
-  AND LOWER(h.os_family) NOT IN (%s)`, rule.compatible)
+  AND LOWER(h.os_family) NOT IN (%s)%s`, rule.compatible, hasCoveringAdvisory)
 		r := db.Exec(sql, rule.source)
 		if r.Error == nil && r.RowsAffected > 0 {
 			total += r.RowsAffected
