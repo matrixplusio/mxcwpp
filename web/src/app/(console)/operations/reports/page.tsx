@@ -12,6 +12,7 @@ import { OverviewReport } from "./_views/OverviewReport";
 import { AntivirusReport } from "./_views/AntivirusReport";
 import { VulnerabilityReport } from "./_views/VulnerabilityReport";
 import { KubeReport } from "./_views/KubeReport";
+import { EdrReport } from "./_views/EdrReport";
 
 const TAB_KEYS = ["overview", "antivirus", "vuln", "kube", "edr"] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -55,7 +56,7 @@ export default function ReportsPage() {
       case "kube":
         return <KubeReport key={refreshKey} range={range} />;
       case "edr":
-        return <ComingSoonPlaceholder label={t("operations.reports.comingSoon")} />;
+        return <EdrReport key={refreshKey} range={range} />;
     }
   }
 
