@@ -158,7 +158,7 @@ function ScoreContent({ d }: { d: ExecutiveTaskReport }) {
           className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-2xl font-bold"
           style={{ borderColor: sc.grade_color, color: sc.grade_color }}
         >
-          {sc.score}
+          {Math.round(sc.score)}
         </div>
         <div>
           <div className="text-lg font-bold" style={{ color: sc.grade_color }}>
@@ -224,7 +224,7 @@ function HostDetailsContent({ d }: { d: ExecutiveTaskReport }) {
       key: "score",
       title: t("operations.taskReport.baseline.hostScore"),
       align: "right",
-      render: (r) => r.score,
+      render: (r) => Math.round(r.score),
     },
     {
       key: "passed",

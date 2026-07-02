@@ -233,7 +233,7 @@ export function OverviewReport({ range }: Props) {
       title: t("operations.reports.colScore"),
       align: "right",
       width: "80px",
-      render: (row) => String(row.score),
+      render: (row) => String(Math.round(row.score)),
     },
     {
       key: "fail_count",
