@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { useUrlState } from "@/hooks/useUrlState";
 import { BaselineTaskReport } from "./_views/BaselineTaskReport";
+import { AntivirusTaskReport } from "./_views/AntivirusTaskReport";
 
 const TAB_KEYS = [
   "baseline",
@@ -42,11 +43,7 @@ export default function TaskReportPage() {
       case "baseline":
         return <BaselineTaskReport />;
       case "antivirus":
-        return (
-          <ComingSoonPlaceholder
-            label={t("operations.taskReport.tabAntivirus")}
-          />
-        );
+        return <AntivirusTaskReport />;
       case "vuln":
         return (
           <ComingSoonPlaceholder
