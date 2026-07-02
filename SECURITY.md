@@ -6,7 +6,7 @@ If you discover a security vulnerability, **please DO NOT open a public issue**.
 
 Please report it privately via email:
 
-- **Email**: 0xkerbos@gmail.com
+- **Email**: contact@matrixplus.io
 - **Subject format**: `[SECURITY] Brief description`
 
 ## Response SLA

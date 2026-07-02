@@ -93,7 +93,7 @@ CHANGELOG 通过 `git log` 生成，按以下分类组织：
 
 如果你发现安全漏洞，**请勿在公开 Issue 中披露**。请通过以下方式私密报告：
 
-- 邮件：0xkerbos@gmail.com
+- 邮件：contact@matrixplus.io
 - 主题格式：`[SECURITY] 简要描述`
 
 ### 漏洞处理 SLA
@@ -157,7 +157,7 @@ CHANGELOG 通过 `git log` 生成，按以下分类组织：
 
 本项目遵循 [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) 行为准则。
 
-参与本项目即表示你同意遵守该准则。违反行为准则的行为可以通过 0xkerbos@gmail.com 报告。
+参与本项目即表示你同意遵守该准则。违反行为准则的行为可以通过 contact@matrixplus.io 报告。
 
 ## 许可证
 
