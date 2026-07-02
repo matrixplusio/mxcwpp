@@ -196,3 +196,6 @@ data/
 # 本地临时目录（评估文档/大命令输出/调试 dump，不入库）
 .scratch/
 local-reports/
+
+# 内网专用文档（本地保留，禁止上 github）
+docs/internal/
