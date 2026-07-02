@@ -284,36 +284,40 @@ type HostRemediationStats struct {
 func (s *RemediationService) GetRemediationStats() (*RemediationStats, error) {
 	stats := &RemediationStats{}
 
-	// 总漏洞数（不含 ignored）
-	s.db.Model(&model.Vulnerability{}).Where("status != ?", "ignored").Count(&stats.TotalVulns)
-	s.db.Model(&model.Vulnerability{}).Where("status = ?", "patched").Count(&stats.PatchedVulns)
-	s.db.Model(&model.Vulnerability{}).Where("status = ?", "unpatched").Count(&stats.UnpatchedVulns)
-	s.db.Model(&model.Vulnerability{}).Where("status = ?", "ignored").Count(&stats.IgnoredVulns)
+	// 统计口径 = host_vulnerabilities（主机实际命中的漏洞实例），不是 vulnerabilities（全局 CVE 目录）。
+	// vulnerabilities 是所有通告拉进来的 CVE 全集（含大量从不影响任何主机、severity 未评级的条目），
+	// 且其 status 永远停在 unpatched（修复发生在 per-host 层），拿它算修复率恒为 0、图表被数万条无关
+	// "无级别" CVE 淹没。真实修复成果在 host_vulnerabilities.status。
+	s.db.Model(&model.HostVulnerability{}).Where("status != ?", "ignored").Count(&stats.TotalVulns)
+	s.db.Model(&model.HostVulnerability{}).Where("status = ?", "patched").Count(&stats.PatchedVulns)
+	s.db.Model(&model.HostVulnerability{}).Where("status = ?", "unpatched").Count(&stats.UnpatchedVulns)
+	s.db.Model(&model.HostVulnerability{}).Where("status = ?", "ignored").Count(&stats.IgnoredVulns)
 
 	if stats.TotalVulns > 0 {
 		stats.RemediationRate = float64(stats.PatchedVulns) / float64(stats.TotalVulns) * 100
 	}
 
-	// MTTR：已修复漏洞的平均修复时间
+	// MTTR：已修复漏洞的平均修复时间（host_vuln 无 discovered_at，用 created_at 作发现时间）
 	var mttrResult struct {
 		AvgHours float64 `gorm:"column:avg_hours"`
 	}
-	s.db.Model(&model.Vulnerability{}).
-		Select("AVG(TIMESTAMPDIFF(HOUR, discovered_at, patched_at)) as avg_hours").
+	s.db.Model(&model.HostVulnerability{}).
+		Select("AVG(TIMESTAMPDIFF(HOUR, created_at, patched_at)) as avg_hours").
 		Where("status = ? AND patched_at IS NOT NULL", "patched").
 		Scan(&mttrResult)
 	stats.MTTR = mttrResult.AvgHours
 
-	// 按严重级别统计
+	// 按严重级别统计（severity 在 vulnerabilities 上，join 取）
 	var severityRows []struct {
 		Severity string `gorm:"column:severity"`
 		Status   string `gorm:"column:status"`
 		Count    int64  `gorm:"column:count"`
 	}
-	s.db.Model(&model.Vulnerability{}).
-		Select("severity, status, COUNT(*) as count").
-		Where("status IN ?", []string{"unpatched", "patched"}).
-		Group("severity, status").
+	s.db.Table("host_vulnerabilities AS hv").
+		Select("v.severity AS severity, hv.status AS status, COUNT(*) as count").
+		Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
+		Where("hv.status IN ?", []string{"unpatched", "patched"}).
+		Group("v.severity, hv.status").
 		Scan(&severityRows)
 
 	severityMap := make(map[string]*SeverityStats)
