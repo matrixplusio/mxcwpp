@@ -56,6 +56,9 @@
     "selectRow": "选择行",
     "totalItems": "共 {{count}} 条",
     "pageOf": "第 {{page}}/{{pages}} 页",
+    "last7Days": "近 7 天",
+    "last30Days": "近 30 天",
+    "last90Days": "近 90 天",
     "empty": {
       "building": "模块建设中",
       "buildingDesc": "该功能将在后续阶段上线"

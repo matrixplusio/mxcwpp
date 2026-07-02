@@ -56,6 +56,9 @@
     "selectRow": "Select row",
     "totalItems": "{{count}} total",
     "pageOf": "Page {{page}} of {{pages}}",
+    "last7Days": "Last 7 days",
+    "last30Days": "Last 30 days",
+    "last90Days": "Last 90 days",
     "empty": {
       "building": "Under construction",
       "buildingDesc": "This feature will be available in a later phase"
