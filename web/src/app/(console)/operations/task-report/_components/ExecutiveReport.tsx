@@ -39,7 +39,6 @@ export function ExecutiveReport({
 }: ExecutiveReportProps) {
   const { t } = useTranslation();
   const nonEmptySections = sections.filter((s) => Boolean(s.content));
-  let sectionIndex = 0;
 
   return (
     <div className="space-y-5">
@@ -102,15 +101,12 @@ export function ExecutiveReport({
       )}
 
       {/* Auto-numbered sections (skip entries with falsy content) */}
-      {nonEmptySections.map((sec) => {
-        sectionIndex += 1;
-        return (
-          <Card key={`${sectionIndex}-${sec.title}`}>
-            <CardHeader title={`${sectionIndex}. ${sec.title}`} />
-            <div className="px-5 pb-5">{sec.content}</div>
-          </Card>
-        );
-      })}
+      {nonEmptySections.map((sec, idx) => (
+        <Card key={`${idx + 1}-${sec.title}`}>
+          <CardHeader title={`${idx + 1}. ${sec.title}`} />
+          <div className="px-5 pb-5">{sec.content}</div>
+        </Card>
+      ))}
 
       {/* Recommendation card */}
       {recommendation && (

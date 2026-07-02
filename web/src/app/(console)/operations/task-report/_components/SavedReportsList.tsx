@@ -10,10 +10,10 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
 
-function fmtDateTime(iso: string): string {
+function fmtDateTime(iso: string, locale?: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("zh-CN", {
+    return new Date(iso).toLocaleString(locale ?? "zh-CN", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -31,7 +31,7 @@ interface Props {
 }
 
 export function SavedReportsList({ type, onView }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -73,7 +73,7 @@ export function SavedReportsList({ type, onView }: Props) {
       title: t("operations.taskReport.savedReports.colCreatedAt"),
       render: (r) => (
         <span className="tabular-nums text-sm text-muted">
-          {fmtDateTime(r.created_at)}
+          {fmtDateTime(r.created_at, i18n.language)}
         </span>
       ),
     },
