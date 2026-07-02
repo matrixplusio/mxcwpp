@@ -49,8 +49,8 @@ export default function RemediationPage() {
 
   const severityOption = {
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: [t("vuln.remediation.legendPatched"), t("vuln.remediation.legendUnpatched")] },
-    grid: { left: "3%", right: "4%", bottom: "3%", containLabel: true },
+    legend: { data: [t("vuln.remediation.legendPatched"), t("vuln.remediation.legendUnpatched")], bottom: 0 },
+    grid: { left: "3%", right: "4%", top: 16, bottom: 36, containLabel: true },
     xAxis: { type: "category", data: bySeverity.map((s) => SEV_LABEL[s.severity] ?? s.severity) },
     yAxis: { type: "value" },
     series: [
