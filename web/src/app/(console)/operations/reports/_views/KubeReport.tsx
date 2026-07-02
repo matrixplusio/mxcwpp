@@ -231,7 +231,7 @@ export function KubeReport({ range }: Props) {
         />
         <StatCard
           label={t("operations.reports.kubeStatPassRate")}
-          value={`${(baselineOverview.passRate * 100).toFixed(1)}%`}
+          value={`${baselineOverview.passRate.toFixed(1)}%`}
           icon={ShieldCheck}
           tone="success"
         />
