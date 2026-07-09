@@ -53,6 +53,7 @@ func main() {
 
 	logger.Info("initializing fixer")
 	fixer := engine.NewFixer(logger)
+	fixer.SetVerifier(checkEngine) // 修后复检：与扫描共用同一检查引擎
 	logger.Info("fixer initialized successfully")
 
 	// 4. 创建上下文

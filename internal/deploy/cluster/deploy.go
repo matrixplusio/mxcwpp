@@ -23,6 +23,23 @@ type deployedNode struct {
 	RemoteCurrent string
 }
 
+// nodeServiceSet returns the expanded fine-grained service set for a node.
+// On error (unknown role), returns an empty set; validation should have caught it earlier.
+func nodeServiceSet(node Node) map[string]bool {
+	set, err := expandRolesSet(node.Roles)
+	if err != nil {
+		return map[string]bool{}
+	}
+	return set
+}
+
+// hasAnyAppRole returns true if the expanded service set contains any application-layer role
+// (manager / agentcenter / consumer / engine / vulnsync / llmproxy / ui).
+func hasAnyAppRole(svcSet map[string]bool) bool {
+	return svcSet[RoleManager] || svcSet[RoleAgentCenter] || svcSet[RoleConsumer] ||
+		svcSet[RoleEngine] || svcSet[RoleVulnSync] || svcSet[RoleLLMProxy] || svcSet[RoleUI]
+}
+
 // DeployCluster 将渲染好的 bundle 通过 SSH 下发到远端节点并启动服务。
 func DeployCluster(cfg *Config, render *RenderResult, opts DeployOptions) error {
 	releaseID := fmt.Sprintf("%s-%s", cfg.Release.Version, time.Now().Format("20060102-150405"))
@@ -46,7 +63,7 @@ func DeployCluster(cfg *Config, render *RenderResult, opts DeployOptions) error 
 	}
 
 	fmt.Println("[2/5] 启动 Kafka...")
-	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return n.Node.HasRole(RoleKafka) }) {
+	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return nodeServiceSet(n.Node)[RoleKafka] }) {
 		fmt.Printf("  -> %s (%s)\n", item.Node.Name, item.Node.Host)
 		if err := runRemote(item.Node, opts.ConfigDir, remoteUpKafka(item)); err != nil {
 			return fmt.Errorf("启动 kafka 节点 %s 失败: %w", item.Node.Name, err)
@@ -54,7 +71,7 @@ func DeployCluster(cfg *Config, render *RenderResult, opts DeployOptions) error 
 	}
 
 	fmt.Println("[3/5] 启动 Storage (MySQL/Redis/ClickHouse)...")
-	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return n.Node.HasRole(RoleStorage) }) {
+	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return nodeServiceSet(n.Node)[RoleMySQL] }) {
 		fmt.Printf("  -> %s (%s)\n", item.Node.Name, item.Node.Host)
 		if err := runRemote(item.Node, opts.ConfigDir, remoteUpStorage(item)); err != nil {
 			return fmt.Errorf("启动 storage 节点 %s 失败: %w", item.Node.Name, err)
@@ -62,7 +79,7 @@ func DeployCluster(cfg *Config, render *RenderResult, opts DeployOptions) error 
 	}
 
 	fmt.Println("[4/5] 启动 Control (Manager/AgentCenter/Consumer/UI)...")
-	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return n.Node.HasRole(RoleControl) }) {
+	for _, item := range filterNodes(nodes, func(n deployedNode) bool { return hasAnyAppRole(nodeServiceSet(n.Node)) }) {
 		fmt.Printf("  -> %s (%s)\n", item.Node.Name, item.Node.Host)
 		if err := runRemote(item.Node, opts.ConfigDir, remoteUpControl(item)); err != nil {
 			return fmt.Errorf("启动 control 节点 %s 失败: %w", item.Node.Name, err)
@@ -132,21 +149,24 @@ func remoteUpControl(node deployedNode) string {
 }
 
 func remoteHealthCheck(cfg *Config, node deployedNode) string {
-	commands := make([]string, 0, 3)
-	if node.Node.HasRole(RoleKafka) {
+	svcSet := nodeServiceSet(node.Node)
+	commands := make([]string, 0, 4)
+	if svcSet[RoleKafka] {
 		compose := filepath.ToSlash(filepath.Join(node.RemoteCurrent, "compose", "docker-compose.kafka.yml"))
 		commands = append(commands, sudoWrap(node.Node, fmt.Sprintf("docker compose -f %s ps", shQuote(compose))))
 	}
-	if node.Node.HasRole(RoleStorage) {
+	if svcSet[RoleMySQL] {
 		compose := filepath.ToSlash(filepath.Join(node.RemoteCurrent, "compose", "docker-compose.storage.yml"))
 		commands = append(commands, sudoWrap(node.Node, fmt.Sprintf("docker compose -f %s ps", shQuote(compose))))
 	}
-	if node.Node.HasRole(RoleControl) {
+	if hasAnyAppRole(svcSet) {
 		compose := filepath.ToSlash(filepath.Join(node.RemoteCurrent, "compose", "docker-compose.control.yml"))
-		commands = append(commands,
-			sudoWrap(node.Node, fmt.Sprintf("docker compose -f %s ps", shQuote(compose))),
-			fmt.Sprintf("curl -fsS http://127.0.0.1:%d/health >/dev/null", cfg.App.HTTPPort),
-		)
+		commands = append(commands, sudoWrap(node.Node, fmt.Sprintf("docker compose -f %s ps", shQuote(compose))))
+	}
+	// Only nodes serving the HTTP /health endpoint (manager or UI behind nginx) get the curl check.
+	// agentcenter-only or other fine-grained app nodes do NOT expose HTTPPort /health.
+	if svcSet[RoleManager] || svcSet[RoleUI] {
+		commands = append(commands, fmt.Sprintf("curl -fsS http://127.0.0.1:%d/health >/dev/null", cfg.App.HTTPPort))
 	}
 	return strings.Join(commands, " && ")
 }

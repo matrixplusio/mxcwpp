@@ -31,6 +31,7 @@ const taskStatusMeta = (t: TFunction): Record<BaselineTask["status"], { label: s
   pending: { label: t("baseline.tasks.statusPending"), tone: "info" },
   running: { label: t("baseline.tasks.statusRunning"), tone: "info" },
   completed: { label: t("baseline.tasks.statusCompleted"), tone: "success" },
+  partial: { label: t("baseline.tasks.statusPartial"), tone: "warning" },
   failed: { label: t("baseline.tasks.statusFailed"), tone: "danger" },
   cancelled: { label: t("baseline.tasks.statusCancelled"), tone: "neutral" },
 });
@@ -135,9 +136,15 @@ export default function BaselineTaskDetailPage() {
         {task && <span className="text-xs text-faint tabular-nums">{task.created_at}</span>}
       </div>
 
-      {/* 任务执行失败原因（任务本身失败，非合规不通过） */}
-      {task?.status === "failed" && task.failed_reason && (
-        <div className="rounded-card border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+      {/* 任务执行失败/部分完成原因（任务本身的执行结果，非合规不通过） */}
+      {(task?.status === "failed" || task?.status === "partial") && task.failed_reason && (
+        <div
+          className={
+            task.status === "partial"
+              ? "rounded-card border border-warning/40 bg-warning/5 p-3 text-sm text-warning"
+              : "rounded-card border border-danger/40 bg-danger/5 p-3 text-sm text-danger"
+          }
+        >
           {t("baseline.tasks.fieldFailedReason")}: {task.failed_reason}
         </div>
       )}

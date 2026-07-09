@@ -8,6 +8,10 @@ import type {
   ThreatIntelStats,
   ThreatIntelIocList,
   ThreatIntelCheckResult,
+  LocalIOC,
+  IOCSourceInfo,
+  IntelSyncSchedule,
+  IntelSyncExecution,
   Storyline,
   StorylineDetail,
   StorylineStats,
@@ -40,6 +44,9 @@ export const detectionApi = {
     date_to?: string;
   }) => get<Paged<EdrEvent>>("/edr/events", params),
   edrEventStats: (hours?: number) => get<EdrEventStats>("/edr/events/stats", { hours }),
+  // 单条完整详情(含 FIM 上下文:username/login_user/parent_exe/content_hash);列表走 lite 精简列
+  edrEventDetail: (params: { host_id: string; timestamp: string; pid?: string; event_type?: string; file_path?: string }) =>
+    get<EdrEvent>("/edr/events/detail", params),
 
   // 检测规则
   listRules: (params: { page: number; page_size: number; keyword?: string; severity?: string; category?: string; enabled?: string }) =>
@@ -58,7 +65,27 @@ export const detectionApi = {
   listIocs: (params: { type?: string; page: number; page_size: number }) => get<ThreatIntelIocList>("/threat-intel/iocs", params),
   checkIoc: (type: string, value: string) => post<ThreatIntelCheckResult>("/threat-intel/check", { type, value }),
   syncThreatIntel: () => post<{ message: string }>("/threat-intel/sync"),
+  // 自有情报库(独立于外部同步)
+  localIocStats: () => get<ThreatIntelStats>("/threat-intel/local-iocs/stats"),
+  iocSource: (type: string, value: string) => get<IOCSourceInfo>("/threat-intel/ioc-source", { type, value }),
+  listLocalIocs: (params: { type?: string; keyword?: string; page: number; page_size: number }) => get<Paged<LocalIOC>>("/threat-intel/local-iocs", params),
+  createLocalIoc: (body: { ioc_type: string; value: string; severity?: string; description?: string }) => post<void>("/threat-intel/local-iocs", body),
+  deleteLocalIoc: (id: number) => del<void>(`/threat-intel/local-iocs/${id}`),
+  // 真实威胁研判:解决告警 + 提取 IOC 入自有情报
+  confirmThreat: (alertId: number) => post<{ extracted_count: number }>(`/threat-intel/confirm-threat/${alertId}`),
   threatIntelSyncStatus: () => get<{ status: string; message: string }>("/threat-intel/sync-status"),
+
+  // 威胁情报同步计划
+  listIntelSchedules: () => get<IntelSyncSchedule[]>("/threat-intel/schedules"),
+  createIntelSchedule: (body: { name: string; cronExpr: string }) =>
+    post<void>("/threat-intel/schedules", body),
+  updateIntelSchedule: (id: number, body: Partial<IntelSyncSchedule>) =>
+    put<void>(`/threat-intel/schedules/${id}`, body),
+  deleteIntelSchedule: (id: number) => del<void>(`/threat-intel/schedules/${id}`),
+  toggleIntelSchedule: (id: number) => post<void>(`/threat-intel/schedules/${id}/toggle`),
+  runIntelSchedule: (id: number) => post<void>(`/threat-intel/schedules/${id}/run`),
+  listIntelExecutions: (id: number, params: { page: number; pageSize: number }) =>
+    get<{ items: IntelSyncExecution[]; total: number; page: number }>(`/threat-intel/schedules/${id}/executions`, params),
 
   // 攻击故事线
   listStorylines: (params: { page: number; page_size: number; host_id?: string; severity?: string; status?: string }) =>

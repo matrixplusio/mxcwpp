@@ -2,7 +2,7 @@ export interface LoginRequest {
   username: string; password: string;
   captcha_id?: string; captcha_code?: string; device_id?: string;
 }
-export interface LoginUser { username: string; role: string; }
+export interface LoginUser { username: string; role: string; permissions?: string[]; read_only?: boolean; }
 export interface LoginResponse { token: string; user: LoginUser; need_change_password?: boolean; }
 
 export type Severity = "critical" | "high" | "medium" | "low";
@@ -36,6 +36,7 @@ export interface Alert {
   policy_id: string;
   source: AlertSource;
   severity: Severity;
+  risk_score: number;
   category: string;
   title: string;
   description?: string;
@@ -43,6 +44,7 @@ export interface Alert {
   expected?: string;
   fix_suggestion?: string;
   status: "active" | "resolved" | "ignored";
+  hit_count?: number;
   first_seen_at: string;
   last_seen_at: string;
   resolved_at?: string;
@@ -66,6 +68,8 @@ export interface AlertWhitelist {
   host_id: string;
   category: string;
   severity: string;
+  exe: string;
+  cmdline: string;
   source_ip_cidr: string;
   reason: string;
   created_by: string;
@@ -73,13 +77,74 @@ export interface AlertWhitelist {
   updated_at: string;
 }
 
+export interface AlertWhitelistSuggestion {
+  id: number;
+  signature: string;
+  rule_id: string;
+  rule_name: string;
+  host_id: string;
+  exe: string;
+  cmdline: string;
+  category: string;
+  severity: string;
+  hit_count: number;
+  confidence: number;
+  sample_alert_ids: string[] | null;
+  resolve_reason_sample: string;
+  status: "pending" | "adopted" | "dismissed" | "revoked";
+  decided_by: string;
+  decided_at: string | null;
+  whitelist_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Incident {
+  id: number;
+  incident_id: string;
+  host_id: string;
+  hostname: string;
+  status: "active" | "investigating" | "resolved";
+  severity: string;
+  risk_score: number;
+  tactics: string;
+  tactic_count: number;
+  alert_ids: string[] | null;
+  alert_count: number;
+  behavior_alert_count: number;
+  storyline_ids: string[] | null;
+  title: string;
+  summary: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+  resolved_by: string;
+}
+
+export interface IncidentStage {
+  category: string;
+  name: string;
+  alert_count: number;
+  examples: string[] | null;
+}
+export interface IncidentDetail {
+  incident: Incident;
+  alerts: Alert[];
+  stages: IncidentStage[] | null;
+  narrative: string;
+  recommendations: string[] | null;
+}
+
 export interface User {
   id: number; username: string; email: string;
-  role: "admin" | "user"; status: "active" | "inactive";
+  role: string; status: "active" | "inactive";
   last_login?: string; created_at: string; updated_at: string;
 }
 export interface Permission { id: number; code: string; name: string; module: string; }
-export interface Role { code: string; name: string; permissions: string[]; }
+// 「模块 × 动作」权限矩阵：每模块含其支持的动作，动作码为 "module:action"。
+export interface PermAction { code: string; name: string; }
+export interface PermModule { code: string; name: string; actions: PermAction[]; }
+export interface Role { code: string; name: string; permissions: string[]; read_only?: boolean; builtin?: boolean; }
 export interface Notification {
   id: number; name: string; description?: string;
   notify_category: string; enabled: boolean;
@@ -92,10 +157,15 @@ export interface SiteConfig { site_name: string; site_logo: string; site_domain:
 export interface RetentionPolicy { id: number; ch_table: string; display_name: string; description: string; retention_days: number; updated_by: string; updated_at: string; }
 export interface FeatureFlag { id: number; key: string; value: string; default_value: string; description: string; updated_by: string; updated_at: string; }
 
+export type AuditActorType = "user" | "system" | "agent";
+export type AuditOutcome = "success" | "failure";
+
 export interface AuditLog {
-  id: number; username: string; action: string;
-  resource_type: string; resource_id: string;
-  path: string; ip: string; status_code: number; created_at: string;
+  id: number; actor_type: AuditActorType; username: string; action: string;
+  outcome: AuditOutcome;
+  resource_type: string; resource_id: string; target_name: string;
+  path: string; ip: string; detail: string; change_detail: string;
+  status_code: number; created_at: string;
 }
 
 // ===== 运维中心（operations）=====
@@ -143,7 +213,7 @@ export interface InspectionSummary {
   total_hosts: number; online_hosts: number; offline_hosts: number;
   agent_outdated_count: number; plugin_error_count: number; plugin_outdated_count: number;
 }
-export interface InspectionHostPlugin { name: string; version: string; status: string; }
+export interface InspectionHostPlugin { name: string; version: string; status: string; need_update?: boolean; }
 export interface InspectionHostItem {
   host_id: string; hostname: string; ipv4: string[];
   status: string; agent_version: string;
@@ -236,6 +306,437 @@ export interface TaskReportMap {
   edr: EdrTaskReport;
 }
 
+// ===== 报告中心（reports）— 新增类型 =====
+
+// --- 模块报表趋势 & Top 列表（camelCase，除 top-failed-rules / top-risk-hosts 用 snake_case）---
+
+export interface BaselineScoreTrend {
+  dates: string[];
+  scores: number[];
+  passRates: number[];
+}
+
+export interface CheckResultTrend {
+  dates: string[];
+  passed: number[];
+  failed: number[];
+  warning: number[];
+}
+
+// GET /reports/top-failed-rules — snake_case
+export interface TopFailedRule {
+  rule_id: string;
+  title: string;
+  severity: string;
+  category: string;
+  affected_hosts: number;
+}
+
+// GET /reports/top-risk-hosts — snake_case
+export interface TopRiskHost {
+  host_id: string;
+  hostname: string;
+  ip: string;
+  os_family: string;
+  score: number;
+  fail_count: number;
+  critical_count: number;
+  high_count: number;
+}
+
+// 模块报表规范名别名（旧名 *TaskReport 保留不变）
+export type AntivirusModuleReport = AntivirusTaskReport;
+export type VulnModuleReport = VulnerabilityTaskReport;
+export type KubeModuleReport = KubeTaskReport;
+
+// GET /reports/edr — 完整字段版（EdrTaskReport 缺部分字段，此接口补全）
+export interface EdrModuleReport {
+  meta: { reportID: string; period: string; generatedAt: string; onlineHosts: number; totalRules: number; enabledRules: number };
+  summary: { totalAlerts: number; activeAlerts: number; resolvedAlerts: number; ignoredAlerts: number; affectedHosts: number; totalStories: number; highRiskStories: number };
+  severityDistribution: Record<string, number>;
+  categoryDistribution: { category: string; count: number }[];
+  tacticDistribution: Record<string, number>;
+  topRules: { title: string; category: string; severity: string; count: number }[];
+  topHosts: { host_id: string; hostname: string; count: number }[];
+  topStories: { story_id: string; host_id: string; hostname: string; phase: string; severity: string; event_count: number; alert_count: number; risk_score: number }[];
+  suppressionStats: { reason: string; count: number }[];
+  trend: { prevPeriodAlerts: number; growthPercent: number; direction: string };
+  rawEventStats?: {
+    available: boolean;
+    totalEvents: number;
+    uniqueHosts: number;
+    eventsByType: { event_type: string; count: number }[];
+    eventsByHour: { hour: number; count: number }[];
+    topHostsByEvent: { host_id: string; hostname: string; count: number }[];
+    topExe: { exe: string; count: number }[];
+  };
+  autoResponseStats: { networkBlocks: number; hostIsolations: number; processKills: number; total: number };
+  iocStats: { iocSnapshots: number; memoryThreats: number; topIOCTypes: { technique: string; count: number }[] };
+  ruleEfficacy: { totalRules: number; enabledRules: number; hitRules: number; zeroHitRules: number; hitRate: number; topZeroHit: { id: string; name: string; category: string }[] };
+  improvements: string[];
+}
+
+// --- 共享辅助类型 ---
+
+// camelCase executive 报告通用建议块（antivirus / vuln / kube / remediation executive 共用）
+export interface ReportRecommendation {
+  overallAssessment: string;
+  actionSuggestions: string[];
+  disclaimer: string;
+}
+
+// snake_case — 基线 executive 风险项（GET /reports/task/:task_id/executive）
+export interface RiskItem {
+  category: string;
+  description: string;
+  impact: string;
+  severity: string;
+  severity_label: string;
+  recommendation: string;
+  affected_count: number;
+}
+
+// snake_case — 基线 executive 主机明细
+export interface HostCheckDetail {
+  host_id: string;
+  hostname: string;
+  ip: string;
+  os_family: string;
+  passed_count: number;
+  failed_count: number;
+  warning_count: number;
+  na_count: number;
+  score: number;
+  status: string;
+  critical_fails: number;
+  high_fails: number;
+}
+
+// --- Executive 报告类型 ---
+
+// GET /reports/task/:task_id/executive — snake_case
+export interface ExecutiveTaskReport {
+  meta: {
+    report_id: string;
+    report_title: string;
+    generated_at: string;
+    company_name: string;
+    baseline_type: string;
+    check_target: string;
+  };
+  summary: {
+    overall_conclusion: string;
+    check_scope: string;
+    compliance_rate: number;
+    has_critical_risk: boolean;
+    has_high_risk: boolean;
+    conclusion_statement: string;
+    coverage_note: string;
+  };
+  task_info: {
+    task_id: string;
+    task_name: string;
+    policy_id: string;
+    policy_name: string;
+    executed_at: string;
+    completed_at: string;
+    host_count: number;
+    rule_count: number;
+    status: string;
+  };
+  statistics: {
+    total_checks: number;
+    passed_checks: number;
+    failed_checks: number;
+    warning_checks: number;
+    na_checks: number;
+    pass_rate: number;
+    by_severity: { critical: number; high: number; medium: number; low: number };
+    by_category: Record<string, number>;
+  };
+  category_stats: {
+    category: string;
+    category_name: string;
+    total_checks: number;
+    passed_checks: number;
+    failed_checks: number;
+    pass_rate: number;
+  }[];
+  security_score: {
+    score: number;
+    grade: string;
+    grade_color: string;
+    score_explanation: string;
+    security_note: string;
+  };
+  host_details: HostCheckDetail[];
+  risk_items: RiskItem[];
+  failed_rules: {
+    rule_id: string;
+    title: string;
+    severity: string;
+    category: string;
+    affected_count: number;
+    fix_suggestion: string;
+  }[];
+  coverage: {
+    baseline_source: string;
+    covered_areas: string[];
+    uncovered_areas: string[];
+    improvement_note: string;
+  };
+  recommendation: {
+    overall_assessment: string;
+    action_suggestions: string[];
+    disclaimer: string;
+  };
+}
+
+// GET /reports/antivirus/:task_id/executive — camelCase
+export interface AntivirusExecutiveReport {
+  meta: {
+    reportId: string;
+    reportTitle: string;
+    generatedAt: string;
+    companyName: string;
+    scanType: string;
+    checkTarget: string;
+  };
+  summary: {
+    overallConclusion: string;
+    threatOverview: string;
+    hasCriticalThreat: boolean;
+    hasHighThreat: boolean;
+  };
+  taskInfo: {
+    taskId: number;
+    taskName: string;
+    scanType: string;
+    hostCount: number;
+    scannedHosts: number;
+    threatCount: number;
+    startedAt: string;
+    finishedAt: string;
+  };
+  statistics: {
+    totalThreats: number;
+    detectedThreats: number;
+    quarantinedThreats: number;
+    deletedThreats: number;
+    ignoredThreats: number;
+    bySeverity: Record<string, number>;
+    byThreatType: Record<string, number>;
+    byAction: Record<string, number>;
+  };
+  hostDetails: {
+    hostId: string;
+    hostname: string;
+    ip: string;
+    threatCount: number;
+    criticalCount: number;
+    highCount: number;
+  }[];
+  topThreats: {
+    threatName: string;
+    count: number;
+    severity: string;
+    affectedHosts: number;
+    filePaths: string[];
+  }[];
+  recommendation: ReportRecommendation;
+}
+
+// GET /reports/vulnerability/executive — camelCase
+export interface VulnExecutiveReport {
+  meta: {
+    reportId: string;
+    reportTitle: string;
+    generatedAt: string;
+    companyName: string;
+    reportPeriod: string;
+    checkTarget: string;
+  };
+  summary: {
+    overallConclusion: string;
+    vulnOverview: string;
+    hasCriticalVuln: boolean;
+    hasHighVuln: boolean;
+    complianceRate: number;
+  };
+  statistics: {
+    totalVulns: number;
+    unpatchedVulns: number;
+    fixedVulns: number;
+    ignoredVulns: number;
+    affectedHosts: number;
+    bySeverity: Record<string, number>;
+    byComponent: { component: string; count: number }[];
+  };
+  hostDetails: {
+    hostId: string;
+    hostname: string;
+    ip: string;
+    vulnCount: number;
+    criticalCount: number;
+    highCount: number;
+  }[];
+  topVulns: {
+    cveId: string;
+    severity: string;
+    cvssScore: number;
+    component: string;
+    affectedHosts: number;
+    description: string;
+  }[];
+  recommendation: ReportRecommendation;
+}
+
+// GET /reports/kube/executive — camelCase
+export interface KubeExecutiveReport {
+  meta: {
+    reportId: string;
+    reportTitle: string;
+    generatedAt: string;
+    companyName: string;
+    reportPeriod: string;
+    checkTarget: string;
+  };
+  summary: {
+    overallConclusion: string;
+    alarmOverview: string;
+    baselineOverview: string;
+    hasCriticalAlarm: boolean;
+  };
+  alarmStatistics: {
+    totalAlarms: number;
+    pendingAlarms: number;
+    processedAlarms: number;
+    ignoredAlarms: number;
+    bySeverity: Record<string, number>;
+    byAlarmType: Record<string, number>;
+    byCluster: { clusterName: string; count: number }[];
+  };
+  baselineStatistics: {
+    totalChecks: number;
+    passed: number;
+    failed: number;
+    warning: number;
+    bySeverity: Record<string, number>;
+    byCategory: Record<string, number>;
+  };
+  failedCheckDetails: {
+    checkId: string;
+    checkName: string;
+    category: string;
+    severity: string;
+    severityLabel: string;
+    description: string;
+    remediation: string;
+    clusterName: string;
+    affectedResources: string[];
+  }[];
+  baselineRiskItems: {
+    checkId: string;
+    category: string;
+    description: string;
+    severity: string;
+    severityLabel: string;
+    remediation: string;
+    clusterName: string;
+  }[];
+  clusterDetails: { clusterName: string; alarmCount: number; baselinePassRate: number }[];
+  topAlarms: { namespace: string; target: string; alarmType: string; count: number }[];
+  recommendation: ReportRecommendation;
+}
+
+// GET /reports/remediation/executive — camelCase
+export interface RemediationExecutiveReport {
+  meta: {
+    reportId: string;
+    reportTitle: string;
+    generatedAt: string;
+    companyName: string;
+    reportPeriod: string;
+    checkTarget: string;
+  };
+  summary: {
+    overallConclusion: string;
+    remediationOverview: string;
+    hasFailedTasks: boolean;
+    hasUnpatchedVulns: boolean;
+    remediationRate: number;
+  };
+  statistics: {
+    totalTasks: number;
+    successTasks: number;
+    failedTasks: number;
+    pendingTasks: number;
+    cancelledTasks: number;
+    successRate: number;
+    totalVulns: number;
+    patchedVulns: number;
+    unpatchedVulns: number;
+    remediationRate: number;
+    mttrHours: number;
+    bySeverity: { severity: string; total: number; fixed: number; rate: number }[];
+    byComponent: { component: string; total: number; fixed: number }[];
+  };
+  taskDetails: {
+    id: number;
+    cveId: string;
+    hostname: string;
+    ip: string;
+    component: string;
+    command: string;
+    status: string;
+    startedAt: string;
+    finishedAt: string;
+  }[];
+  hostDetails: {
+    hostId: string;
+    hostname: string;
+    ip: string;
+    total: number;
+    success: number;
+    failed: number;
+  }[];
+  recommendation: ReportRecommendation;
+}
+
+// GET /reports/edr/executive — meta.reportID + keyMetrics camelCase
+export interface EdrExecutiveReport {
+  meta: { reportID: string; period: string; generatedAt: string };
+  keyMetrics: {
+    totalAlerts: number;
+    criticalAlerts: number;
+    highAlerts: number;
+    totalStories: number;
+    highRiskStories: number;
+    affectedHosts: number;
+    onlineHosts: number;
+    coverage: number;
+  };
+  riskScore: number;
+  conclusion: string;
+  suggestions: string[];
+}
+
+// --- 已保存报告 ---
+// GET /reports/generated
+export interface GeneratedReportItem {
+  id: number;
+  report_type: string;
+  title: string;
+  report_id: string;
+  period: string;
+  created_at: string;
+}
+
+export interface GeneratedReportList {
+  items: GeneratedReportItem[];
+  total: number;
+}
+
 // ===== 资产中心（assets）=====
 export type RuntimeType = "vm" | "docker" | "k8s";
 
@@ -291,6 +792,11 @@ export interface HostRiskDistribution {
   high: number;
   medium: number;
   low: number;
+}
+export interface HostOSDistributionItem {
+  os_family: string;
+  major: string; // os_version 主版本号（"9.6" → "9"）
+  count: number;
 }
 
 export interface AssetOverview {
@@ -546,11 +1052,13 @@ export interface Vulnerability {
   subscope?: string;
   fixOwner?: string;
   hostBinaryPath?: string;
+  // matchedComponent 主机实际匹配到的真实包名；优先于 component 展示(component 常是 advisory 错标子包名)
+  matchedComponent?: string;
   createdAt?: string;
   updatedAt?: string;
   hosts?: VulnerabilityHostRef[];
 }
-export interface VulnerabilityStats { total: number; critical: number; high: number; affectedHosts: number; }
+export interface VulnerabilityStats { total: number; critical: number; high: number; affectedHosts: number; hostInstances: number; patched: number; unpatched: number; remediationRate: number; }
 // GET /vulnerabilities → { items, total, stats }
 export interface VulnerabilityListResult { items: Vulnerability[]; total: number; stats: VulnerabilityStats; }
 
@@ -630,6 +1138,16 @@ export interface RemediationReport {
   mttr: number;
   bySeverity: RemediationSeverityStat[];
   topUnpatched: RemediationHostStat[] | null;
+  recentPatched: RemediationPatchedInstance[] | null;
+}
+export interface RemediationPatchedInstance {
+  cveId: string;
+  severity: string;
+  hostId: string;
+  hostname: string;
+  ip: string;
+  component: string;
+  patchedAt: string | null;
 }
 export interface RemediationTrendItem { date: string; patched: number; discovered: number; }
 
@@ -725,6 +1243,10 @@ export interface VulnDataSource {
   lastError?: string;
   lastCount: number;
   lastDurationMs: number;
+  // vulnCount 该源当前在库漏洞数(运行时聚合)。lastCount 是上次同步 delta(静默期为 0)，
+  // vulnCount 反映真实库存，OS 源(rhsa/rocky-apollo)同步由 VulnSync 负责时看这个更准。
+  vulnCount?: number;
+  advisoryWatermark?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -757,6 +1279,8 @@ export interface KubeCluster {
   gcpEnabled?: boolean;
   gcpProjectId?: string;
   gcpSubscription?: string;
+  gcpLocation?: string;
+  gcpClusterName?: string;
   createdAt: string;
   // getCluster 详情额外返回（列表接口无）
   summary?: { nodes: number; pods: number; namespaces: number; deployments: number; services: number; alarms: number };
@@ -986,6 +1510,13 @@ export interface ServiceAlertList { items: ServiceAlert[]; total: number; stats:
 // 注：字段名镜像后端（snake_case）。/policies 返回 { items }（无 total）；其余列表为 Paged<T>{ items, total }。
 
 // 基线检查策略
+// 详细 OS 版本要求：每个 OS 族各自的版本区间
+export interface OSRequirement {
+  os_family: string;
+  min_version?: string;
+  max_version?: string;
+}
+
 export interface BaselinePolicy {
   id: string;
   name: string;
@@ -993,6 +1524,7 @@ export interface BaselinePolicy {
   description: string;
   os_family: string[];
   os_version: string;
+  os_requirements?: OSRequirement[];
   enabled: boolean;
   group_id?: string;
   runtime_types?: RuntimeType[];
@@ -1002,6 +1534,21 @@ export interface BaselinePolicy {
 }
 // /policies 返回 { items }，无 total
 export interface BaselinePolicyList { items: BaselinePolicy[]; }
+
+// 基线规则（策略下的检查项）
+export interface BaselineRule {
+  rule_id: string;
+  policy_id: string;
+  category: string;
+  title: string;
+  description: string;
+  severity: string;
+  enabled: boolean;
+  builtin: boolean;
+  runtime_types?: RuntimeType[];
+  created_at: string;
+  updated_at: string;
+}
 
 export interface BaselinePolicyStatistics {
   policy_id: string;
@@ -1041,8 +1588,10 @@ export interface BaselineTask {
   policy_id: string;
   policy_ids?: string[];
   rule_ids?: string[] | null;
-  status: "created" | "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "created" | "pending" | "running" | "completed" | "partial" | "failed" | "cancelled";
   timeout_minutes?: number;
+  retry_count?: number;
+  max_retries?: number;
   matched_host_count?: number;
   total_host_count?: number;
   dispatched_host_count?: number;
@@ -1377,6 +1926,12 @@ export interface EdrEvent {
   uid?: string;
   gid?: string;
   return_code?: string;
+  // FIM 上下文:谁改的(username)/谁登录的(login_uid/login_user)/改了什么(敏感文件 content_hash/file_size)
+  username?: string;
+  login_uid?: string;
+  login_user?: string;
+  content_hash?: string;
+  file_size?: string;
 }
 export interface EdrEventStats {
   total: number;
@@ -1416,6 +1971,51 @@ export interface DetectionRuleStats {
 export interface ThreatIntelStats { ip: number; hash: number; domain: number; url: number; total: number; }
 export interface ThreatIntelIocList { items: string[]; total: number; type: string; }
 export interface ThreatIntelCheckResult { hit: boolean; type: string; value: string; }
+// IOC 命中来源溯源
+export interface IOCSourceInfo {
+  hit: boolean;
+  origin: string; // local/external/none
+  source: string;
+  severity: string;
+  description: string;
+  ref_type: string;
+  ref_id: string;
+}
+// 自有情报库
+export interface LocalIOC {
+  id: number;
+  ioc_type: string; // ip/domain/hash/url
+  value: string;
+  source: string; // tp_extract/manual
+  severity: string;
+  description: string;
+  ref_type: string;
+  ref_id: string;
+  created_by: string;
+  created_at: string;
+}
+
+// 威胁情报同步计划
+export interface IntelSyncSchedule {
+  id: number;
+  name: string;
+  cronExpr: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+export interface IntelSyncExecution {
+  id: number;
+  scheduleId: number;
+  status: string; // running / success / failed
+  errorMsg: string;
+  iocCount: number;
+  duration: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
 
 // 攻击故事线
 export interface Storyline {
@@ -1532,6 +2132,19 @@ export interface BdeBaseline {
   first_seen: string;
   created_at: string;
   updated_at: string;
+  // 学习进度（后端按 samples/门槛 与 first_seen/学习期 推导）
+  required_min?: number;
+  sample_pct?: number;
+  time_pct?: number;
+  progress_pct?: number;
+  learning_ends?: string;
+  blocking_reason?: string;
+  metrics?: BdeMetricStat[]; // 13 维学到的行为画像
+}
+export interface BdeMetricStat {
+  key: string;
+  mean: number;
+  stddev: number;
 }
 export interface BdeBaselineStats {
   total_hosts: number;

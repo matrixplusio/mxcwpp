@@ -39,8 +39,9 @@ func TestNewHTTPHandler_Metrics(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "engine metrics placeholder") {
-		t.Fatalf("body missing metrics placeholder: %s", w.Body.String())
+	// /metrics 现暴露真实 Prometheus 默认 registry（含 Go runtime 指标），非占位桩。
+	if !strings.Contains(w.Body.String(), "# HELP") {
+		t.Fatalf("body not prometheus exposition format")
 	}
 }
 

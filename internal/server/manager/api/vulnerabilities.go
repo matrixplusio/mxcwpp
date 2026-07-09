@@ -36,6 +36,10 @@ type vulnerabilityListFilter struct {
 	Component     string
 	ExploitStatus string // has_exploit / in_kev / none
 	Ecosystem     string // OS / Go / npm / PyPI / Maven / Cargo
+	// PackageType 包类型维度: os(系统/rpm/dnf/yum/apt 发行版包) / app(应用依赖 golang/maven/npm/pypi) / all(全部)
+	// 判别源 vulnerabilities.source: osv 聚合源=应用依赖, 其余(rhsa/debian-tracker/alpine/rocky-apollo/usn)=OS 发行版通告。
+	// 默认 os: 系统只显示 OS 包漏洞, 屏蔽应用依赖噪声。
+	PackageType   string
 	Priority      string // high / medium-high / medium / low
 	VulnCategory  string // P5.1: kernel/critical_shared_lib/shared_lib/system_daemon/cli_tool/web_service/db_service/container_runtime/virtualization/language_dep/other
 	RestartAction string // P5.5: reboot_host/restart_dependent_services/restart_specific_service/no_action/rebuild_app/unknown
@@ -55,8 +59,22 @@ type vulnerabilityListFilter struct {
 	Sort    string // priority_score / cvss_score
 }
 
+// applyPackageType 按包类型维度过滤: os=发行版 OS 包(rpm/dnf/yum/apt) / app=应用依赖 / 其余=全部不过滤。
+// 判别 vulnerabilities.source: osv 是应用依赖(golang/maven/npm/pypi)聚合源, 其余均为 OS 发行版通告。
+func applyPackageType(query *gorm.DB, packageType string) *gorm.DB {
+	switch packageType {
+	case "os":
+		return query.Where("vulnerabilities.source <> ?", "osv")
+	case "app":
+		return query.Where("vulnerabilities.source = ?", "osv")
+	}
+	return query
+}
+
 func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityListFilter) *gorm.DB {
 	query := h.db.Model(&model.Vulnerability{})
+
+	query = applyPackageType(query, filter.PackageType)
 
 	if filter.HostID != "" {
 		query = query.Joins("JOIN host_vulnerabilities hv ON hv.vuln_id = vulnerabilities.id")
@@ -97,7 +115,13 @@ func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityLis
 		if filter.HostID != "" {
 			query = query.Where("hv.status = ?", filter.Status)
 		} else {
-			query = query.Where("vulnerabilities.status = ?", filter.Status)
+			// 实例级口径:该 CVE 存在处于此状态的主机实例即命中。
+			// 禁用 vulnerabilities.status —— 它是 CVE 级 rollup,全部主机修好才置 patched,
+			// 用它筛"已修复"会漏掉"部分主机已修"的实例(如某 CVE 命中 3 台仅 1 台修好),
+			// 导致修复页显示已修数 >0 但列表筛已修返回空。详见 docs/vuln-stats-glossary.md。
+			query = query.Where(
+				"EXISTS (SELECT 1 FROM host_vulnerabilities WHERE host_vulnerabilities.vuln_id = vulnerabilities.id AND host_vulnerabilities.status = ?)",
+				filter.Status)
 		}
 	}
 
@@ -193,6 +217,8 @@ func (h *VulnerabilitiesHandler) countAffectedHosts(filter vulnerabilityListFilt
 		Joins("JOIN vulnerabilities ON vulnerabilities.id = hv.vuln_id").
 		Distinct("hv.host_id")
 
+	query = applyPackageType(query, filter.PackageType)
+
 	if filter.Search != "" {
 		pattern := "%" + filter.Search + "%"
 		query = query.Where(
@@ -258,6 +284,11 @@ func (h *VulnerabilitiesHandler) UpdateCategoryOverride(c *gin.Context) {
 func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	// 包类型默认 os: 系统只显示 OS/rpm/dnf/yum/apt 发行版包漏洞, 应用依赖需显式 package_type=app|all。
+	packageType := strings.TrimSpace(c.Query("package_type"))
+	if packageType == "" {
+		packageType = "os"
+	}
 	filter := vulnerabilityListFilter{
 		HostID:        strings.TrimSpace(c.Query("host_id")),
 		Search:        strings.TrimSpace(c.Query("search")),
@@ -275,6 +306,7 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 		CWECategory:   strings.TrimSpace(c.Query("cwe_category")),
 		ShowAll:       c.Query("show_all") == "true",
 		Sort:          strings.TrimSpace(c.Query("sort")),
+		PackageType:   packageType,
 	}
 	if page <= 0 {
 		page = 1
@@ -328,6 +360,11 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 		if filter.HostID != "" {
 			vulns[i].AffectedHosts = len(vulns[i].Hosts)
 		}
+		// 按状态筛选时,状态列反映实例级筛选口径。vulnerabilities.status 是 CVE 级 rollup
+		// (全部主机修好才 patched),与"已修复实例"不一致,直接展示会让用户困惑。
+		if filter.Status != "" {
+			vulns[i].Status = filter.Status
+		}
 	}
 
 	// 聚合 asset_type / fix_owner 到 vulnerability 顶层(全局列表 hosts 数组为空时用)
@@ -338,20 +375,23 @@ func (h *VulnerabilitiesHandler) ListVulnerabilities(c *gin.Context) {
 			vulnIDs[i] = v.ID
 		}
 		type aggRow struct {
-			VulnID         uint   `gorm:"column:vuln_id"`
-			AssetType      string `gorm:"column:asset_type"`
-			Subscope       string `gorm:"column:subscope"`
-			FixOwner       string `gorm:"column:fix_owner"`
-			HostBinaryPath string `gorm:"column:host_binary_path"`
+			VulnID           uint   `gorm:"column:vuln_id"`
+			AssetType        string `gorm:"column:asset_type"`
+			Subscope         string `gorm:"column:subscope"`
+			FixOwner         string `gorm:"column:fix_owner"`
+			HostBinaryPath   string `gorm:"column:host_binary_path"`
+			MatchedComponent string `gorm:"column:matched_component"`
 		}
 		var aggs []aggRow
 		// 用 MAX() 取任一非 unknown 值,subscope/binary_path 同理(UI 提示性,非精确性要求)
+		// matched_component 取任一非空真实包名,让 UI 显示主机真实装的包而非 advisory 错标子包名
 		h.db.Raw(`
 SELECT vuln_id,
   COALESCE(MAX(CASE WHEN asset_type<>'unknown' AND asset_type<>'' THEN asset_type END), 'unknown') AS asset_type,
   COALESCE(MAX(CASE WHEN subscope<>'unknown' AND subscope<>'' THEN subscope END), 'unknown') AS subscope,
   COALESCE(MAX(CASE WHEN fix_owner<>'unknown' AND fix_owner<>'' THEN fix_owner END), 'unknown') AS fix_owner,
-  COALESCE(MAX(CASE WHEN host_binary_path<>'' THEN host_binary_path END), '') AS host_binary_path
+  COALESCE(MAX(CASE WHEN host_binary_path<>'' THEN host_binary_path END), '') AS host_binary_path,
+  COALESCE(MAX(CASE WHEN matched_component<>'' THEN matched_component END), '') AS matched_component
 FROM host_vulnerabilities WHERE vuln_id IN ?
 GROUP BY vuln_id`, vulnIDs).Scan(&aggs)
 		aggMap := make(map[uint]aggRow, len(aggs))
@@ -364,6 +404,7 @@ GROUP BY vuln_id`, vulnIDs).Scan(&aggs)
 				vulns[i].Subscope = a.Subscope
 				vulns[i].FixOwner = a.FixOwner
 				vulns[i].HostBinaryPath = a.HostBinaryPath
+				vulns[i].MatchedComponent = a.MatchedComponent
 			}
 		}
 	}
@@ -401,14 +442,33 @@ GROUP BY vuln_id`, vulnIDs).Scan(&aggs)
 
 	affectedHosts := h.countAffectedHosts(statsFilter)
 
+	// 实例级统计（主机漏洞实例口径，与修复报告页同源）：在当前筛选的 vuln 集合上统计
+	// host_vulnerabilities。清掉状态约束以便按 patched/unpatched 拆分。CVE 级 total 是"漏洞种类"，
+	// 实例级是"主机×漏洞"，两者量纲不同、各自展示，见 docs/vuln-stats-glossary.md。
+	baseFilter := filter
+	baseFilter.Status = ""
+	vulnIDQuery := h.buildVulnerabilityQuery(baseFilter).Select("vulnerabilities.id")
+	var hostInstances, patchedInstances, unpatchedInstances int64
+	h.db.Model(&model.HostVulnerability{}).Where("vuln_id IN (?) AND status != ?", vulnIDQuery, "ignored").Count(&hostInstances)
+	h.db.Model(&model.HostVulnerability{}).Where("vuln_id IN (?) AND status = ?", vulnIDQuery, "patched").Count(&patchedInstances)
+	h.db.Model(&model.HostVulnerability{}).Where("vuln_id IN (?) AND status = ?", vulnIDQuery, "unpatched").Count(&unpatchedInstances)
+	var remediationRate float64
+	if hostInstances > 0 {
+		remediationRate = float64(patchedInstances) / float64(hostInstances) * 100
+	}
+
 	Success(c, gin.H{
 		"items": vulns,
 		"total": total,
 		"stats": gin.H{
-			"total":         statsTotal,
-			"critical":      critical,
-			"high":          high,
-			"affectedHosts": affectedHosts,
+			"total":           statsTotal, // 漏洞种类（CVE 去重）
+			"critical":        critical,
+			"high":            high,
+			"affectedHosts":   affectedHosts,
+			"hostInstances":   hostInstances,      // 主机漏洞总数（实例）
+			"patched":         patchedInstances,   // 已修复实例
+			"unpatched":       unpatchedInstances, // 未修复实例
+			"remediationRate": remediationRate,    // 修复率 %
 		},
 	})
 }
@@ -433,7 +493,47 @@ func (h *VulnerabilitiesHandler) GetVulnerability(c *gin.Context) {
 		return
 	}
 
+	h.fillHostInfo(vuln.Hosts)
+
 	Success(c, vuln)
+}
+
+// fillHostInfo 用 hosts 表的当前 hostname / ip 回填受影响主机信息。
+// host_vulnerabilities.hostname/ip 是扫描期冗余副本，常为空；以 hosts 表为准（空才保留副本）。
+func (h *VulnerabilitiesHandler) fillHostInfo(hosts []model.HostVulnerability) {
+	if len(hosts) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(hosts))
+	for _, hv := range hosts {
+		ids = append(ids, hv.HostID)
+	}
+	var rows []model.Host
+	if err := h.db.Select("host_id, hostname, ipv4").Where("host_id IN ?", ids).Find(&rows).Error; err != nil {
+		h.logger.Warn("回填受影响主机信息失败", zap.Error(err))
+		return
+	}
+	type info struct {
+		name string
+		ip   string
+	}
+	infoMap := make(map[string]info, len(rows))
+	for _, r := range rows {
+		ip := ""
+		if len(r.IPv4) > 0 {
+			ip = r.IPv4[0]
+		}
+		infoMap[r.HostID] = info{name: r.Hostname, ip: ip}
+	}
+	for i := range hosts {
+		v := infoMap[hosts[i].HostID]
+		if v.name != "" {
+			hosts[i].Hostname = v.name
+		}
+		if v.ip != "" {
+			hosts[i].IP = v.ip
+		}
+	}
 }
 
 // IgnoreVulnerability 忽略漏洞

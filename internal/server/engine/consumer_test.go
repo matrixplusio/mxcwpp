@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/IBM/sarama"
@@ -9,32 +10,45 @@ import (
 
 func TestNewKafkaConsumer_RejectsEmptyBrokers(t *testing.T) {
 	t.Parallel()
-	_, err := NewKafkaConsumer(nil, nil, nil)
+	_, err := NewKafkaConsumer(nil, "", nil, nil)
 	if err == nil {
 		t.Fatalf("expected error for nil brokers")
 	}
-	_, err = NewKafkaConsumer([]string{}, nil, nil)
+	_, err = NewKafkaConsumer([]string{}, "", nil, nil)
 	if err == nil {
 		t.Fatalf("expected error for empty brokers")
 	}
 }
 
-func TestSubscribedTopics_IsNonEmpty(t *testing.T) {
+// TestBuildSubscribedTopics_AppliesPrefix 回归: agent.* 必须带 topic_prefix
+// (与 AgentCenter 生产端一致), 否则 Engine 收不到任何事件; vuln.advisory 由
+// VulnSync 裸名生产, 保持不带前缀。
+func TestBuildSubscribedTopics_AppliesPrefix(t *testing.T) {
 	t.Parallel()
-	if len(SubscribedTopics) == 0 {
-		t.Fatalf("SubscribedTopics must not be empty")
-	}
+	got := buildSubscribedTopics("prod")
 	want := map[string]bool{
-		"mxcwpp.agent.ebpf":     true,
-		"mxcwpp.agent.events":   true,
-		"mxcwpp.agent.scanner":  true,
-		"mxcwpp.agent.baseline": true,
-		"mxcwpp.vuln.advisory":  true,
+		"prodmxcwpp.agent.ebpf":     true,
+		"prodmxcwpp.agent.events":   true,
+		"prodmxcwpp.agent.scanner":  true,
+		"prodmxcwpp.agent.baseline": true,
+		"mxcwpp.vuln.advisory":      true, // advisory 裸名, 不带前缀
 	}
-	for _, topic := range SubscribedTopics {
+	if len(got) != len(want) {
+		t.Fatalf("topic count = %d, want %d: %v", len(got), len(want), got)
+	}
+	for _, topic := range got {
 		if !want[topic] {
-			t.Errorf("unexpected topic in SubscribedTopics: %s", topic)
+			t.Errorf("unexpected topic: %s", topic)
 		}
+	}
+}
+
+// TestBuildSubscribedTopics_EmptyPrefix 空前缀时 agent.* 退化为裸名。
+func TestBuildSubscribedTopics_EmptyPrefix(t *testing.T) {
+	t.Parallel()
+	got := buildSubscribedTopics("")
+	if !slices.Contains(got, "mxcwpp.agent.ebpf") {
+		t.Errorf("empty prefix should yield bare mxcwpp.agent.ebpf, got %v", got)
 	}
 }
 

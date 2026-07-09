@@ -31,24 +31,15 @@ interface ListParams {
 interface UserForm {
   username: string;
   email: string;
-  role: "admin" | "user";
+  role: string;
   status: "active" | "inactive";
   password: string;
 }
 
-const buildRoleOptions = (t: TFunction) => [
-  { label: t("system.users.allRoles"), value: "" },
-  { label: t("system.users.roleAdmin"), value: "admin" },
-  { label: t("system.users.roleUser"), value: "user" },
-];
 const buildStatusOptions = (t: TFunction) => [
   { label: t("system.users.allStatus"), value: "" },
   { label: t("system.users.statusActive"), value: "active" },
   { label: t("system.users.statusInactive"), value: "inactive" },
-];
-const buildRoleFormOptions = (t: TFunction) => [
-  { label: t("system.users.roleAdmin"), value: "admin" },
-  { label: t("system.users.roleUser"), value: "user" },
 ];
 const buildStatusFormOptions = (t: TFunction) => [
   { label: t("system.users.statusActive"), value: "active" },
@@ -60,10 +51,15 @@ const emptyForm: UserForm = { username: "", email: "", role: "user", status: "ac
 export default function UsersPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const roleOptions = buildRoleOptions(t);
   const statusOptions = buildStatusOptions(t);
-  const roleFormOptions = buildRoleFormOptions(t);
   const statusFormOptions = buildStatusFormOptions(t);
+
+  // 角色动态来自 RBAC（含内置 6 角色 + 自定义），不再写死 admin/user。
+  const { data: roles } = useQuery({ queryKey: ["sys-roles"], queryFn: () => systemApi.listRoles() });
+  const roleList = roles ?? [];
+  const roleNameMap = Object.fromEntries(roleList.map((r) => [r.code, r.name]));
+  const roleOptions = [{ label: t("system.users.allRoles"), value: "" }, ...roleList.map((r) => ({ label: r.name, value: r.code }))];
+  const roleFormOptions = roleList.map((r) => ({ label: r.name, value: r.code }));
   const [params, setParams] = useUrlState({ page: 1, page_size: 20, username: "", role: "", status: "" });
 
   const { data, isLoading } = useQuery({
@@ -125,7 +121,7 @@ export default function UsersPage() {
       key: "role",
       title: t("system.users.colRole"),
       render: (r) => (
-        <StatusTag tone={r.role === "admin" ? "info" : "neutral"}>{r.role === "admin" ? t("system.users.roleAdmin") : t("system.users.roleUser")}</StatusTag>
+        <StatusTag tone={r.role === "admin" ? "info" : "neutral"}>{roleNameMap[r.role] ?? r.role}</StatusTag>
       ),
     },
     {
@@ -230,7 +226,7 @@ export default function UsersPage() {
           <FormField label={t("system.users.colRole")}>
             <Select
               value={form.role}
-              onChange={(v) => setForm((f) => ({ ...f, role: v as UserForm["role"] }))}
+              onChange={(v) => setForm((f) => ({ ...f, role: v }))}
               options={roleFormOptions}
               className="w-full"
             />

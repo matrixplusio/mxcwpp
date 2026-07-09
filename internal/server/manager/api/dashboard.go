@@ -23,7 +23,11 @@ import (
 
 const (
 	dashboardCacheKey = "mxcwpp:cache:dashboard:stats"
-	dashboardCacheTTL = 30 * time.Second
+	// TTL 远大于刷新间隔：后台 warmer 每 dashboardWarmInterval 重算并续期，
+	// 用户请求始终命中热缓存（~1ms）。即便某次 warmer 失败，旧值仍可服务到 TTL，
+	// 不让用户撞上 2-3s 冷查询（computeStats 扫 scan_results 等大表）。
+	dashboardCacheTTL     = 5 * time.Minute
+	dashboardWarmInterval = 60 * time.Second
 )
 
 // DashboardHandler 是 Dashboard API 处理器
@@ -39,13 +43,42 @@ type DashboardHandler struct {
 
 // NewDashboardHandler 创建 Dashboard 处理器
 func NewDashboardHandler(db *gorm.DB, logger *zap.Logger, chConn chdriver.Conn, redisClient *redis.Client, acRegistry *sd.Registry, promClient *prometheus.Client) *DashboardHandler {
-	return &DashboardHandler{
+	h := &DashboardHandler{
 		db:          db,
 		logger:      logger,
 		chConn:      chConn,
 		redisClient: redisClient,
 		acRegistry:  acRegistry,
 		promClient:  promClient,
+	}
+	// 后台缓存预热：仅在 Redis 可用时启动。把 2-3s 的 computeStats 移出请求路径，
+	// 用户始终命中热缓存。进程级生命周期（退出即随进程结束）。
+	if redisClient != nil {
+		go h.cacheWarmLoop(context.Background())
+	}
+	return h
+}
+
+// cacheWarmLoop 周期性重算 Dashboard 统计并写入 Redis，使前端请求始终命中热缓存。
+func (h *DashboardHandler) cacheWarmLoop(ctx context.Context) {
+	warm := func() {
+		data, err := h.computeStats()
+		if err != nil {
+			h.logger.Warn("Dashboard 缓存预热失败", zap.Error(err))
+			return
+		}
+		h.redisClient.Set(ctx, dashboardCacheKey, data, dashboardCacheTTL)
+	}
+	warm() // 启动即预热一次，避免首请求冷查询
+	ticker := time.NewTicker(dashboardWarmInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			warm()
+		}
 	}
 }
 
@@ -136,9 +169,16 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	h.db.Model(&model.Alert{}).Where("status = ?", model.AlertStatusActive).Count(&pendingAlerts)
 	stats["pendingAlerts"] = pendingAlerts
 
-	// 3. 漏洞风险统计
+	// 3. 漏洞风险统计:数"真实可修 OS 主机漏洞"(host_vulnerabilities 实例,dnf/apt 系统包 + pre-check 确认
+	// 已装有修复),与漏洞列表(默认 OS)+雷达口径一致。
+	// 不用 vulnerabilities.status='unpatched'——那是 CVE 级 advisory rollup(含全源目录 + 不可信 rollup)，
+	// 会把待修数虚报成 2w+(实际真实待修仅数百)。
 	var pendingVulns int64
-	h.db.Model(&model.Vulnerability{}).Where("status = ?", "unpatched").Count(&pendingVulns)
+	h.db.Table("host_vulnerabilities AS hv").
+		Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
+		Where("hv.status = ? AND v.source <> ? AND hv.precheck_status IN ?",
+			"unpatched", "osv", []string{"available", "outdated_repo"}).
+		Count(&pendingVulns)
 	stats["pendingVulnerabilities"] = pendingVulns
 
 	var latestVuln model.Vulnerability
@@ -186,28 +226,50 @@ func (h *DashboardHandler) computeStats() ([]byte, error) {
 	}
 
 	// 7. 主机风险分布百分比
+	// 主机告警维：按"有 active incident 的主机"算，而非任意 active 告警。
+	// CEL 检测流被未治理的 behavior 规则(fork/内核模块/SSH配置等 high/critical)刷满全舰队,
+	// 任意告警口径下几乎每台都命中→比例恒 ~100%、雷达该维恒塌陷。incident 是经关联 + 流行度
+	// 过滤后的真实威胁信号(见 scheduler.incident_correlation prevalence filter),口径如实。
 	var alertHostCount int64
-	h.db.Model(&model.Alert{}).Where("status = ?", model.AlertStatusActive).Distinct("host_id").Count(&alertHostCount)
+	h.db.Model(&model.Incident{}).Where("status = ?", model.IncidentStatusActive).Distinct("host_id").Count(&alertHostCount)
 	totalHosts := hostCount + containerCount
 	if totalHosts > 0 {
-		stats["hostAlertPercent"] = float64(alertHostCount) / float64(totalHosts) * 100.0
+		// clamp 100：incident host_id 可能含已下线/容器等非当前主机集，比例 >100 会让雷达该维越界塌陷
+		p := float64(alertHostCount) / float64(totalHosts) * 100.0
+		if p > 100 {
+			p = 100
+		}
+		stats["hostAlertPercent"] = math.Round(p*10) / 10
 	} else {
 		stats["hostAlertPercent"] = 0.0
 	}
+	// vulnHostCount 只算"真实可修 OS 漏洞"的受影响主机(dnf/apt 系统包+precheck 已装有修复)，
+	// 不是"有任意 unpatched 漏洞"——否则 osv 应用依赖 + 未核查项让几乎每台都命中，比例恒 ~100%、雷达恒 0。
 	var vulnHostCount int64
-	h.db.Model(&model.HostVulnerability{}).Where("status = ?", "unpatched").Distinct("host_id").Count(&vulnHostCount)
+	h.db.Table("host_vulnerabilities AS hv").
+		Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
+		Where("hv.status = ? AND v.source <> ? AND hv.precheck_status IN ?",
+			"unpatched", "osv", []string{"available", "outdated_repo"}).
+		Distinct("hv.host_id").Count(&vulnHostCount)
 	if totalHosts > 0 {
-		stats["vulnHostPercent"] = float64(vulnHostCount) / float64(totalHosts) * 100.0
+		stats["vulnHostPercent"] = math.Round(float64(vulnHostCount)/float64(totalHosts)*1000) / 10
 	} else {
 		stats["vulnHostPercent"] = 0.0
 	}
-	// 检测告警：来自 CEL 规则引擎的告警（category = 'detection_rule'）
-	var edrAlertHostCount int64
-	h.db.Model(&model.Alert{}).Where("status = ? AND category = ?", model.AlertStatusActive, "detection_rule").Distinct("host_id").Count(&edrAlertHostCount)
+	// 检测维：CEL 检测引擎归因的真实威胁——有 active incident 且成员含 detection 源告警的主机。
+	// 原口径 category='detection_rule' 恒空(CEL 告警 category 是 persistence/impact 等语义分类,
+	// 从不写 'detection_rule')→ 该维恒 0;且前端读 detectionAlertPercent 而后端旧发 edrAlertPercent,
+	// 键名不匹配→ NaN 无数据。改挂 incident + detection 源,与主机告警维同源(经关联/流行度过滤)但限 CEL 归因。
+	var detectionAlertHostCount int64
+	h.db.Model(&model.Incident{}).
+		Joins("JOIN alerts a ON a.host_id = incidents.host_id AND a.status = ? AND a.source = ?",
+			model.AlertStatusActive, model.AlertSourceDetection).
+		Where("incidents.status = ?", model.IncidentStatusActive).
+		Distinct("incidents.host_id").Count(&detectionAlertHostCount)
 	if totalHosts > 0 {
-		stats["edrAlertPercent"] = math.Round(float64(edrAlertHostCount)/float64(totalHosts)*1000) / 10
+		stats["detectionAlertPercent"] = math.Round(float64(detectionAlertHostCount)/float64(totalHosts)*1000) / 10
 	} else {
-		stats["edrAlertPercent"] = 0.0
+		stats["detectionAlertPercent"] = 0.0
 	}
 	// 病毒主机百分比：扫描结果中有未处理威胁的主机
 	var virusHostCount int64
@@ -343,16 +405,21 @@ func (h *DashboardHandler) countAlertsBySeverity() (critical, high int64) {
 	return
 }
 
-// countVulnsBySeverity 按 severity 统计未修复漏洞数（仅 critical/high）
+// countVulnsBySeverity 按 severity 统计"真实可修 OS 漏洞"的唯一 CVE 数（仅 critical/high）。
+//
+// 只计 dnf/apt 系统包(source<>osv) 且 pre-check 确认主机已装+有修复(available/outdated_repo)的项，
+// 排除 osv 应用依赖、未适用(not_applicable)、已对账关闭项——否则评分被应用依赖 + 陈旧噪声拉爆恒为 0。
 func (h *DashboardHandler) countVulnsBySeverity() (critical, high int64) {
 	var rows []struct {
 		Severity string `gorm:"column:severity"`
 		Cnt      int64  `gorm:"column:cnt"`
 	}
-	h.db.Model(&model.Vulnerability{}).
-		Select("severity, COUNT(*) as cnt").
-		Where("status = ?", "unpatched").
-		Group("severity").
+	h.db.Table("host_vulnerabilities AS hv").
+		Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
+		Select("v.severity AS severity, COUNT(DISTINCT v.cve_id) AS cnt").
+		Where("hv.status = ? AND v.source <> ? AND hv.precheck_status IN ?",
+			"unpatched", "osv", []string{"available", "outdated_repo"}).
+		Group("v.severity").
 		Scan(&rows)
 	for _, r := range rows {
 		switch r.Severity {
@@ -524,12 +591,19 @@ func (h *DashboardHandler) calculateBaselinePercentages() (float64, float64) {
 		FailCount           int64 `gorm:"column:fail_count"`
 		MediumPlusFailCount int64 `gorm:"column:medium_plus_fail_count"`
 	}
+	// 合规率反映「当前状态」：每主机每规则只取最新一次扫描结果，避免历史复扫被重复计数
+	// （复合主键含 task_id，每次复扫追加整套新行；全表 SUM 会把同一主机扫 N 次算 N 倍）。
 	h.db.Raw(`
 		SELECT
 			SUM(CASE WHEN status = 'pass' THEN 1 ELSE 0 END) AS pass_count,
 			SUM(CASE WHEN status = 'fail' THEN 1 ELSE 0 END) AS fail_count,
 			SUM(CASE WHEN status = 'fail' AND severity IN ('medium','high','critical') THEN 1 ELSE 0 END) AS medium_plus_fail_count
-		FROM scan_results
+		FROM (
+			SELECT status, severity,
+				ROW_NUMBER() OVER (PARTITION BY host_id, rule_id ORDER BY checked_at DESC) AS rn
+			FROM scan_results
+		) ranked
+		WHERE rn = 1
 	`).Scan(&result)
 
 	totalResults := result.PassCount + result.FailCount
@@ -561,19 +635,25 @@ func (h *DashboardHandler) getBaselineRisksTop3() []gin.H {
 		LowCount      int64  `gorm:"column:low_count"`
 	}
 
+	// Top3 反映「当前失败状态」：每主机每规则取最新结果后过滤 fail，避免同一主机多次复扫
+	// 把同一失败项重复累加（旧实现按 7 天窗口 SUM 所有 fail 行，复扫越频繁数字越虚高）。
 	h.db.Raw(`
 		SELECT p.id AS policy_id, p.name,
-			SUM(CASE WHEN sr.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
-			SUM(CASE WHEN sr.severity = 'high'     THEN 1 ELSE 0 END) AS high_count,
-			SUM(CASE WHEN sr.severity = 'medium'   THEN 1 ELSE 0 END) AS medium_count,
-			SUM(CASE WHEN sr.severity = 'low'      THEN 1 ELSE 0 END) AS low_count
-		FROM scan_results sr
-		INNER JOIN policies p ON p.id = sr.policy_id
-		WHERE sr.status = 'fail'
+			SUM(CASE WHEN t.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
+			SUM(CASE WHEN t.severity = 'high'     THEN 1 ELSE 0 END) AS high_count,
+			SUM(CASE WHEN t.severity = 'medium'   THEN 1 ELSE 0 END) AS medium_count,
+			SUM(CASE WHEN t.severity = 'low'      THEN 1 ELSE 0 END) AS low_count
+		FROM (
+			SELECT policy_id, severity, status,
+				ROW_NUMBER() OVER (PARTITION BY host_id, rule_id ORDER BY checked_at DESC) AS rn
+			FROM scan_results
+		) t
+		INNER JOIN policies p ON p.id = t.policy_id
+		WHERE t.rn = 1 AND t.status = 'fail'
 		GROUP BY p.id, p.name
-		ORDER BY (SUM(CASE WHEN sr.severity = 'critical' THEN 4
-		               WHEN sr.severity = 'high'     THEN 3
-		               WHEN sr.severity = 'medium'   THEN 2
+		ORDER BY (SUM(CASE WHEN t.severity = 'critical' THEN 4
+		               WHEN t.severity = 'high'     THEN 3
+		               WHEN t.severity = 'medium'   THEN 2
 		               ELSE 1 END)) DESC
 		LIMIT 3
 	`).Scan(&rows)

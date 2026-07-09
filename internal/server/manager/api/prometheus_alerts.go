@@ -165,7 +165,7 @@ func (h *PrometheusAlertsHandler) upsertAlert(a promWebhookAlert, now time.Time)
 		PolicyID:    "",
 		Source:      model.AlertSourcePrometheusInfra,
 		Severity:    severity,
-		Category:    "infra",
+		Category:    "service", // 平台「系统监控-服务告警」按 category=service 展示
 		Title:       title,
 		Description: description,
 		Status:      model.AlertStatusActive,

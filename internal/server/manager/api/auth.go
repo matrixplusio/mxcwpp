@@ -15,9 +15,30 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
+
+// 认证类审计语义动词
+const (
+	auditActionLogin          = "user.login"
+	auditActionLogout         = "user.logout"
+	auditActionChangePassword = "user.change_password"
+)
+
+// auditAuth 记录一条认证类审计事件（登录在鉴权前发生，HTTP 中间件抓不到，必须显式埋点）。
+func (h *AuthHandler) auditAuth(c *gin.Context, action, username, outcome, detail string) {
+	audit.Record(c.Request.Context(), audit.Event{
+		ActorType: model.ActorTypeUser,
+		Username:  username,
+		Action:    action,
+		Outcome:   outcome,
+		Path:      c.Request.URL.Path,
+		IP:        c.ClientIP(),
+		Detail:    detail,
+	})
+}
 
 // captchaStore 验证码内存存储（自带过期清理，默认 10 分钟过期，每分钟清理一次）
 var captchaStore = base64Captcha.DefaultMemStore
@@ -151,6 +172,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var user model.User
 	if err := h.db.Where("username = ? AND status = ?", req.Username, model.UserStatusActive).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			h.auditAuth(c, auditActionLogin, req.Username, model.OutcomeFailure, "用户名或密码错误")
 			Unauthorized(c, "用户名或密码错误")
 			return
 		}
@@ -161,6 +183,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 检查账户是否被锁定
 	if user.LockedUntil != nil && time.Now().Before(time.Time(*user.LockedUntil)) {
+		h.auditAuth(c, auditActionLogin, req.Username, model.OutcomeFailure, "账户已被临时锁定")
 		TooManyRequests(c, "账户已被临时锁定，请稍后再试")
 		return
 	}
@@ -180,6 +203,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 		h.db.Select("login_fail_count", "locked_until").Save(&user)
 
+		h.auditAuth(c, auditActionLogin, req.Username, model.OutcomeFailure, "用户名或密码错误")
 		Unauthorized(c, "用户名或密码错误")
 		return
 	}
@@ -225,11 +249,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	h.auditAuth(c, auditActionLogin, user.Username, model.OutcomeSuccess, "")
+
 	Success(c, gin.H{
 		"token": tokenString,
 		"user": gin.H{
-			"username": user.Username,
-			"role":     string(user.Role),
+			"username":    user.Username,
+			"role":        string(user.Role),
+			"permissions": h.resolveRolePermissions(string(user.Role)),
+			"read_only":   model.IsReadOnlyRole(string(user.Role)),
 		},
 		"need_change_password": user.ForceChangePassword,
 	})
@@ -253,6 +281,14 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			}
 		}
 	}
+	// logout 路由未挂 AuthMiddleware，context 无 username，从 token 解析操作者。
+	usernameStr := "unknown"
+	if tok, err := extractBearerToken(c); err == nil {
+		if claims, err := h.parseToken(tok); err == nil && claims.Username != "" {
+			usernameStr = claims.Username
+		}
+	}
+	h.auditAuth(c, auditActionLogout, usernameStr, model.OutcomeSuccess, "")
 	SuccessMessage(c, "登出成功")
 }
 
@@ -315,9 +351,22 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	Success(c, gin.H{
-		"username": claims.Username,
-		"role":     claims.Role,
+		"username":    claims.Username,
+		"role":        claims.Role,
+		"permissions": h.resolveRolePermissions(claims.Role),
+		"read_only":   model.IsReadOnlyRole(claims.Role),
 	})
+}
+
+// resolveRolePermissions 返回角色拥有的 module:action 权限码列表。admin（平台超管）拥有全部。
+// 前端据此控制菜单可见性 + 动作按钮；后端权限另由 EnforcePermissions 强制。
+func (h *AuthHandler) resolveRolePermissions(role string) []string {
+	if role == string(model.UserRoleAdmin) {
+		return append([]string(nil), model.AllPermCodes...)
+	}
+	perms := []string{}
+	h.db.Model(&model.RolePermission{}).Where("role_code = ?", role).Pluck("perm_code", &perms)
+	return perms
 }
 
 // AuthMiddleware JWT 认证中间件
@@ -422,6 +471,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	// 验证旧密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
+		h.auditAuth(c, auditActionChangePassword, user.Username, model.OutcomeFailure, "旧密码错误")
 		BadRequest(c, "旧密码错误")
 		return
 	}
@@ -443,5 +493,6 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	h.auditAuth(c, auditActionChangePassword, user.Username, model.OutcomeSuccess, "")
 	SuccessMessage(c, "密码修改成功")
 }

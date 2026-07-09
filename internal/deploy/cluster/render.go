@@ -31,37 +31,46 @@ type NodeBundle struct {
 }
 
 type nodeTemplateData struct {
-	ClusterName      string
-	Environment      string
-	Version          string
-	Config           *Config
-	Node             Node
-	Assignment       RoleAssignment
-	InstallDir       string
-	DataRoot         string
-	Timezone         string
-	Network          Network
-	App              App
-	ControlPlane     ControlPlane
-	ManagerImage     string
-	AgentCenterImage string
-	ConsumerImage    string
-	EngineImage      string
-	LLMProxyImage    string
-	VulnSyncImage    string
-	UIImage          string
-	MySQLImage       string
-	RedisImage       string
-	ClickHouseImage  string
-	KafkaImage       string
-	PrometheusImage  string
-	MySQLPort        int
-	RedisPort        int
-	ClickHouseHTTP   int
-	ClickHouseTCP    int
-	KafkaPorts       []int
-	KafkaHost        string
-	KafkaClusterID   string
+	ClusterName       string
+	Environment       string
+	Version           string
+	Config            *Config
+	Node              Node
+	Assignment        RoleAssignment
+	InstallDir        string
+	DataRoot          string
+	Timezone          string
+	Network           Network
+	App               App
+	ControlPlane      ControlPlane
+	ManagerImage      string
+	AgentCenterImage  string
+	ConsumerImage     string
+	EngineImage       string
+	LLMProxyImage     string
+	VulnSyncImage     string
+	UIImage           string
+	MySQLImage        string
+	RedisImage        string
+	ClickHouseImage   string
+	KafkaImage        string
+	PrometheusImage   string
+	AlertmanagerImage string
+	MySQLPort         int
+	RedisPort         int
+	ClickHouseHTTP    int
+	ClickHouseTCP     int
+	KafkaPorts        []int
+	KafkaHost         string
+	KafkaClusterID    string
+	// Per-service presence booleans, derived from ExpandRoles(node.Roles).
+	HasManager     bool
+	HasAgentCenter bool
+	HasConsumer    bool
+	HasEngine      bool
+	HasVulnSync    bool
+	HasLLMProxy    bool
+	HasUI          bool
 }
 
 type serverConfigDoc struct {
@@ -246,6 +255,39 @@ func RenderCluster(cfg *Config, opts RenderOptions) (*RenderResult, error) {
 	return result, nil
 }
 
+// Render is a convenience wrapper around RenderCluster that auto-discovers RepoRoot
+// and creates a temporary OutputDir when the options are not specified.
+func Render(cfg *Config, opts RenderOptions) (*RenderResult, error) {
+	if opts.RepoRoot == "" {
+		root, err := FindRepoRoot(".")
+		if err != nil {
+			return nil, fmt.Errorf("auto-detect RepoRoot failed: %w", err)
+		}
+		opts.RepoRoot = root
+	}
+	if opts.OutputDir == "" {
+		dir, err := os.MkdirTemp("", "cluster-render-")
+		if err != nil {
+			return nil, fmt.Errorf("create temp output dir: %w", err)
+		}
+		opts.OutputDir = dir
+	}
+	return RenderCluster(cfg, opts)
+}
+
+// expandRolesSet returns the expanded fine-grained role set for a node's roles.
+func expandRolesSet(roles []string) (map[string]bool, error) {
+	expanded, err := ExpandRoles(roles)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(expanded))
+	for _, r := range expanded {
+		set[r] = true
+	}
+	return set, nil
+}
+
 func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *CertificateBundle, repoRoot, bundleDir string) error {
 	for _, dir := range []string{
 		bundleDir,
@@ -258,51 +300,70 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 			return err
 		}
 	}
-	if assignment.Node.HasRole(RoleControl) {
+
+	svcSet, err := expandRolesSet(assignment.Node.Roles)
+	if err != nil {
+		return fmt.Errorf("展开 roles 失败 node=%s: %w", assignment.Node.Name, err)
+	}
+
+	hasAnyApp := svcSet[RoleManager] || svcSet[RoleAgentCenter] || svcSet[RoleConsumer] ||
+		svcSet[RoleEngine] || svcSet[RoleVulnSync] || svcSet[RoleLLMProxy] || svcSet[RoleUI]
+	hasStorage := svcSet[RoleMySQL]
+	hasKafka := svcSet[RoleKafka]
+
+	if hasAnyApp {
 		if err := os.MkdirAll(filepath.Join(bundleDir, "certs"), 0o755); err != nil {
 			return err
 		}
 	}
 
 	data := nodeTemplateData{
-		ClusterName:      cfg.Metadata.Name,
-		Environment:      cfg.Metadata.Environment,
-		Version:          cfg.Release.Version,
-		Config:           cfg,
-		Node:             assignment.Node,
-		Assignment:       assignment,
-		InstallDir:       assignment.Node.InstallDir,
-		DataRoot:         assignment.Node.DataRoot,
-		Timezone:         cfg.Release.Timezone,
-		Network:          cfg.Network,
-		App:              cfg.App,
-		ControlPlane:     cfg.ControlPlane,
-		ManagerImage:     cfg.ImageRef("mxcwpp-manager"),
-		AgentCenterImage: cfg.ImageRef("mxcwpp-agentcenter"),
-		ConsumerImage:    cfg.ImageRef("mxcwpp-consumer"),
-		EngineImage:      cfg.ImageRef("mxcwpp-engine"),
-		LLMProxyImage:    cfg.ImageRef("mxcwpp-llmproxy"),
-		VulnSyncImage:    cfg.ImageRef("mxcwpp-vulnsync"),
-		UIImage:          cfg.ImageRef("mxcwpp-ui"),
-		MySQLImage:       "mysql:8.0",
-		RedisImage:       "redis:7-alpine",
-		ClickHouseImage:  "clickhouse/clickhouse-server:24-alpine",
-		KafkaImage:       "confluentinc/cp-kafka:7.5.0",
-		PrometheusImage:  "prom/prometheus:v2.51.0",
-		MySQLPort:        cfg.Infrastructure.MySQL.Port,
-		RedisPort:        cfg.Infrastructure.Redis.Port,
-		ClickHouseHTTP:   cfg.Infrastructure.ClickHouse.HTTPPort,
-		ClickHouseTCP:    cfg.Infrastructure.ClickHouse.TCPPort,
-		KafkaPorts:       cfg.Infrastructure.Kafka.BrokerPorts,
-		KafkaHost:        cfg.KafkaHost(),
-		KafkaClusterID:   kafkaClusterID(cfg),
+		ClusterName:       cfg.Metadata.Name,
+		Environment:       cfg.Metadata.Environment,
+		Version:           cfg.Release.Version,
+		Config:            cfg,
+		Node:              assignment.Node,
+		Assignment:        assignment,
+		InstallDir:        assignment.Node.InstallDir,
+		DataRoot:          assignment.Node.DataRoot,
+		Timezone:          cfg.Release.Timezone,
+		Network:           cfg.Network,
+		App:               cfg.App,
+		ControlPlane:      cfg.ControlPlane,
+		ManagerImage:      cfg.ImageRef("mxcwpp-manager"),
+		AgentCenterImage:  cfg.ImageRef("mxcwpp-agentcenter"),
+		ConsumerImage:     cfg.ImageRef("mxcwpp-consumer"),
+		EngineImage:       cfg.ImageRef("mxcwpp-engine"),
+		LLMProxyImage:     cfg.ImageRef("mxcwpp-llmproxy"),
+		VulnSyncImage:     cfg.ImageRef("mxcwpp-vulnsync"),
+		UIImage:           cfg.ImageRef("mxcwpp-ui"),
+		MySQLImage:        "mysql:8.0",
+		RedisImage:        "redis:7-alpine",
+		ClickHouseImage:   "clickhouse/clickhouse-server:24-alpine",
+		KafkaImage:        "confluentinc/cp-kafka:7.5.0",
+		PrometheusImage:   "prom/prometheus:v2.51.0",
+		AlertmanagerImage: "prom/alertmanager:v0.27.0",
+		MySQLPort:         cfg.Infrastructure.MySQL.Port,
+		RedisPort:         cfg.Infrastructure.Redis.Port,
+		ClickHouseHTTP:    cfg.Infrastructure.ClickHouse.HTTPPort,
+		ClickHouseTCP:     cfg.Infrastructure.ClickHouse.TCPPort,
+		KafkaPorts:        cfg.Infrastructure.Kafka.BrokerPorts,
+		KafkaHost:         cfg.KafkaHost(),
+		KafkaClusterID:    kafkaClusterID(cfg),
+		HasManager:        svcSet[RoleManager],
+		HasAgentCenter:    svcSet[RoleAgentCenter],
+		HasConsumer:       svcSet[RoleConsumer],
+		HasEngine:         svcSet[RoleEngine],
+		HasVulnSync:       svcSet[RoleVulnSync],
+		HasLLMProxy:       svcSet[RoleLLMProxy],
+		HasUI:             svcSet[RoleUI],
 	}
 
 	installScript := filepath.Join(repoRoot, "scripts", "prod", "install-deps.sh")
 	if err := copyFile(installScript, filepath.Join(bundleDir, "scripts", "install-deps.sh"), 0o755); err != nil {
 		return err
 	}
-	if assignment.Node.HasRole(RoleStorage) {
+	if hasStorage {
 		if err := copyFile(filepath.Join(repoRoot, "deploy", "init.sql"), filepath.Join(bundleDir, "deploy", "init.sql"), 0o644); err != nil {
 			return err
 		}
@@ -321,25 +382,39 @@ func renderNodeBundle(cfg *Config, assignment RoleAssignment, certs *Certificate
 		if err := writePrometheusConfig(filepath.Join(bundleDir, "config", "prometheus.yml"), cfg); err != nil {
 			return err
 		}
+		if err := copyFile(filepath.Join(repoRoot, "deploy", "config", "prometheus-rules.yml"), filepath.Join(bundleDir, "config", "rules.yml"), 0o644); err != nil {
+			return err
+		}
+		if err := writeAlertmanagerConfig(filepath.Join(bundleDir, "config", "alertmanager.yml"), cfg); err != nil {
+			return err
+		}
 	}
-	if assignment.Node.HasRole(RoleKafka) {
+	if hasKafka {
 		if err := renderTemplateFile(filepath.Join(repoRoot, "deploy", "prod", "templates", "docker-compose.kafka.yml.tmpl"), filepath.Join(bundleDir, "compose", "docker-compose.kafka.yml"), data, 0o644); err != nil {
 			return err
 		}
 	}
-	if assignment.Node.HasRole(RoleControl) {
+	if hasAnyApp {
 		if err := renderTemplateFile(filepath.Join(repoRoot, "deploy", "prod", "templates", "docker-compose.control.yml.tmpl"), filepath.Join(bundleDir, "compose", "docker-compose.control.yml"), data, 0o644); err != nil {
 			return err
 		}
-		if err := writeNginxConf(filepath.Join(bundleDir, "config", "nginx.conf"), cfg); err != nil {
-			return err
+		if svcSet[RoleUI] {
+			if err := writeNginxConf(filepath.Join(bundleDir, "config", "nginx.conf"), cfg); err != nil {
+				return err
+			}
 		}
-		if err := writeServerConfig(filepath.Join(bundleDir, "config", "server.yaml"), cfg, assignment, cfg.App.ManagerHTTPPort); err != nil {
-			return err
+		hasServerApp := svcSet[RoleManager] || svcSet[RoleConsumer] || svcSet[RoleEngine] ||
+			svcSet[RoleLLMProxy] || svcSet[RoleVulnSync]
+		if hasServerApp {
+			if err := writeServerConfig(filepath.Join(bundleDir, "config", "server.yaml"), cfg, assignment, cfg.App.ManagerHTTPPort); err != nil {
+				return err
+			}
 		}
 		// agentcenter 用独立配置，HTTP 端口避免与 manager 冲突
-		if err := writeServerConfig(filepath.Join(bundleDir, "config", "server-ac.yaml"), cfg.WithACHTTPPort(), assignment, cfg.App.ManagerHTTPPort); err != nil {
-			return err
+		if svcSet[RoleAgentCenter] {
+			if err := writeServerConfig(filepath.Join(bundleDir, "config", "server-ac.yaml"), cfg.WithACHTTPPort(), assignment, cfg.App.ManagerHTTPPort); err != nil {
+				return err
+			}
 		}
 		if err := writeControlCerts(bundleDir, certs); err != nil {
 			return err
@@ -610,30 +685,37 @@ server {
 
 // writePrometheusConfig 渲染 Prometheus scrape 配置。
 //
-// 抓取 4 个自研服务（network_mode: host，端口直接绑宿主）：
+// 抓取自研服务（network_mode: host，端口直接绑宿主）：
 //   - mxcwpp-manager       :8080  /metrics
 //   - mxcwpp-agentcenter   :8081  /metrics
 //   - mxcwpp-consumer      :9100  /metrics  (独立 HTTP server)
+//   - mxcwpp-engine        :8082  /metrics
+//   - mxcwpp-vulnsync      :8083  /metrics
+//   - mxcwpp-llmproxy      :8085  /metrics
 //   - prometheus self     :9090  /metrics
 //
 // 不部署 mysql/redis/kafka/clickhouse 外部 exporter（与 mxcwpp driver 端检查重复）。
 func writePrometheusConfig(dst string, cfg *Config) error {
-	// 收集所有 control 节点的 IP（manager + agentcenter + consumer 都在 control 节点）
-	var controlHosts []string
-	for _, node := range cfg.Nodes {
-		if node.HasRole(RoleControl) {
-			controlHosts = append(controlHosts, node.Host)
-		}
+	// 收集所有承载 manager 服务的节点 IP（兼容粗粒度 control 与细粒度 HA 角色）
+	managerNodes := cfg.NodesWithRole(RoleManager)
+	if len(managerNodes) == 0 {
+		return fmt.Errorf("未找到 manager 节点，无法生成 Prometheus 配置")
 	}
-	if len(controlHosts) == 0 {
-		return fmt.Errorf("未找到 control 节点，无法生成 Prometheus 配置")
+	var controlHosts []string
+	for _, node := range managerNodes {
+		controlHosts = append(controlHosts, node.Host)
 	}
 
-	const consumerMetricsPort = 9100
+	const (
+		consumerMetricsPort = 9100
+		engineMetricsPort   = 8082
+		vulnsyncMetricsPort = 8083
+		llmproxyMetricsPort = 8085
+	)
 
 	var buf strings.Builder
 	buf.WriteString(`# 由 mxctl 自动生成 — 请勿手动修改
-# 抓取 mxcwpp 自研服务 + Prometheus 自身
+# 抓取 mxcwpp 自研服务 + Prometheus 自身；告警规则 + Alertmanager 路由
 
 global:
   scrape_interval: 15s
@@ -641,6 +723,15 @@ global:
   external_labels:
     cluster: mxcwpp-prod
     env: prod
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - localhost:9093
 
 scrape_configs:
   - job_name: mxcwpp-manager
@@ -665,7 +756,52 @@ scrape_configs:
 	}
 	buf.WriteString("        labels:\n          service: consumer\n\n")
 
+	// engine / vulnsync / llmproxy 也在 control 节点（host network），固定端口暴露 /metrics
+	for _, svc := range []struct {
+		name string
+		port int
+	}{
+		{"mxcwpp-engine", engineMetricsPort},
+		{"mxcwpp-vulnsync", vulnsyncMetricsPort},
+		{"mxcwpp-llmproxy", llmproxyMetricsPort},
+	} {
+		fmt.Fprintf(&buf, "  - job_name: %s\n    scrape_interval: 15s\n    static_configs:\n      - targets:\n", svc.name)
+		for _, h := range controlHosts {
+			fmt.Fprintf(&buf, "          - %s:%d\n", h, svc.port)
+		}
+		fmt.Fprintf(&buf, "        labels:\n          service: %s\n\n", strings.TrimPrefix(svc.name, "mxcwpp-"))
+	}
+
 	buf.WriteString("  - job_name: prometheus\n    scrape_interval: 30s\n    static_configs:\n      - targets:\n          - localhost:9090\n        labels:\n          service: prometheus\n")
+
+	return os.WriteFile(dst, []byte(buf.String()), 0o644)
+}
+
+// writeAlertmanagerConfig 渲染 Alertmanager 配置：所有告警经 webhook 推送到 manager
+// 的 /api/v1/internal/alerts/prometheus，入 alerts 表（category=service）→ 平台「系统监控-服务告警」。
+func writeAlertmanagerConfig(dst string, cfg *Config) error {
+	// 取第一个承载 manager 服务的节点作为 alertmanager webhook 目标（兼容粗粒度 control 与细粒度 HA 角色）
+	managerNodes := cfg.NodesWithRole(RoleManager)
+	if len(managerNodes) == 0 {
+		return fmt.Errorf("未找到 manager 节点，无法生成 Alertmanager 配置")
+	}
+	controlHost := managerNodes[0].Host
+	webhookURL := fmt.Sprintf("http://%s:%d/api/v1/internal/alerts/prometheus", controlHost, cfg.App.ManagerHTTPPort)
+
+	var buf strings.Builder
+	buf.WriteString("# 由 mxctl 自动生成 — 请勿手动修改\n")
+	buf.WriteString("# 告警经 webhook 推送到 manager 服务告警（系统监控-服务告警）\n")
+	buf.WriteString("route:\n")
+	buf.WriteString("  receiver: mxcwpp-manager\n")
+	buf.WriteString("  group_by: ['alertname', 'service']\n")
+	buf.WriteString("  group_wait: 10s\n")
+	buf.WriteString("  group_interval: 1m\n")
+	buf.WriteString("  repeat_interval: 1h\n\n")
+	buf.WriteString("receivers:\n")
+	buf.WriteString("  - name: mxcwpp-manager\n")
+	buf.WriteString("    webhook_configs:\n")
+	fmt.Fprintf(&buf, "      - url: %s\n", webhookURL)
+	buf.WriteString("        send_resolved: true\n")
 
 	return os.WriteFile(dst, []byte(buf.String()), 0o644)
 }

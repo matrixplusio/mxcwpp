@@ -119,7 +119,9 @@ func (r *RockySource) Fetch(ctx context.Context, since time.Time) ([]*Advisory, 
 			return all, ctx.Err()
 		default:
 		}
-		url := fmt.Sprintf("%s/advisories?page=%d&size=%d", r.baseURL, pageNum, pageSize)
+		// 注意尾斜杠：apollo api/v3 对 /advisories（无斜杠）会 307 跳到 /advisories/，
+		// 且 Location 降级为 http://，部分 HTTP client 不跟随 → 拉到空。直接带斜杠避开。
+		url := fmt.Sprintf("%s/advisories/?page=%d&size=%d", r.baseURL, pageNum, pageSize)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return all, err

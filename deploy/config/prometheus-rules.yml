@@ -86,14 +86,16 @@ groups:
           summary: "AgentCenter gRPC 错误率 > 5%"
           description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
 
+      # Transfer 是长生命周期双向流，grpc_handled_total 只在流结束才 +1，
+      # 用它判流量对长连接服务恒为 0（假阳）。改用 msg_received_total（流内每条消息计数）。
       - alert: MxCwppACNoTraffic
-        expr: sum(rate(mxcwpp_ac_grpc_handled_total[5m])) == 0
+        expr: sum(rate(mxcwpp_ac_grpc_msg_received_total[5m])) == 0
         for: 10m
         labels:
           severity: warning
           service: agentcenter
         annotations:
-          summary: "AgentCenter 10 分钟无任何 RPC 流量"
+          summary: "AgentCenter 10 分钟无 Agent 上行消息"
           description: "可能所有 Agent 离线，或 AC 实例不健康。"
 
   # ============ Consumer 处理能力 ============
@@ -244,3 +246,34 @@ groups:
         annotations:
           summary: "ClickHouse 查询错误率高 ({{ $labels.operation }} on {{ $labels.table }})"
           description: "当前错误率: {{ $value }} qps（持续 5 分钟）"
+
+  # Kafka 生产者 burst 丢弃（agent 重连风暴/扫描叠加遥测尖峰下，Input+fallback 满即静默丢，
+  # 含 EDR eBPF 遥测与任务结果）。稳态应为 0，任何持续 drop 都意味着遥测/检测数据丢失。
+  - name: mxcwpp_kafka_producer
+    rules:
+      - alert: MxCwppKafkaProducerDrops
+        expr: |
+          sum by (instance, reason) (
+            rate(mxcwpp_kafka_producer_dropped_total[5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者丢弃消息 ({{ $labels.reason }} on {{ $labels.instance }})"
+          description: |
+            burst 下 Input/降级队列满，消息被静默丢弃（含 EDR eBPF 事件 → 检测盲区）。
+            当前丢弃率: {{ $value }} msg/s。
+            排查：是否 agent 重连风暴/扫描叠加；考虑调大 producer channel_buffer_size / fallback_queue_size，
+            或 agent 侧 eBPF 采样限流。
+
+      - alert: MxCwppKafkaProducerFallbackHigh
+        expr: mxcwpp_kafka_producer_fallback_len > 5000
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者降级队列积压 ({{ $labels.instance }})"
+          description: "降级队列长度 {{ $value }}，接近溢出阈值，生产者排空速率跟不上到达速率。"

@@ -13,19 +13,25 @@ const (
 	RoleKafka   = "kafka"
 )
 
+// ComponentSpec holds per-component overrides within a cluster config.
+type ComponentSpec struct {
+	Version string `yaml:"version"`
+}
+
 // Config 是 cluster.yaml 的顶层结构。
 type Config struct {
-	APIVersion     string         `yaml:"api_version"`
-	Kind           string         `yaml:"kind"`
-	Metadata       Metadata       `yaml:"metadata"`
-	Release        Release        `yaml:"release"`
-	Registry       Registry       `yaml:"registry"`
-	OS             OS             `yaml:"os"`
-	Network        Network        `yaml:"network"`
-	App            App            `yaml:"app"`
-	Infrastructure Infrastructure `yaml:"infrastructure"`
-	ControlPlane   ControlPlane   `yaml:"control_plane"`
-	Nodes          []Node         `yaml:"nodes"`
+	APIVersion     string                   `yaml:"api_version"`
+	Kind           string                   `yaml:"kind"`
+	Metadata       Metadata                 `yaml:"metadata"`
+	Release        Release                  `yaml:"release"`
+	Components     map[string]ComponentSpec `yaml:"components"`
+	Registry       Registry                 `yaml:"registry"`
+	OS             OS                       `yaml:"os"`
+	Network        Network                  `yaml:"network"`
+	App            App                      `yaml:"app"`
+	Infrastructure Infrastructure           `yaml:"infrastructure"`
+	ControlPlane   ControlPlane             `yaml:"control_plane"`
+	Nodes          []Node                   `yaml:"nodes"`
 }
 
 type Metadata struct {
@@ -299,6 +305,7 @@ func (c *Config) ApplyDefaults() {
 
 func (c *Config) Validate() error {
 	c.ApplyDefaults()
+
 	if c.Metadata.Name == "" {
 		return fmt.Errorf("metadata.name 不能为空")
 	}
@@ -317,13 +324,14 @@ func (c *Config) Validate() error {
 	if c.Infrastructure.MySQL.RootPassword == "" || c.Infrastructure.MySQL.Password == "" {
 		return fmt.Errorf("infrastructure.mysql.root_password 和 infrastructure.mysql.password 不能为空")
 	}
+
 	if len(c.Nodes) == 0 {
 		return fmt.Errorf("nodes 不能为空")
 	}
 
+	// Node name/host non-empty and uniqueness checks.
 	nameSet := make(map[string]struct{}, len(c.Nodes))
 	hostSet := make(map[string]struct{}, len(c.Nodes))
-	roleCount := map[string]int{}
 	for _, node := range c.Nodes {
 		if node.Name == "" || node.Host == "" {
 			return fmt.Errorf("所有 node 都必须配置 name 和 host")
@@ -339,85 +347,83 @@ func (c *Config) Validate() error {
 		if len(node.Roles) == 0 {
 			return fmt.Errorf("node %s 未配置 roles", node.Name)
 		}
-		for _, role := range node.Roles {
-			switch role {
-			case RoleControl, RoleStorage, RoleKafka:
-				roleCount[role]++
-			default:
-				return fmt.Errorf("node %s 包含不支持的 role: %s", node.Name, role)
-			}
+		// ExpandRoles validates role names and rejects unknown entries.
+		if _, err := ExpandRoles(node.Roles); err != nil {
+			return fmt.Errorf("node %s 包含无效 role: %w", node.Name, err)
 		}
 	}
 
-	controlCount := roleCount[RoleControl]
-	if controlCount == 0 {
-		return fmt.Errorf("至少需要一个 control 节点")
+	// Required services — each must have at least one placement node.
+	requiredServices := []string{
+		RoleManager, RoleAgentCenter, RoleConsumer, RoleEngine,
+		RoleMySQL, RoleRedis, RoleClickHouse, RoleKafka,
 	}
-	if roleCount[RoleStorage] != 1 {
-		return fmt.Errorf("v1 仅支持一个 storage 节点，当前为 %d", roleCount[RoleStorage])
+	for _, svc := range requiredServices {
+		if len(c.NodesWithRole(svc)) < 1 {
+			return fmt.Errorf("缺少必需服务 %s 的节点", svc)
+		}
 	}
-	if roleCount[RoleKafka] != 1 {
-		return fmt.Errorf("v1 仅支持一个 kafka 节点，当前为 %d", roleCount[RoleKafka])
+
+	// Infra singleton — mysql/redis/clickhouse/kafka each must have exactly 1 node.
+	infraSingletons := []string{RoleMySQL, RoleRedis, RoleClickHouse, RoleKafka}
+	for _, svc := range infraSingletons {
+		if n := len(c.NodesWithRole(svc)); n != 1 {
+			return fmt.Errorf("基建服务 %s 本版本仅支持 1 节点，当前 %d 个", svc, n)
+		}
 	}
+
+	// Kafka broker ports must be exactly 3.
 	if len(c.Infrastructure.Kafka.BrokerPorts) != 3 {
 		return fmt.Errorf("infrastructure.kafka.broker_ports 必须配置 3 个端口")
 	}
-	if c.ControlPlane.ManagerReplicas < controlCount {
-		return fmt.Errorf("control_plane.manager_replicas 不能小于 control 节点数 %d", controlCount)
+
+	// Prometheus requires a MySQL (storage) node.
+	if c.App.PrometheusEnabled && len(c.NodesWithRole(RoleMySQL)) < 1 {
+		return fmt.Errorf("启用 Prometheus 时必须有 storage 节点")
 	}
-	if c.ControlPlane.AgentCenterReplicas < controlCount {
-		return fmt.Errorf("control_plane.agentcenter_replicas 不能小于 control 节点数 %d", controlCount)
-	}
-	if c.ControlPlane.EngineReplicas < controlCount {
-		return fmt.Errorf("control_plane.engine_replicas 不能小于 control 节点数 %d", controlCount)
-	}
-	if c.ControlPlane.LLMProxyReplicas < controlCount {
-		return fmt.Errorf("control_plane.llmproxy_replicas 不能小于 control 节点数 %d", controlCount)
-	}
-	if c.ControlPlane.VulnSyncReplicas < controlCount {
-		return fmt.Errorf("control_plane.vulnsync_replicas 不能小于 control 节点数 %d", controlCount)
-	}
-	if c.App.PrometheusEnabled {
-		if _, err := c.StorageNode(); err != nil {
-			return fmt.Errorf("启用 Prometheus 时必须有 storage 节点: %w", err)
-		}
-	}
-	if _, err := c.StorageNode(); err != nil {
-		return err
-	}
-	if _, err := c.KafkaNode(); err != nil {
-		return err
-	}
+
 	return nil
 }
 
-func (c *Config) ControlNodes() []Node {
+// NodesWithRole returns all nodes whose expanded role set contains role.
+// Nodes for which ExpandRoles returns an error are skipped (treated as no match).
+// Results are sorted by Name.
+func (c *Config) NodesWithRole(role string) []Node {
 	var nodes []Node
 	for _, node := range c.Nodes {
-		if node.HasRole(RoleControl) {
-			nodes = append(nodes, node)
+		expanded, err := ExpandRoles(node.Roles)
+		if err != nil {
+			continue
+		}
+		for _, r := range expanded {
+			if r == role {
+				nodes = append(nodes, node)
+				break
+			}
 		}
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 	return nodes
 }
 
+func (c *Config) ControlNodes() []Node {
+	return c.NodesWithRole(RoleManager)
+}
+
 func (c *Config) StorageNode() (Node, error) {
-	for _, node := range c.Nodes {
-		if node.HasRole(RoleStorage) {
-			return node, nil
-		}
+	nodes := c.NodesWithRole(RoleMySQL)
+	if len(nodes) == 0 {
+		return Node{}, fmt.Errorf("未找到 storage 节点")
 	}
-	return Node{}, fmt.Errorf("未找到 storage 节点")
+	return nodes[0], nil
 }
 
 func (c *Config) KafkaNode() (Node, error) {
-	for _, node := range c.Nodes {
-		if node.HasRole(RoleKafka) {
-			return node, nil
-		}
+	nodes := c.NodesWithRole(RoleKafka)
+	if len(nodes) == 0 {
+		return Node{}, fmt.Errorf("未找到 kafka 节点")
 	}
-	return Node{}, fmt.Errorf("未找到 kafka 节点")
+	return nodes[0], nil
 }
 
 func (n Node) HasRole(role string) bool {
@@ -429,6 +435,15 @@ func (n Node) HasRole(role string) bool {
 	return false
 }
 
+// ServiceVersion returns the pinned version for a given short service name
+// (e.g. "manager"), falling back to Release.Version when not set.
+func (c *Config) ServiceVersion(service string) string {
+	if spec, ok := c.Components[service]; ok && spec.Version != "" {
+		return spec.Version
+	}
+	return c.Release.Version
+}
+
 func (c *Config) ImageRef(name string) string {
 	parts := make([]string, 0, 3)
 	if c.Registry.Domain != "" {
@@ -438,7 +453,8 @@ func (c *Config) ImageRef(name string) string {
 		parts = append(parts, strings.Trim(c.Registry.Namespace, "/"))
 	}
 	parts = append(parts, name)
-	return strings.Join(parts, "/") + ":" + c.Release.Version
+	service := strings.TrimPrefix(name, "mxcwpp-")
+	return strings.Join(parts, "/") + ":" + c.ServiceVersion(service)
 }
 
 func (c *Config) PluginsBaseURL() string {
@@ -452,44 +468,44 @@ func (c *Config) MySQLHost() string {
 	if c.Infrastructure.MySQL.Host != "" {
 		return c.Infrastructure.MySQL.Host
 	}
-	node, err := c.StorageNode()
-	if err != nil {
+	nodes := c.NodesWithRole(RoleMySQL)
+	if len(nodes) == 0 {
 		return ""
 	}
-	return node.Host
+	return nodes[0].Host
 }
 
 func (c *Config) RedisHost() string {
 	if c.Infrastructure.Redis.Host != "" {
 		return c.Infrastructure.Redis.Host
 	}
-	node, err := c.StorageNode()
-	if err != nil {
+	nodes := c.NodesWithRole(RoleRedis)
+	if len(nodes) == 0 {
 		return ""
 	}
-	return node.Host
+	return nodes[0].Host
 }
 
 func (c *Config) ClickHouseHost() string {
 	if c.Infrastructure.ClickHouse.Host != "" {
 		return c.Infrastructure.ClickHouse.Host
 	}
-	node, err := c.StorageNode()
-	if err != nil {
+	nodes := c.NodesWithRole(RoleClickHouse)
+	if len(nodes) == 0 {
 		return ""
 	}
-	return node.Host
+	return nodes[0].Host
 }
 
 func (c *Config) KafkaHost() string {
 	if c.Infrastructure.Kafka.Host != "" {
 		return c.Infrastructure.Kafka.Host
 	}
-	node, err := c.KafkaNode()
-	if err != nil {
+	nodes := c.NodesWithRole(RoleKafka)
+	if len(nodes) == 0 {
 		return ""
 	}
-	return node.Host
+	return nodes[0].Host
 }
 
 func (c *Config) KafkaBrokerEndpoints() []string {

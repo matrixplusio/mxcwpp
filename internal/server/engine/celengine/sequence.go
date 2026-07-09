@@ -33,6 +33,12 @@ type SequenceState struct {
 	MatchedSteps []int     `json:"matched_steps"`
 }
 
+// memStateEntry 内存状态项（redis 为 nil 时使用），带过期时间
+type memStateEntry struct {
+	state     *SequenceState
+	expiresAt time.Time
+}
+
 // SequenceDetector 行为序列检测器
 type SequenceDetector struct {
 	mu          sync.RWMutex
@@ -41,16 +47,22 @@ type SequenceDetector struct {
 	redisClient *redis.Client
 	engine      *Engine
 	logger      *zap.Logger
+
+	// memState 内存状态兜底：engine 进程内无 redis 时使用（engine 单副本，
+	// kafka 按 host 分区保证同主机事件落同一实例，进程内状态即可支撑顺序状态机）。
+	memMu    sync.Mutex
+	memState map[string]memStateEntry
 }
 
 // NewSequenceDetector 创建序列检测器
-// db 可为 nil（测试场景），redisClient 为 nil 时使用纯内存状态（不持久化）
+// db 可为 nil（测试场景），redisClient 为 nil 时使用进程内内存状态（单副本足够）
 func NewSequenceDetector(engine *Engine, db *gorm.DB, redisClient *redis.Client, logger *zap.Logger) *SequenceDetector {
 	return &SequenceDetector{
 		engine:      engine,
 		db:          db,
 		redisClient: redisClient,
 		logger:      logger,
+		memState:    make(map[string]memStateEntry),
 	}
 }
 
@@ -77,6 +89,27 @@ func (d *SequenceDetector) ReloadRules() error {
 		zap.Int("errors", compileErrors),
 	)
 	return nil
+}
+
+// StartReload 启动周期性规则重载，使新增/修改的序列规则无需重启即可生效
+func (d *SequenceDetector) StartReload(ctx context.Context) {
+	if d.db == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := d.ReloadRules(); err != nil {
+					d.logger.Warn("序列规则周期重载失败", zap.Error(err))
+				}
+			}
+		}
+	}()
 }
 
 // SetRules 设置规则（用于测试，不依赖数据库）
@@ -202,7 +235,7 @@ func (d *SequenceDetector) Evaluate(hostID string, dataType int32, fields map[st
 }
 
 // evalProgram 对预编译的 Program 求值
-func (d *SequenceDetector) evalProgram(program cel.Program, activation map[string]interface{}) bool {
+func (d *SequenceDetector) evalProgram(program cel.Program, activation map[string]any) bool {
 	out, _, err := program.Eval(activation)
 	if err != nil {
 		return false
@@ -210,10 +243,20 @@ func (d *SequenceDetector) evalProgram(program cel.Program, activation map[strin
 	return out.Value() == true
 }
 
-// getState 从 Redis 获取序列状态
+// getState 从 Redis（或内存兜底）获取序列状态
 func (d *SequenceDetector) getState(ctx context.Context, key string) *SequenceState {
 	if d.redisClient == nil {
-		return nil
+		d.memMu.Lock()
+		defer d.memMu.Unlock()
+		e, ok := d.memState[key]
+		if !ok {
+			return nil
+		}
+		if time.Now().After(e.expiresAt) {
+			delete(d.memState, key)
+			return nil
+		}
+		return e.state
 	}
 	data, err := d.redisClient.Get(ctx, key).Bytes()
 	if err != nil {
@@ -230,9 +273,12 @@ func (d *SequenceDetector) getState(ctx context.Context, key string) *SequenceSt
 	return &state
 }
 
-// setState 将序列状态写入 Redis
+// setState 将序列状态写入 Redis（或内存兜底）
 func (d *SequenceDetector) setState(ctx context.Context, key string, state *SequenceState, ttl time.Duration) {
 	if d.redisClient == nil {
+		d.memMu.Lock()
+		d.memState[key] = memStateEntry{state: state, expiresAt: time.Now().Add(ttl)}
+		d.memMu.Unlock()
 		return
 	}
 	data, err := json.Marshal(state)
@@ -242,9 +288,12 @@ func (d *SequenceDetector) setState(ctx context.Context, key string, state *Sequ
 	d.redisClient.Set(ctx, key, data, ttl)
 }
 
-// delState 删除 Redis 中的序列状态
+// delState 删除 Redis（或内存兜底）中的序列状态
 func (d *SequenceDetector) delState(ctx context.Context, key string) {
 	if d.redisClient == nil {
+		d.memMu.Lock()
+		delete(d.memState, key)
+		d.memMu.Unlock()
 		return
 	}
 	d.redisClient.Del(ctx, key)

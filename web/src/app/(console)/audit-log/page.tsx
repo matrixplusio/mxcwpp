@@ -14,14 +14,6 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
 import { StatusTag } from "@/components/ui/Tag";
 
-interface ListParams {
-  page: number;
-  page_size: number;
-  username: string;
-  resource_type: string;
-  action: string;
-}
-
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 const buildResourceTypeOptions = (t: TFunction) => [
@@ -36,20 +28,41 @@ const buildResourceTypeOptions = (t: TFunction) => [
   { label: t("audit.resource.system-config"), value: "system-config" },
   { label: t("audit.resource.fim-policies"), value: "fim-policies" },
 ];
-const buildActionOptions = (t: TFunction) => [
-  { label: t("audit.allAction"), value: "" },
-  { label: "POST", value: "POST" },
-  { label: "PUT", value: "PUT" },
-  { label: "DELETE", value: "DELETE" },
+const buildActorOptions = (t: TFunction) => [
+  { label: t("audit.allActor"), value: "" },
+  { label: t("audit.actor.user"), value: "user" },
+  { label: t("audit.actor.system"), value: "system" },
+  { label: t("audit.actor.agent"), value: "agent" },
+];
+const buildOutcomeOptions = (t: TFunction) => [
+  { label: t("audit.allOutcome"), value: "" },
+  { label: t("audit.outcome.success"), value: "success" },
+  { label: t("audit.outcome.failure"), value: "failure" },
 ];
 
+// 语义动作着色：删除类红，处置类橙，创建/更新蓝，越权拒绝红。
 function actionTone(action: string): Tone {
-  if (action === "POST") return "success";
-  if (action === "PUT") return "info";
-  if (action === "DELETE") return "danger";
+  if (action === "access.denied") return "danger";
+  if (action.endsWith(".delete")) return "danger";
+  if (/\.(isolate|release|quarantine|resolve|ignore|dispose)$/.test(action)) return "warning";
+  if (action.endsWith(".create") || action.endsWith(".update") || action.includes("update_perms")) return "info";
   return "neutral";
 }
+function actorTone(actor: string): Tone {
+  if (actor === "system") return "info";
+  if (actor === "agent") return "warning";
+  return "neutral";
+}
+// 兜底：旧审计行无 actor_type/outcome 字段，缺失时归一为合理默认，避免渲染 i18n key。
+function normalizeActor(actor?: string): "user" | "system" | "agent" {
+  return actor === "system" || actor === "agent" ? actor : "user";
+}
+function normalizeOutcome(outcome: string | undefined, code: number): "success" | "failure" {
+  if (outcome === "success" || outcome === "failure") return outcome;
+  return code >= 400 ? "failure" : "success";
+}
 function statusTone(code: number): Tone {
+  if (code === 0) return "neutral";
   if (code < 300) return "success";
   if (code < 400) return "info";
   if (code < 500) return "warning";
@@ -59,13 +72,16 @@ function statusTone(code: number): Tone {
 export default function AuditLogPage() {
   const { t } = useTranslation();
   const resourceTypeOptions = buildResourceTypeOptions(t);
-  const actionOptions = buildActionOptions(t);
+  const actorOptions = buildActorOptions(t);
+  const outcomeOptions = buildOutcomeOptions(t);
   const [params, setParams] = useUrlState({
     page: 1,
     page_size: 20,
     username: "",
     resource_type: "",
     action: "",
+    actor_type: "",
+    outcome: "",
   });
 
   const { data, isLoading } = useQuery({
@@ -77,6 +93,8 @@ export default function AuditLogPage() {
         username: params.username || undefined,
         resource_type: params.resource_type || undefined,
         action: params.action || undefined,
+        actor_type: params.actor_type || undefined,
+        outcome: params.outcome || undefined,
       }),
   });
 
@@ -86,6 +104,14 @@ export default function AuditLogPage() {
       title: t("audit.colTime"),
       render: (r) => <span className="text-faint tabular-nums">{r.created_at}</span>,
     },
+    {
+      key: "actor_type",
+      title: t("audit.colActor"),
+      render: (r) => {
+        const actor = normalizeActor(r.actor_type);
+        return <StatusTag tone={actorTone(actor)}>{t(`audit.actor.${actor}`)}</StatusTag>;
+      },
+    },
     { key: "username", title: t("audit.colUser"), render: (r) => <span className="font-medium text-ink">{r.username}</span> },
     {
       key: "action",
@@ -93,25 +119,33 @@ export default function AuditLogPage() {
       render: (r) => <StatusTag tone={actionTone(r.action)}>{r.action}</StatusTag>,
     },
     {
+      key: "outcome",
+      title: t("audit.colOutcome"),
+      render: (r) => {
+        const outcome = normalizeOutcome(r.outcome, r.status_code);
+        return <StatusTag tone={outcome === "failure" ? "danger" : "success"}>{t(`audit.outcome.${outcome}`)}</StatusTag>;
+      },
+    },
+    {
       key: "resource",
       title: t("audit.colResource"),
       render: (r) => (
         <div className="leading-tight">
-          <div className="font-medium text-ink">{r.resource_type}</div>
+          <div className="font-medium text-ink">{r.resource_type || "-"}</div>
           {r.resource_id && <div className="text-xs text-faint">{r.resource_id}</div>}
         </div>
       ),
     },
     {
-      key: "path",
-      title: t("audit.colPath"),
-      render: (r) => <span className="font-mono text-xs text-muted">{r.path}</span>,
+      key: "target_name",
+      title: t("audit.colTarget"),
+      render: (r) => <span className="text-muted">{r.target_name || "-"}</span>,
     },
-    { key: "ip", title: "IP", render: (r) => <span className="text-muted">{r.ip}</span> },
+    { key: "ip", title: "IP", render: (r) => <span className="text-muted">{r.ip || "-"}</span> },
     {
       key: "status_code",
       title: t("audit.colStatusCode"),
-      render: (r) => <StatusTag tone={statusTone(r.status_code)}>{r.status_code}</StatusTag>,
+      render: (r) => <StatusTag tone={statusTone(r.status_code)}>{r.status_code || "-"}</StatusTag>,
     },
   ];
 
@@ -126,14 +160,19 @@ export default function AuditLogPage() {
             placeholder={t("audit.search")}
           />
           <Select
+            value={params.actor_type}
+            onChange={(v) => setParams((p) => ({ ...p, actor_type: v, page: 1 }))}
+            options={actorOptions}
+          />
+          <Select
+            value={params.outcome}
+            onChange={(v) => setParams((p) => ({ ...p, outcome: v, page: 1 }))}
+            options={outcomeOptions}
+          />
+          <Select
             value={params.resource_type}
             onChange={(v) => setParams((p) => ({ ...p, resource_type: v, page: 1 }))}
             options={resourceTypeOptions}
-          />
-          <Select
-            value={params.action}
-            onChange={(v) => setParams((p) => ({ ...p, action: v, page: 1 }))}
-            options={actionOptions}
           />
         </FilterBar>
         <Card>

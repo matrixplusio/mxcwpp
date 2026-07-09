@@ -156,6 +156,36 @@ func buildCommandFromPreCheck(hv *model.HostVulnerability, osFamily, osVersion s
 	return ""
 }
 
+// precheckConfirmedInstallable 报告 agent pre-check 是否已在主机本地确认「包已装 + 仓库有可
+// 升级版本」。为 true 时，该主机本地真值优先于 VulnApplicableToHost 的 OS-source 启发式闸。
+//
+// 背景：VulnApplicableToHost 基于 vuln.Source 判 OS 归属，比 advisory matcher 的 osCompatible
+// 更严——例如 rocky-apollo advisory 经 rhel-compat 本应覆盖 CentOS，但该闸的 rocky 分支排除
+// CentOS，导致合法的 per-OS 修复被误拒。且多发行版 CVE 的 vuln.Source 会被跨发行版覆盖（如
+// rocky 匹配的链被标 debian-tracker），进一步放大误拒。命令生成本身已依赖同一份 pre-check 包
+// （buildCommandFromPreCheck），故以 pre-check 结果为闸是自洽的。
+func precheckConfirmedInstallable(status string) bool {
+	return status == model.PreCheckStatusAvailable || status == model.PreCheckStatusAvailableEPEL
+}
+
+// effectiveComponent/effectiveFixedVersion 取 per-host 匹配到的真实包名/版本（matched_*），
+// 老数据为空时回退 CVE 级 vulnerabilities 值。remediation task 的 Component 会被 agent 用于
+// check_installed 预检——必须是主机实际装的包（如 vim-enhanced），而非 CVE 级塌缩值（如 vim-X11），
+// 否则 agent 查错包→"未安装"→修复失败。
+func effectiveComponent(hv model.HostVulnerability, vulnComponent string) string {
+	if hv.MatchedComponent != "" {
+		return hv.MatchedComponent
+	}
+	return vulnComponent
+}
+
+func effectiveFixedVersion(hv model.HostVulnerability, vulnFixed string) string {
+	if hv.MatchedFixedVersion != "" {
+		return hv.MatchedFixedVersion
+	}
+	return vulnFixed
+}
+
 // RemediationTasksHandler 修复任务 API 处理器
 type RemediationTasksHandler struct {
 	db     *gorm.DB
@@ -223,8 +253,9 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 	skippedNoCommand := 0
 	for _, hv := range hostVulns {
 		os := osMap[hv.HostID]
-		// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
-		if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+		// vuln source 须适用于 host OS family（防 Debian 包给 CentOS）；但 pre-check 已在主机
+		// 本地确认可升级时，以主机真值为准，绕过更严的 source 闸（修 rocky↔centos 等误拒）。
+		if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(vuln.Source, os.Family) {
 			skippedNotApplicable++
 			continue
 		}
@@ -253,8 +284,8 @@ func (h *RemediationTasksHandler) CreateTask(c *gin.Context) {
 			HostID:       hv.HostID,
 			Hostname:     hv.Hostname,
 			IP:           hv.IP,
-			Component:    vuln.Component,
-			FixedVersion: vuln.FixedVersion,
+			Component:    effectiveComponent(hv, vuln.Component),
+			FixedVersion: effectiveFixedVersion(hv, vuln.FixedVersion),
 			Command:      cmd,
 			Status:       "pending",
 			CreatedBy:    createdBy,
@@ -343,6 +374,124 @@ func (h *RemediationTasksHandler) GetTask(c *gin.Context) {
 	}
 
 	Success(c, task)
+}
+
+// hostUpdateCveSecurity / hostUpdateCveFull 是主机级更新任务的 cve_id 哨兵值
+// （这类任务不针对单个 CVE，而是整机 yum/dnf 更新）。
+const (
+	hostUpdateCveSecurity = "HOST-SECURITY-UPDATE"
+	hostUpdateCveFull     = "HOST-FULL-UPDATE"
+)
+
+// buildHostUpdateCommand 按 OS 包管理器生成整机更新命令。
+// scope=security 仅装安全 errata（低风险,推荐）；scope=all 全量升级。
+func buildHostUpdateCommand(osFamily, osVersion, scope string) (cmd, label string) {
+	secOnly := scope != "all"
+	// skip_if_unavailable=1：单个第三方 repo(如 docker-ce-stable)metadata 拉取超时
+	// 不应阻断整机更新——否则一个不可达 repo 让 dnf/yum 整体 abort，OS 安全更新也装不上。
+	// 让包管理器跳过不可达 repo，仍用可达的 OS repo(BaseOS/AppStream)完成更新。
+	const skipOpt = " --setopt=*.skip_if_unavailable=1"
+	switch detectPackageManager(osFamily, osVersion) {
+	case "rpm-dnf":
+		if secOnly {
+			return "dnf upgrade --security -y" + skipOpt, "主机级安全更新(dnf --security)"
+		}
+		return "dnf upgrade -y" + skipOpt, "主机级全量更新(dnf)"
+	case "rpm-yum":
+		if secOnly {
+			return "yum update --security -y" + skipOpt, "主机级安全更新(yum --security)"
+		}
+		return "yum update -y" + skipOpt, "主机级全量更新(yum)"
+	case "deb":
+		// 单条命令（remediation 插件安全校验禁止 && 组合命令）；依赖近期 apt 缓存。
+		if secOnly {
+			return "apt-get upgrade -y", "主机级更新(apt)"
+		}
+		return "apt-get dist-upgrade -y", "主机级全量更新(apt)"
+	}
+	return "", ""
+}
+
+// CreateHostUpdateTask 创建主机级更新任务（整机 yum/dnf 安全更新，不针对单个 CVE）。
+// 走与 per-vuln 修复相同的 confirm→executor→agent→UI 链，但命令为整机更新，
+// 让包管理器自行选对包/版本，绕开 per-package 选包数据问题。
+// 更新在下次重启后完全生效（内核）；本任务不自动重启。
+// POST /api/v1/remediation-tasks/host-update  {hostIds:[...], scope:"security"|"all"}
+func (h *RemediationTasksHandler) CreateHostUpdateTask(c *gin.Context) {
+	var req struct {
+		HostIDs []string `json:"hostIds" binding:"required,min=1"`
+		Scope   string   `json:"scope"` // security(默认) | all
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数无效：需要 hostIds")
+		return
+	}
+	if req.Scope == "" {
+		req.Scope = "security"
+	}
+	if req.Scope != "security" && req.Scope != "all" {
+		BadRequest(c, "scope 仅支持 security 或 all")
+		return
+	}
+
+	var hosts []model.Host
+	h.db.Select("host_id, hostname, os_family, os_version").
+		Where("host_id IN ? AND status = ?", req.HostIDs, "online").Find(&hosts)
+	if len(hosts) == 0 {
+		BadRequest(c, "指定主机不存在或不在线")
+		return
+	}
+
+	username, _ := c.Get("username")
+	createdBy, _ := username.(string)
+	cveLabel := hostUpdateCveSecurity
+	if req.Scope == "all" {
+		cveLabel = hostUpdateCveFull
+	}
+
+	var tasks []model.RemediationTask
+	skippedNoCmd, skippedExisting := 0, 0
+	for _, host := range hosts {
+		cmd, label := buildHostUpdateCommand(host.OSFamily, host.OSVersion, req.Scope)
+		if cmd == "" {
+			skippedNoCmd++
+			continue
+		}
+		// 同主机已有进行中的整机更新任务则跳过，避免重复下发
+		var existing int64
+		h.db.Model(&model.RemediationTask{}).
+			Where("host_id = ? AND cve_id IN ? AND status IN ?",
+				host.HostID, []string{hostUpdateCveSecurity, hostUpdateCveFull},
+				[]string{"pending", "confirmed", "running"}).
+			Count(&existing)
+		if existing > 0 {
+			skippedExisting++
+			continue
+		}
+		t := model.RemediationTask{
+			VulnID:    0,
+			CveID:     cveLabel,
+			HostID:    host.HostID,
+			Hostname:  host.Hostname,
+			Component: label,
+			Command:   cmd,
+			Status:    "pending",
+			CreatedBy: createdBy,
+		}
+		if err := h.db.Create(&t).Error; err != nil {
+			h.logger.Error("创建主机更新任务失败", zap.String("host_id", host.HostID), zap.Error(err))
+			continue
+		}
+		tasks = append(tasks, t)
+	}
+
+	Success(c, gin.H{
+		"created":          len(tasks),
+		"skippedNoCommand": skippedNoCmd,
+		"skippedExisting":  skippedExisting,
+		"scope":            req.Scope,
+		"tasks":            tasks,
+	})
 }
 
 // ConfirmTask 用户确认执行修复任务
@@ -582,8 +731,8 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 			}
 
 			os := osMap[hv.HostID]
-			// P0 fix: vuln source 必须适用于 host OS family（防 Debian 包给 CentOS）
-			if !biz.VulnApplicableToHost(vuln.Source, os.Family) {
+			// source 闸；pre-check 已本地确认可升级时以主机真值为准，绕过更严的 source 闸
+			if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(vuln.Source, os.Family) {
 				skipped++
 				continue
 			}
@@ -603,8 +752,8 @@ func (h *RemediationTasksHandler) BatchCreate(c *gin.Context) {
 				HostID:       hv.HostID,
 				Hostname:     hv.Hostname,
 				IP:           hv.IP,
-				Component:    vuln.Component,
-				FixedVersion: vuln.FixedVersion,
+				Component:    effectiveComponent(hv, vuln.Component),
+				FixedVersion: effectiveFixedVersion(hv, vuln.FixedVersion),
 				Command:      cmd,
 				Status:       "pending",
 				CreatedBy:    createdBy,
@@ -721,8 +870,8 @@ func (h *RemediationTasksHandler) CreateForHost(c *gin.Context) {
 			skipped++
 			continue
 		}
-		// P0 fix: vuln source 必须适用于 host OS family，否则跳过（防 Debian 包给 CentOS）
-		if !biz.VulnApplicableToHost(v.Source, host.OSFamily) {
+		// source 闸；pre-check 已本地确认可升级时以主机真值为准，绕过更严的 source 闸
+		if !precheckConfirmedInstallable(hv.PreCheckStatus) && !biz.VulnApplicableToHost(v.Source, host.OSFamily) {
 			skippedNotApplicable++
 			continue
 		}
@@ -742,8 +891,8 @@ func (h *RemediationTasksHandler) CreateForHost(c *gin.Context) {
 			HostID:       hv.HostID,
 			Hostname:     hv.Hostname,
 			IP:           hv.IP,
-			Component:    v.Component,
-			FixedVersion: v.FixedVersion,
+			Component:    effectiveComponent(hv, v.Component),
+			FixedVersion: effectiveFixedVersion(hv, v.FixedVersion),
 			Command:      cmd,
 			Status:       "pending",
 			CreatedBy:    createdBy,

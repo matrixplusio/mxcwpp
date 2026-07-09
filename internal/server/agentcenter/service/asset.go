@@ -251,14 +251,17 @@ func (s *AssetService) handleSoftwareData(hostID, jsonData string) error {
 		assets = []engine.SoftwareAsset{asset}
 	}
 
-	// 直接 UPSERT
+	// 直接 UPSERT，同时记录本轮快照的包 ID 与包类型，供后续权威同步删除已卸载的残留包。
+	upsertedIDs := make([]string, 0, len(assets))
+	typesSeen := map[string]struct{}{}
 	for _, asset := range assets {
 		scope := asset.Scope
 		if scope == "" {
 			scope = "system" // 旧 collector 不发字段，默认 system
 		}
+		id := shortHash(hostID, asset.PackageType, asset.Name)
 		software := &model.Software{
-			ID:             shortHash(hostID, asset.PackageType, asset.Name),
+			ID:             id,
 			HostID:         hostID,
 			Name:           asset.Name,
 			Version:        asset.Version,
@@ -282,13 +285,49 @@ func (s *AssetService) handleSoftwareData(hostID, jsonData string) error {
 				zap.Error(err))
 			continue
 		}
+		upsertedIDs = append(upsertedIDs, id)
+		if asset.PackageType != "" {
+			typesSeen[asset.PackageType] = struct{}{}
+		}
 	}
+
+	// 权威同步：software 每次上报为全量快照(dataType 5053)，删除本轮未见的同类型残留包
+	// (卸载/改名的旧包，如 samba 升级后 samba-common-libs 拆分消失)。
+	// 护栏：仅当快照条数够大(>=20)才删，防 collector 偶发部分/错误上报把库存清空。
+	// 仅删本轮出现过的 package_type，避免误删其它 handler(pip/npm/jar)写入的行。
+	s.pruneStaleSoftware(hostID, upsertedIDs, typesSeen)
 
 	s.logger.Debug("processed software data",
 		zap.String("host_id", hostID),
 		zap.Int("count", len(assets)))
 
 	return nil
+}
+
+// pruneStaleSoftware 删除该 host 本轮全量快照未见的同类型软件行（已卸载的残留包）。
+func (s *AssetService) pruneStaleSoftware(hostID string, upsertedIDs []string, typesSeen map[string]struct{}) {
+	const minSnapshot = 20 // 快照条数护栏：太少视为部分/异常上报，不做删除以防清空库存
+	if len(upsertedIDs) < minSnapshot || len(typesSeen) == 0 {
+		return
+	}
+	types := make([]string, 0, len(typesSeen))
+	for t := range typesSeen {
+		types = append(types, t)
+	}
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		res := s.db.Where("host_id = ? AND package_type IN ? AND id NOT IN ?", hostID, types, upsertedIDs).
+			Delete(&model.Software{})
+		if err = res.Error; err == nil {
+			if res.RowsAffected > 0 {
+				s.logger.Info("清理已卸载残留软件包",
+					zap.String("host_id", hostID),
+					zap.Int64("removed", res.RowsAffected))
+			}
+			return
+		}
+	}
+	s.logger.Warn("清理残留软件包失败", zap.String("host_id", hostID), zap.Error(err))
 }
 
 // handleContainerData 处理容器数据

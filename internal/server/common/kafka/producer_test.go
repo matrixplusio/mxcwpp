@@ -126,3 +126,45 @@ func TestSend_FallbackPreservesTopic(t *testing.T) {
 		t.Fatal("fallback queue empty")
 	}
 }
+
+// TestSendReliable_DeliversToInput 验证 SendReliable 正常情况下投递到 Kafka Input。
+func TestSendReliable_DeliversToInput(t *testing.T) {
+	fake := newFakeAsyncProducer()
+	p := newTestAsyncProducer(fake)
+
+	if err := p.SendReliable("mxcwpp.agent.baseline", "agent-1", &MQMessage{DataType: 8001}); err != nil {
+		t.Fatalf("SendReliable err: %v", err)
+	}
+	select {
+	case pm := <-fake.input:
+		if pm.Topic != "mxcwpp.agent.baseline" {
+			t.Errorf("topic = %q, want mxcwpp.agent.baseline", pm.Topic)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("message not delivered to Input")
+	}
+}
+
+// TestSendReliable_FallbackWhenInputFull 验证核心可靠性保证：
+// Input 满时 SendReliable 不丢弃，超时后退降级队列重试。
+func TestSendReliable_FallbackWhenInputFull(t *testing.T) {
+	fake := newFakeAsyncProducer()
+	p := newTestAsyncProducer(fake)
+
+	// 填满 Input 通道
+	for range cap(fake.input) {
+		fake.input <- &sarama.ProducerMessage{}
+	}
+
+	old := producerReliableSendTimeout
+	producerReliableSendTimeout = 30 * time.Millisecond
+	defer func() { producerReliableSendTimeout = old }()
+
+	if err := p.SendReliable("mxcwpp.agent.baseline", "agent-1", &MQMessage{DataType: 8001}); err != nil {
+		t.Fatalf("SendReliable 应退降级队列而非报错: %v", err)
+	}
+	// 消息必须进降级队列，不得被丢弃
+	if got := p.FallbackQueueLen(); got != 1 {
+		t.Fatalf("fallback len = %d, want 1（消息不得被丢弃）", got)
+	}
+}

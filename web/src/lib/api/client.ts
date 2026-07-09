@@ -62,3 +62,7 @@ export async function upload<T>(url: string, file: File, field = "file"): Promis
   const resp = await http.post<ApiResp<T>>(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
   return unwrap(resp.data);
 }
+export async function getBlob(url: string, params?: object): Promise<Blob> {
+  const resp = await http.get<Blob>(url, { params, responseType: "blob" });
+  return resp.data;
+}

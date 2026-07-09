@@ -103,17 +103,21 @@ func (s *PluginUpdateScheduler) checkAndBroadcast(ctx context.Context) {
 		return
 	}
 
-	s.logger.Info("检测到插件配置更新，开始差异广播",
+	s.logger.Info("检测到插件配置更新，广播全量插件配置",
 		zap.Time("last_check", s.lastCheckTime),
 		zap.Time("latest_update", latestUpdate.Time),
 		zap.Strings("changed_plugins", changedPlugins))
 
-	// 只广播变更的插件
-	successCount, failedAgents, err := s.transferService.BroadcastPluginConfigsByName(ctx, changedPlugins)
+	// 仅在检测到变更时广播，但必须广播【全量】启用插件配置而非仅变更的：
+	// agent SyncPlugins 以收到的 config 列表为权威全集，列表里没有的运行插件会被当作
+	// "已删除"而 stop+delete。差异广播（只发变更插件）会让其余未变更的兄弟插件从列表
+	// 缺失而被误杀（实测：baseline 更新差异广播误停了 remediation 插件，全队列 down）。
+	// 全量广播保证 absent 语义正确，绝不误杀。
+	successCount, failedAgents, err := s.transferService.BroadcastPluginConfigs(ctx)
 	if err != nil {
 		s.logger.Error("广播插件配置失败", zap.Error(err))
 	} else {
-		s.logger.Info("差异广播插件配置完成",
+		s.logger.Info("全量广播插件配置完成",
 			zap.Int("success_count", successCount),
 			zap.Strings("failed_agents", failedAgents),
 			zap.Strings("changed_plugins", changedPlugins))

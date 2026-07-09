@@ -1172,6 +1172,7 @@ func copyFile(src, dst string) error {
 }
 
 const cisBenchmarkVersion = "CIS Kubernetes Benchmark 1.8"
+const gkeBenchmarkVersion = "CIS GKE Benchmark 1.6"
 
 // builtinCheckConfigs 返回内置规则的 CEL 检查配置
 // 跨资源查询或复杂逻辑的规则由 Go 函数处理，不在此定义
@@ -1359,6 +1360,35 @@ func builtinCheckConfigs() map[string]*model.KubeCheckConfig {
 
 // initKubeBaselineRules 初始化内置容器基线检查规则
 // 增量导入：按 check_id 去重，已存在的跳过
+// kubeControlRefByCategory 把规则类别映射到合规框架条款（分类粒度，准确无臆造编号）：
+// CIS Kubernetes/GKE Benchmark 章节 + Pod Security Standards + NSA/CISA K8s 加固指南。
+func kubeControlRefByCategory(category string) string {
+	switch category {
+	case "RBAC":
+		return "CIS K8s §5.1 RBAC; NSA/CISA: Authentication & Authorization"
+	case "Pod Security":
+		return "Pod Security Standards (Restricted); CIS K8s §5.2; NSA/CISA: Pod Security"
+	case "Network":
+		return "CIS K8s §5.3 Network Policies; NSA/CISA: Network Hardening"
+	case "Secrets & Config":
+		return "CIS K8s §5.4 Secrets Management; NSA/CISA: Secrets Management"
+	case "Supply Chain":
+		return "CIS K8s §5.5 Image Provenance; NSA/CISA: Supply Chain"
+	case "Workload":
+		return "CIS K8s §5.7 General Policies; NSA/CISA: Pod Security"
+	case "Node":
+		return "CIS K8s §5.7 General Policies; NSA/CISA: System Hardening"
+	case "Cluster Config":
+		return "CIS K8s §5.7 General Policies; NSA/CISA: Audit & Threat Detection"
+	case "Runtime":
+		return "NSA/CISA: Threat Detection & Incident Response"
+	case "GKE 加固":
+		return "CIS GKE Benchmark §5 Managed Cluster Hardening"
+	default:
+		return ""
+	}
+}
+
 func initKubeBaselineRules(db *gorm.DB, logger *zap.Logger) error {
 	builtinRules := []model.KubeBaselineRule{
 		// ===== RBAC 安全 =====
@@ -1536,6 +1566,35 @@ func initKubeBaselineRules(db *gorm.DB, logger *zap.Logger) error {
 			Description: "检查是否存在 CrashLoopBackOff 状态的 Pod", Remediation: "查看 Pod 日志排查崩溃原因"},
 		{CheckID: "CIS-K8S-080", CheckName: "无属主 Pod 检查", Category: "Runtime", Severity: "medium", Builtin: true, Enabled: true, Benchmark: cisBenchmarkVersion,
 			Description: "检查是否存在没有 OwnerReference 的 Pod（不受控制器管理）", Remediation: "使用 Deployment/StatefulSet 等控制器管理 Pod"},
+
+		// GKE 托管层加固（CIS GKE Benchmark）：读 GCP Container API 配置，非 K8s 资源。
+		// 需为集群配置 GCP project/location + 具 container.clusters.get 权限的 SA，否则记为 error。
+		{CheckID: "CIS-GKE-001", CheckName: "Shielded GKE Nodes 启用检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查集群是否启用 Shielded GKE Nodes（安全启动 + 完整性监控，防节点被篡改）", Remediation: "集群配置启用 Shielded GKE Nodes"},
+		{CheckID: "CIS-GKE-002", CheckName: "Workload Identity 启用检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用 Workload Identity（以替代节点 SA 直接暴露，最小化凭证泄露面）", Remediation: "启用 Workload Identity 并迁移工作负载使用 GSA 绑定"},
+		{CheckID: "CIS-GKE-003", CheckName: "私有节点检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查节点是否为私有节点（无公网 IP，缩小攻击面）", Remediation: "重建集群启用 private nodes / 私有集群"},
+		{CheckID: "CIS-GKE-004", CheckName: "Binary Authorization 启用检查", Category: "GKE 加固", Severity: "medium", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用 Binary Authorization（仅允许签名镜像部署）", Remediation: "启用 Binary Authorization 并配置准入策略"},
+		{CheckID: "CIS-GKE-005", CheckName: "Master Authorized Networks 检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用 Master Authorized Networks（限制可访问 API server 的来源网段）", Remediation: "启用并配置 Master Authorized Networks 白名单"},
+		{CheckID: "CIS-GKE-006", CheckName: "Release Channel 注册检查", Category: "GKE 加固", Severity: "medium", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查集群是否注册 Release Channel（自动获取安全补丁与版本更新）", Remediation: "将集群注册到 regular/stable Release Channel"},
+		{CheckID: "CIS-GKE-007", CheckName: "节点自动升级检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查所有节点池是否启用 Auto-Upgrade（及时修复节点 OS/kubelet 漏洞）", Remediation: "为所有节点池启用 Auto-Upgrade"},
+		{CheckID: "CIS-GKE-008", CheckName: "节点自动修复检查", Category: "GKE 加固", Severity: "medium", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查所有节点池是否启用 Auto-Repair（自动替换不健康节点）", Remediation: "为所有节点池启用 Auto-Repair"},
+		{CheckID: "CIS-GKE-009", CheckName: "网络策略 / Dataplane V2 检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用 NetworkPolicy addon 或 Dataplane V2（支持 Pod 间网络隔离）", Remediation: "启用 NetworkPolicy 或迁移到 Dataplane V2"},
+		{CheckID: "CIS-GKE-010", CheckName: "Legacy ABAC 禁用检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否已禁用 Legacy ABAC 授权（应仅用 RBAC）", Remediation: "禁用 Legacy ABAC"},
+		{CheckID: "CIS-GKE-011", CheckName: "客户端证书认证禁用检查", Category: "GKE 加固", Severity: "medium", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否禁用基于客户端证书的静态认证（难以轮换，应使用 IAM/OIDC）", Remediation: "重建集群时不签发客户端证书"},
+		{CheckID: "CIS-GKE-012", CheckName: "Cloud Logging 启用检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用 Cloud Logging（集群/审计日志留存，安全可观测前提）", Remediation: "启用 Cloud Logging"},
+		{CheckID: "CIS-GKE-013", CheckName: "应用层 Secrets 加密检查", Category: "GKE 加固", Severity: "high", Builtin: true, Enabled: true, Benchmark: gkeBenchmarkVersion,
+			Description: "检查是否启用应用层 Secrets 加密（Cloud KMS 信封加密 etcd 中的 Secret）", Remediation: "启用 Application-layer Secrets Encryption 并指定 KMS Key"},
 	}
 
 	// 获取内置 CEL 检查配置
@@ -1558,6 +1617,7 @@ func initKubeBaselineRules(db *gorm.DB, logger *zap.Logger) error {
 		if cfg, ok := configs[builtinRules[i].CheckID]; ok {
 			builtinRules[i].CheckConfig = cfg
 		}
+		builtinRules[i].ControlRef = kubeControlRefByCategory(builtinRules[i].Category)
 		if err := db.Create(&builtinRules[i]).Error; err != nil {
 			logger.Warn("导入内置容器基线规则失败", zap.String("check_id", builtinRules[i].CheckID), zap.Error(err))
 			continue
@@ -1567,6 +1627,14 @@ func initKubeBaselineRules(db *gorm.DB, logger *zap.Logger) error {
 
 	if imported > 0 {
 		logger.Info("内置容器基线规则导入完成", zap.Int("new", imported), zap.Int("existing", len(existingIDs)))
+	}
+
+	// 回填已有规则的框架条款映射（control_ref 为空的按类别补；幂等）
+	for _, cat := range []string{"RBAC", "Pod Security", "Network", "Secrets & Config",
+		"Supply Chain", "Workload", "Node", "Cluster Config", "Runtime", "GKE 加固"} {
+		db.Model(&model.KubeBaselineRule{}).
+			Where("category = ? AND (control_ref IS NULL OR control_ref = '')", cat).
+			Update("control_ref", kubeControlRefByCategory(cat))
 	}
 
 	// 回填已有规则的 CheckConfig（仅更新 builtin=true 且 check_config IS NULL 的记录）
@@ -1642,51 +1710,89 @@ func initKubeExpressionTemplates(db *gorm.DB, logger *zap.Logger) error {
 	return nil
 }
 
-// permissionMeta 内置权限元数据。code 与 model.AllPermissionCodes 一一对应。
-// 启动时 seed 到 permissions 表，handler 拿出来给 UI 渲染权限选择面板。
-var permissionMeta = []model.Permission{
-	{Code: model.PermDashboard, Name: "安全概览", Module: "dashboard", Description: "查看安全态势仪表盘"},
-	{Code: model.PermAssets, Name: "资产中心", Module: "assets", Description: "查看主机、容器、软件包等资产"},
-	{Code: model.PermAlerts, Name: "告警中心", Module: "alerts", Description: "查看与处置安全告警"},
-	{Code: model.PermBaseline, Name: "基线安全", Module: "baseline", Description: "主机/容器合规基线检查"},
-	{Code: model.PermFIM, Name: "文件完整性", Module: "fim", Description: "文件完整性监控与变更告警"},
-	{Code: model.PermVirus, Name: "病毒查杀", Module: "antivirus", Description: "病毒扫描任务与隔离区"},
-	{Code: model.PermVuln, Name: "漏洞管理", Module: "vuln", Description: "CVE 漏洞扫描与修复"},
-	{Code: model.PermKube, Name: "容器集群", Module: "kube", Description: "K8s 集群安全审计"},
-	{Code: model.PermDetection, Name: "威胁检测", Module: "detection", Description: "EDR / 入侵检测规则"},
-	{Code: model.PermMonitoring, Name: "系统监控", Module: "monitoring", Description: "主机指标、SLO、报警"},
-	{Code: model.PermOperations, Name: "运维中心", Module: "operations", Description: "插件版本、Agent 升级、备份"},
-	{Code: model.PermAuditLog, Name: "审计日志", Module: "audit_log", Description: "查看操作审计"},
-	{Code: model.PermUserManage, Name: "用户管理", Module: "user_manage", Description: "用户、角色、RBAC"},
-	{Code: model.PermSystemConfig, Name: "系统设置", Module: "system_config", Description: "全局配置与告警通道"},
-}
-
-// initRBACPermissions seed 内置权限码到 permissions 表（增量，不覆盖已有 Name/Description）。
-// 同时确保 admin 角色拥有全部权限（user 角色默认只读，由用户在 UI 上配置）。
+// initRBACPermissions seed 「模块×动作」权限到 permissions 表 + 内置角色到 role_permissions，
+// 并一次性把旧的模块级权限码（无冒号）迁移为 module:action。
 func initRBACPermissions(db *gorm.DB, logger *zap.Logger) error {
 	if db == nil {
 		return nil
 	}
-	for _, p := range permissionMeta {
-		// 按 code 增量：已存在不动（用户可能改过 Name），只插不存在的
-		var existing model.Permission
-		err := db.Where("code = ?", p.Code).First(&existing).Error
-		if err == gorm.ErrRecordNotFound {
-			if createErr := db.Create(&p).Error; createErr != nil {
-				logger.Warn("seed permission 失败", zap.String("code", string(p.Code)), zap.Error(createErr))
+
+	// 1) permissions 表：按 module:action seed（增量，已存在不动）。
+	actionName := map[model.Action]string{model.ActionView: "查看", model.ActionManage: "管理", model.ActionRespond: "处置"}
+	permCount := 0
+	for _, m := range model.Modules {
+		for _, a := range m.Actions {
+			code := model.Perm(m.Code, a)
+			permCount++
+			var existing model.Permission
+			if err := db.Where("code = ?", code).First(&existing).Error; err == gorm.ErrRecordNotFound {
+				if e := db.Create(&model.Permission{Code: code, Name: m.Name + " - " + actionName[a], Module: m.Code}).Error; e != nil {
+					logger.Warn("seed permission 失败", zap.String("code", code), zap.Error(e))
+				}
 			}
 		}
 	}
 
-	// admin 角色：确保拥有全部权限码（增量补齐，不删旧）
-	for _, code := range model.AllPermissionCodes {
-		rp := model.RolePermission{RoleCode: "admin", PermCode: string(code)}
-		if err := db.Where("role_code = ? AND perm_code = ?", "admin", string(code)).
-			Attrs(rp).
-			FirstOrCreate(&model.RolePermission{}).Error; err != nil {
-			logger.Warn("seed admin role_permission 失败", zap.String("perm", string(code)), zap.Error(err))
+	// 2) 一次性迁移旧模块级权限码（无冒号）。
+	migrateLegacyRolePermissions(db, logger)
+
+	// 3) 内置角色 seed：admin 每次补齐全部；其余首次 seed（之后尊重 UI 定制）。
+	for _, role := range model.BuiltinRoles {
+		if role.Code == "admin" {
+			for _, code := range role.Permissions {
+				if err := db.Where("role_code = ? AND perm_code = ?", role.Code, code).
+					Attrs(model.RolePermission{RoleCode: role.Code, PermCode: code}).
+					FirstOrCreate(&model.RolePermission{}).Error; err != nil {
+					logger.Warn("seed admin role_permission 失败", zap.String("perm", code), zap.Error(err))
+				}
+			}
+			continue
+		}
+		var existing int64
+		db.Model(&model.RolePermission{}).Where("role_code = ?", role.Code).Count(&existing)
+		if existing > 0 {
+			continue
+		}
+		for _, code := range role.Permissions {
+			if err := db.Create(&model.RolePermission{RoleCode: role.Code, PermCode: code}).Error; err != nil {
+				logger.Warn("seed 内置角色权限失败", zap.String("role", role.Code), zap.String("perm", code), zap.Error(err))
+			}
+		}
+		logger.Info("内置角色已 seed", zap.String("role", role.Code), zap.String("name", role.Name), zap.Int("perms", len(role.Permissions)))
+	}
+	logger.Info("RBAC 权限已初始化", zap.Int("permissions", permCount))
+	return nil
+}
+
+// migrateLegacyRolePermissions 把旧的模块级权限码（无冒号，如 "alerts"）升级为
+// module:action（一次性、幂等）。自定义角色的旧码展开为 view+manage；内置角色的旧行
+// 删除后由 seed 按新模型重建。
+func migrateLegacyRolePermissions(db *gorm.DB, logger *zap.Logger) {
+	var legacy []model.RolePermission
+	db.Where("perm_code NOT LIKE ?", "%:%").Find(&legacy)
+	if len(legacy) == 0 {
+		return
+	}
+	builtin := map[string]bool{}
+	for _, r := range model.BuiltinRoles {
+		builtin[r.Code] = true
+	}
+	newCustom := map[string]map[string]bool{}
+	for _, row := range legacy {
+		if builtin[row.RoleCode] {
+			continue
+		}
+		if newCustom[row.RoleCode] == nil {
+			newCustom[row.RoleCode] = map[string]bool{}
+		}
+		newCustom[row.RoleCode][model.Perm(row.PermCode, model.ActionView)] = true
+		newCustom[row.RoleCode][model.Perm(row.PermCode, model.ActionManage)] = true
+	}
+	db.Where("perm_code NOT LIKE ?", "%:%").Delete(&model.RolePermission{})
+	for role, set := range newCustom {
+		for code := range set {
+			db.Create(&model.RolePermission{RoleCode: role, PermCode: code})
 		}
 	}
-	logger.Info("RBAC 权限元数据已初始化", zap.Int("permissions", len(permissionMeta)))
-	return nil
+	logger.Info("RBAC 旧权限码已迁移为 module:action", zap.Int("legacy_rows", len(legacy)))
 }

@@ -67,6 +67,10 @@ func (c *PreCheckCron) Run(ctx context.Context) {
 
 // tickOnce 单轮巡检
 func (c *PreCheckCron) tickOnce(ctx context.Context) {
+	// 先用已有 pre-check 判定对账存量：把 pre-check 已确认"漏洞版本不在"(not_installed / not_in_repo=已装>=修复版)
+	// 却仍挂 unpatched 的 host_vuln 立即关闭。反应式 HandleResult 处理新结果，本步清历史积压，不必等 24h 重扫。
+	c.reconcileAlreadyPatched()
+
 	cutoff := time.Now().Add(-c.cacheTTL)
 	// 先按 host_id 分组找到 online + 有过期/未检 precheck 漏洞的 host
 	type hostBatch struct {
@@ -215,4 +219,85 @@ func (c *PreCheckCron) InvalidateCacheForVuln(vulnID uint) error {
 			"precheck_packages":   "",
 			"precheck_checked_at": nil,
 		}).Error
+}
+
+// reconcileAlreadyPatched 用已有的 pre-check 判定对账存量：把 pre-check 已确认"漏洞版本不在"
+// (not_installed=未装该漏洞版本 / not_in_repo=已装且版本>=修复版) 却仍挂 unpatched 的
+// host_vuln 立即关闭为 patched，并重算受影响 vuln 的 patched_hosts。
+//
+// 背景：agent 软件采集可能滞后(升级后仍报旧版)，致 CleanupAlreadyPatched(按 software 表比对)
+// 漏关；pre-check 走 agent 实时 rpm -q，判定权威。本方法直接采信 pre-check 结果对账，不依赖 software 表。
+// available / outdated_repo = 仍有洞，不关。
+func (c *PreCheckCron) reconcileAlreadyPatched() {
+	closedStatuses := []string{model.PreCheckStatusNotInstalled, model.PreCheckStatusNotInRepo}
+
+	// 先收集待关闭 hv id（只读，不持锁）。
+	var ids []uint
+	c.db.Model(&model.HostVulnerability{}).
+		Where("status = ? AND precheck_status IN ?", model.HostVulnStatusUnpatched, closedStatuses).
+		Pluck("id", &ids)
+	if len(ids) == 0 {
+		return
+	}
+
+	// 分块 UPDATE：大批量单条 UPDATE 会与 consumer 并发写 host_vulnerabilities 争锁死锁(Error 1213)。
+	// 小批 + 死锁重试 + 批间 sleep，既避免死锁又不饿死 consumer。
+	now := model.Now()
+	const chunk = 200
+	var totalClosed int64
+	affectedVulns := map[uint]struct{}{}
+	for start := 0; start < len(ids); start += chunk {
+		end := start + chunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[start:end]
+
+		var res *gorm.DB
+		for attempt := 0; attempt < 3; attempt++ {
+			res = c.db.Model(&model.HostVulnerability{}).
+				Where("id IN ? AND status = ?", batch, model.HostVulnStatusUnpatched).
+				Updates(map[string]any{
+					"status":         model.HostVulnStatusPatched,
+					"prev_status":    model.HostVulnStatusUnpatched,
+					"patched_reason": model.PatchedReasonPreCheckVerified,
+					"patched_at":     &now,
+				})
+			if res.Error == nil {
+				break
+			}
+			time.Sleep(300 * time.Millisecond) // 死锁/锁等待退避后重试
+		}
+		if res.Error != nil {
+			c.logger.Warn("precheck 存量对账分批关闭失败(跳过)", zap.Error(res.Error))
+			continue
+		}
+		totalClosed += res.RowsAffected
+
+		// 记录本批受影响 vuln_id 供后续重算 patched_hosts
+		var vids []uint
+		c.db.Model(&model.HostVulnerability{}).Where("id IN ?", batch).Distinct("vuln_id").Pluck("vuln_id", &vids)
+		for _, v := range vids {
+			affectedVulns[v] = struct{}{}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 重算受影响 vuln 的 patched_hosts；若已无 unpatched 主机则整体置 patched。
+	for vid := range affectedVulns {
+		var patched, unpatched int64
+		c.db.Model(&model.HostVulnerability{}).Where("vuln_id = ? AND status = ?", vid, model.HostVulnStatusPatched).Count(&patched)
+		c.db.Model(&model.HostVulnerability{}).Where("vuln_id = ? AND status = ?", vid, model.HostVulnStatusUnpatched).Count(&unpatched)
+		upd := map[string]any{"patched_hosts": patched}
+		if unpatched == 0 {
+			upd["status"] = model.HostVulnStatusPatched
+			upd["patched_at"] = &now
+		}
+		c.db.Model(&model.Vulnerability{}).Where("id = ?", vid).Updates(upd)
+	}
+
+	if totalClosed > 0 {
+		c.logger.Info("precheck 存量对账：已打补丁漏洞关闭",
+			zap.Int64("closed", totalClosed), zap.Int("vulns", len(affectedVulns)))
+	}
 }

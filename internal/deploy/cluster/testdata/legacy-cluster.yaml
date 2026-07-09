@@ -1,0 +1,67 @@
+api_version: mxcwpp.io/v1alpha1
+kind: ClusterConfig
+metadata:
+  name: legacy
+  environment: prod
+release:
+  version: v1.0.0
+  install_dir: /opt/mxcwpp
+  data_root: /data/mxcwpp
+  timezone: Asia/Shanghai
+registry:
+  domain: registry.example.com
+  namespace: mxcwpp
+network:
+  ui:
+    scheme: http
+    host: 10.0.0.1
+    port: 80
+  grpc:
+    scheme: grpc
+    host: 10.0.0.1
+    port: 6751
+app:
+  jwt_secret: test-jwt-secret-legacy-00001
+  manager_http_port: 8080
+  ac_http_port: 8081
+  grpc_port: 6751
+infrastructure:
+  mysql:
+    root_password: root123
+    password: user123
+    host: 10.0.0.2
+    port: 13306
+    database: mxcwpp
+    user: mxcwpp_user
+  redis:
+    password: redis123
+    host: 10.0.0.2
+    port: 16379
+  clickhouse:
+    host: 10.0.0.2
+    http_port: 8123
+    tcp_port: 9000
+    database: mxcwpp
+    user: default
+    password: ""
+  kafka:
+    enabled: true
+    host: 10.0.0.3
+    broker_ports:
+      - 9092
+      - 9094
+      - 9095
+    topic_prefix: mxcwpp
+nodes:
+  - name: n1-control
+    host: 10.0.0.1
+    roles:
+      - control
+  - name: n2-storage
+    host: 10.0.0.2
+    roles:
+      - storage
+  - name: n3-kafka
+    host: 10.0.0.3
+    roles:
+      - kafka

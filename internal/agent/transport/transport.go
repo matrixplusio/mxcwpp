@@ -29,6 +29,16 @@ import (
 // sendInterval 批量发送间隔（与 Elkeid 一致）
 const sendInterval = 100 * time.Millisecond
 
+// WAL 重放削峰参数（P1）。
+// 断网恢复时 ~232 台 agent 同时重放 EDR WAL（旧默认 100 条/50ms ≈ 2000 条/s/agent，
+// 聚合 ~46 万/s）瞬时洪峰冲垮 AC kafka producer → burst 丢弃。放缓批间隔 + 重连后随机
+// 起始延迟错峰，削平聚合峰值。为 var 便于后续按需配置/测试覆写。
+var (
+	walReplayBatchSize   = 100
+	walReplayBatchDelay  = 200 * time.Millisecond // 旧硬编码 50ms → 放缓 4x，单 agent ~500 条/s
+	walReplayStartJitter = 5 * time.Second        // 重连后重放前 [0,5s) 随机延迟，摊开 herd
+)
+
 // agentMetadata 缓存 Agent 元信息（由心跳更新，sendData 构建 PackagedData 时使用）
 type agentMetadata struct {
 	hostname     string
@@ -594,10 +604,17 @@ func (m *Manager) sendCachedData(ctx context.Context, stream grpc.Transfer_Trans
 }
 
 // replayWAL replays persisted EDR events from the WAL after reconnection.
+// P1: 重连后先随机延迟 [0, walReplayStartJitter) 再重放，把 ~232 台 agent 的重放起始
+// 时刻摊开；并按 walReplayBatchDelay 限速批间隔，削平聚合洪峰避免冲垮 AC kafka producer。
 func (m *Manager) replayWAL(stream grpc.Transfer_TransferClient) error {
 	sendTimeout := 30 * time.Second
 
-	return m.eventWAL.Replay(100, func(records []*grpc.EncodedRecord) error {
+	if d := randSpread(walReplayStartJitter); d > 0 {
+		m.logger.Debug("WAL replay start jitter", zap.Duration("delay", d))
+		time.Sleep(d)
+	}
+
+	return m.eventWAL.Replay(walReplayBatchSize, walReplayBatchDelay, func(records []*grpc.EncodedRecord) error {
 		data := m.buildPackagedData(records)
 		if err := m.sendWithTimeout(stream, data, sendTimeout); err != nil {
 			return fmt.Errorf("WAL replay send: %w", err)

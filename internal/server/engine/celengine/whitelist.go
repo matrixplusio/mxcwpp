@@ -28,6 +28,9 @@ type alertWhitelistRule struct {
 	// ExeBasenameIn 进程 basename 命中即抑制（如 nginx / httpd）。
 	ExeBasenameIn []string
 
+	// CmdlineContains 命令行包含任一子串即抑制（per-rule exception，排除已知良性脚本/工具）。
+	CmdlineContains []string
+
 	// DstIPInPrivate 目的 IP 在 RFC1918 / 回环 / 链路本地范围内即抑制。
 	DstIPInPrivate bool
 
@@ -96,6 +99,13 @@ var defaultAlertWhitelist = []alertWhitelistRule{
 		DstIPInPrivate:  true,
 		Reason:          "internal_network_connection",
 	},
+	{
+		// 防御规避-日志清除 误报：devops bigdata 监控脚本(node_exporter textfile 采集)
+		// 周期重写 /home/devops/bigdata_monitoring 下 textfile,被当成清日志。
+		RuleNamePattern: "日志清除",
+		CmdlineContains: []string{"bigdata_monitoring", "TEXTFILE_DIR", "node_exporter", "textfile"},
+		Reason:          "devops_monitoring_textfile",
+	},
 }
 
 // privateCIDRs 是 RFC1918 + 回环 + 链路本地网段列表。
@@ -128,6 +138,20 @@ func ipIsPrivate(ip string) bool {
 	}
 	for _, n := range privateCIDRs {
 		if n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// cmdlineContainsAny 检查命令行是否包含 list 中任一子串（大小写不敏感）。
+func cmdlineContainsAny(cmdline string, list []string) bool {
+	if cmdline == "" || len(list) == 0 {
+		return false
+	}
+	lc := strings.ToLower(cmdline)
+	for _, s := range list {
+		if s != "" && strings.Contains(lc, strings.ToLower(s)) {
 			return true
 		}
 	}
@@ -185,6 +209,9 @@ func IsAlertWhitelisted(rule *model.DetectionRule, fields map[string]string) (bo
 		// 至少一个具体条件命中才抑制（防止"只匹配规则名就抑制"误抑制）
 		matched := false
 		if len(w.ExeBasenameIn) > 0 && exeBasenameMatch(exe, w.ExeBasenameIn) {
+			matched = true
+		}
+		if len(w.CmdlineContains) > 0 && cmdlineContainsAny(fields["cmdline"], w.CmdlineContains) {
 			matched = true
 		}
 		if w.DstIPInPrivate && ipIsPrivate(dstIP) {

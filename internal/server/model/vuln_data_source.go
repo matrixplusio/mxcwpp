@@ -51,6 +51,11 @@ type VulnDataSource struct {
 	AdvisoryWatermark *LocalTime `gorm:"column:advisory_watermark;type:timestamp" json:"advisoryWatermark,omitempty"`
 	CreatedAt         LocalTime  `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt         LocalTime  `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+
+	// VulnCount 该 source 当前在库(未删)的漏洞条数——运行时聚合，非持久列。
+	// UI 展示"该源实际贡献漏洞数"：比 LastCount(上次同步 delta，静默期可能为 0)更能反映真实库存，
+	// 修复"OS 源显示 0 条"的误导（同步搬到 VulnSync 后 LastCount 回写缺失历史遗留）。
+	VulnCount int64 `gorm:"-" json:"vulnCount"`
 }
 
 // TableName 指定表名。

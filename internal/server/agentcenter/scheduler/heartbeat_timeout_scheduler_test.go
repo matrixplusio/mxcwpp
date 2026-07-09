@@ -47,6 +47,7 @@ func setupHeartbeatTestDB(t *testing.T) *gorm.DB {
 		policy_id TEXT,
 		source TEXT DEFAULT '',
 		severity TEXT,
+		risk_score INTEGER DEFAULT 0,
 		category TEXT,
 		title TEXT,
 		description TEXT,

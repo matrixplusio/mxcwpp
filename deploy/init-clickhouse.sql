@@ -131,6 +131,13 @@ CREATE TABLE IF NOT EXISTS ebpf_events (
     gid           String,
     return_code   String,
 
+    -- FIM 上下文：谁改的(username) / 谁登录的(login_uid/login_user) / 改了什么(敏感文件 content_hash + file_size)
+    username      String,
+    login_uid     String,
+    login_user    String,
+    content_hash  String,
+    file_size     String,
+
     -- 跳数索引：加速 exe / cmdline / remote_addr 模糊查询
     INDEX idx_exe exe TYPE tokenbf_v1(10240, 3, 0) GRANULARITY 4,
     INDEX idx_cmdline cmdline TYPE tokenbf_v1(10240, 3, 0) GRANULARITY 4,
@@ -154,12 +161,20 @@ SETTINGS index_granularity = 8192;
 -- ==================== 审计日志 ====================
 
 CREATE TABLE IF NOT EXISTS audit_log (
-    timestamp   DateTime64(3),
-    user_id     String,
-    action      LowCardinality(String),
-    resource    String,
-    detail      String,
-    ip          String
+    timestamp     DateTime64(3),
+    user_id       String,                            -- = username（保留旧列名兼容存量查询）
+    actor_type    LowCardinality(String) DEFAULT 'user',  -- user/system/agent
+    action        LowCardinality(String),            -- 语义动词 user.login/role.delete/vuln.scan
+    outcome       LowCardinality(String) DEFAULT 'success', -- success/failure
+    resource      String,                            -- 旧复合列（resource_type/resource_id path），兼容保留
+    resource_type LowCardinality(String) DEFAULT '',
+    resource_id   String DEFAULT '',
+    target_name   String DEFAULT '',                 -- 资源可读名
+    path          String DEFAULT '',
+    status_code   Int32  DEFAULT 0,
+    detail        String,
+    change_detail String DEFAULT '',                 -- 变更详情 before→after
+    ip            String
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (timestamp)

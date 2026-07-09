@@ -470,19 +470,24 @@ func (h *TasksHandler) RunTask(c *gin.Context) {
 		return
 	}
 
-	// 只有 created 和 failed 状态的任务可以（重新）执行
-	if task.Status != model.TaskStatusCreated && task.Status != model.TaskStatusFailed {
-		Conflict(c, "任务状态为 "+string(task.Status)+"，无法执行（仅允许 created/failed 状态）")
+	// 只有 created / failed / partial 状态的任务可以（重新）执行
+	// partial（部分完成）允许重跑以补齐剩余未返回结果的主机
+	if task.Status != model.TaskStatusCreated &&
+		task.Status != model.TaskStatusFailed &&
+		task.Status != model.TaskStatusPartial {
+		Conflict(c, "任务状态为 "+string(task.Status)+"，无法执行（仅允许 created/failed/partial 状态）")
 		return
 	}
 
 	// 重置任务状态为 pending，等待调度器处理
 	// 设置 executed_at 为执行请求时间（用于计算超时）
+	// retry_count 归零：手动重跑视为全新一轮（dispatched/completed 计数同步归零，全量重扫）
 	now := time.Now()
 	localNow := model.LocalTime(now)
 	if err := h.db.Model(&task).Updates(map[string]interface{}{
 		"status":                model.TaskStatusPending,
 		"executed_at":           &localNow,
+		"retry_count":           0,
 		"dispatched_host_count": 0,
 		"completed_host_count":  0,
 		"failed_reason":         "",

@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { baselineApi } from "@/lib/api/baseline";
@@ -33,6 +34,7 @@ const emptyForm: GroupForm = { name: "", description: "", enabled: true };
 
 export default function BaselineGroupsPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
@@ -108,7 +110,16 @@ export default function BaselineGroupsPage() {
           {r.color && (
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
           )}
-          <span className="font-medium text-ink">{r.name}</span>
+          <button
+            type="button"
+            className="font-medium text-ink transition-colors hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/baseline/policies?group_id=${r.id}`);
+            }}
+          >
+            {r.name}
+          </button>
         </div>
       ),
     },

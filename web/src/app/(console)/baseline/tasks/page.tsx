@@ -23,6 +23,7 @@ const buildStatusMeta = (t: TFunction): Record<BaselineTask["status"], { label: 
   pending: { label: t("baseline.tasks.statusPending"), tone: "info" },
   running: { label: t("baseline.tasks.statusRunning"), tone: "info" },
   completed: { label: t("baseline.tasks.statusCompleted"), tone: "success" },
+  partial: { label: t("baseline.tasks.statusPartial"), tone: "warning" },
   failed: { label: t("baseline.tasks.statusFailed"), tone: "danger" },
   cancelled: { label: t("baseline.tasks.statusCancelled"), tone: "neutral" },
 });
@@ -33,6 +34,7 @@ const buildStatusOptions = (t: TFunction) => [
   { label: t("baseline.tasks.statusPending"), value: "pending" },
   { label: t("baseline.tasks.statusRunning"), value: "running" },
   { label: t("baseline.tasks.statusCompleted"), value: "completed" },
+  { label: t("baseline.tasks.statusPartial"), value: "partial" },
   { label: t("baseline.tasks.statusFailed"), value: "failed" },
   { label: t("baseline.tasks.statusCancelled"), value: "cancelled" },
 ];

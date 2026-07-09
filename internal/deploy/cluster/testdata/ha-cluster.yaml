@@ -1,0 +1,87 @@
+api_version: mxcwpp.io/v1alpha1
+kind: ClusterConfig
+metadata:
+  name: ha
+  environment: prod
+release:
+  version: v1.0.0
+  install_dir: /opt/mxcwpp
+  data_root: /data/mxcwpp
+  timezone: Asia/Shanghai
+registry:
+  domain: registry.example.com
+  namespace: mxcwpp
+components:
+  manager:
+    version: v1.0.2
+network:
+  ui:
+    scheme: http
+    host: 10.0.1.1
+    port: 80
+  grpc:
+    scheme: grpc
+    host: 10.0.1.1
+    port: 6751
+app:
+  jwt_secret: test-jwt-secret-ha-cluster-001
+  manager_http_port: 8080
+  ac_http_port: 8081
+  grpc_port: 6751
+infrastructure:
+  mysql:
+    root_password: root123
+    password: user123
+    host: 10.0.1.5
+    port: 13306
+    database: mxcwpp
+    user: mxcwpp_user
+  redis:
+    password: redis123
+    host: 10.0.1.5
+    port: 16379
+  clickhouse:
+    host: 10.0.1.5
+    http_port: 8123
+    tcp_port: 9000
+    database: mxcwpp
+    user: default
+    password: ""
+  kafka:
+    enabled: true
+    host: 10.0.1.6
+    broker_ports:
+      - 9092
+      - 9094
+      - 9095
+    topic_prefix: mxcwpp
+nodes:
+  - name: n1
+    host: 10.0.1.1
+    roles:
+      - manager
+      - consumer
+      - engine
+      - vulnsync
+      - llmproxy
+      - ui
+  - name: n2
+    host: 10.0.1.2
+    roles:
+      - agentcenter
+  - name: n3
+    host: 10.0.1.3
+    roles:
+      - agentcenter
+  - name: n4
+    host: 10.0.1.4
+    roles:
+      - agentcenter
+  - name: n5
+    host: 10.0.1.5
+    roles:
+      - storage
+  - name: n6
+    host: 10.0.1.6
+    roles:
+      - kafka

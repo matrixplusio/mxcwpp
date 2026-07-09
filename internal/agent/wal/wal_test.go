@@ -40,7 +40,7 @@ func TestWriteAndReplay(t *testing.T) {
 
 	// Replay.
 	var replayed int
-	err = w.Replay(50, func(records []*grpcProto.EncodedRecord) error {
+	err = w.Replay(50, 0, func(records []*grpcProto.EncodedRecord) error {
 		replayed += len(records)
 		return nil
 	})
@@ -125,7 +125,7 @@ func TestPersistence(t *testing.T) {
 	}
 
 	var replayed int
-	err = w2.Replay(100, func(records []*grpcProto.EncodedRecord) error {
+	err = w2.Replay(100, 0, func(records []*grpcProto.EncodedRecord) error {
 		replayed += len(records)
 		for _, r := range records {
 			if r.DataType != 3001 {
@@ -152,7 +152,7 @@ func TestEmptyReplay(t *testing.T) {
 	defer w.Close()
 
 	// Replay on empty WAL should be no-op.
-	err = w.Replay(100, func(records []*grpcProto.EncodedRecord) error {
+	err = w.Replay(100, 0, func(records []*grpcProto.EncodedRecord) error {
 		t.Fatal("handler should not be called on empty WAL")
 		return nil
 	})
@@ -192,7 +192,7 @@ func TestCorruptRecovery(t *testing.T) {
 	defer w2.Close()
 
 	var replayed int
-	err = w2.Replay(100, func(records []*grpcProto.EncodedRecord) error {
+	err = w2.Replay(100, 0, func(records []*grpcProto.EncodedRecord) error {
 		replayed += len(records)
 		return nil
 	})

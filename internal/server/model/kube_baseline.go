@@ -34,6 +34,7 @@ type KubeBaseline struct {
 	Result            string            `gorm:"column:result;type:varchar(20);not null;index" json:"result"`
 	Remediation       string            `gorm:"column:remediation;type:text" json:"remediation"`
 	Benchmark         string            `gorm:"column:benchmark;type:varchar(255)" json:"benchmark"`
+	ControlRef        string            `gorm:"column:control_ref;type:varchar(255)" json:"controlRef"` // 框架条款映射(PSS/NSA/CIS 章节)
 	AffectedResources AffectedResources `gorm:"column:affected_resources;type:json" json:"affectedResources"`
 	CheckedAt         LocalTime         `gorm:"column:checked_at;type:timestamp;not null;index" json:"checkedAt"`
 	CreatedAt         LocalTime         `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`

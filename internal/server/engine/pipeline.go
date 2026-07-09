@@ -125,6 +125,14 @@ func (p *Pipeline) Handler() MessageHandler {
 			ev.fieldsCache = &fieldsCache{}
 		}
 
+		// 自排除：EDR 不检测自身安全 agent / 插件进程的行为。
+		// collector 等插件做资产采集(读 /etc/passwd /proc、写状态文件、连 AC、DNS 解析)
+		// 会触发枚举/隐藏文件/外连/DNS 等 CEL 规则,造成大量自检测误报(实测单条 hit 1118)。
+		// 凡 exe 属 agent 自身进程树(/var/lib/mxcwpp-agent/ 下插件 或 agent 主程序)的事件直接跳过检测。
+		if isAgentSelfEvent(ev) {
+			return nil
+		}
+
 		// 逐层处理
 		for _, st := range p.stages {
 			alerts, err := st.Process(ctx, ev)
@@ -143,6 +151,32 @@ func (p *Pipeline) Handler() MessageHandler {
 		}
 		return nil
 	}
+}
+
+// agentSelfExePrefixes 标识 mxcwpp 安全 agent 自身及其插件的可执行路径前缀。
+// 这些进程的行为(资产采集/插件运行/与 AC 通信)不应被自家 EDR 当作攻击检测。
+var agentSelfExePrefixes = []string{
+	"/var/lib/mxcwpp-agent/plugins/", // collector/baseline/fim/remediation/scanner 及其 bin/clamscan、bin/yr
+	"/usr/bin/mxcwpp-agent",          // agent 主程序
+	"/var/lib/mxcwpp-agent/",         // agent 工作目录下其他自身进程
+}
+
+// isAgentSelfEvent 判断事件是否由 agent 自身进程树发起（按 exe 前缀）。
+func isAgentSelfEvent(ev PipelineEvent) bool {
+	fields, err := ev.Fields()
+	if err != nil {
+		return false
+	}
+	exe := fields["exe"]
+	if exe == "" {
+		return false
+	}
+	for _, p := range agentSelfExePrefixes {
+		if len(exe) >= len(p) && exe[:len(p)] == p {
+			return true
+		}
+	}
+	return false
 }
 
 // emitAlert 把 Alert 转 AlertEnvelope 推到 mxcwpp.engine.alert,

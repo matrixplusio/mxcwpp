@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Globe, Hash, Network, Link2, Database } from "lucide-react";
@@ -33,6 +33,7 @@ interface IocRow {
 
 export default function ThreatIntelPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const typeLabels = buildTypeLabels(t);
   const typeTabs = IOC_TYPES.map((tp) => ({ key: tp, label: typeLabels[tp] }));
   const checkTypeOptions = IOC_TYPES.map((tp) => ({ label: typeLabels[tp], value: tp }));
@@ -63,11 +64,47 @@ export default function ThreatIntelPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // 同步是后端异步任务：触发后轮询同步状态，完成后自动刷新统计与 IOC 列表，无需手动刷新
+  const [syncing, setSyncing] = useState(false);
+  const sawRunning = useRef(false);
+  const pollCount = useRef(0);
+
+  const { data: syncStatus } = useQuery({
+    queryKey: ["ti-sync-status"],
+    queryFn: () => detectionApi.threatIntelSyncStatus(),
+    enabled: syncing,
+    refetchInterval: syncing ? 1500 : false,
+  });
+
   const syncMutation = useMutation({
     mutationFn: () => detectionApi.syncThreatIntel(),
-    onSuccess: (res) => toast.success(res?.message || t("detection.threatIntel.syncTriggered")),
+    onSuccess: () => {
+      sawRunning.current = false;
+      pollCount.current = 0;
+      setSyncing(true);
+      toast.success(t("detection.threatIntel.syncing"));
+    },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  useEffect(() => {
+    if (!syncing) return;
+    pollCount.current += 1;
+    const status = syncStatus?.status;
+    if (status === "running") sawRunning.current = true;
+    const terminal = status === "success" || status === "failed";
+    // 见过 running 后到达终态，或轮询超过 60s（40×1.5s）兜底退出
+    if ((sawRunning.current && terminal) || pollCount.current > 40) {
+      setSyncing(false);
+      queryClient.invalidateQueries({ queryKey: ["ti-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["ti-iocs"] });
+      if (status === "failed") {
+        toast.error(t("detection.threatIntel.syncFailed"));
+      } else {
+        toast.success(t("detection.threatIntel.syncDone"));
+      }
+    }
+  }, [syncing, syncStatus, queryClient, t]);
 
   const rows: IocRow[] = (iocs?.items ?? []).map((v) => ({ value: v }));
 
@@ -85,8 +122,8 @@ export default function ThreatIntelPage() {
         <CardHeader
           title={t("detection.threatIntel.queryTitle")}
           extra={
-            <Button variant="ghost" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
-              {syncMutation.isPending ? t("detection.threatIntel.syncing") : t("detection.threatIntel.sync")}
+            <Button variant="ghost" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || syncing}>
+              {syncMutation.isPending || syncing ? t("detection.threatIntel.syncing") : t("detection.threatIntel.sync")}
             </Button>
           }
         />

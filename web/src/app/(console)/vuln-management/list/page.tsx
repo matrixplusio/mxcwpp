@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { ShieldAlert, AlertOctagon, AlertTriangle, Server } from "lucide-react";
+import { ShieldAlert, AlertOctagon, AlertTriangle, Server, Layers, ShieldCheck, ShieldX, Percent } from "lucide-react";
 import { vulnApi } from "@/lib/api/vuln";
 import type { Severity, Vulnerability } from "@/lib/api/types";
 import { Card } from "@/components/ui/Card";
@@ -13,7 +14,6 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Drawer } from "@/components/ui/Drawer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusTag, SeverityTag } from "@/components/ui/Tag";
@@ -58,19 +58,18 @@ const buildAssetTypeOptions = (t: TFunction) => [
   { label: t("vuln.list.assetTypeApplication"), value: "application" },
   { label: t("vuln.list.assetTypeMiddleware"), value: "middleware" },
 ];
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex gap-3 text-sm">
-      <span className="w-20 shrink-0 text-muted">{label}</span>
-      <span className="text-ink break-all">{value}</span>
-    </div>
-  );
-}
+// 包类型: 默认只看系统包(OS/rpm/dnf/yum/apt), 应用依赖(golang/maven/npm/pypi)默认隐藏。
+const buildPackageTypeOptions = (t: TFunction) => [
+  { label: t("vuln.list.packageTypeOs"), value: "os" },
+  { label: t("vuln.list.packageTypeApp"), value: "app" },
+  { label: t("vuln.list.packageTypeAll"), value: "all" },
+];
 
 export default function VulnListPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const openDetail = (id: number) => router.push(`/vuln-management/list/detail?id=${id}`);
   const statusMeta = buildStatusMeta(t);
   const statusTag = (status: string) => {
     const meta = statusMeta[status] ?? { tone: "neutral" as Tone, label: status || "—" };
@@ -79,6 +78,7 @@ export default function VulnListPage() {
   const severityOptions = buildSeverityOptions(t);
   const statusOptions = buildStatusOptions(t);
   const assetTypeOptions = buildAssetTypeOptions(t);
+  const packageTypeOptions = buildPackageTypeOptions(t);
   const [params, setParams] = useUrlState({
     page: 1,
     page_size: 20,
@@ -86,6 +86,7 @@ export default function VulnListPage() {
     severity: "",
     status: "",
     asset_type: "",
+    package_type: "os",
   });
 
   const { data, isLoading } = useQuery({
@@ -98,19 +99,13 @@ export default function VulnListPage() {
         severity: params.severity || undefined,
         status: params.status || undefined,
         asset_type: params.asset_type || undefined,
+        package_type: params.package_type || undefined,
       }),
   });
   const stats = data?.stats;
 
-  const [detailId, setDetailId] = useState<number | null>(null);
   const [ignoring, setIgnoring] = useState<Vulnerability | null>(null);
   const [unignoring, setUnignoring] = useState<Vulnerability | null>(null);
-
-  const { data: detail } = useQuery({
-    queryKey: ["vuln-detail", detailId],
-    queryFn: () => vulnApi.getVuln(detailId as number),
-    enabled: detailId != null,
-  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["vuln-list"] });
@@ -144,7 +139,7 @@ export default function VulnListPage() {
       render: (r) => (isSeverity(r.severity) ? <SeverityTag level={r.severity} /> : <StatusTag tone="neutral">{r.severity || "—"}</StatusTag>),
     },
     { key: "cvssScore", title: "CVSS", render: (r) => <span className="tabular-nums">{r.cvssScore?.toFixed(1) ?? "—"}</span> },
-    { key: "component", title: t("vuln.list.colComponent"), render: (r) => <span className="text-muted">{r.component || "—"}</span> },
+    { key: "component", title: t("vuln.list.colComponent"), render: (r) => <span className="text-muted">{r.matchedComponent || r.component || "—"}</span> },
     { key: "affectedHosts", title: t("vuln.list.colAffectedHosts"), render: (r) => <span className="tabular-nums">{r.affectedHosts ?? 0}</span> },
     { key: "status", title: t("common.status"), render: (r) => statusTag(r.status) },
     {
@@ -167,7 +162,7 @@ export default function VulnListPage() {
               {t("vuln.list.actionIgnore")}
             </Button>
           )}
-          <Button variant="ghost" className="h-8 px-3" onClick={() => setDetailId(r.id)}>
+          <Button variant="ghost" className="h-8 px-3" onClick={() => openDetail(r.id)}>
             {t("common.details")}
           </Button>
         </div>
@@ -177,8 +172,14 @@ export default function VulnListPage() {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mb-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 mb-3">
         <StatCard compact label={t("vuln.list.statTotal")} value={stats?.total ?? 0} icon={ShieldAlert} tone="default" />
+        <StatCard compact label={t("vuln.list.statHostInstances")} value={stats?.hostInstances ?? 0} icon={Layers} tone="default" />
+        <StatCard compact label={t("vuln.list.statPatched")} value={stats?.patched ?? 0} icon={ShieldCheck} tone="success" />
+        <StatCard compact label={t("vuln.list.statUnpatched")} value={stats?.unpatched ?? 0} icon={ShieldX} tone="danger" />
+        <StatCard compact label={t("vuln.list.statRate")} value={`${(stats?.remediationRate ?? 0).toFixed(1)}%`} icon={Percent} tone="success" />
+      </div>
+      <div className="grid grid-cols-3 gap-3 md:grid-cols-3 mb-5">
         <StatCard compact label={t("vuln.list.statCritical")} value={stats?.critical ?? 0} icon={AlertOctagon} tone="danger" />
         <StatCard compact label={t("vuln.list.statHigh")} value={stats?.high ?? 0} icon={AlertTriangle} tone="warning" />
         <StatCard compact label={t("vuln.list.statAffectedHosts")} value={stats?.affectedHosts ?? 0} icon={Server} tone="default" />
@@ -191,6 +192,7 @@ export default function VulnListPage() {
             onChange={(v) => setParams((p) => ({ ...p, search: v, page: 1 }))}
             placeholder={t("vuln.list.searchPlaceholder")}
           />
+          <Select value={params.package_type} onChange={(v) => setParams((p) => ({ ...p, package_type: v, page: 1 }))} options={packageTypeOptions} />
           <Select value={params.severity} onChange={(v) => setParams((p) => ({ ...p, severity: v, page: 1 }))} options={severityOptions} />
           <Select value={params.status} onChange={(v) => setParams((p) => ({ ...p, status: v, page: 1 }))} options={statusOptions} />
           <Select value={params.asset_type} onChange={(v) => setParams((p) => ({ ...p, asset_type: v, page: 1 }))} options={assetTypeOptions} />
@@ -202,7 +204,7 @@ export default function VulnListPage() {
             rowKey={(r) => r.id}
             loading={isLoading}
             emptyText={t("vuln.list.empty")}
-            onRowClick={(r) => setDetailId(r.id)}
+            onRowClick={(r) => openDetail(r.id)}
           />
           <Pagination
             page={params.page}
@@ -212,61 +214,6 @@ export default function VulnListPage() {
           />
         </Card>
       </div>
-
-      <Drawer
-        open={detailId != null}
-        onClose={() => setDetailId(null)}
-        title={t("vuln.list.detailTitle")}
-        width={560}
-        footer={
-          detail && detail.status !== "ignored" ? (
-            <Button onClick={() => setIgnoring(detail)}>{t("vuln.list.actionIgnore")}</Button>
-          ) : undefined
-        }
-      >
-        {detail && (
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <h2 className="text-lg font-bold font-mono text-ink">{detail.cveId}</h2>
-              <div className="flex items-center gap-2">
-                {isSeverity(detail.severity) ? <SeverityTag level={detail.severity} /> : <StatusTag tone="neutral">{detail.severity}</StatusTag>}
-                {statusTag(detail.status)}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Field label="CVSS" value={<span className="tabular-nums">{detail.cvssScore?.toFixed(1) ?? "—"}</span>} />
-              <Field label={t("vuln.list.fieldComponent")} value={detail.component || "—"} />
-              <Field label={t("vuln.list.fieldCurrentVersion")} value={<span className="font-mono">{detail.currentVersion || "—"}</span>} />
-              <Field label={t("vuln.list.fieldFixedVersion")} value={<span className="font-mono">{detail.fixedVersion || "—"}</span>} />
-              <Field label={t("vuln.list.fieldAffectedHosts")} value={<span className="tabular-nums">{detail.affectedHosts ?? 0}</span>} />
-            </div>
-
-            {detail.description && (
-              <div>
-                <div className="mb-1.5 text-sm font-medium text-ink">{t("vuln.list.fieldDescription")}</div>
-                <p className="text-sm leading-relaxed text-muted">{detail.description}</p>
-              </div>
-            )}
-
-            <div>
-              <div className="mb-1.5 text-sm font-medium text-ink">{t("vuln.list.affectedHostsTitle")}</div>
-              {detail.hosts && detail.hosts.length > 0 ? (
-                <div className="divide-y divide-border rounded-control border border-border">
-                  {detail.hosts.map((h) => (
-                    <div key={h.hostId} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <span className="text-ink">{h.hostname || h.hostId}</span>
-                      <span className="text-faint tabular-nums">{h.ip}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-faint">{t("vuln.list.noAffectedHosts")}</p>
-              )}
-            </div>
-          </div>
-        )}
-      </Drawer>
 
       <ConfirmDialog
         open={!!ignoring}

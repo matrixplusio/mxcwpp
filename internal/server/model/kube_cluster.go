@@ -57,12 +57,15 @@ type KubeCluster struct {
 	HealthScore    int               `gorm:"column:health_score;type:int;default:100" json:"healthScore"`
 	Remark         string            `gorm:"column:remark;type:text" json:"remark"`
 	// GCP Pub/Sub 配置（GKE 审计日志接入，per-cluster）
-	GCPEnabled         bool      `gorm:"column:gcp_enabled;type:tinyint(1);default:0" json:"gcpEnabled"`
-	GCPProjectID       string    `gorm:"column:gcp_project_id;type:varchar(255)" json:"gcpProjectId,omitempty"`
-	GCPSubscription    string    `gorm:"column:gcp_subscription;type:varchar(255)" json:"gcpSubscription,omitempty"`
-	GCPCredentialsJSON string    `gorm:"column:gcp_credentials_json;type:text" json:"-"` // SA JSON Key 内容，API 不直接暴露
-	CreatedAt          LocalTime `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
-	UpdatedAt          LocalTime `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updatedAt"`
+	GCPEnabled         bool   `gorm:"column:gcp_enabled;type:tinyint(1);default:0" json:"gcpEnabled"`
+	GCPProjectID       string `gorm:"column:gcp_project_id;type:varchar(255)" json:"gcpProjectId,omitempty"`
+	GCPSubscription    string `gorm:"column:gcp_subscription;type:varchar(255)" json:"gcpSubscription,omitempty"`
+	GCPCredentialsJSON string `gorm:"column:gcp_credentials_json;type:text" json:"-"` // SA JSON Key 内容，API 不直接暴露
+	// GKE Container API 坐标（托管层基线检查用，复用 GCPProjectID + GCPCredentialsJSON）
+	GCPLocation    string    `gorm:"column:gcp_location;type:varchar(64)" json:"gcpLocation,omitempty"`         // 集群 region/zone
+	GCPClusterName string    `gorm:"column:gcp_cluster_name;type:varchar(255)" json:"gcpClusterName,omitempty"` // GKE 集群 ID（缺省取 Name）
+	CreatedAt      LocalTime `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt      LocalTime `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 func (KubeCluster) TableName() string {

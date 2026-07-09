@@ -10,6 +10,7 @@ import { useUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
@@ -81,19 +82,17 @@ export default function HostsPage() {
     ...(blList?.items ?? []).map((b) => ({ label: b.name, value: b.code })),
   ];
 
-  // 系统分布(客户端聚合:后端无 os-distribution 端点,拉全量主机按 os_family 分组)
-  const { data: allHosts } = useQuery({
+  // 系统分布(后端 os-distribution 端点单条 GROUP BY,前端只做发行版 label + 主版本号拼接)
+  const { data: osDistRaw } = useQuery({
     queryKey: ["hosts-os-dist"],
-    queryFn: () => hostsApi.list({ page: 1, page_size: 1000 }),
+    queryFn: () => hostsApi.osDistribution(),
   });
-  const osDist = Object.entries(
-    (allHosts?.items ?? []).reduce<Record<string, number>>((acc, h) => {
-      const k = osLabel(h.os_family);
-      acc[k] = (acc[k] ?? 0) + 1;
-      return acc;
-    }, {}),
-  )
-    .map(([name, value]) => ({ name, value }))
+  const osDist = (osDistRaw ?? [])
+    .map((d) => {
+      const major = (d.major || "").trim();
+      const name = major ? `${osLabel(d.os_family)} ${major}` : osLabel(d.os_family);
+      return { name, value: d.count };
+    })
     .sort((a, b) => b.value - a.value);
   // 类型过多时折叠尾部为「其他 N」,避免撑爆卡片
   const OS_MAX = 7;
@@ -214,7 +213,10 @@ export default function HostsPage() {
       render: (r) => (
         <div className="min-w-0">
           <div className="truncate font-medium text-ink">{r.hostname}</div>
-          <div className="truncate text-xs text-faint">{r.host_id}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-xs text-faint">{r.host_id}</span>
+            <CopyButton text={r.host_id} />
+          </div>
         </div>
       ),
     },

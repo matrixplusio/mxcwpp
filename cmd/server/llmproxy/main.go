@@ -32,7 +32,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "configs/llmproxy.yaml", "path to llmproxy config")
-	httpAddr := flag.String("http", ":8084", "HTTP listen address")
+	httpAddr := flag.String("http", ":8085", "HTTP listen address")
 	openaiKey := flag.String("openai-key", "", "OpenAI API key (env OPENAI_API_KEY)")
 	anthropicKey := flag.String("anthropic-key", "", "Anthropic API key (env ANTHROPIC_API_KEY)")
 	geminiKey := flag.String("gemini-key", "", "Google Gemini API key (env GEMINI_API_KEY)")

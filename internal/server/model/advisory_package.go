@@ -24,7 +24,9 @@ type AdvisoryPackage struct {
 	ID       uint   `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 
 	// CVE 关联（cve_id 不强约束 FK，便于 source 先到 vuln 未到的情况）
-	CveID string `gorm:"column:cve_id;type:varchar(50);not null;index:idx_ap_cve" json:"cveId"`
+	// idx_ap_cve_pkg_os：cleanup 的覆盖性 advisory NOT EXISTS 子查询按 (cve_id,pkg_name,os_major)
+	// 等值探测；无此复合索引则每行全扫 advisory_packages(数百万行)，cleanup 单条 DELETE 达 18s。
+	CveID string `gorm:"column:cve_id;type:varchar(50);not null;index:idx_ap_cve;index:idx_ap_cve_pkg_os,priority:1" json:"cveId"`
 
 	// 数据源标识（rhsa / rocky-apollo / debian-tracker / alpine / osv / nvd / ubuntu / centos / 信创...）
 	Source string `gorm:"column:source;type:varchar(32);not null" json:"source"`
@@ -37,13 +39,13 @@ type AdvisoryPackage struct {
 	//   OSFamily: rhel/rocky/centos/almalinux/oraclelinux/debian/ubuntu/alpine/openeuler/anolis/kylin/uos
 	//   OSMajor:  9 / 10 / 11 / "" （""=未明确 OS 主版本，仅靠 ecosystem 匹配）
 	OSFamily string `gorm:"column:os_family;type:varchar(32);not null;default:'';index:idx_ap_os" json:"osFamily"`
-	OSMajor  string `gorm:"column:os_major;type:varchar(16);not null;default:'';index:idx_ap_os" json:"osMajor"`
+	OSMajor  string `gorm:"column:os_major;type:varchar(16);not null;default:'';index:idx_ap_os;index:idx_ap_cve_pkg_os,priority:3" json:"osMajor"`
 
 	// Ecosystem（非 OS pkg 用，如 npm / pypi / maven / golang），与 OSFamily 互斥
 	Ecosystem string `gorm:"column:ecosystem;type:varchar(64);default:'';index" json:"ecosystem"`
 
 	// pkg 标识
-	PkgName string `gorm:"column:pkg_name;type:varchar(200);not null;index:idx_ap_lookup" json:"pkgName"`
+	PkgName string `gorm:"column:pkg_name;type:varchar(200);not null;index:idx_ap_lookup;index:idx_ap_cve_pkg_os,priority:2" json:"pkgName"`
 	Arch    string `gorm:"column:arch;type:varchar(16);default:'';index:idx_ap_lookup" json:"arch"`
 
 	// 修复后的精确版本（NEVRA：epoch:version-release，或 dpkg/语言包格式）

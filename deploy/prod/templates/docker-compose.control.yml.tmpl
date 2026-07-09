@@ -1,6 +1,7 @@
 name: mxcwpp-control
 
 services:
+{{- if .HasManager }}
   manager:
     image: {{ .ManagerImage }}
     restart: always
@@ -21,7 +22,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+{{- end }}
 
+{{- if .HasAgentCenter }}
   agentcenter:
     image: {{ .AgentCenterImage }}
     restart: always
@@ -41,8 +44,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+{{- end }}
 
-{{- if gt .Assignment.ConsumerReplicas 0 }}
+{{- if .HasConsumer }}
   consumer:
     image: {{ .ConsumerImage }}
     restart: always
@@ -61,7 +65,7 @@ services:
       start_period: 30s
 {{- end }}
 
-{{- if gt .Assignment.EngineReplicas 0 }}
+{{- if .HasEngine }}
   # ===== Engine v2.0 检测分析引擎 =====
   # 订阅 mxcwpp.agent.* (ConsumerGroup B "mxcwpp-engine"), 与 consumer 独立 offset.
   # 16 stages: CEL / sequence / anomaly / ML / audit / intrusion / kube / RASP / storyline 等.
@@ -83,7 +87,7 @@ services:
       start_period: 60s
 {{- end }}
 
-{{- if gt .Assignment.LLMProxyReplicas 0 }}
+{{- if .HasLLMProxy }}
   # ===== LLMProxy v2.0 多 LLM 厂商适配网关 =====
   # 7 providers: OpenAI / Anthropic / Gemini / DashScope / DeepSeek / Ollama / vLLM
   # 4 scene routing: alert_explain / storyline_summary / nl2query / rule_draft
@@ -105,7 +109,7 @@ services:
       start_period: 30s
 {{- end }}
 
-{{- if gt .Assignment.VulnSyncReplicas 0 }}
+{{- if .HasVulnSync }}
   # ===== VulnSync v2.0 漏洞情报融合 =====
   # 11+ sources: NVD / OSV / RHSA / USN / CISA KEV / EPSS / CNNVD / 信创 (Kylin/UOS/openEuler/anolis)
   # PURL+NEVRA 双索引 + Leader Election (redsync 避免多副本重复抓取).
@@ -127,13 +131,16 @@ services:
       start_period: 60s
 {{- end }}
 
+{{- if .HasUI }}
   ui:
     image: {{ .UIImage }}
     restart: always
     network_mode: host
+    {{- if .HasManager }}
     depends_on:
       manager:
         condition: service_healthy
+    {{- end }}
     volumes:
       - {{ .InstallDir }}/current/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - {{ .DataRoot }}/logs/nginx:/var/log/nginx
@@ -144,7 +151,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+{{- end }}
 
+{{- if .HasManager }}
   # ===== PDF 服务端渲染（可选）=====
   # Gotenberg 8 sidecar，提供 Chromium → PDF 转换。
   # 替代前端 jsPDF（万行级数据集会让浏览器崩）。
@@ -165,3 +174,4 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+{{- end }}

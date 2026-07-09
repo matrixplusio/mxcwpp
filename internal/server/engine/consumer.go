@@ -8,21 +8,35 @@ import (
 
 	"github.com/IBM/sarama"
 	"go.uber.org/zap"
+
+	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 )
 
 // ConsumerGroupID 是 Engine 服务的 Kafka ConsumerGroup,
 // 与 Consumer 服务的 "mxcwpp-writers" 互不冲突,
-// 同一份 mxcwpp.agent.* 消息会被两个 group 各消费一次。
+// 同一份 agent.* 消息会被两个 group 各消费一次。
 const ConsumerGroupID = "mxcwpp-engine"
 
-// SubscribedTopics 是 Engine ConsumerGroup B 订阅的 Topic 集合。
-// 详见 docs/architecture.md §4.2 ConsumerGroup 拓扑。
-var SubscribedTopics = []string{
-	"mxcwpp.agent.ebpf",     // EDR 内核事件 (CEL 规则 / 序列 / ML)
-	"mxcwpp.agent.events",   // FIM 文件事件
-	"mxcwpp.agent.scanner",  // 病毒/漏洞扫描结果
-	"mxcwpp.agent.baseline", // 基线结果
-	"mxcwpp.vuln.advisory",  // 漏洞情报 (Engine 关联检测)
+// agentTopics 由 AgentCenter 生产，带 topic_prefix（如 prod → prodmxcwpp.agent.*）。
+// Engine 必须用与 AC 相同的前缀订阅，否则收不到任何事件。
+var agentTopics = []string{
+	kafka.TopicEBPF,     // EDR 内核事件 (CEL 规则 / 序列 / ML)
+	kafka.TopicEvents,   // FIM 文件事件
+	kafka.TopicScanner,  // 病毒/漏洞扫描结果
+	kafka.TopicBaseline, // 基线结果
+}
+
+// buildSubscribedTopics 按 topic_prefix 拼接 Engine 订阅的 Topic 集合。
+//
+// agent.* 由 AC 生产，带前缀；vuln.advisory 由 VulnSync 生产，裸名（不带前缀），
+// 故前者拼 prefix、后者保持原样，与各自生产端保持一致。
+func buildSubscribedTopics(topicPrefix string) []string {
+	topics := make([]string, 0, len(agentTopics)+1)
+	for _, t := range agentTopics {
+		topics = append(topics, topicPrefix+t)
+	}
+	topics = append(topics, kafka.TopicVulnAdvisory) // 漏洞情报 (Engine 关联检测)
+	return topics
 }
 
 // MessageHandler 是单条 Kafka 消息的处理函数。
@@ -40,6 +54,7 @@ type MessageHandler func(ctx context.Context, msg *sarama.ConsumerMessage) error
 //   - ctx 取消时优雅退出
 type KafkaConsumer struct {
 	brokers []string
+	topics  []string
 	group   sarama.ConsumerGroup
 	handler MessageHandler
 	logger  *zap.Logger
@@ -49,8 +64,9 @@ type KafkaConsumer struct {
 // NewKafkaConsumer 构造 ConsumerGroup B。
 //
 // brokers: Kafka broker 地址列表
+// topicPrefix: Kafka topic 前缀 (与 AgentCenter / Consumer 一致，如 "prod")
 // handler: 消息处理函数 (nil 时使用 noop)
-func NewKafkaConsumer(brokers []string, handler MessageHandler, logger *zap.Logger) (*KafkaConsumer, error) {
+func NewKafkaConsumer(brokers []string, topicPrefix string, handler MessageHandler, logger *zap.Logger) (*KafkaConsumer, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -74,6 +90,7 @@ func NewKafkaConsumer(brokers []string, handler MessageHandler, logger *zap.Logg
 
 	return &KafkaConsumer{
 		brokers: brokers,
+		topics:  buildSubscribedTopics(topicPrefix),
 		group:   group,
 		handler: handler,
 		logger:  logger,
@@ -93,7 +110,7 @@ func (c *KafkaConsumer) Start(ctx context.Context) {
 			logger:  c.logger,
 		}
 		for {
-			if err := c.group.Consume(ctx, SubscribedTopics, consumer); err != nil {
+			if err := c.group.Consume(ctx, c.topics, consumer); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -115,7 +132,7 @@ func (c *KafkaConsumer) Start(ctx context.Context) {
 
 	c.logger.Info("Engine Kafka ConsumerGroup started",
 		zap.String("group_id", ConsumerGroupID),
-		zap.Strings("topics", SubscribedTopics),
+		zap.Strings("topics", c.topics),
 	)
 }
 

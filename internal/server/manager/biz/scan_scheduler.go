@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
@@ -216,14 +218,30 @@ func (s *ScanScheduler) executeSchedule(scheduleID uint, scanType string) {
 		"finished_at": finishedAt,
 		"duration":    duration,
 	}
+	outcome := model.OutcomeSuccess
 	if err != nil {
 		updates["status"] = "failed"
 		updates["error_msg"] = err.Error()
+		outcome = model.OutcomeFailure
 		s.logger.Error("定时扫描执行失败", zap.Uint("schedule_id", scheduleID), zap.Error(err))
 	} else {
 		updates["status"] = "success"
 	}
 	s.db.Model(&exec).Updates(updates)
+
+	scanDetail := fmt.Sprintf("type=%s duration=%ds", scanType, duration)
+	if err != nil {
+		scanDetail += " error=" + err.Error()
+	}
+	audit.Record(context.Background(), audit.Event{
+		ActorType:    model.ActorTypeSystem,
+		Username:     "scan-scheduler",
+		Action:       "vuln.scan",
+		Outcome:      outcome,
+		ResourceType: "scan_schedule",
+		ResourceID:   fmt.Sprintf("%d", scheduleID),
+		Detail:       scanDetail,
+	})
 
 	// 更新下次执行时间
 	entry, ok := s.entryMap[scheduleID]

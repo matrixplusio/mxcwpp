@@ -12,6 +12,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -24,6 +25,7 @@ interface ListParams {
   page_size: number;
   severity: string;
   status: string;
+  host_id: string;
 }
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -85,6 +87,7 @@ export default function StorylinesPage() {
     page_size: 20,
     severity: "",
     status: "",
+    host_id: "",
   });
 
   const { data: stats } = useQuery({
@@ -100,11 +103,19 @@ export default function StorylinesPage() {
         page_size: params.page_size,
         severity: params.severity || undefined,
         status: params.status || undefined,
+        host_id: params.host_id || undefined,
       }),
   });
 
   const [detail, setDetail] = useState<Storyline | null>(null);
   const [resolving, setResolving] = useState<Storyline | null>(null);
+
+  // 拉故事线完整内容(关联事件链)
+  const { data: detailData } = useQuery({
+    queryKey: ["storyline-detail", detail?.story_id],
+    queryFn: () => detectionApi.getStoryline(detail!.story_id, { page: 1, page_size: 100 }),
+    enabled: !!detail,
+  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["storylines"] });
@@ -142,13 +153,18 @@ export default function StorylinesPage() {
       title: t("common.actions"),
       align: "right",
       render: (r) => (
-        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" className="h-8 px-3" onClick={() => setDetail(r)}>
+        <div className="flex justify-end gap-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="text-sm text-muted transition-colors hover:text-ink" onClick={() => setDetail(r)}>
             {t("common.details")}
-          </Button>
-          <Button variant="ghost" className="h-8 px-3" disabled={r.status !== "active"} onClick={() => setResolving(r)}>
+          </button>
+          <button
+            type="button"
+            className="text-sm text-muted transition-colors hover:text-ink disabled:opacity-40"
+            disabled={r.status !== "active"}
+            onClick={() => setResolving(r)}
+          >
             {t("detection.storylines.actionResolve")}
-          </Button>
+          </button>
         </div>
       ),
     },
@@ -173,6 +189,12 @@ export default function StorylinesPage() {
             value={params.status}
             onChange={(v) => setParams((p) => ({ ...p, status: v, page: 1 }))}
             options={statusOptions}
+          />
+          <Input
+            value={params.host_id}
+            onChange={(e) => setParams((p) => ({ ...p, host_id: e.target.value, page: 1 }))}
+            placeholder={t("detection.storylines.filterHostId")}
+            className="w-56"
           />
         </FilterBar>
         <Card>
@@ -229,18 +251,41 @@ export default function StorylinesPage() {
               </div>
             )}
 
-            <div>
-              <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.storylines.ruleNames")}</div>
-              {ruleList(detail.rule_names).length > 0 ? (
+            {ruleList(detail.rule_names).length > 0 && (
+              <div>
+                <div className="mb-1.5 text-sm font-medium text-ink">{t("detection.storylines.ruleNames")}</div>
                 <ul className="space-y-1">
                   {ruleList(detail.rule_names).map((name, i) => (
-                    <li key={i} className="rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">
-                      {name}
-                    </li>
+                    <li key={i} className="rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">{name}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* 关联事件链(实际内容) */}
+            <div>
+              <div className="mb-1.5 text-sm font-medium text-ink">
+                {t("detection.storylines.eventChain")} ({detailData?.events_total ?? 0})
+              </div>
+              {(detailData?.events?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted">{t("detection.storylines.noEvents")}</p>
               ) : (
-                <p className="text-sm text-muted">—</p>
+                <div className="space-y-2">
+                  {detailData!.events.map((ev) => (
+                    <div key={ev.id} className="rounded-md border border-line p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <StatusTag tone="neutral">{ev.event_type}</StatusTag>
+                        <span className="text-faint tabular-nums">{ev.timestamp}</span>
+                      </div>
+                      {ev.rule_name && <div className="mt-1 text-xs text-danger">{ev.rule_name}</div>}
+                      <div className="mt-1.5 space-y-0.5 rounded bg-surface-muted px-2 py-1.5 text-xs">
+                        {ev.exe && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">进程</span><span className="min-w-0 break-all font-mono text-ink">{ev.exe}</span></div>}
+                        {ev.pid && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">PID</span><span className="font-mono text-ink">{ev.pid}</span></div>}
+                        {ev.detail && <div className="flex gap-2"><span className="w-12 shrink-0 text-faint">详情</span><span className="min-w-0 break-all font-mono text-ink">{ev.detail}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

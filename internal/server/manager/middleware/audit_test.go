@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
@@ -244,19 +245,25 @@ func setupAuditDB(t *testing.T) *gorm.DB {
 	err = db.Exec(`CREATE TABLE audit_logs (
 		tenant_id TEXT NOT NULL DEFAULT 't-default',
 		id            INTEGER PRIMARY KEY AUTOINCREMENT,
+		actor_type    TEXT NOT NULL DEFAULT 'user',
 		username      TEXT NOT NULL DEFAULT 'unknown',
 		action        TEXT NOT NULL,
+		outcome       TEXT NOT NULL DEFAULT 'success',
 		resource_type TEXT NOT NULL DEFAULT 'unknown',
 		resource_id   TEXT DEFAULT '',
+		target_name   TEXT DEFAULT '',
 		path          TEXT NOT NULL,
 		ip            TEXT DEFAULT '',
 		detail        TEXT DEFAULT '',
+		change_detail TEXT DEFAULT '',
 		status_code   INTEGER DEFAULT 200,
 		created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`).Error
 	if err != nil {
 		t.Fatalf("failed to create audit_logs table: %v", err)
 	}
+	// 中间件落库走 audit 全局记录器，测试需显式初始化（nil chConn → 强制 MySQL/sqlite）。
+	audit.Init(db, nil, zap.NewNop())
 	return db
 }
 
@@ -283,7 +290,9 @@ func TestAuditLog_PostRequestRecorded(t *testing.T) {
 	var logs []model.AuditLog
 	db.Find(&logs)
 	assert.Equal(t, 1, len(logs))
-	assert.Equal(t, "POST", logs[0].Action)
+	assert.Equal(t, "policy.create", logs[0].Action)
+	assert.Equal(t, "user", logs[0].ActorType)
+	assert.Equal(t, "success", logs[0].Outcome)
 	assert.Equal(t, "/api/v1/policies", logs[0].Path)
 	assert.Equal(t, "policies", logs[0].ResourceType)
 	assert.Equal(t, 200, logs[0].StatusCode)
@@ -329,7 +338,7 @@ func TestAuditLog_DeleteRequestRecorded(t *testing.T) {
 	var logs []model.AuditLog
 	db.Find(&logs)
 	assert.Equal(t, 1, len(logs))
-	assert.Equal(t, "DELETE", logs[0].Action)
+	assert.Equal(t, "policy.delete", logs[0].Action)
 	assert.Equal(t, "policies", logs[0].ResourceType)
 	assert.Equal(t, "pol-123", logs[0].ResourceID)
 	// DELETE 不捕获 body
@@ -411,6 +420,6 @@ func TestAuditLog_PutRequestWithBody(t *testing.T) {
 	var logs []model.AuditLog
 	db.Find(&logs)
 	assert.Equal(t, 1, len(logs))
-	assert.Equal(t, "PUT", logs[0].Action)
+	assert.Equal(t, "policy.update", logs[0].Action)
 	assert.Contains(t, logs[0].Detail, "updated-policy")
 }

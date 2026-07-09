@@ -428,6 +428,7 @@ cmd/server/consumer/             # Consumer 入口（仅持久化）
 cmd/server/engine/               # Engine 入口（检测分析）
 cmd/server/llmproxy/             # LLMProxy 入口（LLM 适配网关）
 cmd/server/vulnsync/             # VulnSync 入口（漏洞情报融合）
+internal/server/audit/           # 操作审计中央记录器（中立共享：manager + agentcenter 各自 Init）
 internal/server/manager/sd/      # AC 服务发现与注册（Registry 结构体）
 internal/server/common/kafka/    # Kafka Producer / Topic 路由
 internal/server/consumer/        # Consumer 路由 / Writer / DLQ

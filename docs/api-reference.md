@@ -346,9 +346,12 @@
 
 ## 审计日志
 
+语义化操作审计：`actor_type`(user/system/agent) + 语义动词 `action`(如 user.login/role.delete/vuln.scan) + `outcome`(success/failure) + `target_name`。
+覆盖认证(登录/登出/改密)、越权拒绝(access.denied)、HTTP 写操作、系统调度(vuln.scan/agent.update_push)、Agent 上线/离线。
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/audit-logs` | 审计日志列表 |
+| GET | `/api/v1/audit-logs` | 审计日志列表（filter: username / action / actor_type / outcome / resource_type / start_time / end_time） |
 
 ---
 

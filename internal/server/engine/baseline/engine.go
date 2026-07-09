@@ -32,6 +32,11 @@ const (
 	checkpointInterval = 5 * time.Minute
 	// MetricCount is the number of BDE metrics tracked.
 	MetricCount = 13
+	// NumTimeBuckets 时段分桶数(必须整除 24)。按 hour-of-day 分桶,叠加在扁平基线之上,
+	// 让评估对比"同时段"的正常水位,消除夜间批处理等周期性负载的误报。默认 4 桶(每 6h)。
+	NumTimeBuckets = 4
+	// minBucketSamples 桶基线启用所需最小样本;不足则回退扁平基线(=分桶前行为)。
+	minBucketSamples = 50
 )
 
 // Phase constants for host baseline learning state.
@@ -80,9 +85,19 @@ type HostBaseline struct {
 	samples   int
 	phase     string // learning/active
 	dirty     bool   // true if updated since last checkpoint
-	// Welford's online algorithm for mean and variance.
+	// Welford's online algorithm for mean and variance（扁平基线，全时段聚合）。
 	mean [MetricCount]float64
 	m2   [MetricCount]float64 // sum of squared deviations
+	// 时段分桶基线（叠加层）：按 hour-of-day 分桶各维 Welford 统计。
+	// 桶样本足时评估用桶基线（同时段精准），不足回退扁平 mean/m2。
+	bMean    [NumTimeBuckets][MetricCount]float64
+	bM2      [NumTimeBuckets][MetricCount]float64
+	bSamples [NumTimeBuckets]int
+}
+
+// timeBucket 把时刻映射到 [0,NumTimeBuckets) 的时段桶（按 hour-of-day 均分）。
+func timeBucket(t time.Time) int {
+	return t.Hour() / (24 / NumTimeBuckets)
 }
 
 // Update ingests a new metric vector and updates running statistics.
@@ -104,10 +119,42 @@ func (b *HostBaseline) Update(metrics [MetricCount]float64) {
 		b.m2[i] += delta * delta2
 	}
 
+	// 叠加更新当前时段桶（Welford，独立于扁平基线）。
+	bk := timeBucket(time.Now())
+	if bk >= 0 && bk < NumTimeBuckets {
+		b.bSamples[bk]++
+		bn := float64(b.bSamples[bk])
+		for i := range MetricCount {
+			delta := metrics[i] - b.bMean[bk][i]
+			b.bMean[bk][i] += delta / bn
+			delta2 := metrics[i] - b.bMean[bk][i]
+			b.bM2[bk][i] += delta * delta2
+		}
+	}
+
 	// Phase transition: learning → active.
 	if b.phase == PhaseLearning && b.samples >= minSamples && time.Since(b.firstSeen) >= learningPeriod {
 		b.phase = PhaseActive
 	}
+}
+
+// statFor 返回评估某时段桶时第 i 维的 (mean, stddev)。
+// 桶样本足(≥minBucketSamples)→ 用桶基线(同时段精准)；否则回退扁平基线(=分桶前行为)。
+func (b *HostBaseline) statFor(bucket, i int) (mean, stddev float64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if bucket >= 0 && bucket < NumTimeBuckets && b.bSamples[bucket] >= minBucketSamples {
+		mean = b.bMean[bucket][i]
+		if b.bSamples[bucket] >= 2 {
+			stddev = math.Sqrt(b.bM2[bucket][i] / float64(b.bSamples[bucket]-1))
+		}
+		return
+	}
+	mean = b.mean[i]
+	if b.samples >= 2 {
+		stddev = math.Sqrt(b.m2[i] / float64(b.samples-1))
+	}
+	return
 }
 
 // Stddev returns the standard deviation for metric i.
@@ -212,9 +259,10 @@ func (e *Engine) evaluate(hostID string, bl *HostBaseline, metrics [MetricCount]
 	var weightedSum float64
 	var totalWeight float64
 
+	// 按当前时段桶取基线(桶样本足用桶,否则回退扁平),消除周期性负载误报。
+	bucket := timeBucket(time.Now())
 	for i := range MetricCount {
-		mean := bl.Mean(i)
-		sd := bl.Stddev(i)
+		mean, sd := bl.statFor(bucket, i)
 		if sd < 0.001 {
 			continue
 		}
@@ -341,14 +389,44 @@ func (e *Engine) StartCheckpoint(done <-chan struct{}) {
 	go func() {
 		ticker := time.NewTicker(checkpointInterval)
 		defer ticker.Stop()
+		e.sweepGraduations() // 启动即扫一次，毕业重启前已满足条件但无新快照的主机
+		e.checkpoint()       // 立即落库，避免毕业结果等到首个 5 分钟 ticker 才持久化
 		for {
 			select {
 			case <-done:
 				e.checkpoint()
 				return
 			case <-ticker.C:
+				e.sweepGraduations()
 				e.checkpoint()
 			}
 		}
 	}()
+}
+
+// sweepGraduations 定时把已满足毕业条件（samples≥minSamples 且 学习期已满）的学习中主机
+// 转为 active。毕业转换原本仅在新快照到达时触发；主机停发快照（离线/低活跃）会导致
+// 已达标主机永久停留在学习中。本扫描使毕业改为时间驱动，不再依赖增量事件。
+func (e *Engine) sweepGraduations() {
+	e.mu.RLock()
+	baselines := make([]*HostBaseline, 0, len(e.baselines))
+	for _, b := range e.baselines {
+		baselines = append(baselines, b)
+	}
+	e.mu.RUnlock()
+
+	now := time.Now()
+	graduated := 0
+	for _, b := range baselines {
+		b.mu.Lock()
+		if b.phase == PhaseLearning && b.samples >= minSamples && now.Sub(b.firstSeen) >= learningPeriod {
+			b.phase = PhaseActive
+			b.dirty = true
+			graduated++
+		}
+		b.mu.Unlock()
+	}
+	if graduated > 0 {
+		e.logger.Info("行为基线定时毕业", zap.Int("graduated", graduated))
+	}
 }

@@ -6,10 +6,16 @@ metadata:
   environment: prod
 
 release:
-  version: v1.0.0
+  version: v1.0.0          # 全局缺省版本：未在 components 单独指定的组件都用它
   install_dir: /opt/mxcwpp
   data_root: /data/mxcwpp
   timezone: Asia/Shanghai
+
+# 组件级版本覆盖（可选）。只想升级单个组件时用，缺省继承 release.version。
+# 仅作用于 7 个应用镜像：manager/agentcenter/consumer/engine/vulnsync/llmproxy/ui。
+# components:
+#   manager:     { version: v1.0.2 }   # 只升 manager
+#   agentcenter: { version: v1.0.0 }
 
 registry:
   domain: harbor.example.com
@@ -75,14 +81,13 @@ infrastructure:
     broker_ports: [9092, 9094, 9095]
     topic_prefix: prod
 
-control_plane:
-  manager_replicas: 1
-  agentcenter_replicas: 1
-  consumer_replicas: 1
-  engine_replicas: 1
-  llmproxy_replicas: 1
-  vulnsync_replicas: 1
+# control_plane 已废弃：副本数由服务放置隐式推导（= 带该 role 的节点数）。
+# 存量配置保留此块不会报错（解析时忽略）。想横向扩某服务，给多个 node 加对应 role 即可。
 
+# role 词表：
+#   应用 = manager / agentcenter / consumer / engine / vulnsync / llmproxy / ui
+#   基建 = mysql / redis / clickhouse / kafka（本版本各恰好 1 节点）
+#   粗别名（兼容存量）= control(全部应用) / storage(mysql+redis+clickhouse) / kafka
 nodes:
   - name: node1-control
     host: 10.0.0.10
@@ -104,3 +109,20 @@ nodes:
     ssh_port: 22
     ssh_key_path: ~/.ssh/id_rsa
     roles: [kafka]
+
+# ---------------------------------------------------------------------------
+# HA 拓扑样例（细粒度 role，把 agentcenter 拆成 3-node 集群）：
+#
+# components:
+#   manager: { version: v1.0.2 }        # 组件级版本，只升 manager
+#
+# nodes:
+#   - { name: n1, host: 10.0.0.10, roles: [manager, ui, engine, consumer, vulnsync, llmproxy] }
+#   - { name: n2, host: 10.0.0.11, roles: [agentcenter] }   # 3-node AC 集群
+#   - { name: n3, host: 10.0.0.12, roles: [agentcenter] }
+#   - { name: n4, host: 10.0.0.13, roles: [agentcenter] }
+#   - { name: n5, host: 10.0.0.14, roles: [mysql, redis, clickhouse] }
+#   - { name: n6, host: 10.0.0.15, roles: [kafka] }
+#
+# 副本数 = 带该 role 的节点数（agentcenter 上例为 3）。基建服务本版本各限 1 节点。
+# ---------------------------------------------------------------------------

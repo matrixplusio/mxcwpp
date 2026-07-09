@@ -189,6 +189,38 @@ func (s *TaskService) dispatchTask(task *model.ScanTask, transferService interfa
 		zap.Int("original_count", len(hosts)),
 	)
 
+	// 重试场景：跳过本任务已完成的主机，只重排未返回结果的主机，避免重复扫描已完成主机
+	if task.RetryCount > 0 {
+		var completedIDs []string
+		s.db.Model(&model.TaskHostStatus{}).
+			Where("task_id = ? AND status = ?", task.TaskID, model.TaskHostStatusCompleted).
+			Distinct().
+			Pluck("host_id", &completedIDs)
+		if len(completedIDs) > 0 {
+			done := make(map[string]struct{}, len(completedIDs))
+			for _, id := range completedIDs {
+				done[id] = struct{}{}
+			}
+			remaining := make([]model.Host, 0, len(matchedHosts))
+			for _, h := range matchedHosts {
+				if _, ok := done[h.HostID]; !ok {
+					remaining = append(remaining, h)
+				}
+			}
+			matchedHosts = remaining
+		}
+		s.logger.Info("重试任务：重排未完成主机",
+			zap.String("task_id", task.TaskID),
+			zap.Int("retry_count", task.RetryCount),
+			zap.Int("skipped_completed", len(completedIDs)),
+			zap.Int("to_redispatch", len(matchedHosts)),
+		)
+		if len(matchedHosts) == 0 {
+			// 未完成主机当前均不在线，保持 running 等待 task_timeout_scheduler 下一轮判定
+			return nil
+		}
+	}
+
 	// CAS：仅当任务仍为 pending 时才转为 running（防止与取消操作竞争）
 	casResult := s.db.Model(&model.ScanTask{}).
 		Where("task_id = ? AND status = ?", task.TaskID, model.TaskStatusPending).
@@ -296,7 +328,7 @@ func (s *TaskService) dispatchTask(task *model.ScanTask, transferService interfa
 				DispatchedAt: &now,
 				ErrorMessage: err.Error(),
 			}
-			if dbErr := s.db.Create(hostStatus).Error; dbErr != nil {
+			if dbErr := s.upsertHostStatus(hostStatus); dbErr != nil {
 				s.logger.Error("记录主机状态失败",
 					zap.String("task_id", task.TaskID),
 					zap.String("host_id", host.HostID),
@@ -319,7 +351,7 @@ func (s *TaskService) dispatchTask(task *model.ScanTask, transferService interfa
 			Status:       model.TaskHostStatusDispatched,
 			DispatchedAt: &now,
 		}
-		if dbErr := s.db.Create(hostStatus).Error; dbErr != nil {
+		if dbErr := s.upsertHostStatus(hostStatus); dbErr != nil {
 			s.logger.Error("记录主机状态失败",
 				zap.String("task_id", task.TaskID),
 				zap.String("host_id", host.HostID),
@@ -330,8 +362,11 @@ func (s *TaskService) dispatchTask(task *model.ScanTask, transferService interfa
 		successCount++
 	}
 
-	// 更新已下发主机数
-	s.db.Model(task).Update("dispatched_host_count", successCount)
+	// 更新已下发主机数：仅首轮设定为目标主机总数（作为完成判定分母），
+	// 重试轮只重排未完成主机，不覆盖总数，否则 completed>=dispatched 判定会失真
+	if task.RetryCount == 0 {
+		s.db.Model(task).Update("dispatched_host_count", successCount)
+	}
 
 	// 如果没有成功下发到任何主机，回滚为 pending 让调度器下一轮重试
 	// （可能是 Agent 正在更新重启，稍后会重新上线）
@@ -358,6 +393,31 @@ func (s *TaskService) dispatchTask(task *model.ScanTask, transferService interfa
 		zap.Int("success_count", successCount),
 	)
 
+	return nil
+}
+
+// upsertHostStatus 写入主机执行状态：若本任务+主机已有记录则更新（重试场景重排），否则创建。
+// task_host_status 表 (task_id, host_id) 为非唯一索引，故用 update-or-create 避免重试产生重复行。
+func (s *TaskService) upsertHostStatus(hs *model.TaskHostStatus) error {
+	res := s.db.Model(&model.TaskHostStatus{}).
+		Where("task_id = ? AND host_id = ?", hs.TaskID, hs.HostID).
+		Updates(map[string]interface{}{
+			"status":        hs.Status,
+			"dispatched_at": hs.DispatchedAt,
+			"error_message": hs.ErrorMessage,
+			"hostname":      hs.Hostname,
+			"ip_address":    hs.IPAddress,
+			"business_line": hs.BusinessLine,
+			"os_family":     hs.OSFamily,
+			"os_version":    hs.OSVersion,
+			"runtime_type":  hs.RuntimeType,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return s.db.Create(hs).Error
+	}
 	return nil
 }
 

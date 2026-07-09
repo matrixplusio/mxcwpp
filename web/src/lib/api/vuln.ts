@@ -35,6 +35,8 @@ export const vulnApi = {
     fix_owner?: string;
     show_all?: boolean;
     sort?: string;
+    // 包类型: os(系统/rpm/dnf/yum/apt) / app(应用依赖) / all。默认 os(系统只显示 OS 包漏洞)。
+    package_type?: string;
   }) => get<VulnerabilityListResult>("/vulnerabilities", params),
   getVuln: (id: number) => get<Vulnerability>(`/vulnerabilities/${id}`),
   ignoreVuln: (id: number) => post<void>(`/vulnerabilities/${id}/ignore`),
@@ -120,7 +122,7 @@ export const vulnApi = {
   updateDataSource: (id: number, body: { enabled?: boolean; baseUrl?: string }) =>
     put<VulnDataSource>(`/vuln-data-sources/${id}`, body),
   testDataSource: (id: number) => post<VulnDataSourceTestResult>(`/vuln-data-sources/${id}/test`),
-  syncDataSource: (id: number) => post<{ message: string }>(`/vuln-data-sources/${id}/sync`),
+  syncDataSource: (id: number) => post<void>(`/vuln-data-sources/${id}/sync`),
 
   // ---- SBOM 导入（GET → array | null）----
   listSbomProjects: () => get<SbomProject[] | null>("/sbom/projects"),

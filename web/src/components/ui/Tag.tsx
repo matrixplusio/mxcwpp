@@ -12,7 +12,7 @@ const sevMap: Record<Severity, string> = {
 
 export function SeverityTag({ level }: { level: Severity }) {
   const { t } = useTranslation();
-  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", sevMap[level])}>{t(`common.severity.${level}`)}</span>;
+  return <span className={cn("inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", sevMap[level])}>{t(`common.severity.${level}`)}</span>;
 }
 
 type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -24,5 +24,5 @@ const toneMap: Record<StatusTone, string> = {
   neutral: "bg-muted/10 text-muted",
 };
 export function StatusTag({ tone, children }: { tone: StatusTone; children: React.ReactNode }) {
-  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", toneMap[tone])}>{children}</span>;
+  return <span className={cn("inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", toneMap[tone])}>{children}</span>;
 }

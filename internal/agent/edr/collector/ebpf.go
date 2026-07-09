@@ -591,6 +591,9 @@ func (c *ebpfCollector) decodeFileEvent(raw []byte) (*event.Event, error) {
 	evt.SetField("comm", comm)
 	evt.SetField("ktime_ns", fmt.Sprintf("%d", fe.StartTs))
 
+	// FIM 上下文增强:谁改的(username+父进程)/谁登录的(login_uid)/改了什么(敏感文件哈希)。
+	enrichFileEventContext(evt, int(fe.Tgid), fe.Uid, int(fe.Ppid), filePath)
+
 	if fe.InContainer == 1 {
 		evt.SetField("in_container", "true")
 	}

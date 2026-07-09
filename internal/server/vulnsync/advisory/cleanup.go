@@ -131,6 +131,22 @@ func cleanupCrossOSFamily(db *gorm.DB, logger *zap.Logger) {
 		{"rocky-apollo", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
 		{"centos", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
 	}
+	// 守卫：多发行版 CVE 的 vulnerabilities.source 会被 mergeByConfidence 按全局
+	// confidence 覆盖成异 OS 源（如 rocky 匹配的 CentOS 链被标 debian-tracker），若仅按
+	// v.source 判跨 OS 会误删合法链。故仅当该 CVE 对本机 OS **无任何覆盖性 advisory_packages
+	// 行**时才删——advisory_packages 是 per-OS 修复权威源，rhel 家族互兼容。
+	const hasCoveringAdvisory = `
+  AND NOT EXISTS (
+    SELECT 1 FROM advisory_packages ap
+    WHERE ap.cve_id = v.cve_id
+      AND ap.pkg_name = v.component
+      AND ap.os_major = SUBSTRING_INDEX(h.os_version, '.', 1)
+      AND (
+        LOWER(ap.os_family) = LOWER(h.os_family)
+        OR (LOWER(ap.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
+            AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux'))
+      )
+  )`
 	var total int64
 	for _, rule := range xrefRules {
 		sql := fmt.Sprintf(`
@@ -138,7 +154,7 @@ DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source = ?
-  AND LOWER(h.os_family) NOT IN (%s)`, rule.compatible)
+  AND LOWER(h.os_family) NOT IN (%s)%s`, rule.compatible, hasCoveringAdvisory)
 		r := db.Exec(sql, rule.source)
 		if r.Error == nil && r.RowsAffected > 0 {
 			total += r.RowsAffected
@@ -153,12 +169,14 @@ func cleanupCrossOSMajor(db *gorm.DB, logger *zap.Logger) {
 	rhelMajors := []string{"7", "8", "9", "10"}
 	var total int64
 	for _, major := range rhelMajors {
+		// 按 per-host 匹配到的 fixed_version(matched_fixed_version)判 OS-major；老数据空时回退
+		// v.fixed_version。避免 CVE 级 fixed_version 塌成异 major(如 el10)导致 el9 主机被误删。
 		r := db.Exec(`
 DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source IN ('rhsa','rocky-apollo','centos','osv')
-  AND v.fixed_version REGEXP CONCAT('[.+]el', ?, '([^0-9]|$)')
+  AND COALESCE(NULLIF(hv.matched_fixed_version, ''), v.fixed_version) REGEXP CONCAT('[.+]el', ?, '([^0-9]|$)')
   AND SUBSTRING_INDEX(h.os_version, '.', 1) <> ?`, major, major)
 		if r.Error == nil && r.RowsAffected > 0 {
 			total += r.RowsAffected
@@ -170,15 +188,42 @@ WHERE v.source IN ('rhsa','rocky-apollo','centos','osv')
 }
 
 func cleanupComponentNotInstalled(db *gorm.DB, logger *zap.Logger) {
-	r := db.Exec(`
+	// 按 per-host 匹配到的真实包名(matched_component)判是否安装；老数据 matched_component 空时
+	// 回退 v.component。避免 CVE 级 component 塌成主机未装的子包(如 glibc-langpack-el)导致误删。
+	//
+	// 拆两条 DELETE：JOIN 键须为「裸列」才能命中 software(host_id,name) 索引——若用
+	// COALESCE(NULLIF(matched_component,''),v.component) 做 join 键，函数化后索引失效，
+	// 单条 DELETE 全表扫达 85s，饿死 consumer。故分「有 matched」「无 matched」两路各走等值。
+	const src = `v.source IN ('rhsa','rocky-apollo','centos','debian-tracker','usn','alpine','osv')`
+	var total int64
+
+	// ① 有 matched_component：按 matched_component 判安装
+	r1 := db.Exec(`
+DELETE hv FROM host_vulnerabilities hv
+JOIN vulnerabilities v ON hv.vuln_id = v.id
+LEFT JOIN software s ON s.host_id = hv.host_id AND s.name = hv.matched_component
+WHERE ` + src + `
+  AND hv.matched_component <> ''
+  AND s.id IS NULL`)
+	if r1.Error == nil {
+		total += r1.RowsAffected
+	}
+
+	// ② 无 matched_component（老数据）：回退 v.component 判安装
+	r2 := db.Exec(`
 DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 LEFT JOIN software s ON s.host_id = hv.host_id AND s.name = v.component
-WHERE v.source IN ('rhsa','rocky-apollo','centos','debian-tracker','usn','alpine','osv')
+WHERE ` + src + `
+  AND (hv.matched_component IS NULL OR hv.matched_component = '')
   AND v.component <> ''
   AND s.id IS NULL`)
-	if r.Error == nil && r.RowsAffected > 0 {
-		logger.Info("component 未装 host_vuln 已清理", zap.Int64("deleted", r.RowsAffected))
+	if r2.Error == nil {
+		total += r2.RowsAffected
+	}
+
+	if total > 0 {
+		logger.Info("component 未装 host_vuln 已清理", zap.Int64("deleted", total))
 	}
 }
 

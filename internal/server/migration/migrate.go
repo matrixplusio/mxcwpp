@@ -59,9 +59,19 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("告警表result_id列扩展处理", zap.Error(err))
 	}
 
+	// 执行数据迁移：扩展 incidents 表 incident_id 列
+	if err := migrateIncidentIDColumn(db, logger); err != nil {
+		logger.Warn("事件表incident_id列扩展处理", zap.Error(err))
+	}
+
 	// 执行数据迁移：scan_results / fix_results 主键从 result_id 迁移到复合主键
 	if err := migrateScanResultsCompositeKey(db, logger); err != nil {
 		logger.Warn("scan_results 复合主键迁移处理", zap.Error(err))
+	}
+
+	// 创建 scan_results dashboard 复合索引（host_id, rule_id, checked_at），加速窗口函数查询
+	if err := ensureScanResultsDashboardIndex(db, logger); err != nil {
+		logger.Warn("scan_results dashboard 索引创建失败", zap.Error(err))
 	}
 
 	// 执行数据迁移：为现有数据设置默认的运行时类型
@@ -168,7 +178,105 @@ func Migrate(db *gorm.DB, logger *zap.Logger) error {
 		logger.Warn("advisory_packages 回填失败", zap.Error(err))
 	}
 
+	// 把低保真单信号噪声规则降级（fidelity=low），不独立告警，仅喂关联（CrowdStrike IOA 模型）
+	if err := migrateMarkLowFidelityRules(db, logger); err != nil {
+		logger.Warn("低保真规则降级失败", zap.Error(err))
+	}
+
+	// 把纯端口启发式 C2 规则降级为 indicator（fidelity=low），生产 proxy/CDN 正常出站误报刷屏
+	if err := migrateMarkPortHeuristicLowFidelity(db, logger); err != nil {
+		logger.Warn("端口启发式规则降级失败", zap.Error(err))
+	}
+
+	// 给存量检测规则回填 detect-only 观察期起点 effective_at = created_at
+	if err := migrateBackfillRuleEffectiveAt(db, logger); err != nil {
+		logger.Warn("回填规则 effective_at 失败", zap.Error(err))
+	}
+
+	// 种入内置多步攻击链(序列)规则：序列引擎已实现但表空,补齐 IOA 攻击链检测
+	if err := seedBuiltinSequenceRules(db, logger); err != nil {
+		logger.Warn("内置序列规则种入失败", zap.Error(err))
+	}
+
 	logger.Info("数据库迁移完成")
+	return nil
+}
+
+// migrateBackfillRuleEffectiveAt 给存量检测规则回填 effective_at = created_at。
+//
+// detect-only 上线观察期(P3)新增 effective_at 列：新规则上线起 ruleGraceWindow 内降级 indicator。
+// 存量规则早已上线、不应进入观察期，回填为创建时间使其立即过窗，避免加列后全量规则被静默。
+// 幂等：仅回填 NULL（AutoMigrate 新加列对存量行为 NULL；新增规则由 BeforeCreate 置当前时间）。
+func migrateBackfillRuleEffectiveAt(db *gorm.DB, logger *zap.Logger) error {
+	r := db.Exec("UPDATE detection_rules SET effective_at = created_at WHERE effective_at IS NULL")
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected > 0 {
+		logger.Info("回填检测规则 effective_at", zap.Int64("count", r.RowsAffected))
+	}
+	return nil
+}
+
+// migrateMarkLowFidelityRules 把繁忙业务负载上必然刷屏、单信号、近零真阳价值的检测规则
+// 标记为 fidelity=low（降级 indicator，不独立告警，事件仍喂 anomaly/storyline 关联）。
+//
+// 依据 prod 实测：高频外连(hit 326k)/DNS(22w)/枚举(11w)/tmp/隐藏文件 等单信号规则在
+// db/mq/zookeeper/网关等正常业务上持续触发。对齐 Falco「少量精调规则 > 一堆噪声规则」+
+// CrowdStrike IOA「单信号不告警，多信号关联才告警」。幂等。
+//
+// 仅降级"低保真"规则名模式；高保真规则(反弹shell/CobaltStrike/memfd/真C2/横向)保持 high。
+func migrateMarkLowFidelityRules(db *gorm.DB, logger *zap.Logger) error {
+	lowFidelityPatterns := []string{
+		"高频外连%",
+		"DNS 查询%", // 非 DNS 工具 / 高频请求
+		"信息收集%",   // 主机/用户/进程/网络枚举
+		"发现 -%",   // net user/arp/ldap 等枚举（agent yaml 原始名）
+		"/tmp 目录可执行文件创建%",
+		"反检测 - 隐藏文件大量创建%",
+	}
+	var total int64
+	for _, p := range lowFidelityPatterns {
+		r := db.Model(&model.DetectionRule{}).
+			Where("name LIKE ? AND fidelity <> ?", p, model.RuleFidelityLow).
+			Update("fidelity", model.RuleFidelityLow)
+		if r.Error != nil {
+			return r.Error
+		}
+		total += r.RowsAffected
+	}
+	if total > 0 {
+		logger.Info("已降级低保真噪声规则为 indicator", zap.Int64("count", total))
+	}
+	return nil
+}
+
+// migrateMarkPortHeuristicLowFidelity 把纯端口启发式 C2 检测规则标记为 fidelity=low（降级 indicator，
+// 不独立告警，事件仍喂 anomaly/storyline 关联）。
+//
+// 依据 prod 实测：这类规则仅按 remote_port 命中高危端口/CobaltStrike默认端口/VPN/IRC/Tor/SOCKS/矿池端口，
+// 对 proxy/CDN/正常业务出站流量误报刷屏（全队列 197-228 台均匀铺满 = 环境噪声铁证）。端口本身零上下文，
+// 单信号价值极低；降级后仅参与多信号关联，真行为检测（memfd 反弹shell / 真信标模式 / 挖矿进程行为）保 high 不动。
+// 幂等：按规则名精确匹配，已 low 则跳过。
+func migrateMarkPortHeuristicLowFidelity(db *gorm.DB, logger *zap.Logger) error {
+	portHeuristicRules := []string{
+		"高危端口外连",
+		"IRC 协议外连",
+		"Tor/匿名代理外连",
+		"挖矿矿池端口外连",
+		"SOCKS 代理外连",
+		"VPN 端口外连",
+		"Cobalt Strike 默认端口",
+	}
+	r := db.Model(&model.DetectionRule{}).
+		Where("name IN ? AND fidelity <> ?", portHeuristicRules, model.RuleFidelityLow).
+		Update("fidelity", model.RuleFidelityLow)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected > 0 {
+		logger.Info("已降级端口启发式 C2 规则为 indicator", zap.Int64("count", r.RowsAffected))
+	}
 	return nil
 }
 
@@ -715,6 +823,44 @@ func migrateAlertResultIDColumn(db *gorm.DB, logger *zap.Logger) error {
 		return err
 	}
 	logger.Info("扩展告警表result_id列成功", zap.String("old_type", columnType), zap.String("new_type", "varchar(128)"))
+
+	return nil
+}
+
+// migrateIncidentIDColumn 扩展 incidents 表的 incident_id 列从 varchar(64) 到 varchar(128)
+// incident_id 格式为 "inc-{64位host_id}-{unix秒}"，总长 79 字符，超过 varchar(64) 导致插入报
+// Error 1406 (Data too long)，攻击链关联事件无法落库。
+func migrateIncidentIDColumn(db *gorm.DB, logger *zap.Logger) error {
+	// 检查表是否存在
+	var exists bool
+	if err := db.Raw(
+		"SELECT COUNT(*) > 0 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'incidents'",
+	).Scan(&exists).Error; err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	// 检查当前列长度
+	var columnType string
+	if err := db.Raw(
+		"SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'incidents' AND column_name = 'incident_id'",
+	).Scan(&columnType).Error; err != nil {
+		return err
+	}
+
+	// 如果已经是 varchar(128) 或更大则跳过
+	if columnType == "varchar(128)" {
+		return nil
+	}
+
+	// 执行 ALTER TABLE
+	if err := db.Exec("ALTER TABLE `incidents` MODIFY COLUMN `incident_id` varchar(128) NOT NULL").Error; err != nil {
+		logger.Error("扩展事件表incident_id列失败", zap.String("old_type", columnType), zap.Error(err))
+		return err
+	}
+	logger.Info("扩展事件表incident_id列成功", zap.String("old_type", columnType), zap.String("new_type", "varchar(128)"))
 
 	return nil
 }

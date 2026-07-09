@@ -25,8 +25,9 @@ const (
 	TaskStatusCreated   TaskStatus = "created"   // 已创建，等待用户确认执行
 	TaskStatusPending   TaskStatus = "pending"   // 待执行，等待调度器处理
 	TaskStatusRunning   TaskStatus = "running"   // 执行中
-	TaskStatusCompleted TaskStatus = "completed" // 已完成
-	TaskStatusFailed    TaskStatus = "failed"    // 失败
+	TaskStatusCompleted TaskStatus = "completed" // 已完成（全部主机返回结果）
+	TaskStatusPartial   TaskStatus = "partial"   // 部分完成（重试耗尽后仍有主机未返回，已接受部分结果）
+	TaskStatusFailed    TaskStatus = "failed"    // 失败（无任何结果）
 	TaskStatusCancelled TaskStatus = "cancelled" // 已取消
 )
 
@@ -59,9 +60,13 @@ type ScanTask struct {
 	// 超时配置
 	TimeoutMinutes int `gorm:"column:timeout_minutes;type:int;default:10" json:"timeout_minutes"` // 任务超时时间（分钟），默认 10 分钟
 
+	// 重试配置（超时后自动重排未完成主机，避免大批量并发下的非确定性丢失整任务失败）
+	RetryCount int `gorm:"column:retry_count;type:int;default:0" json:"retry_count"` // 已重试轮次
+	MaxRetries int `gorm:"column:max_retries;type:int;default:2" json:"max_retries"` // 最大重试轮次，0 表示不重试
+
 	// 执行统计
-	DispatchedHostCount int `gorm:"column:dispatched_host_count;type:int;default:0" json:"dispatched_host_count"` // 已下发主机数
-	CompletedHostCount  int `gorm:"column:completed_host_count;type:int;default:0" json:"completed_host_count"`   // 已完成主机数（收到结果的主机数）
+	DispatchedHostCount int `gorm:"column:dispatched_host_count;type:int;default:0" json:"dispatched_host_count"` // 目标主机总数（首轮下发后固定，重试不覆盖）
+	CompletedHostCount  int `gorm:"column:completed_host_count;type:int;default:0" json:"completed_host_count"`   // 累计已完成主机数（收到结果的主机数）
 
 	// 失败信息
 	FailedReason string `gorm:"column:failed_reason;type:varchar(500)" json:"failed_reason"` // 失败原因

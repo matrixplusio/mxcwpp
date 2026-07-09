@@ -26,6 +26,7 @@ import (
 	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/metrics"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/service"
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/kafka"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
@@ -96,6 +97,10 @@ type Service struct {
 	// 连接管理
 	connections map[string]*Connection
 	connMu      sync.RWMutex
+
+	// 连接即推钩子:agent 注册成功后异步触发(如推送 IOC/规则全量,补齐版本门控广播的漏推)。
+	// 启动期一次性注册,运行时不改,读无需锁。
+	connectHooks []func(agentID string)
 
 	// 优雅关闭标志：Server 自身重启时跳过离线通知，避免假告警
 	shutdownFlag atomic.Bool
@@ -300,6 +305,15 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 	// 注册连接
 	s.registerConnection(agentID, conn)
 	defer s.unregisterConnection(agentID, conn)
+
+	// 无条件解除离线告警：连接建立即代表 agent 已恢复。幂等(只 resolve 存在的 active offline 告警)，
+	// 且不依赖 host.LastHeartbeat 判断——重连自身的心跳会把 LastHeartbeat 刷成 now，导致
+	// checkAndSendAgentOnlineNotification 的"<3min 视为未离线"判定误跳过解除，离线告警残留(read-after-write 竞态)。
+	go s.resolveAgentOfflineAlert(agentID)
+
+	// 运维事件抑制:重连往往伴随 WAL 重放(缓存 EDR 事件 flush)，短时把行为速率打高致 BDE 假异常。
+	// 设一个抑制窗，consumer 落库 behavior_alert 前查此窗，窗内低信号偏离不落库(见 router.shouldPersistBehaviorAlert)。
+	go s.setBehaviorSuppressWindow(agentID, behaviorSuppressAfterReconnect)
 
 	// 检查并发送 Agent 上线恢复通知（如果之前离线）
 	go s.checkAndSendAgentOnlineNotification(agentID, conn)
@@ -1017,6 +1031,13 @@ func parseFloat(s string) *float64 {
 	return &f
 }
 
+// isBaselineCompletionSignal 判断是否为基线任务完成信号
+// （DataType 8001 基线扫描任务完成 / 8004 基线修复任务完成）。
+// 这些是控制面关键低频消息，被丢弃会导致主机永不计完成、任务超时，需保证投递。
+func isBaselineCompletionSignal(dataType int32) bool {
+	return dataType == 8001 || dataType == 8004
+}
+
 // handleEncodedRecord 处理 EncodedRecord
 // 若 Kafka 生产者已注入，则将记录发布到对应 Topic（异步解耦，μs 级返回）；
 // 否则回退到直接写 MySQL（向后兼容）。
@@ -1041,6 +1062,17 @@ func (s *Service) handleEncodedRecord(ctx context.Context, record *grpcProto.Enc
 			ACID:         s.cfg.Server.InstanceID,
 		}
 		topic := kafka.RouteDataType(record.DataType, s.cfg.Kafka.TopicPrefix)
+		// 基线任务完成信号（8001/8004）是控制面关键低频消息：被丢弃会导致主机永不计完成、
+		// 任务超时。改用 SendReliable（Input 满时有界阻塞→退降级队列重试），避免 eBPF 高频
+		// 遥测 burst 把完成信号首先挤丢。其余高频遥测仍用 Send（非阻塞）。
+		if isBaselineCompletionSignal(record.DataType) {
+			if rs, ok := s.kafkaProducer.(interface {
+				SendReliable(topic, key string, msg *kafka.MQMessage) error
+			}); ok {
+				_ = rs.SendReliable(topic, conn.AgentID, msg)
+				return nil
+			}
+		}
 		// Send 失败（队列满/丢弃）已由 producer 内部聚合计数并周期汇总，
 		// 此处不再逐条记录——高频 eBPF 事件逐条打日志会撑爆磁盘（prod 实测 ~130GB/天）。
 		_ = s.kafkaProducer.Send(topic, conn.AgentID, msg)
@@ -1683,6 +1715,16 @@ func (s *Service) registerConnection(agentID string, conn *Connection) {
 	}
 
 	s.connections[agentID] = conn
+
+	// 连接即推:补齐 IOC/规则等版本门控广播对新连/重连 agent 的漏推。
+	for _, h := range s.connectHooks {
+		go h(agentID)
+	}
+}
+
+// OnAgentConnect 注册连接即推钩子(启动期调用)
+func (s *Service) OnAgentConnect(fn func(agentID string)) {
+	s.connectHooks = append(s.connectHooks, fn)
 }
 
 // checkAndSendAgentOnlineNotification 检查并发送 Agent 上线恢复通知
@@ -1712,6 +1754,17 @@ func (s *Service) checkAndSendAgentOnlineNotification(agentID string, conn *Conn
 		zap.Time("last_heartbeat", lastHeartbeat),
 		zap.Duration("offline_duration", time.Since(lastHeartbeat)),
 	)
+
+	audit.Record(context.Background(), audit.Event{
+		ActorType:    model.ActorTypeAgent,
+		Username:     agentID,
+		Action:       "agent.online",
+		Outcome:      model.OutcomeSuccess,
+		ResourceType: "host",
+		ResourceID:   agentID,
+		TargetName:   host.Hostname,
+		Detail:       fmt.Sprintf("offline_duration=%s", time.Since(lastHeartbeat).Round(time.Second)),
+	})
 
 	// 自动解决离线告警
 	s.resolveAgentOfflineAlert(agentID)
@@ -1892,6 +1945,17 @@ func (s *Service) resolveAgentOfflineAlert(agentID string) {
 	if result.RowsAffected > 0 {
 		s.logger.Info("已自动解决 Agent 离线告警", zap.String("agent_id", agentID))
 	}
+}
+
+// behaviorSuppressAfterReconnect agent 重连后 BDE 行为告警抑制时长(覆盖 WAL 重放突发窗)。
+const behaviorSuppressAfterReconnect = 10 * time.Minute
+
+// setBehaviorSuppressWindow 给 host 设一个"此刻前 BDE 行为告警抑制"的窗口。
+// consumer 落库 behavior_alert 前查此字段:窗内且低信号 → 不落库，避免运维突发(重连/插件重载)刷假异常。
+func (s *Service) setBehaviorSuppressWindow(agentID string, d time.Duration) {
+	until := model.ToLocalTime(time.Now().Add(d))
+	s.db.Model(&model.Host{}).Where("host_id = ?", agentID).
+		Update("behavior_suppress_until", &until)
 }
 
 // sendCertificateBundleIfNeeded 检查并下发证书包（如果Agent首次连接）
@@ -2320,101 +2384,6 @@ func (s *Service) BroadcastPluginConfigs(ctx context.Context) (int, []string, er
 	s.logger.Info("插件配置广播完成",
 		zap.Int("success_count", successCount),
 		zap.Int("failed_count", len(failedAgents)))
-
-	return successCount, failedAgents, nil
-}
-
-// BroadcastPluginConfigsByName 只广播指定名称的插件配置（差异广播）
-// 分批发送，每批 20 个 Agent 后暂停 200ms，避免所有 Agent 同时下载
-func (s *Service) BroadcastPluginConfigsByName(ctx context.Context, pluginNames []string) (int, []string, error) {
-	if len(pluginNames) == 0 {
-		return 0, nil, nil
-	}
-
-	// 从数据库查询指定的插件配置
-	var pluginConfigs []model.PluginConfig
-	if err := s.db.Where("enabled = ? AND name IN ?", true, pluginNames).Find(&pluginConfigs).Error; err != nil {
-		return 0, nil, fmt.Errorf("查询插件配置失败: %w", err)
-	}
-
-	if len(pluginConfigs) == 0 {
-		return 0, nil, nil
-	}
-
-	// 获取所有在线连接
-	s.connMu.RLock()
-	connections := make([]*Connection, 0, len(s.connections))
-	for _, conn := range s.connections {
-		connections = append(connections, conn)
-	}
-	s.connMu.RUnlock()
-
-	if len(connections) == 0 {
-		return 0, nil, nil
-	}
-
-	s.logger.Info("开始差异广播插件配置",
-		zap.Int("agent_count", len(connections)),
-		zap.Strings("plugins", pluginNames))
-
-	// 分批发送，每批 broadcastBatchSize 个 Agent
-	const broadcastBatchSize = 20
-	const broadcastBatchDelay = 200 * time.Millisecond
-	successCount := 0
-	var failedAgents []string
-
-	for i, conn := range connections {
-		if i > 0 && i%broadcastBatchSize == 0 {
-			time.Sleep(broadcastBatchDelay)
-		}
-
-		runtimeType := s.getAgentRuntimeType(conn.AgentID)
-
-		var configs []*grpcProto.Config
-		for _, pc := range pluginConfigs {
-			if len(pc.RuntimeTypes) > 0 && !containsString([]string(pc.RuntimeTypes), string(runtimeType)) {
-				continue
-			}
-
-			downloadURLs, sha256 := s.resolvePluginDelivery(pc)
-			if len(downloadURLs) == 0 {
-				continue
-			}
-
-			config := &grpcProto.Config{
-				Name:         pc.Name,
-				Type:         string(pc.Type),
-				Version:      pc.Version,
-				Sha256:       sha256,
-				Signature:    pc.Signature,
-				DownloadUrls: downloadURLs,
-				Detail:       pc.Detail,
-			}
-			configs = append(configs, config)
-		}
-
-		if len(configs) == 0 {
-			continue
-		}
-
-		cmd := &grpcProto.Command{
-			Configs: configs,
-		}
-
-		select {
-		case conn.sendCh <- cmd:
-			successCount++
-		case <-conn.ctx.Done():
-			failedAgents = append(failedAgents, conn.AgentID)
-		default:
-			failedAgents = append(failedAgents, conn.AgentID)
-		}
-	}
-
-	s.logger.Info("差异广播完成",
-		zap.Int("success_count", successCount),
-		zap.Int("failed_count", len(failedAgents)),
-		zap.Strings("plugins", pluginNames))
 
 	return successCount, failedAgents, nil
 }

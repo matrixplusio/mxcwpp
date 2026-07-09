@@ -14,6 +14,7 @@ import (
 // 检测 N 次内多事件触发的序列模式 (暴力破解 / 多次失败登录 / 反弹shell 多步)。
 type SequenceStage struct {
 	detector *celengine.SequenceDetector
+	alertGen *celengine.AlertGenerator // 非 nil 时命中直接 upsert alerts 表
 	logger   *zap.Logger
 }
 
@@ -23,6 +24,12 @@ func NewSequenceStage(d *celengine.SequenceDetector, logger *zap.Logger) *Sequen
 		logger = zap.NewNop()
 	}
 	return &SequenceStage{detector: d, logger: logger}
+}
+
+// WithAlertGenerator 注入 AlertGenerator，让攻击链命中落 alerts 表(供 UI 与 incident 关联)。
+func (s *SequenceStage) WithAlertGenerator(g *celengine.AlertGenerator) *SequenceStage {
+	s.alertGen = g
+	return s
 }
 
 // Name 返回 stage 名。
@@ -45,6 +52,13 @@ func (s *SequenceStage) Process(_ context.Context, ev PipelineEvent) ([]Alert, e
 	hits := s.detector.Evaluate(ev.HostID, ev.DataType, fields)
 	if len(hits) == 0 {
 		return nil, nil
+	}
+
+	// 攻击链命中落 alerts 表(供 UI 展示 + incident 关联识别为强信号)
+	if s.alertGen != nil {
+		for _, rule := range hits {
+			s.alertGen.GenerateFromSequence(ev.HostID, rule, fields)
+		}
 	}
 
 	alerts := make([]Alert, 0, len(hits))

@@ -35,7 +35,7 @@ export const kubeApi = {
   getClusterNodes: (id: number) => get<{ items: KubeNode[] }>(`/kube/clusters/${id}/nodes`),
   getClusterPods: (id: number, params?: PageParams) => get<{ items: KubePod[]; total: number }>(`/kube/clusters/${id}/pods`, params),
   getClusterWorkloads: (id: number) => get<{ items: KubeWorkload[] }>(`/kube/clusters/${id}/workloads`),
-  updateClusterGCP: (id: number, body: { projectId: string; subscription: string; credentialsJson?: string }) =>
+  updateClusterGCP: (id: number, body: { projectId: string; subscription?: string; location?: string; clusterName?: string; credentialsJson?: string }) =>
     put<{ gcpEnabled: boolean }>(`/kube/clusters/${id}/gcp-config`, body),
   deleteClusterGCP: (id: number) => del<void>(`/kube/clusters/${id}/gcp-config`),
 

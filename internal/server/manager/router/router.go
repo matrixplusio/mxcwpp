@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"strings"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -10,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/mode"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/tenant"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
@@ -169,12 +171,13 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	// 需要认证的路由
 	apiV1Auth := apiV1.Group("")
 	apiV1Auth.Use(authHandler.AuthMiddleware())
+	audit.Init(db, chConn, logger)
 	apiV1Auth.Use(middleware.AuditLogWithCH(db, chConn, logger))
 	// RBAC：让 role_permissions 表参与放行——对写操作按所属模块校验权限（纵向越权防护）。
 	// 读操作放行；admin 角色恒通过；user 默认无写权。
 	permResolver := api.NewPermissionResolver(db, logger)
 	api.SetGlobalResolver(permResolver)
-	apiV1Auth.Use(permResolver.EnforceWritePermissions())
+	apiV1Auth.Use(permResolver.EnforcePermissions())
 
 	// 服务发现查询（需要认证，运维 / 前端监控页面调用）
 	apiV1Auth.GET("/discovery/agentcenter", discoveryHandler.ListACInstances)
@@ -276,6 +279,7 @@ func setupAPIRoutes(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, cf
 	setupBusinessLinesAPI(router, db, logger)
 	setupAlertsAPI(router, db, logger)
 	setupAlertWhitelistAPI(router, db, logger)
+	setupIncidentAPI(router, db, logger)
 	setupPolicyImportExportAPI(router, db, logger)
 	setupInspectionAPI(router, db, logger)
 	setupFIMAPI(router, db, logger, chConn)
@@ -330,6 +334,8 @@ func setupRBACAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	handler := api.NewRBACHandler(db, logger)
 	router.GET("/rbac/permissions", handler.ListPermissions)
 	router.GET("/rbac/roles", handler.ListRoles)
+	router.POST("/rbac/roles", handler.CreateRole)
+	router.DELETE("/rbac/roles/:role", handler.DeleteRole)
 	router.GET("/rbac/roles/:role/permissions", handler.GetRolePermissions)
 	router.PUT("/rbac/roles/:role/permissions", handler.UpdateRolePermissions)
 }
@@ -457,6 +463,7 @@ func setupHostsAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, sco
 	router.POST("/hosts/batch-update-business-line", handler.BatchUpdateBusinessLine)
 	router.GET("/hosts/status-distribution", handler.GetHostStatusDistribution)
 	router.GET("/hosts/risk-distribution", handler.GetHostRiskDistribution)
+	router.GET("/hosts/os-distribution", handler.GetHostOSDistribution)
 }
 
 // setupPolicyGroupsAPI 设置策略组 API 路由
@@ -691,6 +698,14 @@ func setupAuditLogAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) 
 	router.GET("/audit-logs", handler.ListAuditLogs)
 }
 
+// setupIncidentAPI 设置安全事件(Incident)API 路由（P2）
+func setupIncidentAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
+	handler := api.NewIncidentHandler(db, logger)
+	router.GET("/incidents", handler.ListIncidents)
+	router.GET("/incidents/:id", handler.GetIncident)
+	router.POST("/incidents/:id/resolve", handler.ResolveIncident)
+}
+
 // setupAlertWhitelistAPI 设置告警白名单 API 路由
 func setupAlertWhitelistAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger) {
 	handler := api.NewAlertWhitelistHandler(db, logger)
@@ -698,6 +713,13 @@ func setupAlertWhitelistAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Lo
 	router.POST("/alerts/whitelist", handler.CreateWhitelist)
 	router.PUT("/alerts/whitelist/:id", handler.UpdateWhitelist)
 	router.DELETE("/alerts/whitelist/:id", handler.DeleteWhitelist)
+
+	// P2-B 自动调优建议（人审采纳/驳回）
+	sug := api.NewAlertWhitelistSuggestionHandler(db, logger)
+	router.GET("/alerts/whitelist/suggestions", sug.ListSuggestions)
+	router.POST("/alerts/whitelist/suggestions/:id/adopt", sug.AdoptSuggestion)
+	router.POST("/alerts/whitelist/suggestions/:id/dismiss", sug.DismissSuggestion)
+	router.POST("/alerts/whitelist/suggestions/:id/revoke", sug.RevokeSuggestion)
 }
 
 // setupComponentsAPI 设置组件管理 API 路由
@@ -792,14 +814,16 @@ func setupKubeAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logger, alar
 		logger.Error("初始化 K8s CEL 规则引擎失败", zap.Error(err))
 	}
 
-	// 基线检查
+	// 基线检查（异步：启动后台 worker 消费 pending 任务）
 	baselineChecker := biz.NewKubeBaselineChecker(db, logger, kubeClient, ruleEngine)
+	baselineChecker.Start(context.Background())
 	baselineHandler := api.NewKubeBaselineHandler(db, logger, baselineChecker)
 	router.GET("/kube/baseline", baselineHandler.ListBaseline)
 	router.GET("/kube/baseline/:id", baselineHandler.GetBaselineDetail)
 	router.POST("/kube/baseline/detect", baselineHandler.RunBaselineCheck)
 	router.GET("/kube/baseline-tasks", baselineHandler.ListBaselineTasks)
 	router.GET("/kube/baseline-tasks/:id", baselineHandler.GetBaselineTaskDetail)
+	router.GET("/kube/baseline/trend", baselineHandler.GetBaselineTrend)
 
 	// 基线规则管理
 	rulesHandler := api.NewKubeBaselineRulesHandler(db, logger, baselineChecker, ruleEngine)
@@ -962,6 +986,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	// 修复任务管理
 	taskHandler := api.NewRemediationTasksHandler(db, logger)
 	router.POST("/remediation-tasks", taskHandler.CreateTask)
+	router.POST("/remediation-tasks/host-update", taskHandler.CreateHostUpdateTask) // 主机级整机安全更新
 	router.GET("/remediation-tasks", taskHandler.ListTasks)
 	router.GET("/remediation-tasks/stats", taskHandler.GetTaskStats)
 	router.GET("/remediation-tasks/:id", taskHandler.GetTask)
@@ -979,7 +1004,7 @@ func setupVulnerabilitiesAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.L
 	router.POST("/vulnerabilities/advisory-sync", vulnSyncHandler.SyncAdvisories)
 
 	// 漏洞数据源管理（UI「漏洞源管理」页面）
-	vdsHandler := api.NewVulnDataSourcesHandler(db, logger)
+	vdsHandler := api.NewVulnDataSourcesHandler(db, logger, vulnSyncURL)
 	router.GET("/vuln-data-sources", vdsHandler.List)
 	router.PUT("/vuln-data-sources/:id", vdsHandler.Update)
 	router.POST("/vuln-data-sources/:id/test", vdsHandler.TestConnection)
@@ -1095,6 +1120,30 @@ func setupThreatIntelAPI(router *gin.RouterGroup, db *gorm.DB, logger *zap.Logge
 	router.POST("/threat-intel/sync", handler.TriggerSync)
 	router.GET("/threat-intel/sync-status", handler.GetSyncStatus)
 	router.GET("/threat-intel/sync-history", handler.GetSyncHistory)
+	// 自有情报库(独立于外部 feed):真实威胁研判提取 / 人工录入
+	router.GET("/threat-intel/local-iocs/stats", handler.GetLocalIOCStats)
+	router.GET("/threat-intel/ioc-source", handler.LookupIOCSource)
+	router.GET("/threat-intel/local-iocs", handler.ListLocalIOCs)
+	router.POST("/threat-intel/local-iocs", handler.CreateLocalIOC)
+	router.DELETE("/threat-intel/local-iocs/:id", handler.DeleteLocalIOC)
+	router.POST("/threat-intel/confirm-threat/:alert_id", handler.ConfirmThreat)
+
+	// 情报同步计划（定时拉取 IOC Feed）：单实例既驱动 cron 又服务 CRUD，
+	// 避免 handler 实例与运行实例分离导致新建计划重启前不生效。
+	intelScheduler := biz.NewIntelSyncScheduler(db, logger, service)
+	go func() {
+		if err := intelScheduler.Start(); err != nil {
+			logger.Error("威胁情报同步调度器启动失败", zap.Error(err))
+		}
+	}()
+	schedHandler := api.NewIntelSyncSchedulesHandler(db, logger, intelScheduler)
+	router.GET("/threat-intel/schedules", schedHandler.ListSchedules)
+	router.POST("/threat-intel/schedules", schedHandler.CreateSchedule)
+	router.PUT("/threat-intel/schedules/:id", schedHandler.UpdateSchedule)
+	router.DELETE("/threat-intel/schedules/:id", schedHandler.DeleteSchedule)
+	router.POST("/threat-intel/schedules/:id/toggle", schedHandler.ToggleSchedule)
+	router.POST("/threat-intel/schedules/:id/run", schedHandler.RunSchedule)
+	router.GET("/threat-intel/schedules/:id/executions", schedHandler.ListExecutions)
 }
 
 // setupDependencyAPI 设置依赖管理 API 路由

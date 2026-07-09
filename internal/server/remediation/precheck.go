@@ -84,7 +84,47 @@ func (h *PreCheckResultHandler) HandleResult(agentID string, fields map[string]s
 	if err := h.applyVerifyResult(uint(hvID), status, fields["message"]); err != nil {
 		h.logger.Warn("[PRECHECK] verify task 更新失败", zap.Error(err))
 	}
+
+	// pre-check 权威对账：agent 实时 rpm -q 判定漏洞版本不在(not_installed=已升级/已删,
+	// not_in_repo=已装且无待修版) → 该 host_vuln 对本机不再是活漏洞 → 关闭为 patched。
+	// 这是"software 库存陈旧致已打补丁漏洞仍报 unpatched"的核心兜底：不依赖可能陈旧的 software 表，
+	// 直接用 agent 实时探测结果对账。与 applyVerifyResult 的 not_installed→verified 同语义，只是覆盖到
+	// 无 verify task 的普通 unpatched 漏洞。available/outdated_repo=仍有洞，不关。
+	if status == model.PreCheckStatusNotInstalled || status == model.PreCheckStatusNotInRepo {
+		h.closeAlreadyPatched(uint(hvID))
+	}
 	return nil
+}
+
+// closeAlreadyPatched 把 pre-check 判定已不适用的 unpatched host_vuln 关闭为 patched。
+// 仅迁移 unpatched（用带状态条件的 UPDATE 防与其它路径竞态覆盖 vanished/ignored）。
+func (h *PreCheckResultHandler) closeAlreadyPatched(hvID uint) {
+	var hv model.HostVulnerability
+	if err := h.db.Select("id, vuln_id, host_id, status").First(&hv, hvID).Error; err != nil {
+		return
+	}
+	if hv.Status != model.HostVulnStatusUnpatched {
+		return
+	}
+	now := model.Now()
+	res := h.db.Model(&model.HostVulnerability{}).
+		Where("id = ? AND status = ?", hvID, model.HostVulnStatusUnpatched).
+		Updates(map[string]any{
+			"status":         model.HostVulnStatusPatched,
+			"prev_status":    model.HostVulnStatusUnpatched,
+			"patched_reason": model.PatchedReasonPreCheckVerified,
+			"patched_at":     &now,
+		})
+	if res.Error != nil || res.RowsAffected == 0 {
+		return
+	}
+	if err := PatchVulnerability(h.db, hv.VulnID, []string{hv.HostID}); err != nil {
+		h.logger.Warn("[PRECHECK] PatchVulnerability 失败",
+			zap.Uint("host_vuln_id", hvID), zap.Error(err))
+	}
+	h.logger.Info("[PRECHECK] 已打补丁漏洞自动对账关闭",
+		zap.Uint("host_vuln_id", hvID),
+		zap.String("host_id", hv.HostID))
 }
 
 // applyVerifyResult P5.6: pre-check 结果联动更新 main_verifying 的 task。

@@ -86,11 +86,15 @@ type Host struct {
 	// 网卡信息（JSON 格式，存储网卡列表）
 	NetworkInterfaces string `gorm:"column:network_interfaces;type:text" json:"network_interfaces"` // JSON 数组，包含网卡名称、MAC地址、IP地址、MTU、状态等信息
 	// 业务信息
-	BusinessLine string `gorm:"column:business_line;type:varchar(100)" json:"business_line"` // 业务线
+	BusinessLine string `gorm:"column:business_line;type:varchar(100)" json:"business_line"`                      // 业务线
+	Criticality  string `gorm:"column:criticality;type:varchar(16);not null;default:'normal'" json:"criticality"` // 资产关键性 low/normal/high/critical,供告警风险分级加权
 	// 时间信息
 	SystemBootTime *LocalTime `gorm:"column:system_boot_time;type:timestamp" json:"system_boot_time"` // 系统启动时间
 	AgentStartTime *LocalTime `gorm:"column:agent_start_time;type:timestamp" json:"agent_start_time"` // 客户端启动时间
 	LastActiveTime *LocalTime `gorm:"column:last_active_time;type:timestamp" json:"last_active_time"` // 最近活跃时间
+	// BehaviorSuppressUntil 运维事件抑制窗:此刻前 BDE 行为告警抑制(agent 重连/插件推送后 WAL 重放/
+	// 采集突发会把行为速率打高致大量假异常)。AC 重连时 + manager 插件 set-latest 时设,consumer 落库前查。
+	BehaviorSuppressUntil *LocalTime `gorm:"column:behavior_suppress_until;type:timestamp" json:"behavior_suppress_until,omitempty"`
 	// Kernel livepatch 能力（P5.3）— agent collector 周期 detect 上报
 	// 启用 livepatch 的主机，内核漏洞可能不需 reboot；UI 修复弹窗会显示提示
 	KernelLivepatchEnabled  bool   `gorm:"column:kernel_livepatch_enabled;type:tinyint(1);default:0" json:"kernel_livepatch_enabled"`

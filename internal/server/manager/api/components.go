@@ -480,6 +480,13 @@ func (h *ComponentsHandler) SetLatestVersion(c *gin.Context) {
 	// 同步更新插件配置（如果是插件）
 	var component model.Component
 	if err := h.db.First(&component, componentID).Error; err == nil {
+		// 运维事件抑制:插件/agent set-latest 触发全舰队 config-sync 重载(采集重跑)或升级(重连)，
+		// 短时把行为速率打高。给全部主机设 BDE 行为告警抑制窗，滤掉推送引发的假异常(consumer 侧生效)。
+		if component.Category == model.ComponentCategoryPlugin || component.Category == model.ComponentCategoryAgent {
+			until := model.ToLocalTime(time.Now().Add(15 * time.Minute))
+			h.db.Model(&model.Host{}).Where("status = ?", model.HostStatusOnline).
+				Update("behavior_suppress_until", &until)
+		}
 		if component.Category == model.ComponentCategoryPlugin {
 			h.logger.Info("设置最新版本后同步插件配置",
 				zap.String("component_name", component.Name),
@@ -593,9 +600,9 @@ func (h *ComponentsHandler) UploadPackage(c *gin.Context) {
 		return
 	}
 
-	// Plugin 只允许 binary
-	if component.Category == model.ComponentCategoryPlugin && pkgType != "binary" {
-		BadRequest(c, "插件包类型必须是 binary")
+	// Plugin 允许 binary 或 tgz（scanner 等 ClamAV/YARA bundle 走 tar.gz，agent 端自动解压）
+	if component.Category == model.ComponentCategoryPlugin && pkgType != "binary" && pkgType != "tgz" {
+		BadRequest(c, "插件包类型必须是 binary 或 tgz")
 		return
 	}
 
@@ -1026,13 +1033,15 @@ func (h *ComponentsHandler) DownloadPluginPackage(c *gin.Context) {
 		}
 	}
 
-	// 查找对应架构的二进制包（先查指定架构，再 fallback 到 arch=all）
+	// 查找对应架构的包（binary 或 tgz——scanner 等 tar.gz bundle 插件走 tgz，
+	// agent 端按 gzip magic 自动解压；先查指定架构，再 fallback 到 arch=all）
+	pkgTypes := []string{"binary", "tgz"}
 	var pkg model.ComponentPackage
-	if err := h.db.Where("version_id = ? AND pkg_type = ? AND arch = ? AND enabled = ?",
-		latestVersion.ID, "binary", arch, true).First(&pkg).Error; err != nil {
+	if err := h.db.Where("version_id = ? AND pkg_type IN ? AND arch = ? AND enabled = ?",
+		latestVersion.ID, pkgTypes, arch, true).First(&pkg).Error; err != nil {
 		// fallback: 查 arch=all（如 virus-database 等不分架构的包）
-		if err2 := h.db.Where("version_id = ? AND pkg_type = ? AND arch = ? AND enabled = ?",
-			latestVersion.ID, "binary", "all", true).First(&pkg).Error; err2 != nil {
+		if err2 := h.db.Where("version_id = ? AND pkg_type IN ? AND arch = ? AND enabled = ?",
+			latestVersion.ID, pkgTypes, "all", true).First(&pkg).Error; err2 != nil {
 			NotFound(c, fmt.Sprintf("插件 %s 没有 %s 架构的包", name, arch))
 			return
 		}

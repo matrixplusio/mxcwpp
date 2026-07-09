@@ -16,7 +16,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/mxcwpp/mxcwpp.git
+git clone https://github.com/matrixplusio/mxcwpp.git
 cd mxcwpp
 
 # 启动开发环境（带热更新）

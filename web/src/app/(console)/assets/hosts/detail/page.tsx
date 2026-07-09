@@ -199,7 +199,7 @@ function OverviewTab({ host }: { host: Host }) {
           />
           <Field
             label={t("assets.hostDetail.fieldPassRate")}
-            value={host.baseline_pass_rate !== undefined ? `${host.baseline_pass_rate}%` : "—"}
+            value={host.baseline_pass_rate !== undefined ? `${Math.round(host.baseline_pass_rate * 100)}%` : "—"}
           />
         </div>
       </Card>

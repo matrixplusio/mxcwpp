@@ -1,5 +1,5 @@
 import { get, post, put, del, upload } from "./client";
-import type { Paged, User, Permission, Role, Notification, SiteConfig, RetentionPolicy, FeatureFlag } from "./types";
+import type { Paged, User, PermModule, Role, Notification, SiteConfig, RetentionPolicy, FeatureFlag } from "./types";
 
 export const systemApi = {
   // users
@@ -10,10 +10,12 @@ export const systemApi = {
   updateUser: (id: number, body: Partial<User> & { password?: string }) => put<User>(`/users/${id}`, body),
   deleteUser: (id: number) => del<void>(`/users/${id}`),
   // rbac
-  listPermissions: () => get<Permission[]>("/rbac/permissions"),
+  listPermissions: () => get<PermModule[]>("/rbac/permissions"),
   listRoles: () => get<Role[]>("/rbac/roles"),
   getRolePermissions: (role: string) => get<{ permissions: string[]; role: string }>(`/rbac/roles/${role}/permissions`),
   updateRolePermissions: (role: string, permissions: string[]) => put<void>(`/rbac/roles/${role}/permissions`, { permissions }),
+  createRole: (body: { code: string; name: string; permissions: string[] }) => post<{ code: string; name: string }>("/rbac/roles", body),
+  deleteRole: (role: string) => del<void>(`/rbac/roles/${role}`),
   // notifications
   listNotifications: (params: { page: number; page_size: number; enabled?: boolean; keyword?: string }) =>
     get<Paged<Notification>>("/notifications", params),

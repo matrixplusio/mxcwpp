@@ -133,7 +133,8 @@ func (h *AlertsHandler) ListAlerts(c *gin.Context) {
 	// 获取列表
 	var alerts []model.Alert
 	offset := (req.Page - 1) * req.PageSize
-	if err := query.Order("last_seen_at DESC").Offset(offset).Limit(req.PageSize).Find(&alerts).Error; err != nil {
+	// P2-A 风险分级：高风险优先（risk_score DESC），同分按最近活跃
+	if err := query.Order("risk_score DESC, last_seen_at DESC").Offset(offset).Limit(req.PageSize).Find(&alerts).Error; err != nil {
 		h.logger.Error("查询告警列表失败", zap.Error(err))
 		InternalError(c, "查询告警列表失败")
 		return

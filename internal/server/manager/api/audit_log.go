@@ -25,7 +25,9 @@ type ListAuditLogsRequest struct {
 	Page         int    `form:"page" binding:"omitempty,min=1"`
 	PageSize     int    `form:"page_size" binding:"omitempty,min=1,max=100"`
 	Username     string `form:"username"`
-	Action       string `form:"action"`        // POST/PUT/DELETE
+	Action       string `form:"action"`        // 语义动词，如 user.login
+	ActorType    string `form:"actor_type"`    // user/system/agent
+	Outcome      string `form:"outcome"`       // success/failure
 	ResourceType string `form:"resource_type"` // hosts/policies 等
 	StartTime    string `form:"start_time"`    // 2006-01-02 15:04:05
 	EndTime      string `form:"end_time"`
@@ -53,6 +55,12 @@ func (h *AuditLogHandler) ListAuditLogs(c *gin.Context) {
 	}
 	if req.Action != "" {
 		query = query.Where("action = ?", req.Action)
+	}
+	if req.ActorType != "" {
+		query = query.Where("actor_type = ?", req.ActorType)
+	}
+	if req.Outcome != "" {
+		query = query.Where("outcome = ?", req.Outcome)
 	}
 	if req.ResourceType != "" {
 		query = query.Where("resource_type = ?", req.ResourceType)

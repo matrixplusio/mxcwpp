@@ -168,7 +168,12 @@ func (w *WAL) Write(record *grpcProto.EncodedRecord) bool {
 // Replay reads all entries from the WAL and calls the handler for each batch.
 // After successful replay, the WAL file is truncated.
 // batchSize controls how many records are batched per handler call.
-func (w *WAL) Replay(batchSize int, handler func([]*grpcProto.EncodedRecord) error) error {
+// batchDelay 是批间暂停时长，用于限速削峰：断网恢复时 ~232 台 agent 同时重放会瞬时洪峰
+// 冲垮 AC kafka producer（实测 burst 丢弃），放缓批间隔可削峰。batchDelay<=0 回退 50ms。
+func (w *WAL) Replay(batchSize int, batchDelay time.Duration, handler func([]*grpcProto.EncodedRecord) error) error {
+	if batchDelay <= 0 {
+		batchDelay = 50 * time.Millisecond
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -230,8 +235,8 @@ func (w *WAL) Replay(batchSize int, handler func([]*grpcProto.EncodedRecord) err
 			totalReplayed += len(batch)
 			batch = batch[:0]
 
-			// Small delay between batches to avoid overwhelming the connection.
-			time.Sleep(50 * time.Millisecond)
+			// Small delay between batches to avoid overwhelming the connection / AC producer.
+			time.Sleep(batchDelay)
 		}
 	}
 

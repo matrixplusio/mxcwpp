@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { Paged, Alert, AlertStatistics, AlertWhitelist } from "./types";
+import type { Paged, Alert, AlertStatistics, AlertWhitelist, AlertWhitelistSuggestion } from "./types";
 
 export interface ListAlertsParams {
   page?: number;
@@ -9,6 +9,7 @@ export interface ListAlertsParams {
   host_id?: string;
   alert_type?: string;
   category?: string;
+  business_line?: string;
   keyword?: string;
   start_time?: string;
   end_time?: string;
@@ -20,6 +21,8 @@ export interface WhitelistParams {
   host_id?: string;
   category?: string;
   severity?: string;
+  exe?: string;
+  cmdline?: string;
   source_ip_cidr?: string;
   reason?: string;
 }
@@ -38,4 +41,12 @@ export const whitelistApi = {
   create: (data: WhitelistParams) => post<AlertWhitelist>("/alerts/whitelist", data),
   update: (id: number, data: WhitelistParams) => put<AlertWhitelist>(`/alerts/whitelist/${id}`, data),
   delete: (id: number) => del(`/alerts/whitelist/${id}`),
+};
+
+export const suggestionApi = {
+  list: (params: { page: number; page_size: number; status?: string }) =>
+    get<Paged<AlertWhitelistSuggestion>>("/alerts/whitelist/suggestions", params),
+  adopt: (id: number) => post(`/alerts/whitelist/suggestions/${id}/adopt`),
+  dismiss: (id: number) => post(`/alerts/whitelist/suggestions/${id}/dismiss`),
+  revoke: (id: number) => post(`/alerts/whitelist/suggestions/${id}/revoke`),
 };

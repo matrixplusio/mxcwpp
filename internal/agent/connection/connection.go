@@ -101,6 +101,9 @@ func (m *Manager) GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 			Timeout:             5 * time.Second,  // keepalive ping 超时时间
 			PermitWithoutStream: true,             // 即使没有活跃流也发送 keepalive
 		}),
+		// 抬高接收上限:IOC 全量快照可达数 MB(默认 4MB 会拒收 → iocStore 空 → 情报不匹配)。
+		// 与 AC 服务端 16MB 对齐。
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(16*1024*1024)),
 	)
 	if err != nil {
 		m.logger.Error("failed to create gRPC client",

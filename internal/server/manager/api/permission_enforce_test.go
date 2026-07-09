@@ -2,42 +2,40 @@ package api
 
 import "testing"
 
-func TestRequiredWriteCode(t *testing.T) {
+func TestRequiredPerm(t *testing.T) {
 	cases := []struct {
 		method, path, want string
 	}{
-		// 读操作放行
-		{"GET", "/api/v1/hosts/:host_id", ""},
-		{"GET", "/api/v1/kube/clusters", ""},
-		{"HEAD", "/api/v1/vulnerabilities", ""},
-		// 最长前缀优先：/hosts/isolate -> operations，而非 /hosts -> assets
-		{"POST", "/api/v1/hosts/isolate", "operations"},
-		{"POST", "/api/v1/hosts/release", "operations"},
-		{"POST", "/api/v1/hosts/restart-agent", "operations"},
-		{"DELETE", "/api/v1/hosts/:host_id", "assets"},
-		{"POST", "/api/v1/hosts/batch-delete", "assets"},
-		// 各模块写
-		{"POST", "/api/v1/kube/clusters", "kube"},
-		{"DELETE", "/api/v1/kube/clusters/:id", "kube"},
-		{"POST", "/api/v1/vulnerabilities/scan", "vuln"},
-		{"POST", "/api/v1/vulnerabilities/:id/patch", "vuln"},
-		{"POST", "/api/v1/remediation-tasks", "vuln"},
-		{"POST", "/api/v1/detection-rules", "detection"},
-		{"POST", "/api/v1/threat-intel/sync", "detection"},
-		{"POST", "/api/v1/fim/tasks", "fim"},
-		{"DELETE", "/api/v1/quarantine/files/:id", "virus"},
-		{"POST", "/api/v1/rootkit/scan", "virus"},
-		{"POST", "/api/v1/network-block/rules", "operations"},
-		{"POST", "/api/v1/policies", "baseline"},
-		{"DELETE", "/api/v1/rules/:rule_id", "baseline"},
-		{"POST", "/api/v1/alerts/:id/resolve", "alerts"},
-		// 未登记写操作放行（如自助/未覆盖端点）
+		// 读 → module:view（已登记模块的读也要 view 权限）
+		{"GET", "/api/v1/hosts/:host_id", "assets:view"},
+		{"GET", "/api/v1/kube/clusters", "kube:view"},
+		{"HEAD", "/api/v1/vulnerabilities", "vuln:view"},
+		// 处置 → module:respond（模块支持 respond 时）
+		{"POST", "/api/v1/alerts/:id/resolve", "alerts:respond"},
+		{"POST", "/api/v1/alerts/:id/ignore", "alerts:respond"},
+		{"DELETE", "/api/v1/quarantine/files/:id", "virus:respond"},
+		// 处置语义但模块无 respond → 退化为 manage
+		{"POST", "/api/v1/hosts/isolate", "operations:manage"},
+		{"POST", "/api/v1/hosts/release", "operations:manage"},
+		// 普通写 → module:manage
+		{"POST", "/api/v1/hosts/restart-agent", "operations:manage"},
+		{"DELETE", "/api/v1/hosts/:host_id", "assets:manage"},
+		{"POST", "/api/v1/kube/clusters", "kube:manage"},
+		{"POST", "/api/v1/vulnerabilities/scan", "vuln:manage"},
+		{"POST", "/api/v1/remediation-tasks", "vuln:manage"},
+		{"POST", "/api/v1/detection-rules", "detection:manage"},
+		{"POST", "/api/v1/fim/tasks", "fim:manage"},
+		{"POST", "/api/v1/rootkit/scan", "virus:manage"},
+		{"POST", "/api/v1/policies", "baseline:manage"},
+		{"DELETE", "/api/v1/rules/:rule_id", "baseline:manage"},
+		// 未登记路由放行（读写均放行）
 		{"POST", "/api/v1/auth/login", ""},
+		{"GET", "/api/v1/something-unmapped", ""},
 		{"POST", "/api/v1/something-unmapped", ""},
 	}
 	for _, c := range cases {
-		if got := requiredWriteCode(c.method, c.path); got != c.want {
-			t.Errorf("requiredWriteCode(%s %s) = %q, want %q", c.method, c.path, got, c.want)
+		if got := requiredPerm(c.method, c.path); got != c.want {
+			t.Errorf("requiredPerm(%s %s) = %q, want %q", c.method, c.path, got, c.want)
 		}
 	}
 }

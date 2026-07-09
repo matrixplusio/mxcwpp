@@ -94,9 +94,10 @@ export default function DataSourcesPage() {
 
   const syncMutation = useMutation({
     mutationFn: (id: number) => vulnApi.syncDataSource(id),
-    onSuccess: (res) => {
+    // 后端 SuccessMessage 只回 {code,message}(无 data),unwrap 得 undefined;不读 res.message 避免崩
+    onSuccess: () => {
       invalidate();
-      toast.success(res.message || t("vuln.dataSources.syncTriggered"));
+      toast.success(t("vuln.dataSources.syncTriggered"));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -139,7 +140,8 @@ export default function DataSourcesPage() {
       title: t("vuln.dataSources.colLastStatus"),
       render: (r) => <StatusTag tone={statusTone(r.lastStatus)}>{STATUS_LABEL[r.lastStatus] ?? r.lastStatus}</StatusTag>,
     },
-    { key: "lastCount", title: t("vuln.dataSources.colLastCount"), render: (r) => <span className="tabular-nums text-ink">{r.lastCount}</span> },
+    { key: "lastCount", title: t("vuln.dataSources.colLastCount"), render: (r) => <span className="tabular-nums text-muted">{r.lastCount}</span> },
+    { key: "vulnCount", title: t("vuln.dataSources.colVulnCount"), render: (r) => <span className="tabular-nums text-ink">{r.vulnCount ?? 0}</span> },
     {
       key: "actions",
       title: t("common.actions"),
