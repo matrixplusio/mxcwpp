@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0023
+name: container_escape_docker_sock
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: privilege_escalation
+  technique: T1611
+tags: [container, escape, docker]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: container_id
+        op: not_equals
+        value: ""
+      - field: cmdline
+        op: regex
+        value: "(docker\\s+(run|exec|create).*--privileged|curl\\s+.*--unix-socket.*/var/run/docker\\.sock)"
+    logic: and
+metadata:
+  description: "检测容器内通过挂载的 docker.sock 执行特权操作进行逃逸"
+  confidence: 90
+  false_positive:
+    - "CI/CD 容器中合法的 Docker-in-Docker 操作"

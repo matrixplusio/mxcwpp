@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0031
+name: persistence_crontab_edit
+version: 1
+category: process
+severity: medium
+mitre:
+  tactic: persistence
+  technique: T1053.003
+tags: [persistence, crontab]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "crontab"
+      - field: cmdline
+        op: regex
+        value: "(-e|-l|-r)"
+    logic: and
+metadata:
+  description: "检测 crontab 编辑/列出/删除操作"
+  confidence: 60
+  false_positive:
+    - "管理员正常维护定时任务"

@@ -1,0 +1,219 @@
+{
+  "id": "LINUX_CRON_SECURITY",
+  "name": "定时任务安全基线",
+  "version": "1.0.0",
+  "description": "Cron/At 定时任务安全配置检查（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_CRON_001",
+      "category": "cron",
+      "title": "/etc/crontab 权限正确",
+      "description": "/etc/crontab 文件权限应为 600，仅 root 可读写",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/crontab", "0600"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/crontab 权限为 600",
+        "command": "chmod 600 /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_002",
+      "category": "cron",
+      "title": "/etc/cron.hourly 权限正确",
+      "description": "/etc/cron.hourly 目录权限应为 700，仅 root 可访问",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.hourly", "0700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.hourly 权限为 700",
+        "command": "chmod 700 /etc/cron.hourly"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_003",
+      "category": "cron",
+      "title": "/etc/cron.daily 权限正确",
+      "description": "/etc/cron.daily 目录权限应为 700，仅 root 可访问",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.daily", "0700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.daily 权限为 700",
+        "command": "chmod 700 /etc/cron.daily"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_004",
+      "category": "cron",
+      "title": "/etc/cron.weekly 权限正确",
+      "description": "/etc/cron.weekly 目录权限应为 700，仅 root 可访问",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.weekly", "0700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.weekly 权限为 700",
+        "command": "chmod 700 /etc/cron.weekly"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_005",
+      "category": "cron",
+      "title": "/etc/cron.monthly 权限正确",
+      "description": "/etc/cron.monthly 目录权限应为 700，仅 root 可访问",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.monthly", "0700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.monthly 权限为 700",
+        "command": "chmod 700 /etc/cron.monthly"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_006",
+      "category": "cron",
+      "title": "/etc/cron.d 权限正确",
+      "description": "/etc/cron.d 目录权限应为 700，仅 root 可访问",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.d", "0700"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.d 权限为 700",
+        "command": "chmod 700 /etc/cron.d"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_007",
+      "category": "cron",
+      "title": "cron.allow 已配置",
+      "description": "应配置 /etc/cron.allow 限制可使用 cron 的用户",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/cron.allow"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "创建 /etc/cron.allow 并添加允许使用 cron 的用户",
+        "command": "echo 'root' > /etc/cron.allow && chmod 600 /etc/cron.allow"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_008",
+      "category": "cron",
+      "title": "cron.deny 不存在或为空",
+      "description": "如果配置了 cron.allow，cron.deny 应不存在或为空",
+      "severity": "low",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/cron.allow"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["test -f /etc/cron.deny && echo exists || echo not_exists", "not_exists"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "删除 /etc/cron.deny 或配置 /etc/cron.allow",
+        "command": "rm -f /etc/cron.deny"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_009",
+      "category": "cron",
+      "title": "at.allow 已配置",
+      "description": "应配置 /etc/at.allow 限制可使用 at 的用户",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/at.allow"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "创建 /etc/at.allow 并添加允许使用 at 的用户",
+        "command": "echo 'root' > /etc/at.allow && chmod 600 /etc/at.allow"
+      }
+    },
+    {
+      "rule_id": "LINUX_CRON_010",
+      "category": "cron",
+      "title": "cron.allow 权限正确",
+      "description": "/etc/cron.allow 文件权限应为 600，仅 root 可读写",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/cron.allow", "0600"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["test -f /etc/cron.allow || echo not_exists", "not_exists"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/cron.allow 权限为 600",
+        "command": "chmod 600 /etc/cron.allow"
+      }
+    }
+  ]
+}

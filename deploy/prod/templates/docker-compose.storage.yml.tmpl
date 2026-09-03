@@ -1,0 +1,154 @@
+name: mxcwpp-storage
+
+# 容器 stdout 日志轮转。
+#
+# json-file 驱动默认无上限：容器一旦进入错误刷屏，单个日志文件可以在数小时内
+# 吃掉整块根盘，届时数据库停止写入、docker exec 也会因无空间而失败，连排查都做不了。
+# 此处给所有服务设硬上限：单文件 100MB、保留 3 个 = 每容器 300MB 封顶。
+# 应用自身的结构化日志另有 DataRoot/logs/<svc> 卷挂载，不受此影响。
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "100m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: {{ .MySQLImage }}
+    container_name: mxcwpp-mysql
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ .Config.Infrastructure.MySQL.RootPassword }}"
+      MYSQL_DATABASE: "{{ .Config.Infrastructure.MySQL.Database }}"
+      MYSQL_USER: "{{ .Config.Infrastructure.MySQL.User }}"
+      MYSQL_PASSWORD: "{{ .Config.Infrastructure.MySQL.Password }}"
+      MYSQL_TCP_PORT: "{{ .MySQLPort }}"
+      TZ: "{{ .Timezone }}"
+    volumes:
+      - {{ .DataRoot }}/mysql:/var/lib/mysql
+      - {{ .InstallDir }}/current/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - {{ .InstallDir }}/current/config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - {{ .DataRoot }}/logs/mysql:/var/log/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "{{ .MySQLPort }}", "-u", "root", "-p{{ .Config.Infrastructure.MySQL.RootPassword }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: {{ .RedisImage }}
+    container_name: mxcwpp-redis
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    command: >
+      sh -c '
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --port {{ .RedisPort }}
+        else
+          redis-server --appendonly yes --port {{ .RedisPort }}
+        fi
+      '
+    environment:
+      REDIS_PASSWORD: "{{ .Config.Infrastructure.Redis.Password }}"
+    volumes:
+      - {{ .DataRoot }}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -p {{ .RedisPort }} -a \"$$REDIS_PASSWORD\" ping | grep -q PONG; else redis-cli -p {{ .RedisPort }} ping | grep -q PONG; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  clickhouse:
+    image: {{ .ClickHouseImage }}
+    container_name: mxcwpp-clickhouse
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    cap_add:
+      - SYS_NICE
+    environment:
+      CLICKHOUSE_DB: "{{ .Config.Infrastructure.ClickHouse.Database }}"
+      CLICKHOUSE_USER: "{{ .Config.Infrastructure.ClickHouse.User }}"
+      CLICKHOUSE_PASSWORD: "{{ .Config.Infrastructure.ClickHouse.Password }}"
+      CLICKHOUSE_HTTP_PORT: "{{ .ClickHouseHTTP }}"
+      CLICKHOUSE_TCP_PORT: "{{ .ClickHouseTCP }}"
+      TZ: "{{ .Timezone }}"
+    volumes:
+      - {{ .DataRoot }}/clickhouse:/var/lib/clickhouse
+      - {{ .InstallDir }}/current/deploy/init-clickhouse.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - {{ .InstallDir }}/current/config/clickhouse.xml:/etc/clickhouse-server/config.d/custom.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:{{ .ClickHouseHTTP }}/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  prometheus:
+    image: {{ .PrometheusImage }}
+    container_name: mxcwpp-prometheus
+    restart: always
+    logging: *default-logging
+    user: root
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - {{ .InstallDir }}/current/config/rules.yml:/etc/prometheus/rules.yml:ro
+      - {{ .DataRoot }}/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.enable-lifecycle"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  alertmanager:
+    image: {{ .AlertmanagerImage }}
+    container_name: mxcwpp-alertmanager
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - {{ .DataRoot }}/alertmanager:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===== 主机资源指标 =====
+  # 主机 CPU/内存/磁盘指标。每个节点都要有，缺一个该节点就是监控盲区——
+  # 盘满时进程仍存活，只靠服务存活告警发现不了。
+  # 监听 9101 而非默认 9100 —— consumer 的 metrics 端点已占用 9100。
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: mxcwpp-node-exporter
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+      - "--web.listen-address=:9101"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run)($|/)"
+    volumes:
+      - /:/host:ro,rslave
+    environment:
+      TZ: {{ .Timezone }}

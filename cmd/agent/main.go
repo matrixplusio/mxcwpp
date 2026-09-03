@@ -1,0 +1,423 @@
+// Package main 是 Agent 主程序入口
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"sync"
+	"syscall"
+
+	"go.uber.org/zap"
+
+	"time"
+
+	"github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	agentcli "github.com/matrixplusio/mxcwpp/internal/agent/cli"
+	"github.com/matrixplusio/mxcwpp/internal/agent/config"
+	"github.com/matrixplusio/mxcwpp/internal/agent/connection"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr"
+	"github.com/matrixplusio/mxcwpp/internal/agent/edr/antidebug"
+	agentgctune "github.com/matrixplusio/mxcwpp/internal/agent/gctune"
+	"github.com/matrixplusio/mxcwpp/internal/agent/heartbeat"
+	"github.com/matrixplusio/mxcwpp/internal/agent/id"
+	"github.com/matrixplusio/mxcwpp/internal/agent/logger"
+	"github.com/matrixplusio/mxcwpp/internal/agent/metrics"
+	"github.com/matrixplusio/mxcwpp/internal/agent/plugin"
+	agentrt "github.com/matrixplusio/mxcwpp/internal/agent/runtime"
+	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
+	"github.com/matrixplusio/mxcwpp/internal/agent/updater"
+)
+
+var (
+	version      = flag.Bool("version", false, "显示版本信息")
+	update       = flag.Bool("update", false, "检查并执行自更新")
+	updateForce  = flag.Bool("force", false, "强制更新（即使版本相同，需配合 --update 使用）")
+	updateFile   = flag.String("file", "", "使用本地包文件更新（离线模式，需配合 --update 使用）")
+	updateServer = flag.String("server", "", "指定 Server HTTP 地址（如 http://10.0.0.1:8080，需配合 --update 使用）")
+
+	// 运维辅助子命令
+	statusFlag = flag.Bool("status", false, "显示 Agent 运行状态")
+	logsFlag   = flag.Bool("logs", false, "查看 Agent 日志")
+	configFlag = flag.Bool("config", false, "显示 Agent 配置")
+	diagFlag   = flag.Bool("diag", false, "生成诊断信息包")
+	jsonFlag   = flag.Bool("json", false, "以 JSON 格式输出（适用于 --status / --config）")
+
+	// --logs 子选项
+	logsLines  = flag.Int("n", 100, "末尾日志行数（配合 --logs 使用）")
+	logsFollow = flag.Bool("f", false, "实时跟踪日志（配合 --logs 使用）")
+
+	// --diag 子选项
+	diagOutput = flag.String("o", "", "诊断包输出路径（配合 --diag 使用，默认 /tmp/mxcwpp-agent-diag-<host>-<ts>.tar.gz）")
+)
+
+// 构建时嵌入的变量（通过 -ldflags 设置）
+// Server 在部署时生成配置，编译时嵌入到 Agent 二进制
+// 示例: go build -ldflags "-X main.serverHost=10.0.0.1:6751 -X main.buildVersion=1.0.0" ./cmd/agent
+var (
+	serverHost    string // Server 地址（构建时嵌入，必须）
+	buildVersion  string // 构建版本（构建时嵌入）
+	buildTime     string // 构建时间（构建时嵌入）
+	signPublicKey string // Plugin 签名验证公钥（base64，构建时嵌入）
+	caFingerprint string // AC CA 证书 SHA256 指纹（构建时嵌入，首连 pin AC 防中间人）
+	gitCommit     string // 构建所用源码 commit，供交付后与源码对账
+	enrollToken   string // enroll 引导令牌（构建时嵌入，换取单机证书）
+)
+
+func main() {
+	// Watchdog child 入口: 在 flag.Parse 之前判定, 避免 flag 处理影响 child 行为
+	if antidebug.IsChild() {
+		// child 用最小日志栈 (避开 /var/log/mxcwpp-agent 锁竞争)
+		minimalLog, _ := zap.NewProduction()
+		if err := antidebug.ServeAsChild(antidebug.WatchdogConfig{
+			Logger:         minimalLog,
+			RestartCommand: []string{"/bin/systemctl", "restart", "mxcwpp-agent"},
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "watchdog child exited: %v\n", err)
+		}
+		return
+	}
+
+	flag.Parse()
+
+	if *version {
+		printVersion()
+		return
+	}
+
+	// 运维辅助子命令：独立执行路径，不启动 Agent 服务
+	commonOpts := agentcli.CommonOptions{
+		BuildVersion: buildVersion,
+		BuildTime:    buildTime,
+		ServerHost:   serverHost,
+		JSON:         *jsonFlag,
+	}
+	switch {
+	case *statusFlag:
+		if err := agentcli.RunStatus(commonOpts, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *logsFlag:
+		if err := agentcli.RunLogs(agentcli.LogsOptions{
+			Lines:  *logsLines,
+			Follow: *logsFollow,
+		}, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *configFlag:
+		if err := agentcli.RunConfig(commonOpts, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	case *diagFlag:
+		if _, err := agentcli.RunDiag(commonOpts, agentcli.DiagOptions{
+			OutputPath: *diagOutput,
+		}, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// 自更新模式：独立执行路径，不启动 Agent 服务
+	if *update {
+		currentVer := buildVersion
+		if currentVer == "" {
+			currentVer = "dev"
+		}
+		opts := updater.SelfUpdateOptions{
+			ServerHost:     serverHost,
+			ServerHTTP:     *updateServer,
+			CurrentVersion: currentVer,
+			WorkDir:        "/var/lib/mxcwpp-agent",
+			Force:          *updateForce,
+			LocalFile:      *updateFile,
+		}
+		if err := updater.RunSelfUpdate(opts); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// 1. 验证构建时嵌入的配置（必须）
+	if serverHost == "" {
+		panic("serverHost must be embedded at build time, use -ldflags \"-X main.serverHost=HOST:PORT\"")
+	}
+
+	// 2. 加载默认配置（完全依赖构建时嵌入，不需要配置文件）
+	cfg := config.LoadDefaults()
+	cfg.Local.Server.AgentCenter.PrivateHost = serverHost
+	// 设置构建时嵌入的版本
+	if buildVersion != "" {
+		cfg.BuildVersion = buildVersion
+	}
+	// 设置构建时嵌入的插件签名公钥
+	cfg.SignPublicKey = signPublicKey
+	cfg.GitCommit = gitCommit
+
+	// Agent↔AC 信任链：CA 指纹 + enroll 令牌。
+	cfg.Local.TLS.CAFingerprint, cfg.Local.TLS.EnrollToken = resolveTrustConfig(caFingerprint, enrollToken)
+
+	// 3. 初始化日志（默认配置：按天轮转，保留7天）
+	log, err := logger.Init(logger.LogConfig{
+		Level:  "info",
+		Format: "json",
+		File:   "/var/log/mxcwpp-agent/agent.log",
+		MaxAge: 7, // 保留7天
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = log.Sync() }()
+
+	// P3-B: Agent GC + 内存上限调优 (默认 200MB / GOGC=100)
+	agentgctune.Apply(log)
+
+	log.Info("Agent starting",
+		zap.String("version", cfg.GetVersion()),
+		zap.String("product", cfg.GetProduct()),
+		zap.String("server", serverHost),
+		zap.Bool("remote_config_loaded", cfg.Remote.Loaded),
+	)
+
+	// 3.1 自我加固 (Phase 3 P3-1):
+	//   PR_SET_DUMPABLE=0 + PR_SET_NO_NEW_PRIVS=1 + PTRACE_TRACEME 自挂
+	//   失败仅 warn, 不阻塞 Agent 启动
+	if err := antidebug.SelfProtect(log); err != nil {
+		log.Warn("Agent self-protect 部分失败 (内核老/容器限制)", zap.Error(err))
+	}
+
+	// 3.2 ELF 完整性周期校验 (5 min)
+	//   命中即触发 onTamper (默认 os.Exit(2)), systemd 拉起新进程
+	elfMon := antidebug.NewELFIntegrityMonitor("/proc/self/exe", 5*time.Minute, log)
+	elfStop := make(chan struct{})
+	go elfMon.Run(elfStop)
+	defer close(elfStop)
+
+	// 3.3 Watchdog 双进程互保
+	//   fork child + 心跳 + reap 重启
+	watchdog := antidebug.NewWatchdog(antidebug.WatchdogConfig{
+		HeartbeatInterval: 3 * time.Second,
+		MaxHeartbeatMiss:  3,
+		RestartCommand:    []string{"/bin/systemctl", "restart", "mxcwpp-agent"},
+		Logger:            log,
+	})
+	watchdog.OnSuspectKill = func(reason string) {
+		log.Error("watchdog: 可疑 kill 检测",
+			zap.String("reason", reason),
+			zap.String("action", "已触发 child 重启"))
+		// 后续 PR 调 transport.ReportTamper(reason)
+	}
+	if err := watchdog.StartAsParent(); err != nil {
+		log.Warn("Watchdog 启动失败, 跳过双进程互保",
+			zap.Error(err),
+			zap.String("hint", "非 root 或 systemctl 不可用时降级正常"))
+	} else {
+		defer func() { _ = watchdog.Stop() }()
+	}
+
+	// 3.4 Agent /metrics Prometheus (9101)
+	metrics.Init(cfg.GetVersion(), buildTime, log)
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	defer metricsCancel()
+	go metrics.Get().Serve(metricsCtx, ":9101")
+
+	// 3.5 初始化运行时环境检测（全局单例，供所有模块使用）
+	rtInfo := agentrt.Init(log)
+	log.Info("runtime environment detected",
+		zap.String("type", string(rtInfo.Type)),
+		zap.Bool("is_container", rtInfo.IsContainer),
+		zap.String("container_id", rtInfo.ContainerID),
+	)
+
+	// 4. 初始化 Agent ID
+	agentID, err := id.InitID(cfg.Local.IDFile)
+	if err != nil {
+		log.Fatal("failed to init agent ID", zap.Error(err))
+	}
+	log.Info("Agent ID initialized", zap.String("agent_id", agentID))
+
+	// 5. 创建连接管理器
+	connMgr := connection.NewManager(cfg, log)
+
+	// 6. 创建传输管理器（用于心跳模块）
+	transportMgr, err := transport.NewManager(cfg, log, connMgr, agentID)
+	if err != nil {
+		log.Fatal("创建传输管理器失败", zap.Error(err))
+	}
+
+	// 7. 创建插件管理器（需要在心跳模块之前创建，以便传递引用）
+	pluginMgr := plugin.NewManager(cfg, log, transportMgr)
+
+	// 7.5 创建 EDR 引擎（内置模块，与 Agent 同进程）
+	// 非 linux 平台的 stub 永不返 err，staticcheck SA4023 误报，linux 平台 engine.go 会返真实 err
+	edrEngine, err := edr.NewEngine(log, transportMgr, "", serverHost) //nolint:staticcheck
+	if err != nil {                                                    //nolint:staticcheck
+		log.Warn("EDR engine initialization failed, continuing without EDR",
+			zap.Error(err))
+	}
+
+	// 8. 设置配置更新回调
+	transportMgr.SetConfigUpdateCallback(func(agentConfig *grpc.AgentConfig, certBundle *grpc.CertificateBundle) {
+		// 处理证书包更新
+		if certBundle != nil {
+			certDir := "/var/lib/mxcwpp-agent/certs"
+			// 记录同步前的客户端证书指纹：与同步后不同即证书换了人，必须主动重连才会生效。
+			// 判据不能是"之前没有证书"——共享证书换单机证书时旧文件是在的，落盘了却不重连，
+			// 结果是磁盘上已是新证书、当前连接仍拿旧证书，直到下次偶然断线才切换。
+			// 服务端一旦开启 CN 强制绑定，这批"看着已迁移、实际还在用旧证书"的 agent 会被直接拒绝。
+			prevFP := clientCertFingerprint(certDir)
+			if err := cfg.SyncCertificatesFromServer(certBundle, certDir); err != nil {
+				log.Error("failed to sync certificates from server", zap.Error(err))
+			} else {
+				log.Info("certificates updated from server",
+					zap.String("cert_dir", certDir),
+				)
+				if newFP := clientCertFingerprint(certDir); newFP != prevFP {
+					// 覆盖首次签发(prevFP 为空)与证书轮换/替换两种情况。
+					log.Info("客户端证书已变更，主动重连以启用新证书",
+						zap.Bool("first_issue", prevFP == ""),
+					)
+					_ = connMgr.Close()
+				}
+			}
+		}
+
+		// 处理 Agent 配置更新
+		if agentConfig != nil {
+			if err := cfg.SyncFromServer(agentConfig); err != nil {
+				log.Error("failed to sync config from server", zap.Error(err))
+			} else {
+				log.Info("config updated from server",
+					zap.Int32("heartbeat_interval", agentConfig.HeartbeatInterval),
+					zap.String("work_dir", agentConfig.WorkDir),
+				)
+			}
+		}
+	})
+
+	// 9. 启动核心模块
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(4)
+
+	// 心跳模块（传递插件管理器和 EDR 引擎引用）
+	var edrStatus heartbeat.EDRStatusGetter
+	if edrEngine != nil {
+		edrStatus = edrEngine
+	}
+	go heartbeat.Startup(ctx, wg, cfg, log, transportMgr, agentID, pluginMgr, edrStatus)
+
+	// 传输模块（使用已创建的传输管理器）
+	go transport.StartupWithManager(ctx, wg, transportMgr)
+
+	// 插件管理模块（使用已创建的插件管理器）
+	go plugin.StartupWithManager(ctx, wg, pluginMgr)
+
+	// 自更新模块（监听来自 Server 的更新命令）
+	updaterMgr := updater.NewManager(log, transportMgr.GetAgentUpdateChannel(), cfg.GetVersion(), cfg.GetWorkDir())
+	if edrEngine != nil {
+		updaterMgr.SetProtector(edrEngine.SelfProtectManager())
+	}
+	go updater.StartupWithManager(ctx, wg, updaterMgr)
+
+	// EDR 引擎（内置模块，不计入 WaitGroup — 通过 context 取消后自行停止）
+	if edrEngine != nil {
+		if err := edrEngine.Start(ctx); err != nil {
+			log.Error("EDR engine start failed", zap.Error(err))
+		}
+	}
+
+	// 9. 信号处理
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+
+	log.Info("Agent started, waiting for shutdown signal...")
+
+	// 等待信号
+	sig := <-signalCh
+	log.Info("Received shutdown signal", zap.String("signal", sig.String()))
+
+	// 10. 优雅退出
+	log.Info("Shutting down...")
+	cancel()
+
+	// 停止 EDR 引擎（在 cancel 之后，释放 eBPF 资源）
+	if edrEngine != nil {
+		if err := edrEngine.Stop(); err != nil {
+			log.Error("EDR engine stop failed", zap.Error(err))
+		}
+	}
+
+	wg.Wait()
+
+	// 关闭连接
+	if err := connMgr.Close(); err != nil {
+		log.Error("Failed to close connection", zap.Error(err))
+	}
+
+	log.Info("Agent stopped")
+}
+
+func printVersion() {
+	version := buildVersion
+	if version == "" {
+		version = "dev"
+	}
+	buildTimeStr := buildTime
+	if buildTimeStr == "" {
+		buildTimeStr = "unknown"
+	}
+	fmt.Printf("mxcwpp-agent version %s\n", version)
+	fmt.Printf("Build time: %s\n", buildTimeStr)
+	if serverHost != "" {
+		fmt.Printf("Server: %s\n", serverHost)
+	}
+}
+
+// resolveTrustConfig 决定 agent 使用的 CA 指纹与 enroll 令牌。
+//
+// 环境变量优先于构建期嵌入值：安装脚本按机写入 root-only 的 EnvironmentFile，
+// 令牌得以逐机轮换而不必重新出包；构建期嵌入仅作为未注入环境变量时的兜底。
+//
+// 抽成独立函数是为了可测：这两个值决定一台新机器能否 enroll 上线，取值顺序一旦搞反
+// （比如嵌入值盖掉环境变量），表现是全网新装 agent 静默失败，而 main() 里的内联逻辑
+// 没有任何测试能发现。
+func resolveTrustConfig(embeddedFingerprint, embeddedToken string) (fingerprint, token string) {
+	fingerprint = embeddedFingerprint
+	if v := os.Getenv("MXCWPP_CA_FINGERPRINT"); v != "" {
+		fingerprint = v
+	}
+	token = embeddedToken
+	if v := os.Getenv("MXCWPP_ENROLL_TOKEN"); v != "" {
+		token = v
+	}
+	return fingerprint, token
+}
+
+// clientCertFingerprint 返回 certDir 下客户端证书的 SHA-256 指纹，取不到时返回空串。
+//
+// 用于判断服务端下发的证书是否换掉了当前正在用的那张。空串既表示"本机还没有证书"
+// （首次签发），也表示"读不出来"——两种情况都应触发重连：前者是要启用新身份，
+// 后者说明当前证书本就不可用，重连时会走首连流程重新取。
+func clientCertFingerprint(certDir string) string {
+	data, err := os.ReadFile(filepath.Join(certDir, "client.crt"))
+	if err != nil || len(data) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}

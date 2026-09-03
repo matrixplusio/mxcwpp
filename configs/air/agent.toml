@@ -1,0 +1,50 @@
+# Air 配置文件（Go 热重载工具）
+# 用于 Agent 开发环境自动重新编译和运行
+# 注意：Agent 需要构建时嵌入 Server 地址，通过环境变量传递
+
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+  args_bin = []
+  bin = "./tmp/agent"
+  # 使用构建脚本（环境变量 SERVER_HOST 和 VERSION 由 docker-compose 传递）
+  cmd = "/workspace/scripts/build-agent.sh"
+  delay = 1000
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "deploy", "ui", "docs", ".git", ".cursor", "node_modules", "Elkeid", "dist"]
+  exclude_file = []
+  exclude_regex = ["_test.go"]
+  exclude_unchanged = false
+  follow_symlink = false
+  # Agent 直接运行，无需额外参数（配置通过构建时嵌入）
+  full_bin = "./tmp/agent"
+  include_dir = []
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  include_file = []
+  kill_delay = "0s"
+  log = "build-errors.log"
+  poll = false
+  poll_interval = 0
+  rerun = false
+  rerun_delay = 500
+  send_interrupt = false
+  stop_on_error = false
+
+[color]
+  app = ""
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  main_only = false
+  time = false
+
+[misc]
+  clean_on_exit = false
+
+[screen]
+  clear_on_rebuild = false
+  keep_scroll = true

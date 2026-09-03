@@ -1,0 +1,103 @@
+{
+  "samples": [
+    {
+      "name": "benign/inbound-accept-ephemeral-hits-mining-port",
+      "label": "benign",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_accept",
+        "comm": "nginx",
+        "exe": "/usr/sbin/nginx",
+        "local_addr": "192.0.2.10",
+        "local_port": "80",
+        "remote_addr": "198.51.100.30",
+        "remote_port": "3333",
+        "protocol": "tcp"
+      },
+      "note": "prod 实例：nginx 在 80 端口接受连接，客户端临时源端口恰为 3333。挖矿矿池规则据此判 critical，挂了两个月（alerts#5726）。入站事件的 remote_port 是对端临时端口，不含任何语义。"
+    },
+    {
+      "name": "benign/inbound-accept-ephemeral-hits-backdoor-port",
+      "label": "benign",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_accept",
+        "comm": "java",
+        "exe": "/opt/jdk1.8/bin/java",
+        "local_addr": "192.0.2.11",
+        "local_port": "8080",
+        "remote_addr": "198.51.100.31",
+        "remote_port": "4444",
+        "protocol": "tcp"
+      },
+      "note": "同一错误的另一形态：入站连接的临时源端口落在后门端口号上。"
+    },
+    {
+      "name": "benign/inbound-accept-ephemeral-hits-tor-port",
+      "label": "benign",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_accept",
+        "comm": "nginx",
+        "exe": "/usr/sbin/nginx",
+        "local_addr": "192.0.2.10",
+        "local_port": "443",
+        "remote_addr": "198.51.100.32",
+        "remote_port": "9001",
+        "protocol": "tcp"
+      },
+      "note": "9001 既是 Tor 端口也是常见业务端口，入站时更是普通临时端口。"
+    },
+    {
+      "name": "attack/outbound-connect-to-mining-pool",
+      "label": "attack",
+      "technique": "T1496",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_connect",
+        "comm": "xmrig",
+        "exe": "/tmp/.x/xmrig",
+        "local_addr": "192.0.2.10",
+        "local_port": "51234",
+        "remote_addr": "198.51.100.50",
+        "remote_port": "3333",
+        "protocol": "tcp"
+      },
+      "note": "真实挖矿：主动外连矿池端口。加了方向约束后这条必须仍然命中。"
+    },
+    {
+      "name": "attack/outbound-connect-to-backdoor-port",
+      "label": "attack",
+      "technique": "T1571",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_connect",
+        "comm": "bash",
+        "exe": "/bin/bash",
+        "local_addr": "192.0.2.10",
+        "local_port": "51235",
+        "remote_addr": "198.51.100.51",
+        "remote_port": "4444",
+        "protocol": "tcp"
+      },
+      "note": "真实 C2 外连，方向约束不能把它一并挡掉。"
+    },
+    {
+      "name": "attack/inbound-redis-exposed-to-internet",
+      "label": "attack",
+      "technique": "T1190",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_accept",
+        "comm": "redis-server",
+        "exe": "/usr/bin/redis-server",
+        "local_addr": "192.0.2.12",
+        "local_port": "6379",
+        "remote_addr": "198.51.100.60",
+        "remote_port": "44321",
+        "protocol": "tcp"
+      },
+      "note": "「暴露 Redis 未授权」的真实形态：外部连到本机 6379。原规则判 remote_port，恰好把这个真实场景漏掉，同时又对临时端口误报。"
+    }
+  ]
+}

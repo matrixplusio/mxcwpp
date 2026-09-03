@@ -1,0 +1,26 @@
+schema_version: 1
+id: MXEDR-0090
+name: recon_network_scan
+version: 1
+category: process
+severity: medium
+mitre:
+  tactic: discovery
+  technique: T1046
+tags: [discovery, scan]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: regex
+        value: "(nmap|masscan|zmap|rustscan)$"
+    logic: and
+metadata:
+  description: "检测网络扫描工具执行"
+  confidence: 85
+  false_positive:
+    - "安全团队主动扫描"

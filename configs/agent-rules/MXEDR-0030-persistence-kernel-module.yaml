@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0030
+name: persistence_kernel_module
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: persistence
+  technique: T1547.006
+tags: [persistence, rootkit, kernel]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: regex
+        value: "(insmod|modprobe)$"
+    logic: and
+metadata:
+  description: "检测内核模块加载，可能为 rootkit 植入"
+  confidence: 70
+  false_positive:
+    - "系统启动时正常加载驱动模块"
+    - "管理员手动加载网络/存储驱动"

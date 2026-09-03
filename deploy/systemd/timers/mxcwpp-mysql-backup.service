@@ -1,0 +1,14 @@
+[Unit]
+Description=mxcwpp MySQL backup (xtrabackup)
+After=mysql.service
+Wants=mysql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mxcwpp/backup.env
+ExecStart=/usr/local/bin/mxcwpp-mysql-xtrabackup.sh full
+StandardOutput=append:/var/log/mxcwpp-backup/mysql-systemd.log
+StandardError=append:/var/log/mxcwpp-backup/mysql-systemd.log
+TimeoutStartSec=4h
+Nice=10
+IOSchedulingClass=idle

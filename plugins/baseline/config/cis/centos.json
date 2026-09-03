@@ -1,0 +1,866 @@
+{
+  "id": "LINUX_CIS_CENTOS",
+  "name": "CentOS 安全基线 (CIS Benchmark + 等保 2.0)",
+  "version": "2.0.0",
+  "description": "面向 CentOS/Rocky/AlmaLinux/Oracle/RHEL 的 CIS Level 1 主机基线，覆盖文件系统、服务、SSH、认证、网络、审计与权限维度。",
+  "os_family": [
+    "centos",
+    "rocky",
+    "almalinux",
+    "oracle",
+    "rhel"
+  ],
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "CIS_CENTOS_001",
+      "category": "文件系统",
+      "title": "禁用 cramfs 文件系统内核模块",
+      "description": "cramfs 为只读压缩文件系统，普通服务器无需挂载，禁用可缩小攻击面。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/mxcwpp-cramfs.conf",
+              "install\\s+cramfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 modprobe 配置中将 cramfs 模块加载重定向到 /bin/true 以阻止挂载。",
+        "command": "F=/etc/modprobe.d/mxcwpp-cramfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+cramfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+cramfs.*|install cramfs /bin/true|' \"$F\"; else echo 'install cramfs /bin/true' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_002",
+      "category": "文件系统",
+      "title": "禁用 squashfs 文件系统内核模块",
+      "description": "squashfs 常用于 snap/容器镜像，主机基线场景下禁用以减少不必要的内核模块。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/mxcwpp-squashfs.conf",
+              "install\\s+squashfs\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 modprobe 配置中将 squashfs 模块加载重定向到 /bin/true。",
+        "command": "F=/etc/modprobe.d/mxcwpp-squashfs.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+squashfs' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+squashfs.*|install squashfs /bin/true|' \"$F\"; else echo 'install squashfs /bin/true' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_003",
+      "category": "文件系统",
+      "title": "禁用 udf 文件系统内核模块",
+      "description": "udf 用于光盘介质，服务器一般无此需求，禁用可降低风险。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/modprobe.d/mxcwpp-udf.conf",
+              "install\\s+udf\\s+/bin/(true|false)",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 modprobe 配置中将 udf 模块加载重定向到 /bin/true。",
+        "command": "F=/etc/modprobe.d/mxcwpp-udf.conf; [ -f \"$F\" ] && { [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; }; if grep -qE '^\\s*install\\s+udf' \"$F\" 2>/dev/null; then sed -ri 's|^\\s*install\\s+udf.*|install udf /bin/true|' \"$F\"; else echo 'install udf /bin/true' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_004",
+      "category": "文件系统",
+      "title": "为 /tmp 配置独立挂载分区",
+      "description": "将 /tmp 划分为独立分区可单独施加 nodev/nosuid/noexec 等挂载选项，分区调整无法在线安全完成，需人工规划。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "findmnt -kn /tmp 2>/dev/null | wc -l",
+              "^[1-9]"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在系统安装或维护窗口将 /tmp 划为独立分区（或使用 tmp.mount），并设置 nodev,nosuid,noexec 挂载选项。该操作涉及磁盘分区，请人工执行。",
+        "command": ""
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_005",
+      "category": "服务",
+      "title": "确保未安装 telnet 服务端",
+      "description": "telnet 明文传输凭证，应使用 SSH 替代，禁止安装 telnet-server。",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "telnet-server"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 telnet-server 软件包。",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf remove -y telnet-server; else yum remove -y telnet-server; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_006",
+      "category": "服务",
+      "title": "确保未安装 rsh 相关服务",
+      "description": "rsh/rlogin 使用明文且基于主机信任认证，存在严重安全隐患，应卸载。",
+      "severity": "high",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "rsh-server"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 rsh-server 软件包。",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf remove -y rsh-server; else yum remove -y rsh-server; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_007",
+      "category": "服务",
+      "title": "确保未安装 tftp 服务端",
+      "description": "TFTP 无认证机制，易被用于任意文件读写，主机基线下禁止安装。",
+      "severity": "medium",
+      "check": {
+        "condition": "none",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "tftp-server"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "卸载 tftp-server 软件包。",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf remove -y tftp-server; else yum remove -y tftp-server; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_008",
+      "category": "服务",
+      "title": "确保 avahi 服务未启用",
+      "description": "Avahi (mDNS) 会主动暴露主机信息，服务器场景下应停用。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "avahi-daemon",
+              "inactive"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "停止并禁用 avahi-daemon 服务。",
+        "command": "systemctl disable --now avahi-daemon 2>/dev/null; systemctl disable --now avahi-daemon.socket 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_009",
+      "category": "服务",
+      "title": "确保 cups 打印服务未启用",
+      "description": "服务器一般无打印需求，停用 CUPS 可减少监听端口。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "cups",
+              "inactive"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "停止并禁用 cups 打印服务。",
+        "command": "systemctl disable --now cups 2>/dev/null; systemctl disable --now cups.socket 2>/dev/null; true"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_010",
+      "category": "服务",
+      "title": "确保时间同步服务已启用",
+      "description": "准确的系统时间是日志取证与证书校验的基础，应启用 chrony 等时间同步服务。",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "chronyd",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "ntpd",
+              "active"
+            ]
+          },
+          {
+            "type": "service_status",
+            "param": [
+              "systemd-timesyncd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装并启用 chrony 时间同步服务。",
+        "command": "if ! rpm -q chrony >/dev/null 2>&1; then if command -v dnf >/dev/null 2>&1; then dnf install -y chrony; else yum install -y chrony; fi; fi; systemctl enable --now chronyd",
+        "restart_services": [
+          "chronyd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_011",
+      "category": "SSH",
+      "title": "限制 sshd_config 文件权限",
+      "description": "sshd 配置文件应仅 root 可读写，防止被篡改导致安全策略失效。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/ssh/sshd_config 权限设为 600，属主 root:root。",
+        "command": "chmod 600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_012",
+      "category": "SSH",
+      "title": "禁止 root 用户直接 SSH 登录",
+      "description": "禁用 root 直接登录可强制管理员先以普通账号登录再提权，增强可审计性。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "PermitRootLogin",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 PermitRootLogin no，并校验配置后重启 sshd。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*PermitRootLogin' \"$F\"; then sed -ri 's|^\\s*#?\\s*PermitRootLogin.*|PermitRootLogin no|I' \"$F\"; else echo 'PermitRootLogin no' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_013",
+      "category": "SSH",
+      "title": "限制 SSH 最大认证尝试次数",
+      "description": "将 MaxAuthTries 限制为 4 次以内可抑制暴力破解尝试。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "MaxAuthTries",
+              "^[1-4]$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 MaxAuthTries 4。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*MaxAuthTries' \"$F\"; then sed -ri 's|^\\s*#?\\s*MaxAuthTries.*|MaxAuthTries 4|I' \"$F\"; else echo 'MaxAuthTries 4' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_014",
+      "category": "SSH",
+      "title": "禁用 SSH X11 转发",
+      "description": "服务器无图形界面需求时关闭 X11Forwarding 可消除 X11 通道相关风险。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "X11Forwarding",
+              "^no$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 X11Forwarding no。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*X11Forwarding' \"$F\"; then sed -ri 's|^\\s*#?\\s*X11Forwarding.*|X11Forwarding no|I' \"$F\"; else echo 'X11Forwarding no' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_015",
+      "category": "SSH",
+      "title": "设置合适的 SSH 日志级别",
+      "description": "LogLevel 设为 INFO 或 VERBOSE 可记录登录与密钥指纹等关键信息，便于审计。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "LogLevel",
+              "^(INFO|VERBOSE)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中设置 LogLevel INFO。",
+        "command": "F=/etc/ssh/sshd_config; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*LogLevel' \"$F\"; then sed -ri 's|^\\s*#?\\s*LogLevel.*|LogLevel INFO|I' \"$F\"; else echo 'LogLevel INFO' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_016",
+      "category": "SSH",
+      "title": "配置 SSH 登录警示横幅",
+      "description": "登录前展示授权使用声明（Banner）满足合规要求并具威慑作用。",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "Banner",
+              "^/\\S+"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "创建 /etc/issue.net 警示文本并在 sshd_config 中通过 Banner 指向该文件。",
+        "command": "F=/etc/ssh/sshd_config; [ -f /etc/issue.net ] || echo 'Authorized access only. All activity may be monitored and reported.' > /etc/issue.net; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*Banner' \"$F\"; then sed -ri 's|^\\s*#?\\s*Banner.*|Banner /etc/issue.net|I' \"$F\"; else echo 'Banner /etc/issue.net' >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_017",
+      "category": "SSH",
+      "title": "限制 SSH 使用强加密算法",
+      "description": "显式配置 Ciphers 仅启用 AES-GCM/CTR 等强算法，避免弱加密套件被协商使用。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "^\\s*Ciphers\\s+.*aes256-gcm",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 sshd_config 中显式配置强加密算法列表。",
+        "command": "F=/etc/ssh/sshd_config; C='Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr,aes128-gcm@openssh.com,aes128-ctr'; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qiE '^\\s*#?\\s*Ciphers' \"$F\"; then sed -ri \"s|^\\s*#?\\s*Ciphers.*|$C|I\" \"$F\"; else echo \"$C\" >> \"$F\"; fi; sshd -t || { mv \"$F.mxbak\" \"$F\"; exit 1; }",
+        "restart_services": [
+          "sshd"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_018",
+      "category": "权限",
+      "title": "限制 /etc/sudoers 文件权限",
+      "description": "sudoers 文件应为 root 所有且权限不超过 440，防止被篡改获得越权能力。",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/sudoers",
+              "440"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/sudoers",
+              "400"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/sudoers 权限设为 440，属主 root:root。",
+        "command": "chown root:root /etc/sudoers && chmod 440 /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_019",
+      "category": "权限",
+      "title": "启用 sudo 命令日志记录",
+      "description": "为 sudo 配置独立日志文件，完整记录提权操作以满足审计追溯要求。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": [
+              "/etc/sudoers.d/mxcwpp-logfile",
+              "^\\s*Defaults\\s+logfile\\s*=",
+              "match"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/sudoers.d/ 下增加 Defaults logfile 配置，并用 visudo -cf 校验。",
+        "command": "F=/etc/sudoers.d/mxcwpp-logfile; T=$(mktemp); echo 'Defaults logfile=\"/var/log/sudo.log\"' > \"$T\"; if visudo -cf \"$T\" >/dev/null 2>&1; then install -m 0440 -o root -g root \"$T\" \"$F\"; rm -f \"$T\"; else rm -f \"$T\"; exit 1; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_020",
+      "category": "认证",
+      "title": "设置口令最长使用期限",
+      "description": "在 login.defs 中将 PASS_MAX_DAYS 限制为不超过 90 天，强制定期更换口令。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/login.defs",
+              "PASS_MAX_DAYS",
+              "^([1-9]|[1-8][0-9]|90)$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/login.defs 中设置 PASS_MAX_DAYS 90。",
+        "command": "F=/etc/login.defs; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qE '^\\s*PASS_MAX_DAYS' \"$F\"; then sed -ri 's|^\\s*PASS_MAX_DAYS.*|PASS_MAX_DAYS 90|' \"$F\"; else echo 'PASS_MAX_DAYS 90' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_021",
+      "category": "认证",
+      "title": "设置口令最小长度要求",
+      "description": "通过 pwquality 将口令最小长度设为不低于 8 位，提升口令强度。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_kv",
+            "param": [
+              "/etc/security/pwquality.conf",
+              "minlen",
+              "^(8|9|1[0-9]|[2-9][0-9])$"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "在 /etc/security/pwquality.conf 中设置 minlen = 8。",
+        "command": "F=/etc/security/pwquality.conf; [ -f \"$F.mxbak\" ] || cp \"$F\" \"$F.mxbak\"; if grep -qE '^\\s*#?\\s*minlen' \"$F\"; then sed -ri 's|^\\s*#?\\s*minlen.*|minlen = 8|' \"$F\"; else echo 'minlen = 8' >> \"$F\"; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_022",
+      "category": "网络",
+      "title": "禁止主机充当路由器转发数据包",
+      "description": "非路由主机应关闭 net.ipv4.ip_forward，避免被滥用进行流量中转。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.ip_forward",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.ip_forward=0 并写入持久化配置。",
+        "command": "sysctl -w net.ipv4.ip_forward=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.ip_forward' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.ip_forward.*|net.ipv4.ip_forward = 0|' \"$F\" || echo 'net.ipv4.ip_forward = 0' >> \"$F\"; }"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_023",
+      "category": "网络",
+      "title": "禁止发送 ICMP 重定向报文",
+      "description": "关闭 send_redirects 防止主机向网络发布可能误导的路由信息。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.send_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.send_redirects=0 并持久化。",
+        "command": "sysctl -w net.ipv4.conf.all.send_redirects=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.send_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.send_redirects.*|net.ipv4.conf.all.send_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.send_redirects = 0' >> \"$F\"; }"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_024",
+      "category": "网络",
+      "title": "禁止接受 ICMP 重定向报文",
+      "description": "关闭 accept_redirects 防止攻击者通过伪造重定向篡改本机路由表。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.accept_redirects",
+              "0"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.accept_redirects=0 并持久化。",
+        "command": "sysctl -w net.ipv4.conf.all.accept_redirects=0 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.accept_redirects' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.accept_redirects.*|net.ipv4.conf.all.accept_redirects = 0|' \"$F\" || echo 'net.ipv4.conf.all.accept_redirects = 0' >> \"$F\"; }"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_025",
+      "category": "网络",
+      "title": "启用反向路径过滤",
+      "description": "开启 rp_filter 校验源地址合法性，可缓解 IP 欺骗类攻击。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.conf.all.rp_filter",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.conf.all.rp_filter=1 并持久化。",
+        "command": "sysctl -w net.ipv4.conf.all.rp_filter=1 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.conf.all.rp_filter' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.conf.all.rp_filter.*|net.ipv4.conf.all.rp_filter = 1|' \"$F\" || echo 'net.ipv4.conf.all.rp_filter = 1' >> \"$F\"; }"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_026",
+      "category": "网络",
+      "title": "启用 TCP SYN Cookies",
+      "description": "开启 tcp_syncookies 可在半连接队列溢出时缓解 SYN Flood 攻击。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "sysctl",
+            "param": [
+              "net.ipv4.tcp_syncookies",
+              "1"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 net.ipv4.tcp_syncookies=1 并持久化。",
+        "command": "sysctl -w net.ipv4.tcp_syncookies=1 && { F=/etc/sysctl.d/90-mxcwpp-baseline.conf; grep -q '^net.ipv4.tcp_syncookies' \"$F\" 2>/dev/null && sed -ri 's|^net.ipv4.tcp_syncookies.*|net.ipv4.tcp_syncookies = 1|' \"$F\" || echo 'net.ipv4.tcp_syncookies = 1' >> \"$F\"; }"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_027",
+      "category": "权限",
+      "title": "限制 /etc/passwd 文件权限",
+      "description": "/etc/passwd 应为 644，属主 root，防止被普通用户写入伪造账号。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/passwd",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/passwd 权限设为 644，属主 root:root。",
+        "command": "chmod 644 /etc/passwd && chown root:root /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_028",
+      "category": "权限",
+      "title": "限制 /etc/shadow 文件权限",
+      "description": "/etc/shadow 存储口令哈希，权限应为 000 或 600 且属主 root，防止泄露。",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "000"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/shadow 权限设为 000，属主 root:root。",
+        "command": "chmod 000 /etc/shadow && chown root:root /etc/shadow"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_029",
+      "category": "权限",
+      "title": "限制 /etc/gshadow 文件权限",
+      "description": "/etc/gshadow 含组口令信息，权限应为 000 或 600 且属主 root。",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/gshadow",
+              "000"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/gshadow",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/gshadow 权限设为 000，属主 root:root。",
+        "command": "chmod 000 /etc/gshadow && chown root:root /etc/gshadow"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_030",
+      "category": "审计",
+      "title": "确保已安装 auditd 审计组件",
+      "description": "auditd 是内核审计事件的用户态守护进程，是合规审计的基础依赖。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": [
+              "audit"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装 audit 软件包。",
+        "command": "if command -v dnf >/dev/null 2>&1; then dnf install -y audit; else yum install -y audit; fi"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_031",
+      "category": "审计",
+      "title": "确保 auditd 服务已启用并运行",
+      "description": "审计服务需开机自启且处于运行状态，否则审计规则不会生效。",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "auditd",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "启用并启动 auditd 服务。",
+        "command": "rpm -q audit >/dev/null 2>&1 || { dnf install -y audit >/dev/null 2>&1 || yum install -y audit; }; systemctl enable auditd >/dev/null 2>&1; service auditd restart >/dev/null 2>&1 || systemctl restart auditd >/dev/null 2>&1; systemctl is-active auditd >/dev/null 2>&1",
+        "restart_services": []
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_032",
+      "category": "服务",
+      "title": "确保 cron 守护进程已启用并运行",
+      "description": "crond 负责执行计划任务，许多安全与运维任务依赖其正常运行。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "service_status",
+            "param": [
+              "crond",
+              "active"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "启用并启动 crond 服务。",
+        "command": "systemctl enable --now crond",
+        "restart_services": [
+          "crond"
+        ]
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_033",
+      "category": "权限",
+      "title": "限制 /etc/crontab 文件权限",
+      "description": "/etc/crontab 应为 600 且属主 root，防止普通用户植入计划任务提权。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/crontab",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/crontab 权限设为 600，属主 root:root。",
+        "command": "chmod 600 /etc/crontab && chown root:root /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "CIS_CENTOS_034",
+      "category": "权限",
+      "title": "限制 cron.d 目录权限",
+      "description": "/etc/cron.d 目录应为 700 且属主 root，避免被植入恶意定时任务。",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/cron.d",
+              "700"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "将 /etc/cron.d 目录权限设为 700，属主 root:root。",
+        "command": "chmod 700 /etc/cron.d && chown root:root /etc/cron.d"
+      }
+    }
+  ]
+}

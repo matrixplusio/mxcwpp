@@ -1,0 +1,3 @@
+# 此目录用于存放 Protobuf 定义文件
+# 生成的 .pb.go 文件会被 .gitignore 忽略
+# 运行 make proto 后会在此目录生成 Go 代码

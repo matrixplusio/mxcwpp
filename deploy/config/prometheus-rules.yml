@@ -1,0 +1,632 @@
+# MxCwpp Platform — Prometheus 告警规则（精简，仅自研服务）
+#
+# 设计原则：
+#   - 只关心 mxcwpp 自研服务（manager / agentcenter / consumer）
+#   - 不规则 mysql / redis / clickhouse / kafka — 这些由 mxcwpp monitor handler
+#     的 driver-level 检查覆盖，且 mxcwpp 内置告警系统会用其他路径上报
+#
+# 命名规范：MxCwpp<Component><Issue>
+# severity: critical (P0) / warning (P1) / info (P2)
+#
+# 告警流向：
+#   Prometheus 触发 → webhook /api/v1/internal/alerts/prometheus
+#                  → mxcwpp alerts 表 (source=prometheus_infra)
+#                  → notification 系统 (Lark/Webhook)
+
+groups:
+  # ============ 服务存活 ============
+  - name: mxcwpp_service_availability
+    interval: 30s
+    rules:
+      - alert: MxCwppServiceDown
+        expr: up{job=~"mxcwpp-.+"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务不可达 (job={{ $labels.job }})"
+          description: |
+            mxcwpp 服务 {{ $labels.service }} ({{ $labels.instance }}) 已 1 分钟无法 scrape。
+            可能原因：进程崩溃、网络中断、配置错误。
+            排查：docker ps / docker logs {{ $labels.instance }} / curl http://{{ $labels.instance }}/metrics
+
+      - alert: MxCwppServiceFlapping
+        expr: changes(up{job=~"mxcwpp-.+"}[10m]) > 4
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务状态频繁变化（10 分钟内 > 4 次）"
+          description: "服务在 10 分钟内状态翻转 {{ $value }} 次，可能崩溃重启循环。"
+
+  # ============ Manager HTTP RED 指标 ============
+  - name: mxcwpp_manager_http
+    interval: 30s
+    rules:
+      - alert: MxCwppManagerHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(mxcwpp_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "Manager 5xx 错误率 > 5% 持续 5 分钟"
+          description: "当前: {{ $value | humanizePercentage }}。查 manager 日志。"
+
+      - alert: MxCwppManagerHighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(mxcwpp_http_request_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager p99 延迟 > 1s 持续 5 分钟"
+          description: "当前 p99: {{ $value }}s。可能 DB 慢查询或下游卡顿。"
+
+  # ============ AgentCenter gRPC RED 指标 ============
+  - name: mxcwpp_ac_grpc
+    interval: 30s
+    rules:
+      - alert: MxCwppACHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_ac_grpc_handled_total{grpc_code!="OK"}[5m]))
+          / sum(rate(mxcwpp_ac_grpc_handled_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter gRPC 错误率 > 5%"
+          description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
+
+      # Transfer 是长生命周期双向流，grpc_handled_total 只在流结束才 +1，
+      # 用它判流量对长连接服务恒为 0（假阳）。改用 msg_received_total（流内每条消息计数）。
+      - alert: MxCwppACNoTraffic
+        expr: sum(rate(mxcwpp_ac_grpc_msg_received_total[5m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter 10 分钟无 Agent 上行消息"
+          description: "可能所有 Agent 离线，或 AC 实例不健康。"
+
+  # ============ Consumer 处理能力 ============
+  - name: mxcwpp_consumer_kafka
+    interval: 30s
+    rules:
+      - alert: MxCwppConsumerHighLag
+        expr: mxcwpp_consumer_lag > 50000
+        for: 5m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "Consumer 队列积压超过 50K"
+          description: "topic={{ $labels.topic }} partition={{ $labels.partition }} lag={{ $value }}"
+
+      - alert: MxCwppConsumerHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_consumer_records_consumed_total{status=~"error|dlq"}[5m]))
+          / sum(rate(mxcwpp_consumer_records_consumed_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer 错误率 > 5%"
+          description: "{{ $value | humanizePercentage }} 消息处理失败或进入 DLQ。"
+
+      # DLQ 写入失败 = 数据保全的最后一米失守：消息处理失败已转 DLQ 保底，连 DLQ 也没写进去。
+      # 与错误率不同，这里没有阈值可言——任何一条都是不可恢复的丢失，出现即告警。
+      # ClickHouse 刷盘失败会让提交屏障暂停推进 offset（刻意如此：宁可重放produce重复行，
+      # 也不能提交"已落盘"却其实没落盘）。代价是 lag 会持续增长，必须能被看见。
+      # 事件超过认领时限仍无人认领。一条无人认领的高危事件与一条未被检出的攻击，
+      # 对客户来说结果是一样的——检测做到了，处置没接上。
+      - alert: MxCwppIncidentAckOverdue
+        expr: sum(mxcwpp_incident_sla_breached{kind="ack",severity=~"critical|high"}) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "有高危事件超过认领时限仍无人认领"
+          description: "当前 {{ $value }} 条 critical/high 事件已过认领时限；无人开始处置。"
+
+      # 无主事件堆积：还没到时限但已经没人认领，是即将变成超时的前兆。
+      - alert: MxCwppIncidentUnownedBacklog
+        expr: mxcwpp_incident_unowned > 20
+        for: 30m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "无负责人的事件正在堆积"
+          description: "当前 {{ $value }} 条未关闭事件没有负责人。"
+
+      - alert: MxCwppConsumerCHFlushBlockingOffset
+        expr: increase(mxcwpp_consumer_ch_write_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "ClickHouse 刷盘失败，Consumer offset 已暂停推进"
+          description: "op={{ $labels.op }} 持续写入失败；offset 不再推进以避免丢证据，lag 将增长直至 CH 恢复。"
+
+      - alert: MxCwppConsumerDLQWriteFailure
+        expr: increase(mxcwpp_consumer_dlq_write_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer DLQ 写入失败，消息已丢失"
+          description: "dlq_topic={{ $labels.dlq_topic }} 近 5 分钟丢失 {{ $value }} 条，不可恢复。"
+
+      # AgentCenter 投递到未登记路由的 DataType：消息进心跳兜底 Topic，消费者不认识 → 静默丢弃。
+      # 非零即代表存在接线缺口（缺 RouteDataType 或缺 Consumer handler）。
+      - alert: MxCwppUnroutedDataType
+        expr: increase(mxcwpp_ac_unrouted_datatype_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "存在未登记 Kafka 路由的 DataType"
+          description: "data_type={{ $labels.data_type }} 走了心跳兜底，会被消费者静默忽略；需补 RouteDataType 与 Consumer handler。"
+
+      - alert: MxCwppConsumerNoMembers
+        expr: mxcwpp_consumer_group_members == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer Group 无活跃成员"
+          description: "所有 consumer 实例已断开，Kafka 消息将停滞。"
+
+  # ============ Go 运行时饱和度（自动覆盖所有 mxcwpp-* 服务）============
+  - name: mxcwpp_saturation
+    interval: 60s
+    rules:
+      # Agent 侧丢事件：背压或 WAL 满时事件被丢弃。指标一直存在但从无告警——
+      # 数据在丢，图表上看得见，没人被叫醒。丢事件等于检测面出现盲区。
+      - alert: MxCwppAgentEventDrop
+        expr: sum(increase(mxcwpp_agent_event_dropped_total[10m])) by (host_id) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Agent 丢弃事件，该主机存在检测盲区"
+          description: "host_id={{ $labels.host_id }} 近 10 分钟丢弃 {{ $value }} 条事件（背压或 WAL 满）。"
+
+      # Engine 背压丢弃：检测流水线来不及处理而主动丢事件。
+      - alert: MxCwppEngineBackpressureDrop
+        expr: increase(mxcwpp_engine_backpressure_drop_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: engine
+        annotations:
+          summary: "Engine 背压丢弃事件，检测出现漏检"
+          description: "近 10 分钟丢弃 {{ $value }} 条；被丢的事件不会经任何 Stage 检测。"
+
+      # Stage 报错：某个检测 Stage 持续异常，等于该项能力静默失效。
+      - alert: MxCwppEngineStageErrors
+        expr: sum(increase(mxcwpp_engine_stage_errors_total[10m])) by (stage) > 10
+        for: 10m
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "检测 Stage 持续报错"
+          description: "stage={{ $labels.stage }} 近 10 分钟报错 {{ $value }} 次；该能力可能已静默失效。"
+
+      # 漏洞库停更：同步挂了或上游拒服后，界面照常显示旧数据，看不出区别。
+      # 判据是"距上次成功多久"而非"跑了多少次"——后者在反复失败时同样在增长。
+      - alert: MxCwppVulnDataStale
+        expr: (time() - mxcwpp_vulnsync_last_success_timestamp_seconds) > 86400
+        for: 30m
+        labels:
+          severity: critical
+          service: vulnsync
+        annotations:
+          summary: "漏洞库超过 24 小时未成功同步"
+          description: "source={{ $labels.source }} 已 {{ $value | humanizeDuration }} 未成功同步；界面上的漏洞数据已停在那之前。"
+
+      - alert: MxCwppHighCPU
+        expr: 100 * rate(process_cpu_seconds_total{job=~"mxcwpp-.+"}[5m]) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} CPU 持续 > 80% (10min)"
+          description: "当前: {{ $value | humanize }}%"
+
+      - alert: MxCwppHighMemory
+        expr: process_resident_memory_bytes{job=~"mxcwpp-.+"} > 2147483648  # 2GB
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} RSS > 2GB (10min)"
+          description: "当前: {{ $value | humanize1024 }}B"
+
+      - alert: MxCwppGoroutineLeak
+        expr: go_goroutines{job=~"mxcwpp-.+"} > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} goroutine 数 > 10000，疑似泄漏"
+          description: "当前: {{ $value }}"
+
+      - alert: MxCwppGCPauseLong
+        expr: |
+          histogram_quantile(0.99, sum by (job, le)
+            (rate(go_gc_duration_seconds_bucket{job=~"mxcwpp-.+"}[5m]))) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} GC p99 暂停 > 500ms"
+          description: "当前: {{ $value }}s"
+
+  # ============ Manager → MySQL 视角（gorm callback 埋点）============
+  # 注：mxcwpp_db_query_duration_seconds 由 Manager 端 gorm callback 提供（Tier 1-2 新增）
+  - name: mxcwpp_db
+    interval: 60s
+    rules:
+      - alert: MxCwppDBSlowQuery
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxcwpp_db_query_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager DB 查询 p99 > 1s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前: {{ $value }}s"
+
+  # ============ Manager → ClickHouse 视角（edr_events.go recordCHQuery 埋点）============
+  # 商业级 EDR 查询基线：列表 < 200ms，统计 < 1s。
+  # 慢于此说明 projection 未命中 / 数据量异常 / CH 资源紧张。
+  - name: mxcwpp_clickhouse
+    interval: 60s
+    rules:
+      - alert: MxCwppCHQuerySlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxcwpp_clickhouse_query_duration_seconds_bucket[5m]))
+          ) > 3.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询 p99 > 3s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            当前 p99: {{ $value }}s
+            排查：
+            1. SELECT * FROM system.parts WHERE table='{{ $labels.table }}' AND active 查 part 数
+            2. SELECT * FROM system.mutations WHERE table='{{ $labels.table }}' AND not is_done
+            3. EXPLAIN PIPELINE SELECT ... 看是否走 projection
+
+      - alert: MxCwppCHQueryTimeout
+        expr: |
+          sum by (operation, table) (
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="timeout"}[5m])
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询超时 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            5 分钟内出现超时（max_execution_time 50s 或 ctx 60s 触发）。
+            通常意味着 projection 未命中或数据量暴增。
+            立即检查 system.parts merge backlog + materialize projection 进度。
+
+      - alert: MxCwppCHQueryError
+        expr: |
+          sum by (operation, table) (
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="error"}[5m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询错误率高 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前错误率: {{ $value }} qps（持续 5 分钟）"
+
+  # Kafka 生产者 burst 丢弃（agent 重连风暴/扫描叠加遥测尖峰下，Input+fallback 满即静默丢，
+  # 含 EDR eBPF 遥测与任务结果）。稳态应为 0，任何持续 drop 都意味着遥测/检测数据丢失。
+  - name: mxcwpp_kafka_producer
+    rules:
+      - alert: MxCwppKafkaProducerDrops
+        expr: |
+          sum by (instance, reason) (
+            rate(mxcwpp_kafka_producer_dropped_total[5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者丢弃消息 ({{ $labels.reason }} on {{ $labels.instance }})"
+          description: |
+            burst 下 Input/降级队列满，消息被静默丢弃（含 EDR eBPF 事件 → 检测盲区）。
+            当前丢弃率: {{ $value }} msg/s。
+            排查：是否 agent 重连风暴/扫描叠加；考虑调大 producer channel_buffer_size / fallback_queue_size，
+            或 agent 侧 eBPF 采样限流。
+
+      - alert: MxCwppKafkaProducerFallbackHigh
+        expr: mxcwpp_kafka_producer_fallback_len > 5000
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者降级队列积压 ({{ $labels.instance }})"
+          description: "降级队列长度 {{ $value }}，接近溢出阈值，生产者排空速率跟不上到达速率。"
+
+      # --- ML 异常检测：模型健康与投毒防护 ---
+      #
+      # 这几条监督的是"防护是否还在生效"，而不是"是否有攻击"。
+      # 防护失效与一切正常在外部表现完全一样，不主动告警就永远不会被发现。
+
+      - alert: MxCwppAnomalyReferenceBaselineMissing
+        expr: mxcwpp_anomaly_reference_baseline_ready == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测缺少参照基线（投毒防护未生效）"
+          description: |
+            长期参照基线未就绪，模型漂移与训练投毒防护当前不生效。
+            滑窗重训在无参照时会把任何缓慢变化学成新常态——攻击者放慢动作即可让
+            恶意行为成为基线。
+            刚部署时属正常（需积累样本），持续 30 分钟以上需排查：
+            anomaly_model_states 表是否可写、样本量是否长期不足。
+
+      - alert: MxCwppAnomalyRetrainRejected
+        expr: increase(mxcwpp_anomaly_retrain_rejected_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测拒绝重训（训练窗口偏离基线）"
+          description: |
+            过去 1 小时有 {{ $value }} 次重训被拒绝：训练窗口偏离长期参照超过 3σ。
+            两种可能，处理方式相反：
+              1. 业务确实变了（扩容/迁移/新业务上线）→ 需要人工重建参照基线；
+              2. 环境中正在发生持续异常 → 这是信号本身，应当排查。
+            模型此刻仍在用旧参数工作，不会漏报，但也学不进新数据。
+
+      - alert: MxCwppAnomalyModelStale
+        expr: mxcwpp_anomaly_model_age_seconds > 14400
+        for: 10m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测模型超过 4 小时未成功训练"
+          description: |
+            重训周期为 30 分钟，连续 8 次以上未训练成功说明这不是偶发。
+            模型仍在工作但已停止学习，对新出现的正常行为会逐渐开始误报。
+            结合 mxcwpp_anomaly_retrain_rejected_total 判断是被漂移闸拦下还是样本不足。
+
+      # --- ML 模型工程：版本、训练集、排序通路 ---
+
+      - alert: MxCwppAnomalyModelVersionStalled
+        # 版本号长时间不动 = 模型停止学习。它仍在打分，只是分数越来越不反映当前环境。
+        # 与「一切正常」在其它指标上看起来完全一样，不主动告警就不会被发现。
+        expr: changes(mxcwpp_anomaly_model_version[6h]) == 0 and mxcwpp_anomaly_model_version > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常模型 6 小时未产生新版本"
+          description: |
+            重训周期 30 分钟，6 小时内一个新版本都没有，说明训练持续没成功。
+            结合 mxcwpp_anomaly_retrain_rejected_total 判断：
+              非 0 → 被漂移闸拦下（环境变了或正在发生持续异常，两种处理方式相反）；
+              为 0 → 样本不足，检查 mxcwpp_anomaly_training_hosts 是否也在下降。
+            当前模型仍可用，但学到的是越来越旧的"正常"。
+
+      - alert: MxCwppAnomalyTrainingSetNarrowing
+        # 训练主机数骤降 = 模型正在向少数主机的行为收敛。
+        # 后果是其余主机的日常行为被判成异常——看起来像检测变敏感了，实际是训练集被带偏。
+        expr: mxcwpp_anomaly_training_hosts < 10 and mxcwpp_anomaly_training_hosts > 0
+        for: 1h
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 训练集主机数过少（当前 {{ $value }}）"
+          description: |
+            参与训练的主机不足 10 台时，"什么算正常"由这几台机器决定，
+            其余主机的正常行为会被判成异常。
+            排查：BDE 指标上报是否中断、agent 是否大面积离线。
+
+      - alert: MxCwppAnomalyScoreFlushFailing
+        # 异常分落库失败 = ranking 档静默退回"没有 ML 参与排序"，而界面上档位仍显示 ranking。
+        expr: increase(mxcwpp_anomaly_score_flush_failed_total[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常分落库失败，告警排序未生效"
+          description: |
+            host_anomaly_scores 写入失败，ranking 档实际未参与告警排序，
+            但档位配置仍显示已启用——功能看起来在，实际不起作用。
+            排查 MySQL 可写性与 host_anomaly_scores 表结构。
+
+      # --- 异常登录：学习期是否走得出去 ---
+
+      # 任一已接线 Stage 长达一周零产出。
+      #
+      # 零产出本身不是故障——没有威胁时它本就该是零。这条规则的价值在于让"零"
+      # 变成一个看得见、需要有人给出解释的事实，而不是沉默。本项目已多次出现
+      # 结构完整但管道为空的能力：Stage 注册了、指标导出了、状态表建了、
+      # 告警规则也配了，唯独没有任何数据流过，而所有面板显示的都是零，
+      # 与"一切正常"无法区分，最后只能靠人工翻代码发现。
+      #
+      # 依赖 Stage 计数器在注册时被预置为 0（见 PrewarmStageMetrics）；
+      # 不预置的话序列压根不存在，本规则也就无从判断。
+      #
+      # 收到后要回答的是：这一周该 Stage 处理过事件吗？如果处理过而没有告警，
+      # 是真没威胁；如果它读的字段根本没有生产者，那就是能力从未生效。
+      - alert: MxCwppStageNoOutputForAWeek
+        expr: |
+          sum by (stage_name) (increase(mxcwpp_engine_stage_alerts_total[7d])) == 0
+        for: 6h
+        labels:
+          severity: info
+          service: engine
+        annotations:
+          summary: "检测 Stage {{ $labels.stage_name }} 已一周无任何产出"
+          description: |
+            该 Stage 在流水线中已注册，但过去 7 天没有产生任何告警。
+            可能是这段时间确实没有对应威胁，也可能是它依赖的输入不存在、
+            或上游数据源已经断流——两种情况在监控上看起来完全一样。
+            排查：确认该 Stage 读取的字段有没有生产者，再看它处理过的事件量。
+
+      - alert: MxCwppAbnormalLoginNeverGraduates
+        # 学习期内检测静默不告警，和"检测根本没生效"在告警面上完全一样：都是零条。
+        # 学习期是 7 天且 ≥10 次登录，全机群一台都毕业不了说明画像没在积累——
+        # 常见原因是画像落库失败（每次重启从零开始）或登录事件根本没进 engine。
+        #
+        # 这里不能再加 `and hosts_learning > 0` 之类的前置条件。上面列的第二个原因
+        # ——登录事件根本没进 engine——恰好会让 learning 也停在 0，于是那个前置条件
+        # 反而把最该告警的场景排除掉，守卫对自己要守的情况永久静默。
+        # 判据只看结果：到期仍无一台毕业就报，至于是没毕业还是没开始，由排查区分。
+        expr: mxcwpp_engine_abnormal_login_hosts_graduated == 0
+        for: 8d
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "异常登录检测无一台主机走完学习期"
+          description: |
+            有 {{ $value }} 台主机在学习期内，却没有任何一台毕业。学习期是 7 天且
+            ≥10 次登录，这里等到第 8 天才判，正常上线不会触发。
+            排查顺序：host_login_profile_states 是否在增长（落库失败则每次重启归零）→
+            engine 是否真的收到成功登录事件 → 机群登录频率是否低于 10 次/7 天
+            （真低频则这条检测对它本就不生效，属预期）。
+
+      - alert: MxCwppACSchedulerMissing
+        # AC 的后台调度器漏接线不会有任何报错——这正是 ioc_sync 与 rule_sync
+        # 能静默缺失数月的原因：装配代码写在一份没有调用方的初始化文件里，
+        # 编译通过、启动正常、日志干净，而 agent 侧 IOC 集一直是空的，
+        # 规则也无法热更新。
+        #
+        # 每个调度器启动时自行登记，AC 启动后比对期望集合，缺失即置 1。
+        expr: mxcwpp_ac_scheduler_missing > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: agentcenter
+        annotations:
+          summary: "AC 后台调度器 {{ $labels.scheduler }} 未启动"
+          description: |
+            调度器 {{ $labels.scheduler }} 在 ExpectedSchedulers 中登记，但启动后
+            未调用 MarkStarted，说明它没有被真正 go 起来，对应能力静默缺失。
+            受影响能力：ioc_sync 缺失 → agent 本地威胁情报为空，IOC 匹配失效；
+            rule_sync 缺失 → agent 检测规则无法热更新，改规则必须重装且重装也不覆盖。
+            排查：确认 setup.StartBackgroundServices 里该调度器的 go 语句是否存在，
+            以及它的 Start 方法首行是否调用了 MarkStarted。
+
+  # ============ 主机资源 ============
+  # 只监控自研服务进程无法发现磁盘耗尽：盘满时进程仍然存活，服务存活类
+  # 告警不会触发，而 MySQL/ClickHouse/Redis 已经全部停止写入。
+  # 存储组件与 Prometheus 若同处一块盘，盘满时监控自身也会一并哑掉，
+  # 所以磁盘必须在触顶前告警，而不是等健康检查失败。
+  - name: mxcwpp_host_resources
+    interval: 60s
+    rules:
+      - alert: MxCwppHostDiskSpaceWarning
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+             / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 已用超 80%"
+          description: |
+            已用 {{ $value | humanizePercentage }}，剩余空间不足两成。
+            先查容器日志：`du -sh /var/lib/docker/containers/*/*-json.log | sort -rh | head`，
+            未配轮转的单个容器日志可以在数小时内吃掉整块盘。
+
+      - alert: MxCwppHostDiskSpaceCritical
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+             / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 已用超 90%"
+          description: |
+            已用 {{ $value | humanizePercentage }}。盘一旦写满，MySQL 报
+            "table is full"、ClickHouse 报 NOT_ENOUGH_SPACE、Redis 因 RDB 失败
+            禁止一切写入，且 docker exec 会因 /tmp 无空间而失败，届时连排查都做不了。
+            必须在此刻处理，不要等触顶。
+
+      # 触顶预测：比固定水位更早。慢性泄漏（无 TTL 的日志表）水位爬得慢但不会停，
+      # 突发泄漏（日志风暴）几小时就能吃掉整块盘，靠固定阈值往往来不及。
+      - alert: MxCwppHostDiskWillFill
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24*3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 预计 24 小时内写满"
+          description: |
+            按最近 6 小时的增长速度外推，24 小时内可用空间将归零。
+            排查顺序：容器日志 → ClickHouse system 库（query_log/part_log 若无 TTL 会无限涨）
+            → 业务表 TTL 是否失效。
+
+      - alert: MxCwppHostMemoryPressure
+        expr: |
+          (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.92
+        for: 15m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 可用内存不足 8%"
+          description: "已用 {{ $value | humanizePercentage }}；接下来的 OOM Kill 会随机打掉容器。"
+
+      # node_exporter 自己不见了 = 主机层重新变成盲区，等同于本组全部规则失效
+      - alert: MxCwppHostExporterDown
+        expr: up{job="mxcwpp-node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} node_exporter 不可达"
+          description: "主机磁盘/内存指标已停止采集，磁盘告警在此期间不会触发。"

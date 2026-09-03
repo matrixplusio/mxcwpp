@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mxcwpp-sdk"
+version = "0.1.0"
+description = "mxcwpp platform official Python SDK"
+authors = [{name = "mxcwpp dev", email = "dev@mxcwpp.local"}]
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mxcwpp*"]

@@ -1,0 +1,24 @@
+schema_version: 1
+id: MXEDR-0050
+name: defense_evasion_log_wipe
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: defense_evasion
+  technique: T1070.002
+tags: [defense_evasion, log_wipe]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "(history\\s+-c|rm\\s+.*(/var/log|/var/log/auth|wtmp|btmp|lastlog)|shred\\s+.*\\.log|truncate\\s+.*\\.log)"
+    logic: and
+metadata:
+  description: "检测清除日志或命令历史记录"
+  confidence: 85

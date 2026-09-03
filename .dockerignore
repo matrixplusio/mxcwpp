@@ -1,0 +1,12 @@
+.git
+.DS_Store
+dist/
+tmp/
+data/
+memory/
+.claude/
+deploy/data/
+web/node_modules/
+web/.next/
+web/out/
+web/.pnpm-store/

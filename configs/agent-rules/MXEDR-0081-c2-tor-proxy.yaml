@@ -1,0 +1,37 @@
+schema_version: 1
+id: MXEDR-0081
+name: c2_tor_proxy
+version: 2
+category: network
+severity: high
+mitre:
+  tactic: command_and_control
+  technique: T1090.003
+tags: [c2, tor, anonymity]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: tcp_connect
+    conditions:
+      - field: remote_port
+        op: in
+        values: ["9050", "9150", "9001", "9030"]
+      - field: remote_addr
+        op: not_in_cidr
+        values:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.0/8"
+          - "169.254.0.0/16"
+          - "::1/128"
+          - "fc00::/7"
+          - "fe80::/10"
+    logic: and
+metadata:
+  description: "连接 Tor 常用端口，可能为匿名通信"
+  confidence: 85
+  false_positive:
+    - "已按目的地址排除私网：这些端口号与内网数据库/运维组件冲突但语义无关，东西向调用不再命中"

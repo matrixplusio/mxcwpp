@@ -1,0 +1,723 @@
+// Package config 提供 Server 配置管理
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+)
+
+// Config 是 Server 配置结构
+type Config struct {
+	Server     ServerConfig     `mapstructure:"server"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Redis      RedisConfig      `mapstructure:"redis"`
+	Kafka      KafkaConfig      `mapstructure:"kafka"`
+	ClickHouse ClickHouseConfig `mapstructure:"clickhouse"`
+	MTLS       MTLSConfig       `mapstructure:"mtls"`
+	Log        LogConfig        `mapstructure:"log"`
+	Agent      AgentConfig      `mapstructure:"agent"`
+	Metrics    MetricsConfig    `mapstructure:"metrics"`
+	Plugins    PluginsConfig    `mapstructure:"plugins"`
+	RuleSync   RuleSyncConfig   `mapstructure:"rule_sync"`
+	LLM        LLMConfig        `mapstructure:"llm"`
+	SIEM       SIEMConfig       `mapstructure:"siem"`
+	PDF        PDFConfig        `mapstructure:"pdf"`
+	Vuln       VulnConfig       `mapstructure:"vuln"`
+	Alerting   AlertingConfig   `mapstructure:"alerting"`
+}
+
+// AlertingConfig 控制检测产出经 alertbus 发往通知渠道的行为。
+//
+// 此前 ML 异常、行为基线、AD 审计、关联事件、K8s 基线告警五类检测只入库、无通知出口。
+// 接通它们必须配灰度开关：这些链路从未通知过，一次全开会淹没值班。
+type AlertingConfig struct {
+	// NotifyCategories 是已灰度开启通知的类别（anomaly_alert / behavior_alert /
+	// ad_audit_alert / incident / kube_alert）。**留空即全部不通知**，告警仍照常入库、
+	// 列表与大屏可见。确认某类误报已收敛后再逐个加入。
+	NotifyCategories []string `mapstructure:"notify_categories"`
+	// MinSeverity 低于此等级不通知，留空按 high。
+	MinSeverity string `mapstructure:"min_severity"`
+	// SuppressWindowMinutes 相同告警在此窗口内只通知一次，<=0 按 30 分钟。
+	SuppressWindowMinutes int `mapstructure:"suppress_window_minutes"`
+}
+
+// VulnConfig 漏洞数据相关配置。
+type VulnConfig struct {
+	// NVDAPIKey NVD JSON 2.0 API key。
+	// 留空走无 key 限速(6s 间隔,5471 vuln ≈ 9h 跑完);
+	// 配 key 后 50 req / 30s(0.6s 间隔,~1h)。
+	// 申请: https://nvd.nist.gov/developers/request-an-api-key
+	NVDAPIKey string `mapstructure:"nvd_api_key"`
+
+	// VulnSyncURL VulnSync 服务地址（如 http://vulnsync:8083）。
+	// advisory-sync 手动 API 经此触发 VulnSync 立即拉取；留空则该 API 返回未配置提示。
+	VulnSyncURL string `mapstructure:"vulnsync_url"`
+}
+
+// PDFConfig 服务端 PDF 生成（Gotenberg sidecar）配置。
+// gotenberg_url 为空时 PDF endpoint 返回 400，UI 应降级前端 jsPDF。
+type PDFConfig struct {
+	GotenbergURL string `mapstructure:"gotenberg_url"` // 如 http://gotenberg:3000
+	InternalURL  string `mapstructure:"internal_url"`  // Gotenberg → manager 拉取地址，如 http://manager:8080
+}
+
+// SIEMConfig SIEM 转发配置
+type SIEMConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Protocol string `mapstructure:"protocol"` // "tcp" or "udp"
+	Address  string `mapstructure:"address"`  // "siem.example.com:514"
+	Facility int    `mapstructure:"facility"` // syslog facility (default 1 = user-level)
+}
+
+// RuleSyncConfig 规则 Git 同步配置
+type RuleSyncConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`   // 是否启用 Git 规则同步
+	GitURL   string        `mapstructure:"git_url"`   // Git 仓库 URL（支持 HTTPS/SSH）
+	Branch   string        `mapstructure:"branch"`    // 分支名（默认 main）
+	LocalDir string        `mapstructure:"local_dir"` // 本地克隆目录（默认 /var/mxcwpp/rules-repo）
+	Interval time.Duration `mapstructure:"interval"`  // 同步间隔（默认 10m）
+}
+
+// LLMConfig LLM 服务配置
+type LLMConfig struct {
+	APIURL string `mapstructure:"api_url"` // LLM API 地址
+	APIKey string `mapstructure:"api_key"` // API Key
+	Model  string `mapstructure:"model"`   // 模型名称
+
+	// 批4 合规：数据出境管控。AllowDataEgress 默认 false——安全运营数据默认不出境，
+	// 仅允许本地/内网模型（ollama 等）；外发第三方需显式置 true（国内合规要求）。
+	AllowDataEgress       bool     `mapstructure:"allow_data_egress"`       // 默认 false：禁止外发第三方 LLM
+	Desensitize           bool     `mapstructure:"desensitize"`             // 外发前脱敏 IP/主机名，默认建议 true
+	SensitiveHostSuffixes []string `mapstructure:"sensitive_host_suffixes"` // 追加的内网域名后缀（如自建集群域名）
+}
+
+// PluginsConfig 是插件配置
+type PluginsConfig struct {
+	// 插件存放目录（本地文件路径）
+	Dir string `mapstructure:"dir"`
+	// 插件下载基础 URL（Agent 用于下载插件的 URL 前缀）
+	// 例如: http://10.0.0.140:8080/api/v1/plugins/download
+	// 如果为空，则下发相对 HTTP 路径，由 Agent 结合当前管理面地址访问
+	BaseURL string `mapstructure:"base_url"`
+	// Ed25519 签名私钥文件路径（用于对插件 SHA256 签名）
+	SignPrivateKey string `mapstructure:"sign_private_key"`
+	// 插件下载并发上限：超过则返回 429。0 或负数 → 默认 50
+	DownloadConcurrency int `mapstructure:"download_concurrency"`
+}
+
+// ServerConfig 是服务器配置
+type ServerConfig struct {
+	GRPC           GRPCConfig         `mapstructure:"grpc"`
+	HTTP           HTTPConfig         `mapstructure:"http"`
+	JWTSecret      string             `mapstructure:"jwt_secret"`      // JWT 密钥，用于生成和验证 Token
+	ManagerAddr    string             `mapstructure:"manager_addr"`    // AC 向 Manager SD 注册的 Manager HTTP 地址（如 http://manager:8080）
+	InstanceID     string             `mapstructure:"instance_id"`     // AC 实例唯一 ID（多实例部署时区分，留空则用 hostname）
+	ExternalURL    string             `mapstructure:"external_url"`    // 外网访问地址（如 https://mxcwpp.example.com），用于拼接 K8s Audit Webhook URL
+	CORSOrigins    []string           `mapstructure:"cors_origins"`    // CORS 允许的 Origin 列表（为空时默认仅允许同源访问）
+	InternalSecret string             `mapstructure:"internal_secret"` // AC 内部通信共享密钥（为空时不验证）
+	InternalMTLS   InternalMTLSConfig `mapstructure:"internal_mtls"`   // v2.0: AC↔Manager 内部通信 mTLS 配置
+	Security       SecurityConfig     `mapstructure:"security"`        // 批4: Manager HTTP 安全加固（全部默认关，灰度逐项开）
+}
+
+// SecurityConfig 是 Manager HTTP 安全加固配置（批4）。
+// 全部默认关闭，生产先观察再按租户/集群灰度开启，避免误伤存量流量。
+type SecurityConfig struct {
+	Headers        SecurityHeadersConfig `mapstructure:"headers"`          // 安全响应头
+	LoginRateLimit RateLimitRuleConfig   `mapstructure:"login_rate_limit"` // 登录接口 IP 限流（防爆破）
+	JWTBlacklist   JWTBlacklistConfig    `mapstructure:"jwt_blacklist"`    // 登出 JWT 黑名单（需 Redis）
+	// AllowCustomExecRules 允许自定义（非内置）基线规则携带 command_exec 检查与
+	// fix.command 修复命令。默认 false。
+	//
+	// 这两个字段的内容会以 root 在全部目标主机上执行，因此"能编辑基线规则"等价于
+	// "能在全舰队执行任意代码"——对只应拥有基线配置权限的角色而言是提权。内置规则
+	// （builtin=true，随发布同步）不受此开关限制。
+	// 确有自定义可执行规则需求的环境才显式开启，且开启后每次执行都会留审计。
+	AllowCustomExecRules bool `mapstructure:"allow_custom_exec_rules"`
+	// BlockExistingCustomExecRules 控制**派发阶段**是否跳过存量的自定义可执行规则。
+	// 默认 false：只记审计不拦截。
+	//
+	// 与 AllowCustomExecRules 分开是刻意的：前者关的是"新增提权路径"，可以立即默认收紧
+	// 而不影响任何现有行为；后者拦的是已经在跑的存量规则，直接默认打开会静默削减基线覆盖面。
+	// 先用 GET /api/v1/policies/custom-exec-rules 盘点、逐条研判，再决定是否开启。
+	BlockExistingCustomExecRules bool `mapstructure:"block_existing_custom_exec_rules"`
+}
+
+// SecurityHeadersConfig 控制安全响应头中间件。
+type SecurityHeadersConfig struct {
+	Enabled bool   `mapstructure:"enabled"` // 默认 false
+	HSTS    bool   `mapstructure:"hsts"`    // 默认 false：仅全站 HTTPS 时开，否则会锁死 http 访问
+	CSP     string `mapstructure:"csp"`     // 留空用内置默认策略
+}
+
+// RateLimitRuleConfig 控制单条路由限流规则。
+type RateLimitRuleConfig struct {
+	Enabled bool `mapstructure:"enabled"` // 默认 false
+	RPS     int  `mapstructure:"rps"`     // 默认 10
+	Burst   int  `mapstructure:"burst"`   // 默认 5
+}
+
+// JWTBlacklistConfig 控制登出 JWT 黑名单。
+type JWTBlacklistConfig struct {
+	Enabled bool `mapstructure:"enabled"` // 默认 false；启用需配置 Redis
+}
+
+// InternalMTLSConfig 是 AC↔Manager 内部通信 mTLS 配置。
+//
+// 启用后,sdclient 通过 https + 客户端证书向 Manager 注册/心跳/注销。
+// 兼容期内可与 InternalSecret 同时启用,二者构成纵深防御。
+//
+// 详见 docs/architecture.md §7 安全与通信 / docs/configuration.md
+type InternalMTLSConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`      // 是否启用 mTLS,默认 false (v1 兼容)
+	CACertPath string `mapstructure:"ca_cert_path"` // PEM CA 证书路径
+	ClientCert string `mapstructure:"client_cert"`  // PEM 客户端证书路径
+	ClientKey  string `mapstructure:"client_key"`   // PEM 客户端私钥路径
+	ServerName string `mapstructure:"server_name"`  // 期望 Manager 证书 SAN
+}
+
+// GRPCConfig 是 gRPC 服务配置
+type GRPCConfig struct {
+	Host    string        `mapstructure:"host"`
+	Port    int           `mapstructure:"port"`
+	AntiDoS AntiDoSConfig `mapstructure:"anti_dos"` // 批4: AC gRPC 抗 DoS（全部默认 0=不限，灰度开）
+}
+
+// AntiDoSConfig 是 AC gRPC 服务抗 DoS 配置（批4）。
+// 各项默认 0 表示不限制；panic recovery 拦截器始终启用，无需配置。
+type AntiDoSConfig struct {
+	MaxConcurrentStreams uint32 `mapstructure:"max_concurrent_streams"` // 每连接最大并发流，0=用 gRPC 默认
+	MaxConns             int    `mapstructure:"max_conns"`              // 全局最大并发连接，0=不限
+	PerIPRPS             int    `mapstructure:"per_ip_rps"`             // 单 IP 每秒新 RPC 上限，0=不限
+	PerIPBurst           int    `mapstructure:"per_ip_burst"`           // 单 IP 突发额度，<=0 时取 PerIPRPS
+}
+
+// Address 返回 gRPC 服务地址
+func (c GRPCConfig) Address() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+// HTTPConfig 是 HTTP 服务配置
+type HTTPConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+}
+
+// Address 返回 HTTP 服务地址
+func (c HTTPConfig) Address() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+// DatabaseConfig 是数据库配置
+type DatabaseConfig struct {
+	Type     string         `mapstructure:"type"`
+	MySQL    MySQLConfig    `mapstructure:"mysql"`
+	Postgres PostgresConfig `mapstructure:"postgres"`
+}
+
+// MySQLConfig 是 MySQL 配置
+type MySQLConfig struct {
+	Host            string        `mapstructure:"host"`
+	Port            int           `mapstructure:"port"`
+	User            string        `mapstructure:"user"`
+	Password        string        `mapstructure:"password"`
+	Database        string        `mapstructure:"database"`
+	Charset         string        `mapstructure:"charset"`
+	ParseTime       bool          `mapstructure:"parse_time"`
+	Loc             string        `mapstructure:"loc"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+}
+
+// DSN 返回 MySQL DSN
+func (c MySQLConfig) DSN() string {
+	// URL 编码 loc 参数（如 Asia/Shanghai 需要编码为 Asia%2FShanghai）
+	loc := c.Loc
+	if loc == "" {
+		loc = "Local"
+	}
+	// 使用 url.QueryEscape 编码 loc 参数
+	locEncoded := url.QueryEscape(loc)
+
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=%v&loc=%s&allowNativePasswords=true",
+		c.User, c.Password, c.Host, c.Port, c.Database, c.Charset, c.ParseTime, locEncoded)
+}
+
+// PostgresConfig 是 PostgreSQL 配置
+type PostgresConfig struct {
+	Host            string        `mapstructure:"host"`
+	Port            int           `mapstructure:"port"`
+	User            string        `mapstructure:"user"`
+	Password        string        `mapstructure:"password"`
+	Database        string        `mapstructure:"database"`
+	SSLMode         string        `mapstructure:"sslmode"`
+	Timezone        string        `mapstructure:"timezone"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+}
+
+// DSN 返回 PostgreSQL DSN
+func (c PostgresConfig) DSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
+		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode, c.Timezone)
+}
+
+// RedisConfig 是 Redis 配置
+type RedisConfig struct {
+	// 单节点模式（默认）
+	Addr     string `mapstructure:"addr"`
+	Password string `mapstructure:"password"`
+	DB       int    `mapstructure:"db"`
+	// Sentinel 模式（生产 HA 推荐）
+	// sentinel: true 时启用；MasterName 默认 "mymaster"
+	Sentinel      bool     `mapstructure:"sentinel"`
+	SentinelAddrs []string `mapstructure:"sentinel_addrs"` // 如 ["redis-sentinel-1:26379","redis-sentinel-2:26379","redis-sentinel-3:26379"]
+	MasterName    string   `mapstructure:"master_name"`    // 默认 "mymaster"
+	// 集群模式（预留，当前未实现）
+	Cluster      bool     `mapstructure:"cluster"`
+	ClusterAddrs []string `mapstructure:"cluster_addrs"`
+	// 连接池
+	PoolSize     int           `mapstructure:"pool_size"`
+	MinIdleConns int           `mapstructure:"min_idle_conns"`
+	DialTimeout  time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout time.Duration `mapstructure:"write_timeout"`
+}
+
+// KafkaConfig 是 Kafka 配置
+type KafkaConfig struct {
+	Enabled bool     `mapstructure:"enabled"`
+	Brokers []string `mapstructure:"brokers"`
+	// 生产者
+	Producer KafkaProducerConfig `mapstructure:"producer"`
+	// 消费者
+	Consumer KafkaConsumerConfig `mapstructure:"consumer"`
+	// Topic 前缀（用于多环境隔离，如 dev. / prod.）
+	TopicPrefix string `mapstructure:"topic_prefix"`
+}
+
+// KafkaConsumerConfig 是 Kafka 消费者配置
+type KafkaConsumerConfig struct {
+	// InitialOffset 冷启动（新消费组 / offset 过期）时的初始位点："newest"（默认，保持现状）或
+	// "oldest"。newest 会跳过 producer 已写入但未消费的积压；oldest 从最早未消费开始，需配合
+	// 消费幂等（MySQL upsert 幂等，ClickHouse append 会重复）。
+	InitialOffset string `mapstructure:"initial_offset"`
+}
+
+// KafkaProducerConfig 是 Kafka 生产者配置
+type KafkaProducerConfig struct {
+	RequiredAcks    int           `mapstructure:"required_acks"`     // 0=NoResponse,1=WaitForLocal,-1=WaitForAll
+	MaxMessageBytes int           `mapstructure:"max_message_bytes"` // 默认 1MB
+	FlushMessages   int           `mapstructure:"flush_messages"`
+	FlushFrequency  time.Duration `mapstructure:"flush_frequency"`
+	RetryMax        int           `mapstructure:"retry_max"`
+	// ChannelBufferSize 是 sarama 生产者输入通道缓冲区大小（消息数）。
+	// 默认 256 太小，burst（agent 重连风暴/扫描叠加遥测）下秒满即丢；放大以吸收尖峰。
+	ChannelBufferSize int `mapstructure:"channel_buffer_size"`
+	// FallbackQueueSize 是 Kafka Input 满后的降级内存队列容量（消息数）。
+	// 内存占用 ≈ size × 单条消息字节数，需按内存权衡。
+	FallbackQueueSize int `mapstructure:"fallback_queue_size"`
+}
+
+// ClickHouseConfig 是 ClickHouse 配置
+type ClickHouseConfig struct {
+	Enabled  bool     `mapstructure:"enabled"`
+	Addrs    []string `mapstructure:"addrs"`
+	Database string   `mapstructure:"database"`
+	Username string   `mapstructure:"username"`
+	Password string   `mapstructure:"password"`
+	// 连接池
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	DialTimeout     time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
+	// 批量写入
+	BatchSize    int           `mapstructure:"batch_size"`
+	FlushTimeout time.Duration `mapstructure:"flush_timeout"`
+}
+
+// MTLSConfig 是 mTLS 配置
+type MTLSConfig struct {
+	CACert     string `mapstructure:"ca_cert"`
+	ServerCert string `mapstructure:"server_cert"`
+	ServerKey  string `mapstructure:"server_key"`
+
+	// --- Agent↔AC 信任链改造（默认全关，兼容现网；逐步灰度开启）---
+
+	// CAKey 是 CA 私钥路径。开启 PerAgentCert 后，AC 用它按 AgentID 在线签发单机证书。
+	CAKey string `mapstructure:"ca_key"`
+	// EnrollToken 是 agent enroll 引导令牌。非空时，agent 必须经 gRPC metadata 上报匹配的令牌才会被签发单机证书。
+	// 空表示迁移期不校验令牌（仅适用于受控内网）。
+	EnrollToken string `mapstructure:"enroll_token"`
+	// PerAgentCert 开启后，AC 在 agent 首连时签发一机一证（CN=AgentID），取代下发全网共享证书。
+	PerAgentCert bool `mapstructure:"per_agent_cert"`
+	// EnforceAgentID 是步骤 6 强制开关：开启后 Transfer 要求客户端证书已验证且 CN==上报 AgentID，
+	// 无证书连接仅允许完成 enroll（签发后即断开，要求带证书重连）。关闭时为观察模式（只告警不拒绝）。
+	EnforceAgentID bool `mapstructure:"enforce_agent_id"`
+	// RevokedSerials 是已吊销的证书序列号（十进制字符串）列表，握手期拒绝。
+	RevokedSerials []string `mapstructure:"revoked_serials"`
+	// InsecureDevMode 是显式的不安全开发模式（默认 false）。仅供本地/回环开发放行
+	// “无 per-agent 证书 / 弱信任配置”场景；一旦开启，ValidateAgentCenter 要求 gRPC/HTTP
+	// 均绑定回环地址，且官方 prod/deploy/cluster 渲染绝不设置此项。
+	InsecureDevMode bool `mapstructure:"insecure_dev_mode"`
+}
+
+// LogConfig 是日志配置
+type LogConfig struct {
+	Level     string `mapstructure:"level"`
+	Format    string `mapstructure:"format"`
+	File      string `mapstructure:"file"`
+	ErrorFile string `mapstructure:"error_file"`
+	MaxAge    int    `mapstructure:"max_age"`
+	// MaxSizeMB 是单个日志文件的大小上限（MB），超过即切分。0 表示用默认值。
+	//
+	// 只按天轮转是不够的：2026-08 manager 因写库失败进入错误循环，单日写出 20GB，
+	// 按天轮转对"一天之内写满磁盘"完全无效，最终写满 node1 根盘导致平台停摆。
+	MaxSizeMB int `mapstructure:"max_size_mb"`
+}
+
+// AgentConfig 是 Agent 配置（下发到 Agent）
+type AgentConfig struct {
+	HeartbeatInterval int    `mapstructure:"heartbeat_interval"`
+	WorkDir           string `mapstructure:"work_dir"`
+}
+
+// MetricsConfig 是监控指标配置
+type MetricsConfig struct {
+	// MySQL 存储配置
+	MySQL MySQLMetricsConfig `mapstructure:"mysql"`
+	// Prometheus 配置
+	Prometheus PrometheusConfig `mapstructure:"prometheus"`
+	// BasicAuth 用户名/密码，用于保护 /metrics 端点（留空则不保护）
+	BasicAuthUser     string `mapstructure:"basic_auth_user"`
+	BasicAuthPassword string `mapstructure:"basic_auth_password"`
+	// ConsumerAddr Consumer 进程独立 /metrics HTTP 监听地址（默认 :9100）
+	ConsumerAddr string `mapstructure:"consumer_addr"`
+}
+
+// MySQLMetricsConfig 是 MySQL 监控指标存储配置
+type MySQLMetricsConfig struct {
+	Enabled       bool          `mapstructure:"enabled"`        // 是否启用 MySQL 存储
+	RetentionDays int           `mapstructure:"retention_days"` // 数据保留天数（默认 30 天）
+	BatchSize     int           `mapstructure:"batch_size"`     // 批量插入大小（默认 100）
+	FlushInterval time.Duration `mapstructure:"flush_interval"` // 刷新间隔（默认 5 秒）
+}
+
+// PrometheusConfig 是 Prometheus 配置
+type PrometheusConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`          // 是否启用 Prometheus 远程写入
+	RemoteWriteURL string `mapstructure:"remote_write_url"` // Prometheus Remote Write API URL
+	QueryURL       string `mapstructure:"query_url"`        // Prometheus Query API URL（用于查询，如果为空则从 remote_write_url 提取）
+	// 如果使用 Pushgateway
+	PushgatewayURL string        `mapstructure:"pushgateway_url"` // Pushgateway URL（可选，与 remote_write_url 二选一）
+	JobName        string        `mapstructure:"job_name"`        // Job 名称（默认 "mxcwpp"）
+	Timeout        time.Duration `mapstructure:"timeout"`         // 请求超时（默认 10 秒）
+}
+
+// Load 加载配置文件
+func Load(configPath string) (*Config, error) {
+	v := viper.New()
+
+	// 设置配置文件路径
+	if configPath != "" {
+		v.SetConfigFile(configPath)
+	} else {
+		// 默认查找配置文件
+		v.SetConfigName("server")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("./configs")
+		v.AddConfigPath("/etc/mxcwpp-server")
+	}
+
+	// 设置环境变量支持
+	v.SetEnvPrefix("MXCWPP_SERVER")
+	v.AutomaticEnv()
+
+	// 读取配置文件
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// 配置文件未找到，使用默认配置
+			return loadDefaults(), nil
+		}
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 解析配置
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	// 检查 log.file 是否在配置文件中明确设置
+	// 如果配置文件中设置了 file: ""，Viper 会将其解析为空字符串
+	// 如果配置文件中没有 file 字段，Viper 不会设置这个字段，我们需要设置默认值
+	logFileSet := v.IsSet("log.file")
+
+	// 设置默认值
+	setDefaults(&cfg, logFileSet)
+
+	return &cfg, nil
+}
+
+// loadDefaults 加载默认配置
+func loadDefaults() *Config {
+	cfg := &Config{}
+	setDefaults(cfg, false) // 没有配置文件，使用所有默认值
+	return cfg
+}
+
+// setDefaults 设置默认值
+// logFileSet 表示 log.file 是否在配置文件中明确设置（包括设置为空字符串）
+func setDefaults(cfg *Config, logFileSet bool) {
+	// Server 默认配置
+	if cfg.Server.GRPC.Host == "" {
+		cfg.Server.GRPC.Host = "0.0.0.0"
+	}
+	if cfg.Server.GRPC.Port == 0 {
+		cfg.Server.GRPC.Port = 6751
+	}
+	if cfg.Server.HTTP.Host == "" {
+		cfg.Server.HTTP.Host = "0.0.0.0"
+	}
+	if cfg.Server.HTTP.Port == 0 {
+		cfg.Server.HTTP.Port = 8080
+	}
+
+	// 数据库默认配置
+	if cfg.Database.Type == "" {
+		cfg.Database.Type = "mysql"
+	}
+	if cfg.Database.MySQL.Host == "" {
+		cfg.Database.MySQL.Host = "localhost"
+	}
+	if cfg.Database.MySQL.Port == 0 {
+		cfg.Database.MySQL.Port = 3306
+	}
+	if cfg.Database.MySQL.Charset == "" {
+		cfg.Database.MySQL.Charset = "utf8mb4"
+	}
+	if cfg.Database.MySQL.MaxIdleConns == 0 {
+		cfg.Database.MySQL.MaxIdleConns = 10
+	}
+	if cfg.Database.MySQL.MaxOpenConns == 0 {
+		cfg.Database.MySQL.MaxOpenConns = 50
+	}
+	if cfg.Database.MySQL.ConnMaxLifetime == 0 {
+		cfg.Database.MySQL.ConnMaxLifetime = time.Hour
+	}
+
+	// 日志默认配置
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = "info"
+	}
+	if cfg.Log.Format == "" {
+		cfg.Log.Format = "json"
+	}
+	// 只有在配置文件中没有明确设置 log.file 字段时，才设置默认值
+	// 如果配置文件中设置了 file: ""，表示明确禁用文件日志，不设置默认值
+	if !logFileSet && cfg.Log.File == "" {
+		cfg.Log.File = "/var/log/mxcwpp-server/server.log"
+	}
+	if cfg.Log.MaxSizeMB == 0 {
+		cfg.Log.MaxSizeMB = 512
+	}
+	if cfg.Log.MaxAge == 0 {
+		cfg.Log.MaxAge = 30
+	}
+
+	// Agent 默认配置
+	if cfg.Agent.HeartbeatInterval == 0 {
+		cfg.Agent.HeartbeatInterval = 60
+	}
+	if cfg.Agent.WorkDir == "" {
+		cfg.Agent.WorkDir = "/var/lib/mxcwpp-agent"
+	}
+
+	// Metrics 默认配置
+	// 默认使用 MySQL 存储（如果未启用 Prometheus）
+	if !cfg.Metrics.Prometheus.Enabled {
+		// 默认启用 MySQL 存储
+		cfg.Metrics.MySQL.Enabled = true
+		if cfg.Metrics.MySQL.RetentionDays == 0 {
+			cfg.Metrics.MySQL.RetentionDays = 30
+		}
+		if cfg.Metrics.MySQL.BatchSize == 0 {
+			cfg.Metrics.MySQL.BatchSize = 100
+		}
+		if cfg.Metrics.MySQL.FlushInterval == 0 {
+			cfg.Metrics.MySQL.FlushInterval = 5 * time.Second
+		}
+	} else {
+		// 如果启用 Prometheus，则禁用 MySQL
+		cfg.Metrics.MySQL.Enabled = false
+		// Prometheus 配置默认值
+		if cfg.Metrics.Prometheus.JobName == "" {
+			cfg.Metrics.Prometheus.JobName = "mxcwpp"
+		}
+		if cfg.Metrics.Prometheus.Timeout == 0 {
+			cfg.Metrics.Prometheus.Timeout = 10 * time.Second
+		}
+	}
+
+	// Redis 默认配置
+	if cfg.Redis.Addr == "" {
+		cfg.Redis.Addr = "redis:6379"
+	}
+	if cfg.Redis.PoolSize == 0 {
+		cfg.Redis.PoolSize = 100
+	}
+	if cfg.Redis.MinIdleConns == 0 {
+		cfg.Redis.MinIdleConns = 10
+	}
+	if cfg.Redis.DialTimeout == 0 {
+		cfg.Redis.DialTimeout = 5 * time.Second
+	}
+	if cfg.Redis.ReadTimeout == 0 {
+		cfg.Redis.ReadTimeout = 3 * time.Second
+	}
+	if cfg.Redis.WriteTimeout == 0 {
+		cfg.Redis.WriteTimeout = 3 * time.Second
+	}
+
+	// Kafka 默认配置
+	if len(cfg.Kafka.Brokers) == 0 {
+		cfg.Kafka.Brokers = []string{"kafka:9092"}
+	}
+	if cfg.Kafka.Consumer.InitialOffset == "" {
+		cfg.Kafka.Consumer.InitialOffset = "newest" // 默认保持现状，不破坏既有部署
+	}
+	if cfg.Kafka.Producer.RequiredAcks == 0 {
+		cfg.Kafka.Producer.RequiredAcks = -1
+	}
+	if cfg.Kafka.Producer.MaxMessageBytes == 0 {
+		cfg.Kafka.Producer.MaxMessageBytes = 1 * 1024 * 1024
+	}
+	if cfg.Kafka.Producer.FlushMessages == 0 {
+		cfg.Kafka.Producer.FlushMessages = 500
+	}
+	if cfg.Kafka.Producer.FlushFrequency == 0 {
+		cfg.Kafka.Producer.FlushFrequency = 500 * time.Millisecond
+	}
+	if cfg.Kafka.Producer.RetryMax == 0 {
+		cfg.Kafka.Producer.RetryMax = 3
+	}
+	if cfg.Kafka.Producer.ChannelBufferSize == 0 {
+		cfg.Kafka.Producer.ChannelBufferSize = 8192 // sarama 默认仅 256，放大吸收 burst
+	}
+	if cfg.Kafka.Producer.FallbackQueueSize == 0 {
+		cfg.Kafka.Producer.FallbackQueueSize = 50000 // 旧硬编码 10000，放大降级队列头寸
+	}
+
+	// ClickHouse 默认配置
+	if len(cfg.ClickHouse.Addrs) == 0 {
+		cfg.ClickHouse.Addrs = []string{"clickhouse:9000"}
+	}
+	if cfg.ClickHouse.Database == "" {
+		cfg.ClickHouse.Database = "mxcwpp"
+	}
+	if cfg.ClickHouse.Username == "" {
+		cfg.ClickHouse.Username = "default"
+	}
+	if cfg.ClickHouse.MaxOpenConns == 0 {
+		cfg.ClickHouse.MaxOpenConns = 20
+	}
+	if cfg.ClickHouse.MaxIdleConns == 0 {
+		cfg.ClickHouse.MaxIdleConns = 5
+	}
+	if cfg.ClickHouse.ConnMaxLifetime == 0 {
+		cfg.ClickHouse.ConnMaxLifetime = time.Hour
+	}
+	if cfg.ClickHouse.DialTimeout == 0 {
+		cfg.ClickHouse.DialTimeout = 10 * time.Second
+	}
+	if cfg.ClickHouse.ReadTimeout == 0 {
+		cfg.ClickHouse.ReadTimeout = 30 * time.Second
+	}
+	if cfg.ClickHouse.WriteTimeout == 0 {
+		cfg.ClickHouse.WriteTimeout = 30 * time.Second
+	}
+	if cfg.ClickHouse.BatchSize == 0 {
+		cfg.ClickHouse.BatchSize = 10000
+	}
+	if cfg.ClickHouse.FlushTimeout == 0 {
+		cfg.ClickHouse.FlushTimeout = 5 * time.Second
+	}
+
+	// Plugins 默认配置
+	if cfg.Plugins.Dir == "" {
+		cfg.Plugins.Dir = "/opt/mxcwpp/plugins"
+	}
+	// BaseURL 为空时，由 Manager 下发相对 HTTP 下载路径。
+}
+
+// Validate 验证配置
+func (c *Config) Validate() error {
+	// 验证 mTLS 证书文件
+	if c.MTLS.CACert != "" {
+		if _, err := os.Stat(c.MTLS.CACert); os.IsNotExist(err) {
+			return fmt.Errorf("CA 证书文件不存在: %s", c.MTLS.CACert)
+		}
+	}
+	if c.MTLS.ServerCert != "" {
+		if _, err := os.Stat(c.MTLS.ServerCert); os.IsNotExist(err) {
+			return fmt.Errorf("server 证书文件不存在: %s", c.MTLS.ServerCert)
+		}
+	}
+	if c.MTLS.ServerKey != "" {
+		if _, err := os.Stat(c.MTLS.ServerKey); os.IsNotExist(err) {
+			return fmt.Errorf("server 私钥文件不存在: %s", c.MTLS.ServerKey)
+		}
+	}
+
+	// 验证 Prometheus 配置
+	if c.Metrics.Prometheus.Enabled {
+		if c.Metrics.Prometheus.QueryURL == "" && c.Metrics.Prometheus.RemoteWriteURL == "" && c.Metrics.Prometheus.PushgatewayURL == "" {
+			return errors.New("prometheus 已启用但未配置 URL，请配置 query_url 或 remote_write_url")
+		}
+	}
+
+	// 验证日志目录（仅在配置了日志文件时）
+	// 如果 Log.File 为空字符串，表示不写文件，只输出到控制台，不需要创建目录
+	if c.Log.File != "" {
+		logDir := filepath.Dir(c.Log.File)
+		// 检查是否是绝对路径且指向系统目录（需要权限）
+		// 如果是相对路径，会在当前工作目录创建，不需要特殊权限
+		if filepath.IsAbs(logDir) {
+			// 对于系统目录（如 /var/log），尝试创建，如果失败则返回错误
+			if err := os.MkdirAll(logDir, 0755); err != nil {
+				return fmt.Errorf("创建日志目录失败: %w (提示: 开发环境建议使用相对路径或设置 file: \"\" 禁用文件日志)", err)
+			}
+		} else {
+			// 相对路径，在当前工作目录创建，通常不会有权限问题
+			if err := os.MkdirAll(logDir, 0755); err != nil {
+				return fmt.Errorf("创建日志目录失败: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// LogInfo 记录配置信息（隐藏敏感信息）
+func (c *Config) LogInfo(logger *zap.Logger) {
+	logger.Info("配置加载完成",
+		zap.String("grpc_address", c.Server.GRPC.Address()),
+		zap.String("http_address", c.Server.HTTP.Address()),
+		zap.String("database_type", c.Database.Type),
+		zap.String("log_level", c.Log.Level),
+		zap.String("log_format", c.Log.Format),
+		zap.String("log_file", c.Log.File),
+		zap.String("log_error_file", c.Log.ErrorFile),
+	)
+}

@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0025
+name: container_sensitive_path_access
+version: 1
+category: file
+severity: high
+mitre:
+  tactic: discovery
+  technique: T1083
+tags: [container, discovery]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: file_open
+    conditions:
+      - field: container_id
+        op: not_equals
+        value: ""
+      - field: file_path
+        op: regex
+        value: "^/(host|rootfs)/(etc/(shadow|passwd|sudoers)|root/\\.ssh)"
+    logic: and
+metadata:
+  description: "检测容器内读取宿主机敏感文件（通过 /host 或 /rootfs 挂载点）"
+  confidence: 85
+  false_positive:
+    - "合法的配置管理工具读取挂载的宿主机配置"

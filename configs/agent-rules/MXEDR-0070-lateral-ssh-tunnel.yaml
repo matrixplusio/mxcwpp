@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0070
+name: lateral_ssh_tunnel
+version: 1
+category: process
+severity: medium
+mitre:
+  tactic: lateral_movement
+  technique: T1572
+tags: [lateral_movement, ssh, tunnel]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "ssh"
+      - field: cmdline
+        op: regex
+        value: "\\s+-(L|R|D|J)\\s+"
+    logic: and
+metadata:
+  description: "检测 SSH 端口转发或动态隧道"
+  confidence: 70
+  false_positive:
+    - "运维人员使用 SSH 隧道访问内网服务"

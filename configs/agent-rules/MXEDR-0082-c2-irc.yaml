@@ -1,0 +1,38 @@
+schema_version: 1
+id: MXEDR-0082
+name: c2_irc_connect
+version: 2
+category: network
+severity: high
+mitre:
+  tactic: command_and_control
+  technique: T1071.001
+tags: [c2, irc, botnet]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: tcp_connect
+    conditions:
+      - field: remote_port
+        op: in
+        values: ["6667", "6668", "6669", "6697"]
+      - field: remote_addr
+        op: not_in_cidr
+        values:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.0/8"
+          - "169.254.0.0/16"
+          - "::1/128"
+          - "fc00::/7"
+          - "fe80::/10"
+    logic: and
+metadata:
+  description: "连接 IRC 端口，可能为僵尸网络 C2 通信"
+  confidence: 80
+  false_positive:
+    - "已按目的地址排除私网：IRC 端口段与内网自建服务存在号段重叠，
+       东西向调用不再命中；真实僵尸网络 C2 必然外连，检出不受影响"

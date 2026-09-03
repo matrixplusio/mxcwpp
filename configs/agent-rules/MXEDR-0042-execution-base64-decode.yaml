@@ -1,0 +1,26 @@
+schema_version: 1
+id: MXEDR-0042
+name: base64_decode_exec
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: defense_evasion
+  technique: T1140
+tags: [execution, obfuscation, base64]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "base64\\s+(-d|--decode)"
+    logic: and
+metadata:
+  description: "检测 base64 解码执行，常见于混淆后门"
+  confidence: 60
+  false_positive:
+    - "合法脚本使用 base64 编解码"

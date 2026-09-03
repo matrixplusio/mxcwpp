@@ -1,0 +1,225 @@
+# ======================
+# Build artifacts
+# ======================
+bin/
+dist/
+build/
+target/
+out/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+!internal/agent/edr/collector/*_bpfel.o
+!internal/agent/edr/collector/*_bpfeb.o
+*.a
+
+# Top-level binaries
+/agent
+/agentcenter
+/manager
+/consumer
+/engine
+/vulnsync
+/llmproxy
+/baseline
+/baseline-plugin
+/collector-plugin
+/stress
+/migrate-metrics
+/remediation
+
+# ======================
+# Go
+# ======================
+vendor/
+go.work
+go.work.sum
+*.test
+*.out
+coverage/
+*.coverprofile
+*.coverage
+coverage.html
+coverage.xml
+
+# Generated protobuf
+*.pb.go
+*_grpc.pb.go
+
+# Profiling
+*.prof
+*.pprof
+
+# ======================
+# Node / Frontend
+# ======================
+node_modules/
+ui/dist/
+ui/dist-ssr/
+ui/build/
+ui/.vite/
+ui/.output/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ======================
+# IDE / Editor
+# ======================
+.idea/
+.vscode/
+.cursor/
+.claude/
+*.iml
+*.iws
+*.ipr
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*.swn
+*.swm
+*~
+\#*\#
+.\#*
+
+# ======================
+# OS files
+# ======================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+.Trash-*
+
+# ======================
+# Logs
+# ======================
+*.log
+*.log.*
+logs/
+
+# ======================
+# Secrets / Configs
+# ======================
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret.*
+
+# Actual config files (keep examples)
+configs/server.yaml
+configs/agent.yaml
+deploy/config/server.yaml
+deploy/.env
+
+# ======================
+# Data volumes
+# ======================
+deploy/data/
+deploy/data-perf/
+uploads/
+
+# ======================
+# Packages
+# ======================
+*.deb
+*.rpm
+*.tar.gz
+*.tgz
+*.tar
+*.zip
+*.rar
+*.7z
+
+# ======================
+# Misc
+# ======================
+Elkeid/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.pid
+*.lock
+*.sock
+
+# ======================
+# AI
+# ======================
+CLAUDE.md
+CODEX.md
+.claude/
+memory/
+PLATFORM-REVIEW.md
+TODOLIST*.md
+docs/TODO.md
+# docs/roadmap.md 已入库：它是交付状态的权威来源，且有 CI 门禁依赖它
+# （docs_sync_test.go 校验其存在、带核实日期、规模数字与代码一致）。
+# 忽略它会让别人 clone 后测试直接失败。
+# 涉及具体部署环境的运维细节留在 local-reports/roadmap-internal.md（不入库）。
+.superpowers/
+docs/superpowers/
+
+# ======================
+# Internal test / evaluation reports
+# ======================
+docs/*test*.md
+docs/*evaluation*.md
+docs/functional-test*/
+docs/*-test-report*.md
+ruletest/
+/ruletest
+
+# ======================
+# Local data
+# ======================
+data/
+
+# ======================
+# Legacy tools (root level only, not cmd/tools/)
+# ======================
+/tools/
+# 本地临时目录（评估文档/大命令输出/调试 dump，不入库）
+.scratch/
+local-reports/
+
+# 内网专用文档（本地保留，禁止上 github）
+docs/internal/
+
+# openssl CA serial artifact (generated)
+deploy/certs/*.srl
+# 密钥文件：*.secret.* 只匹配「.secret.」中缀，漏掉以 .secret 结尾的。
+# enroll_token.secret 就属于后者——它一直躺在工作区里未被忽略，随时可能被误 add。
+*.secret
+deploy/certs/*.key
+deploy/certs/*.crt
+
+# generated & persisted agent enroll token (secret, do not commit)
+deploy/certs/enroll_token.secret
+
+# golangci-lint migrate 产生的备份；旧配置在 git 历史里可回溯，不需要留副本
+.golangci.bck.yml
+*.bck.yml
+
+# 环境特有标识清单（供 no_production_identifiers_test 读取，不入库）
+.production-identifiers

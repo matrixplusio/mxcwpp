@@ -1,0 +1,12 @@
+[Unit]
+Description=mxcwpp ClickHouse backup timer
+Documentation=https://github.com/matrixplusio/mxcwpp
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=600
+Persistent=true
+Unit=mxcwpp-clickhouse-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,54 @@
+version: "2"
+linters:
+  enable:
+    - forbidigo
+    - misspell
+  settings:
+    staticcheck:
+      # 排除 QF（quickfix）类：staticcheck 官方定位是「编辑器里的交互式重构建议」，
+      # 例如「这串 if-else 可以写成 switch」「这里能用德摩根律」。
+      # 它们不指示缺陷，把它们当门禁只会让人为了过 CI 去改无关代码，
+      # 顺手改坏的风险高于收益。SA（缺陷）/S（化简）/ST（约定）保持开启。
+      checks:
+        - all
+        - -QF*
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(ln|f)?$
+        - pattern: ^log\.(Print|Println|Printf)$
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - forbidigo
+        path: ^cmd/
+      - linters:
+          - forbidigo
+        path: ^internal/deploy/cluster/
+      - linters:
+          - forbidigo
+        path: ^internal/agent/updater/
+      - linters:
+          - errcheck
+          - forbidigo
+        path: _test\.go$
+    paths:
+      - deploy/data
+      - deploy/data-perf
+      - dist
+      - tmp
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
