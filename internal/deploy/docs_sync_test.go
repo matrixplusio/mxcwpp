@@ -360,3 +360,57 @@ func assertRoadmapNumber(t *testing.T, body, pattern string, want int, what stri
 			"  改了代码就要改这个数字——它是对外说明规模的依据。", what, got, want)
 	}
 }
+
+// TestServiceCountMatchesDocs 文档里写的服务数量必须与 cmd/server 下的实际数量一致。
+//
+// 与 TestArchitectureDocCoversAllServices 互补：那条查"每个服务名是否被提到"，
+// 但服务名可能因为别的原因出现在文档里而蒙混过关——scanner 就是这样，
+// 它既是 cmd/server 下的镜像扫描服务，也是 plugins/ 下的病毒查杀插件，
+// 文档只写了后者，数量却一直停在"六服务"，那条检查照样通过。
+//
+// 数量是独立于名字的第二个事实，两者都对才说明文档跟上了代码。
+func TestServiceCountMatchesDocs(t *testing.T) {
+	root := repoRootFromDeploy(t)
+
+	entries, err := os.ReadDir(filepath.Join(root, "cmd", "server"))
+	if err != nil {
+		t.Fatalf("读取 cmd/server 失败: %v", err)
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			n++
+		}
+	}
+	if n == 0 {
+		t.Fatal("cmd/server 下没有服务，检查测试假设是否已失效")
+	}
+
+	// 中文数字与阿拉伯数字都要覆盖：文档里两种写法都出现过。
+	cn := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
+	stale := regexp.MustCompile(`(六|七|八|5|6|7|8)\s*(个)?\s*(微)?服务`)
+
+	for _, doc := range []string{"docs/architecture.md", "README.md", "README_ZH.md"} {
+		data, err := os.ReadFile(filepath.Join(root, doc))
+		if err != nil {
+			t.Errorf("读取 %s 失败: %v", doc, err)
+			continue
+		}
+		for _, m := range stale.FindAllString(string(data), -1) {
+			digits := regexp.MustCompile(`[0-9]`).FindString(m)
+			want := cn[n]
+			ok := strings.Contains(m, want) || digits == itoaDocs(n)
+			if !ok {
+				t.Errorf("%s 写着 %q，但 cmd/server 下有 %d 个服务。\n"+
+					"新增或删除服务时，架构描述与 README 的数量都要跟着改。", doc, m, n)
+			}
+		}
+	}
+}
+
+func itoaDocs(n int) string {
+	if n < 10 {
+		return string(rune('0' + n))
+	}
+	return ""
+}
