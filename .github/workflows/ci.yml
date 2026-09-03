@@ -72,7 +72,7 @@ jobs:
         run: make proto
       # 版本必须锁定并与本地一致：golangci-lint 会拒绝加载 go 版本高于
       # 自身构建版本的项目，而 latest 解析到的往往是上一个大版本。
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
           args: --timeout=10m
