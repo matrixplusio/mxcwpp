@@ -1,0 +1,42 @@
+name: Star History
+
+# GitHub 2026 年起把 stargazers 接口收成必须认证，第三方 star history 服务
+# 因此失效，并转而要求用户交出带写权限的个人 token。这里改用 Actions 内置的
+# GITHUB_TOKEN：仓库级、单次运行后失效、不经任何第三方，图直接提交进仓库。
+
+on:
+  schedule:
+    - cron: "17 3 1 * *" # 每月 1 日跑一次，足够反映趋势
+  workflow_dispatch:
+
+permissions:
+  contents: write # 只为把生成的 SVG 提交回仓库
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  chart:
+    name: 生成 star 曲线
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 生成 SVG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/star-history.py "${{ github.repository }}" docs/assets/star-history.svg
+
+      - name: 提交变化
+        run: |
+          if git diff --quiet -- docs/assets/star-history.svg; then
+            echo "曲线无变化，跳过提交"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/star-history.svg
+          git commit -m "chore: 更新 star 曲线"
+          git push
