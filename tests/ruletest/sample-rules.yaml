@@ -1,0 +1,40 @@
+rules:
+  - name: reverse_shell_detect
+    expression: 'exe == "/bin/bash" && remote_addr != ""'
+    severity: critical
+    category: backdoor
+    mitre_id: T1059.004
+    data_types: ["3000"]
+    description: 反弹 Shell 检测
+
+  - name: crypto_miner_process
+    expression: 'exe.contains("xmrig") || exe.contains("minerd") || cmdline.contains("stratum+tcp")'
+    severity: high
+    category: cryptomining
+    mitre_id: T1496
+    data_types: ["3000"]
+    description: 挖矿进程检测
+
+  - name: suspicious_crontab_write
+    expression: 'file_path.contains("/crontab") || file_path.contains("/cron.d/")'
+    severity: medium
+    category: persistence
+    mitre_id: T1053.003
+    data_types: ["3001"]
+    description: 可疑 crontab 写入
+
+  - name: ssh_brute_force_connect
+    expression: 'remote_port == "22" && !is_private_ip(remote_addr)'
+    severity: high
+    category: lateral_movement
+    mitre_id: T1021.004
+    data_types: ["3002"]
+    description: 外网 SSH 连接检测
+
+  - name: passwd_file_read
+    expression: 'file_path == "/etc/passwd" || file_path == "/etc/shadow"'
+    severity: medium
+    category: credential_access
+    mitre_id: T1003
+    data_types: ["3001"]
+    description: 敏感凭据文件读取

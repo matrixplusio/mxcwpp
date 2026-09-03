@@ -1,0 +1,26 @@
+schema_version: 1
+id: MXEDR-0032
+name: persistence_systemd_create
+version: 1
+category: file
+severity: high
+mitre:
+  tactic: persistence
+  technique: T1543.002
+tags: [persistence, systemd]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: file_open
+    conditions:
+      - field: file_path
+        op: regex
+        value: "/etc/systemd/system/.*\\.service$"
+    logic: and
+metadata:
+  description: "检测 /etc/systemd/system/ 下新增 service 文件"
+  confidence: 65
+  false_positive:
+    - "管理员部署新服务"

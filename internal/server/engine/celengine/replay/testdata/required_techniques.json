@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "回放语料必须覆盖的 ATT&CK 技术清单，作为 UncoveredTechniques() 的输入。",
+    "",
+    "它挡的是倒退，不是给覆盖率定目标：清单里的每一项今天都有语料且有规则命中。",
+    "删语料、改技术标注、或把规则改到某类技术不再被测到，都会让门禁失败。",
+    "",
+    "清单不写还没覆盖的技术。让 CI 长期红着的门禁等于没有门禁——",
+    "谁都会学会忽略它。真实缺口记在 docs/roadmap.md §5.1，那里说的是",
+    "「没测过」，不会被读成「测过且没问题」。",
+    "",
+    "扩清单的前提是先有标注语料：加样本 → 确认规则命中 → 再往这里加一行。"
+  ],
+  "techniques": [
+    { "id": "T1059.004", "name": "Command and Scripting Interpreter: Unix Shell" },
+    { "id": "T1059.006", "name": "Command and Scripting Interpreter: Python" },
+    { "id": "T1543.002", "name": "Create or Modify System Process: Systemd Service" },
+    { "id": "T1053.003", "name": "Scheduled Task/Job: Cron" },
+    { "id": "T1505.003", "name": "Server Software Component: Web Shell" },
+    { "id": "T1098.004", "name": "Account Manipulation: SSH Authorized Keys" },
+    { "id": "T1070.003", "name": "Indicator Removal: Clear Command History" },
+    { "id": "T1003.008", "name": "OS Credential Dumping: /etc/passwd and /etc/shadow" }
+  ]
+}

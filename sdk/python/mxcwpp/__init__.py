@@ -1,0 +1,18 @@
+"""mxcwpp Python SDK (P4-4).
+
+用法:
+
+    from mxcwpp import Client
+
+    cli = Client("https://mxcwpp.example.com", token="eyJhbGc...")
+    hosts = cli.list_hosts(status="online")
+    alerts = cli.list_alerts(severity="critical")
+    cli.set_mode("t-default", "protect", reason="incident-2026-06-07")
+"""
+
+from .client import Client, MxcwppError, ApiResponse
+from .models import Host, Alert, ConfigChangeRequest
+
+__version__ = "0.1.0"
+
+__all__ = ["Client", "MxcwppError", "ApiResponse", "Host", "Alert", "ConfigChangeRequest"]

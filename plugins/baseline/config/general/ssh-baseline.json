@@ -1,0 +1,601 @@
+{
+  "id": "LINUX_SSH_BASELINE",
+  "name": "SSH 安全配置基线",
+  "version": "2.0.0",
+  "description": "SSH 服务安全配置检查（参考 CIS Benchmark 和等保 2.0）",
+  "os_family": ["rocky", "centos", "oracle", "debian", "ubuntu", "almalinux"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_SSH_001",
+      "category": "ssh",
+      "title": "禁止 root 远程登录",
+      "description": "sshd_config 中应设置 PermitRootLogin no，防止 root 账户被暴力破解",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "PermitRootLogin", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 PermitRootLogin no，然后重启 sshd 服务",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_002",
+      "category": "ssh",
+      "title": "禁止空密码登录",
+      "description": "sshd_config 中应设置 PermitEmptyPasswords no，禁止使用空密码登录",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "PermitEmptyPasswords", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 PermitEmptyPasswords no，然后重启 sshd 服务",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && (grep -q '^#*PermitEmptyPasswords' /etc/ssh/sshd_config && sed -i 's/^#*PermitEmptyPasswords.*/PermitEmptyPasswords no/' /etc/ssh/sshd_config || echo 'PermitEmptyPasswords no' >> /etc/ssh/sshd_config) && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_003",
+      "category": "ssh",
+      "title": "使用 SSH 协议版本 2",
+      "description": "SSH 应仅使用协议版本 2，版本 1 存在安全漏洞",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/ssh/sshd_config", "^\\s*Protocol\\s+1", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "确保 /etc/ssh/sshd_config 中没有设置 Protocol 1（OpenSSH 7.6+ 已移除 Protocol 指令，默认仅支持 SSH-2）",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i '/^[[:space:]]*Protocol[[:space:]]*1/d' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_004",
+      "category": "ssh",
+      "title": "设置 SSH 最大认证尝试次数",
+      "description": "MaxAuthTries 应设置为 4 或更少，限制暴力破解尝试",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "MaxAuthTries", "^[1-4]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 MaxAuthTries 4",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 4/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_005",
+      "category": "ssh",
+      "title": "设置 SSH 登录超时",
+      "description": "LoginGraceTime 应设置为 60 秒或更少，减少未认证连接占用",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "LoginGraceTime", "^([1-5]?[0-9]|60)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 LoginGraceTime 60",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_006",
+      "category": "ssh",
+      "title": "设置客户端空闲超时间隔",
+      "description": "ClientAliveInterval 应设置为 300 秒或更少，断开空闲连接",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "ClientAliveInterval", "^([1-9]|[1-9][0-9]|[12][0-9]{2}|300)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 ClientAliveInterval 300",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_007",
+      "category": "ssh",
+      "title": "设置客户端空闲超时计数",
+      "description": "ClientAliveCountMax 应设置为 3 或更少",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "ClientAliveCountMax", "^[0-3]$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 ClientAliveCountMax 3",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 3/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_008",
+      "category": "ssh",
+      "title": "禁用 SSH 主机认证",
+      "description": "HostbasedAuthentication 应设置为 no，防止基于主机的认证绕过",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "HostbasedAuthentication", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 HostbasedAuthentication no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*HostbasedAuthentication.*/HostbasedAuthentication no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_009",
+      "category": "ssh",
+      "title": "禁用 rhosts 文件",
+      "description": "IgnoreRhosts 应设置为 yes，忽略不安全的 rhosts 文件",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "IgnoreRhosts", "yes"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 IgnoreRhosts yes",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*IgnoreRhosts.*/IgnoreRhosts yes/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_010",
+      "category": "ssh",
+      "title": "禁用 X11 转发",
+      "description": "X11Forwarding 应设置为 no（除非业务需要）",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "X11Forwarding", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 X11Forwarding no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*X11Forwarding.*/X11Forwarding no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_011",
+      "category": "ssh",
+      "title": "设置 SSH 警告横幅",
+      "description": "Banner 应设置为 /etc/issue.net，显示登录警告",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "Banner", "/etc/issue"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 Banner /etc/issue.net",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*Banner.*/Banner \\/etc\\/issue.net/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_012",
+      "category": "ssh",
+      "title": "限制 SSH 最大会话数",
+      "description": "MaxSessions 应设置为 10 或更少，防止资源耗尽",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "MaxSessions", "^([1-9]|10)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 MaxSessions 10",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*MaxSessions.*/MaxSessions 10/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_013",
+      "category": "ssh",
+      "title": "限制 SSH 最大启动连接数",
+      "description": "MaxStartups 应设置为 10:30:60，限制未认证连接",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/ssh/sshd_config", "^\\s*MaxStartups\\s+10:30:60", "match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 MaxStartups 10:30:60",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_014",
+      "category": "ssh",
+      "title": "启用严格模式",
+      "description": "StrictModes 应设置为 yes，检查用户主目录和文件权限",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "StrictModes", "yes"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 StrictModes yes",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*StrictModes.*/StrictModes yes/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_015",
+      "category": "ssh",
+      "title": "禁用 TCP 转发",
+      "description": "AllowTcpForwarding 应设置为 no（除非业务需要）",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "AllowTcpForwarding", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 AllowTcpForwarding no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*AllowTcpForwarding.*/AllowTcpForwarding no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_016",
+      "category": "ssh",
+      "title": "SSH LogLevel 设置",
+      "description": "LogLevel 应设置为 INFO 或 VERBOSE，便于审计",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "LogLevel", "^(INFO|VERBOSE)$"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 LogLevel INFO",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*LogLevel.*/LogLevel INFO/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_017",
+      "category": "ssh",
+      "title": "SSH 使用强加密算法",
+      "description": "SSH 应仅使用强加密算法，禁用 3des-cbc、arcfour 等弱算法",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/ssh/sshd_config", "Ciphers.*(3des|arcfour|blowfish)", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，配置强加密算法",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i '/^Ciphers/d' /etc/ssh/sshd_config && echo 'Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr' >> /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_018",
+      "category": "ssh",
+      "title": "SSH 使用强 MAC 算法",
+      "description": "SSH 应仅使用强 MAC 算法，禁用 MD5、96 位等弱算法",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/ssh/sshd_config", "MACs.*(hmac-md5|hmac-sha1-96|umac-64)", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，配置强 MAC 算法",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i '/^MACs/d' /etc/ssh/sshd_config && echo 'MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256' >> /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_019",
+      "category": "ssh",
+      "title": "SSH 使用强密钥交换算法",
+      "description": "SSH 应仅使用强密钥交换算法，禁用 diffie-hellman-group1-sha1 等弱算法",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/ssh/sshd_config", "KexAlgorithms.*(diffie-hellman-group1|diffie-hellman-group14-sha1|diffie-hellman-group-exchange-sha1)", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，配置强密钥交换算法",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i '/^KexAlgorithms/d' /etc/ssh/sshd_config && echo 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512' >> /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_020",
+      "category": "ssh",
+      "title": "禁用 PermitUserEnvironment",
+      "description": "PermitUserEnvironment 应设置为 no，防止用户修改环境变量绕过安全限制",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "PermitUserEnvironment", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 PermitUserEnvironment no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*PermitUserEnvironment.*/PermitUserEnvironment no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_021",
+      "category": "ssh",
+      "title": "禁用 GSSAPIAuthentication",
+      "description": "GSSAPIAuthentication 应设置为 no（除非使用 Kerberos）",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "GSSAPIAuthentication", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 GSSAPIAuthentication no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*GSSAPIAuthentication.*/GSSAPIAuthentication no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_022",
+      "category": "ssh",
+      "title": "禁用 UseDNS",
+      "description": "UseDNS 应设置为 no，避免 DNS 反向解析导致的连接延迟和潜在的安全问题",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/ssh/sshd_config"]
+          },
+          {
+            "type": "file_kv",
+            "param": ["/etc/ssh/sshd_config", "UseDNS", "no"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "修改 /etc/ssh/sshd_config，设置 UseDNS no",
+        "command": "cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sed -i 's/^#*UseDNS.*/UseDNS no/' /etc/ssh/sshd_config && if ! sshd -t; then echo \"SSH 配置验证失败，回滚配置\" >&2; mv /etc/ssh/sshd_config.bak /etc/ssh/sshd_config; exit 1; fi",
+        "restart_services": ["sshd"]
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_023",
+      "category": "ssh",
+      "title": "SSH 私钥文件权限",
+      "description": "SSH 私钥文件权限应为 600，仅属主可读写",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/ssh/ssh_host_rsa_key", "0600"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 SSH 私钥文件权限为 600",
+        "command": "chmod 600 /etc/ssh/ssh_host_*_key"
+      }
+    },
+    {
+      "rule_id": "LINUX_SSH_024",
+      "category": "ssh",
+      "title": "SSH 公钥文件权限",
+      "description": "SSH 公钥文件权限应为 644",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/ssh/ssh_host_rsa_key.pub", "0644"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 SSH 公钥文件权限为 644",
+        "command": "chmod 644 /etc/ssh/ssh_host_*_key.pub"
+      }
+    }
+  ]
+}

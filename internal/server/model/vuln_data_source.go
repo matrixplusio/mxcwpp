@@ -1,0 +1,64 @@
+package model
+
+// VulnDataSourceRegion 漏洞源地理分类。
+const (
+	VulnSourceRegionCN     = "cn"
+	VulnSourceRegionGlobal = "global"
+)
+
+// VulnDataSourceCategory 漏洞源功能分类。
+const (
+	VulnSourceCategoryCNOfficial  = "cn_official"  // 中国官方漏洞库（CNNVD/CNVD）
+	VulnSourceCategoryOSAdvisory  = "os_advisory"  // OS 厂商 advisory（RHSA/Rocky/USN/Debian/Alpine）
+	VulnSourceCategoryCVEMetadata = "cve_metadata" // CVE 元数据（NVD/MITRE/OSV）
+	VulnSourceCategoryExploit     = "exploit"      // 0day / 已剥削（CISA KEV / exploit-db）
+)
+
+// VulnDataSourceStatus 上次同步状态。
+const (
+	VulnSourceStatusNever   = "never"
+	VulnSourceStatusRunning = "running"
+	VulnSourceStatusSuccess = "success"
+	VulnSourceStatusFailed  = "failed"
+)
+
+// VulnDataSource 漏洞数据源配置 + 同步状态。
+//
+// UI「漏洞源管理」页面展示并允许 admin 启用/禁用 + 改 base_url + 手动触发同步。
+// Coordinator/Scanner 每次 sync 前查 enabled=true 列表，跳过 disabled。
+type VulnDataSource struct {
+	TenantID     string     `gorm:"column:tenant_id;type:varchar(64);not null;index;default:'t-default'" json:"tenant_id"`
+	ID           uint       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
+	Name         string     `gorm:"column:name;type:varchar(64);uniqueIndex;not null" json:"name"`     // slug，如 rhsa
+	DisplayName  string     `gorm:"column:display_name;type:varchar(128);not null" json:"displayName"` // UI 展示名
+	Region       string     `gorm:"column:region;type:varchar(16);not null;index" json:"region"`       // cn / global
+	Category     string     `gorm:"column:category;type:varchar(32);not null;index" json:"category"`   // os_advisory / cve_metadata / exploit / cn_official
+	Enabled      bool       `gorm:"column:enabled;default:0;index" json:"enabled"`                     // 启用同步
+	BaseURL      string     `gorm:"column:base_url;type:varchar(500)" json:"baseUrl"`                  // 可在 UI 改（如换 CNNVD 镜像）
+	APIKeyEnv    string     `gorm:"column:api_key_env;type:varchar(64)" json:"apiKeyEnv,omitempty"`    // 引用 env 变量名（如 NVD_API_KEY）
+	Description  string     `gorm:"column:description;type:varchar(500)" json:"description"`           // UI tooltip
+	LastSyncAt   *LocalTime `gorm:"column:last_sync_at;type:timestamp" json:"lastSyncAt,omitempty"`
+	LastStatus   string     `gorm:"column:last_status;type:varchar(16);default:'never'" json:"lastStatus"` // never / running / success / failed
+	LastError    string     `gorm:"column:last_error;type:text" json:"lastError,omitempty"`
+	LastCount    int64      `gorm:"column:last_count;default:0" json:"lastCount"` // 上次同步入库 vuln 数
+	LastDuration int64      `gorm:"column:last_duration_ms;default:0" json:"lastDurationMs"`
+
+	// AdvisoryWatermark 上次成功 fetch 到的 advisory.IssuedAt 最大值（按 source 独立）。
+	// Coordinator.Sync 下次跑该 source 时传 since=AdvisoryWatermark，仅拉 delta：
+	//   - 首次 sync：watermark 为 nil → 全量拉
+	//   - 后续 sync：仅拉 since>watermark 的 advisory，速度 30min→2-5min
+	// 与 LastSyncAt 不同：LastSyncAt 是"啥时跑的"，AdvisoryWatermark 是"拉到啥位置了"。
+	AdvisoryWatermark *LocalTime `gorm:"column:advisory_watermark;type:timestamp" json:"advisoryWatermark,omitempty"`
+	CreatedAt         LocalTime  `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	UpdatedAt         LocalTime  `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+
+	// VulnCount 该 source 当前在库(未删)的漏洞条数——运行时聚合，非持久列。
+	// UI 展示"该源实际贡献漏洞数"：比 LastCount(上次同步 delta，静默期可能为 0)更能反映真实库存，
+	// 修复"OS 源显示 0 条"的误导（同步搬到 VulnSync 后 LastCount 回写缺失历史遗留）。
+	VulnCount int64 `gorm:"-" json:"vulnCount"`
+}
+
+// TableName 指定表名。
+func (VulnDataSource) TableName() string {
+	return "vuln_data_sources"
+}

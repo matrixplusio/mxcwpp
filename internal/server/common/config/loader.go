@@ -1,0 +1,198 @@
+// Package config 统一 6 微服务 (Manager/AgentCenter/Consumer/Engine/VulnSync/LLMProxy) 配置加载。
+//
+// 设计原则:
+//   - 单一来源: YAML 文件 (默认 configs/<service>.yaml)
+//   - 环境变量覆盖: MXCWPP_<SERVICE>_<KEY> (e.g. MXCWPP_ENGINE_HTTP_ADDR)
+//   - flag 仍保留, 但仅作 path/dev 用 (--config / --dry-run)
+//   - 字段校验前置: 缺关键字段直接 Fatal, 不允许 silent fallback
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+// EngineConfig 是 Engine 服务的全部配置。
+//
+// 字段一一对应 configs/engine.yaml; flag 不再承载默认值。
+type EngineConfig struct {
+	HTTPAddr    string         `mapstructure:"http_addr"`
+	DefaultMode string         `mapstructure:"default_mode"` // observe / protect
+	AlertTopic  string         `mapstructure:"alert_topic"`
+	Kafka       KafkaConfig    `mapstructure:"kafka"`
+	Database    DBConfig       `mapstructure:"database"`
+	Redis       RedisConfig    `mapstructure:"redis"` // ScanDetector 入站扫描聚合计数用；未配则跳过扫描检测
+	OTel        OTelConfig     `mapstructure:"otel"`
+	Pipeline    PipelineConfig `mapstructure:"pipeline"`
+	// Alerting 与 server.yaml 的 alerting 段同构，供 Engine 初始化告警发布点。
+	// 缺省即全部类别不通知（告警仍照常入库）。
+	Alerting AlertingConfig `mapstructure:"alerting"`
+	// SIEM 与 server.yaml 的 siem 段同构。Engine 是检测告警的主要来源，
+	// 缺了外发接线，客户 SIEM 会漏掉绝大部分告警。
+	SIEM SIEMConfig `mapstructure:"siem"`
+}
+
+// SIEMConfig 客户自有 SIEM 的外发配置，与 server config 的同名结构同构。
+type SIEMConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Protocol string `mapstructure:"protocol"`
+	Address  string `mapstructure:"address"`
+	Facility int    `mapstructure:"facility"`
+}
+
+// AlertingConfig 检测产出的通知灰度配置，与 server config 的同名结构同构。
+type AlertingConfig struct {
+	NotifyCategories      []string `mapstructure:"notify_categories"`
+	MinSeverity           string   `mapstructure:"min_severity"`
+	SuppressWindowMinutes int      `mapstructure:"suppress_window_minutes"`
+}
+
+// KafkaConfig Kafka 连接参数。
+type KafkaConfig struct {
+	Brokers     []string `mapstructure:"brokers"`
+	TopicPrefix string   `mapstructure:"topic_prefix"` // 与 AgentCenter / Consumer 一致 (如 "prod")
+	SASLEnabled bool     `mapstructure:"sasl_enabled"`
+	SASLUser    string   `mapstructure:"sasl_user"`
+	SASLPass    string   `mapstructure:"sasl_pass"`
+	TLSEnabled  bool     `mapstructure:"tls_enabled"`
+}
+
+// DBConfig MySQL 连接参数。
+//
+// 支持两种写法: 显式 dsn 字符串 (优先)，或结构化 database.mysql.* 字段
+// (与 Manager/Consumer 共用的 server.yaml 同构)。用 ResolveDSN() 统一取值。
+type DBConfig struct {
+	DSN             string      `mapstructure:"dsn"`
+	Type            string      `mapstructure:"type"`
+	MySQL           MySQLParams `mapstructure:"mysql"`
+	MaxOpenConns    int         `mapstructure:"max_open_conns"`
+	MaxIdleConns    int         `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime string      `mapstructure:"conn_max_lifetime"` // duration string e.g. "1h"
+}
+
+// MySQLParams 结构化 MySQL 连接字段 (database.mysql.*)。
+type MySQLParams struct {
+	Host         string `mapstructure:"host"`
+	Port         int    `mapstructure:"port"`
+	User         string `mapstructure:"user"`
+	Password     string `mapstructure:"password"`
+	Database     string `mapstructure:"database"`
+	Charset      string `mapstructure:"charset"`
+	Loc          string `mapstructure:"loc"`
+	MaxOpenConns int    `mapstructure:"max_open_conns"`
+	MaxIdleConns int    `mapstructure:"max_idle_conns"`
+}
+
+// ResolveDSN 返回可用的 MySQL DSN: 优先显式 DSN，否则用结构化 mysql 字段拼接。
+// 无任何连接信息时返回空串 (调用方据此跳过 DB 初始化)。
+func (c DBConfig) ResolveDSN() string {
+	if c.DSN != "" {
+		return c.DSN
+	}
+	if c.MySQL.Host == "" {
+		return ""
+	}
+	charset := c.MySQL.Charset
+	if charset == "" {
+		charset = "utf8mb4"
+	}
+	loc := c.MySQL.Loc
+	if loc == "" {
+		loc = "Local"
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=true&loc=%s&allowNativePasswords=true",
+		c.MySQL.User, c.MySQL.Password, c.MySQL.Host, c.MySQL.Port, c.MySQL.Database, charset, url.QueryEscape(loc))
+}
+
+// OTelConfig OTel 追踪。
+type OTelConfig struct {
+	Enabled    bool    `mapstructure:"enabled"`
+	Endpoint   string  `mapstructure:"endpoint"`
+	Insecure   bool    `mapstructure:"insecure"`
+	SampleRate float64 `mapstructure:"sample_rate"`
+}
+
+// PipelineConfig Engine pipeline 行为参数。
+type PipelineConfig struct {
+	// 启用哪些 stage (逗号分隔; 空则按 db 可用情况自动启用)
+	EnabledStages []string `mapstructure:"enabled_stages"`
+	// pipeline 并发度 (后续: PR68 ML 多 worker 用)
+	Workers int `mapstructure:"workers"`
+}
+
+// LoadEngine 加载 Engine 配置。
+//
+// 顺序:
+//
+//  1. 设置内置默认 (与历史 flag 一致, 兼容老部署)
+//  2. 读 YAML 文件
+//  3. 环境变量覆盖 (MXCWPP_ENGINE_*)
+//  4. 反序列化 → 校验
+func LoadEngine(path string) (*EngineConfig, error) {
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("yaml")
+
+	// 默认
+	v.SetDefault("http_addr", ":8082")
+	v.SetDefault("default_mode", "observe")
+	v.SetDefault("alert_topic", "mxcwpp.engine.alert")
+	v.SetDefault("kafka.brokers", []string{})
+	v.SetDefault("database.dsn", "")
+	v.SetDefault("database.max_open_conns", 50)
+	v.SetDefault("database.max_idle_conns", 10)
+	v.SetDefault("database.conn_max_lifetime", "1h")
+	v.SetDefault("otel.enabled", false)
+	v.SetDefault("otel.endpoint", "localhost:4318")
+	v.SetDefault("otel.insecure", true)
+	v.SetDefault("otel.sample_rate", 0.1)
+	v.SetDefault("pipeline.enabled_stages", []string{})
+	v.SetDefault("pipeline.workers", 4)
+
+	// env override: MXCWPP_ENGINE_KAFKA_BROKERS=a,b,c → kafka.brokers
+	v.SetEnvPrefix("MXCWPP_ENGINE")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// 文件可选: 没找到走 default + env (容器场景 env-only 部署)
+	if err := v.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) && path != "" {
+			// 路径明指但读不出 → 报错; 走默认路径找不到 → 允许
+			if _, ok := err.(*viper.ConfigParseError); ok {
+				return nil, fmt.Errorf("parse engine config: %w", err)
+			}
+		}
+	}
+
+	var cfg EngineConfig
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("decode engine config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("engine config invalid: %w", err)
+	}
+	return &cfg, nil
+}
+
+// Validate 校验关键字段。
+func (c *EngineConfig) Validate() error {
+	if c.HTTPAddr == "" {
+		return errors.New("http_addr required")
+	}
+	if c.DefaultMode != "observe" && c.DefaultMode != "protect" {
+		return fmt.Errorf("default_mode must be observe|protect, got %q", c.DefaultMode)
+	}
+	if c.AlertTopic == "" {
+		return errors.New("alert_topic required")
+	}
+	if c.Database.MaxOpenConns < c.Database.MaxIdleConns {
+		return errors.New("database.max_open_conns must be >= max_idle_conns")
+	}
+	return nil
+}

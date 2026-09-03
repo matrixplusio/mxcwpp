@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.next
+.env.local
+*.tsbuildinfo
+e2e/.auth
+test-results
+playwright-report
+.playwright

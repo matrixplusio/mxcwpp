@@ -1,0 +1,30 @@
+schema_version: 1
+id: MXEDR-0003
+name: reverse_shell_python
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: execution
+  technique: T1059.006
+tags: [reverse_shell, python]
+agent:
+  enabled: true
+  action: kill
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "python"
+      - field: cmdline
+        op: contains
+        value: "socket"
+      - field: cmdline
+        op: regex
+        value: "(connect|pty\\.spawn|subprocess)"
+    logic: and
+metadata:
+  description: "Python 通过 socket+connect 或 pty.spawn 建立反弹 Shell"
+  confidence: 85

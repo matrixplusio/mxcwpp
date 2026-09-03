@@ -1,0 +1,103 @@
+{
+  "id": "LINUX_FILE_INTEGRITY",
+  "name": "文件完整性检查基线",
+  "version": "1.0.0",
+  "description": "AIDE 文件完整性检查配置（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_AIDE_001",
+      "category": "integrity",
+      "title": "AIDE 已安装",
+      "description": "AIDE (Advanced Intrusion Detection Environment) 应已安装，用于检测文件系统变更",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "package_installed",
+            "param": ["aide"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "安装 AIDE 包",
+        "command": "if command -v dnf &>/dev/null; then dnf install aide -y; elif command -v yum &>/dev/null; then if ! timeout 10 yum repolist -q &>/dev/null && grep -q 'mirror.centos.org' /etc/yum.repos.d/CentOS-*.repo 2>/dev/null; then sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo && yum clean all; fi; yum install aide -y; elif command -v apt-get &>/dev/null; then apt-get update && apt-get install aide -y; else echo 'Unsupported package manager' >&2; exit 1; fi"
+      }
+    },
+    {
+      "rule_id": "LINUX_AIDE_002",
+      "category": "integrity",
+      "title": "AIDE 数据库已初始化",
+      "description": "AIDE 数据库应已初始化，用于后续完整性检查的基准",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/var/lib/aide/aide.db.gz"]
+          },
+          {
+            "type": "file_exists",
+            "param": ["/var/lib/aide/aide.db"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "初始化 AIDE 数据库",
+        "command": "aide --init && mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz"
+      }
+    },
+    {
+      "rule_id": "LINUX_AIDE_003",
+      "category": "integrity",
+      "title": "AIDE 定期检查已配置",
+      "description": "AIDE 完整性检查应通过 cron 定期运行",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_line_match",
+            "param": ["/etc/cron.daily/aide", "aide", "match"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/crontab", "aide", "match"]
+          },
+          {
+            "type": "command_exec",
+            "param": ["crontab -l 2>/dev/null | grep -c aide || echo 0", "^[1-9]"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "配置 AIDE 定期检查",
+        "command": "echo '0 5 * * * root /usr/sbin/aide --check' >> /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "LINUX_AIDE_004",
+      "category": "integrity",
+      "title": "AIDE 配置文件权限正确",
+      "description": "AIDE 配置文件应仅 root 可读写，防止被篡改",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/aide.conf", "0600"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 AIDE 配置文件权限",
+        "command": "chmod 600 /etc/aide.conf"
+      }
+    }
+  ]
+}

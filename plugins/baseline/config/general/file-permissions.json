@@ -1,0 +1,675 @@
+{
+  "id": "LINUX_FILE_PERMISSIONS",
+  "name": "关键文件权限基线",
+  "version": "2.0.0",
+  "description": "关键系统文件权限检查（参考 CIS Benchmark 和等保 2.0）",
+  "os_family": [
+    "rocky",
+    "centos",
+    "oracle",
+    "debian",
+    "ubuntu",
+    "almalinux"
+  ],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_FILE_001",
+      "category": "file_permission",
+      "title": "/etc/passwd 文件权限",
+      "description": "/etc/passwd 文件权限应不超过 644",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/passwd"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/passwd",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/passwd",
+        "command": "chmod 644 /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_002",
+      "category": "file_permission",
+      "title": "/etc/shadow 文件权限",
+      "description": "/etc/shadow 文件权限应为 000 或 400（仅 root 可读）",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/shadow"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/shadow",
+              "000"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 000 /etc/shadow 或 chmod 400 /etc/shadow",
+        "command": "chmod 000 /etc/shadow"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_003",
+      "category": "file_permission",
+      "title": "/etc/ssh/sshd_config 文件权限",
+      "description": "/etc/ssh/sshd_config 文件权限应不超过 600",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/ssh/sshd_config"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/sshd_config",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 /etc/ssh/sshd_config",
+        "command": "chmod 600 /etc/ssh/sshd_config"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_004",
+      "category": "file_permission",
+      "title": "/etc/group 文件权限",
+      "description": "/etc/group 文件权限应不超过 644",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/group"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/group",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/group",
+        "command": "chmod 644 /etc/group"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_005",
+      "category": "file_permission",
+      "title": "/etc/gshadow 文件权限",
+      "description": "/etc/gshadow 文件权限应为 000 或 400",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/gshadow"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/gshadow",
+              "000"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 000 /etc/gshadow",
+        "command": "chmod 000 /etc/gshadow"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_006",
+      "category": "file_permission",
+      "title": "/etc/passwd 文件属主",
+      "description": "/etc/passwd 文件应属于 root:root",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/passwd"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/passwd",
+              "root:root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chown root:root /etc/passwd",
+        "command": "chown root:root /etc/passwd"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_007",
+      "category": "file_permission",
+      "title": "/etc/shadow 文件属主",
+      "description": "/etc/shadow 文件应属于 root:root",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/shadow"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/shadow",
+              "root:root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chown root:root /etc/shadow",
+        "command": "chown root:root /etc/shadow"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_010",
+      "category": "file_permission",
+      "title": "/etc/crontab 文件权限",
+      "description": "/etc/crontab 文件权限应不超过 600",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/crontab"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/crontab",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 /etc/crontab",
+        "command": "chmod 600 /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_011",
+      "category": "file_permission",
+      "title": "/etc/crontab 文件属主",
+      "description": "/etc/crontab 文件应属于 root:root",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/crontab"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/crontab",
+              "root:root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chown root:root /etc/crontab",
+        "command": "chown root:root /etc/crontab"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_012",
+      "category": "file_permission",
+      "title": "/etc/sudoers 文件权限",
+      "description": "/etc/sudoers 文件权限应为 440",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/sudoers"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/sudoers",
+              "440"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 440 /etc/sudoers",
+        "command": "chmod 440 /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_013",
+      "category": "file_permission",
+      "title": "/etc/sudoers 文件属主",
+      "description": "/etc/sudoers 文件应属于 root:root",
+      "severity": "critical",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/sudoers"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/sudoers",
+              "root:root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chown root:root /etc/sudoers",
+        "command": "chown root:root /etc/sudoers"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_014",
+      "category": "file_permission",
+      "title": "/boot/grub2/grub.cfg 文件权限",
+      "description": "GRUB 配置文件权限应不超过 600",
+      "severity": "high",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "command_exec",
+            "param": [
+              "! test -f /boot/grub2/grub.cfg && ! test -f /boot/grub/grub.cfg && echo skip",
+              "skip"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/boot/grub2/grub.cfg",
+              "600"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/boot/grub/grub.cfg",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 /boot/grub2/grub.cfg",
+        "command": "test -f /boot/grub2/grub.cfg && chmod 600 /boot/grub2/grub.cfg || { test -f /boot/grub/grub.cfg && chmod 600 /boot/grub/grub.cfg; }"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_015",
+      "category": "file_permission",
+      "title": "/etc/rsyslog.conf 文件权限",
+      "description": "/etc/rsyslog.conf 文件权限应不超过 640",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/rsyslog.conf"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/rsyslog.conf",
+              "640"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 640 /etc/rsyslog.conf",
+        "command": "chmod 640 /etc/rsyslog.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_016",
+      "category": "file_permission",
+      "title": "/var/log 目录权限",
+      "description": "/var/log 目录权限应不超过 755",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/var/log"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/var/log",
+              "755"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 755 /var/log",
+        "command": "chmod 755 /var/log"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_017",
+      "category": "file_permission",
+      "title": "/etc/ssh 目录权限",
+      "description": "/etc/ssh 目录权限应不超过 755",
+      "severity": "high",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/ssh"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh",
+              "755"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 755 /etc/ssh",
+        "command": "chmod 755 /etc/ssh"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_018",
+      "category": "file_permission",
+      "title": "SSH 私钥文件权限",
+      "description": "SSH 私钥文件权限应为 600",
+      "severity": "critical",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_rsa_key",
+              "600"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_ecdsa_key",
+              "600"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_ed25519_key",
+              "600"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 600 /etc/ssh/ssh_host_*_key",
+        "command": "chmod 600 /etc/ssh/ssh_host_*_key"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_019",
+      "category": "file_permission",
+      "title": "SSH 公钥文件权限",
+      "description": "SSH 公钥文件权限应不超过 644",
+      "severity": "medium",
+      "check": {
+        "condition": "any",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_rsa_key.pub",
+              "644"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_ecdsa_key.pub",
+              "644"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/ssh/ssh_host_ed25519_key.pub",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/ssh/ssh_host_*_key.pub",
+        "command": "chmod 644 /etc/ssh/ssh_host_*_key.pub"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_020",
+      "category": "file_permission",
+      "title": "/etc/security/limits.conf 文件权限",
+      "description": "/etc/security/limits.conf 文件权限应不超过 644",
+      "severity": "medium",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/security/limits.conf"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/security/limits.conf",
+              "644"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/security/limits.conf",
+        "command": "chmod 644 /etc/security/limits.conf"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_021",
+      "category": "file_permission",
+      "title": "/etc/motd 文件权限",
+      "description": "/etc/motd 文件权限应为 644，属主为 root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/motd"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/motd",
+              "644"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/motd",
+              "root",
+              "root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/motd && chown root:root /etc/motd",
+        "command": "chmod 644 /etc/motd && chown root:root /etc/motd"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_022",
+      "category": "file_permission",
+      "title": "/etc/issue 文件权限",
+      "description": "/etc/issue 文件权限应为 644，属主为 root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/issue"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/issue",
+              "644"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/issue",
+              "root",
+              "root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/issue && chown root:root /etc/issue",
+        "command": "chmod 644 /etc/issue && chown root:root /etc/issue"
+      }
+    },
+    {
+      "rule_id": "LINUX_FILE_023",
+      "category": "file_permission",
+      "title": "/etc/issue.net 文件权限",
+      "description": "/etc/issue.net 文件权限应为 644，属主为 root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": [
+              "/etc/issue.net"
+            ]
+          },
+          {
+            "type": "file_permission",
+            "param": [
+              "/etc/issue.net",
+              "644"
+            ]
+          },
+          {
+            "type": "file_owner",
+            "param": [
+              "/etc/issue.net",
+              "root",
+              "root"
+            ]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "执行 chmod 644 /etc/issue.net && chown root:root /etc/issue.net",
+        "command": "chmod 644 /etc/issue.net && chown root:root /etc/issue.net"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+schema_version: 1
+id: MXEDR-0005
+name: reverse_shell_openssl
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: execution
+  technique: T1573.002
+tags: [reverse_shell, openssl, encrypted]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "openssl"
+      - field: cmdline
+        op: contains
+        value: "s_client"
+      - field: cmdline
+        op: contains
+        value: "connect"
+    logic: and
+metadata:
+  description: "openssl s_client 加密反弹 Shell"
+  confidence: 85

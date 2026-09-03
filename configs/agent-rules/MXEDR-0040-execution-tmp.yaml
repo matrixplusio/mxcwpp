@@ -1,0 +1,26 @@
+schema_version: 1
+id: MXEDR-0040
+name: execution_from_tmp
+version: 1
+category: process
+severity: medium
+mitre:
+  tactic: execution
+  technique: T1059
+tags: [execution, tmp, suspicious]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: regex
+        value: "^/(tmp|var/tmp|dev/shm)/"
+    logic: and
+metadata:
+  description: "检测从临时目录执行的可执行文件"
+  confidence: 70
+  false_positive:
+    - "某些安装程序和编译器在 /tmp 下执行"

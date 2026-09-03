@@ -1,0 +1,24 @@
+schema_version: 1
+id: MXEDR-0051
+name: defense_evasion_ld_preload
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: defense_evasion
+  technique: T1574.006
+tags: [defense_evasion, ld_preload, hijack]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "(LD_PRELOAD=|/etc/ld\\.so\\.preload)"
+    logic: and
+metadata:
+  description: "检测 LD_PRELOAD 动态链接库劫持"
+  confidence: 90

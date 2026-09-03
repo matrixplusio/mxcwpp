@@ -1,0 +1,78 @@
+# MxCwpp Platform — Prometheus 抓取配置
+#
+# 设计原则：
+#   - 只 scrape mxcwpp 自研服务（Go 进程，自动暴露 process_* + Go runtime metric）
+#   - 不部署 mysql/redis/kafka/clickhouse exporter（这些指标已由 driver/admin 在
+#     Manager monitor handler 中真实查询，不重复造轮子）
+#   - 告警直 webhook 到 mxcwpp /api/v1/internal/alerts/prometheus，
+#     入 alerts 表 (source=prometheus_infra)，复用现有 notification 系统
+#     （不部署 Alertmanager — 告警路由/去重/通知 mxcwpp 已全套覆盖）
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: mxcwpp
+    env: dev
+
+# 告警规则文件
+rule_files:
+  - /etc/prometheus/rules.yml
+
+# 告警直推 mxcwpp manager webhook（不经 Alertmanager）
+alerting:
+  alertmanagers:
+    - scheme: http
+      path_prefix: /api/v1/internal/alerts/prometheus
+      static_configs:
+        - targets:
+            - manager:8080
+      # 注意：mxcwpp 通过 X-Internal-Secret header 鉴权
+      # Prometheus webhook 不支持自定义 header，需用 basic_auth 或通过 nginx 转换
+      # 部署时可在 manager 端临时放行此路径 + Prom IP 白名单
+
+scrape_configs:
+  # ============ Mxcwpp 自研服务（Go process metrics + 业务 RED 指标） ============
+  - job_name: mxcwpp-manager
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - manager:8080
+        labels:
+          service: manager
+
+  - job_name: mxcwpp-agentcenter
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - agentcenter:8080
+        labels:
+          service: agentcenter
+
+  - job_name: mxcwpp-consumer
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - consumer:9100
+        labels:
+          service: consumer
+
+  - job_name: prometheus
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: prometheus
+
+  # ============ 主机资源（node_exporter） ============
+  # 只抓自研服务进程不足以发现磁盘耗尽：盘满时进程仍然存活，
+  # 存活类告警不触发，但数据库已全部停止写入。
+  # 端口用 9101 而非默认 9100 —— consumer 的 metrics 端点已占用 9100。
+  - job_name: mxcwpp-node
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - node-exporter:9101
+        labels:
+          service: node

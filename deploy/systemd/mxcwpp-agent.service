@@ -1,0 +1,34 @@
+[Unit]
+Description=Matrix Cloud Security Platform Agent
+Documentation=https://github.com/matrixplusio/mxcwpp
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/mxcwpp-agent
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxcwpp-agent
+
+# 资源限制
+# MemoryLimit (legacy)兼容 systemd <231 (Oracle Linux 7 / RHEL 7)
+# 新系统 systemd 仍接受 MemoryLimit
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=2G
+CPUQuota=100%
+
+# 环境变量
+Environment="TZ=Asia/Shanghai"
+# Agent↔AgentCenter 信任链引导参数（MXCWPP_ENROLL_TOKEN / MXCWPP_CA_FINGERPRINT）。
+# 由安装脚本写入，root-only 0600；走 EnvironmentFile 而非 Environment=，避免令牌出现在
+# unit 文件、进程参数或 systemctl show 的常规输出里。前缀 "-" 表示文件不存在不报错
+# （已持有单机证书的存量 agent 无需 enroll 令牌）。
+EnvironmentFile=-/etc/mxcwpp-agent/agent.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+#
+# 提交前本地拦截，避免把必然让 CI 变红的改动推上去。
+#
+# 为什么需要它：CI 最近 12 次运行有 11 次失败，6 次全是同一个原因——
+# 有人提交了未 gofmt 的文件。而 gofmt 是 CI 的第一步，它一失败，
+# build 和 test 都不会执行，所有门禁形同虚设。
+#
+# 这里只做「快且必然失败」的检查。慢的（构建、测试）留给 CI，
+# 否则每次提交都要等几分钟，最后大家会用 --no-verify 绕过去。
+#
+# 安装：make hooks    （或 git config core.hooksPath .githooks）
+# 跳过：git commit --no-verify   （仅限确实需要时）
+
+set -euo pipefail
+
+fail=0
+
+# --- 1. gofmt ---
+# 只检查本次暂存的 .go 文件，不扫全仓：全仓 gofmt 在大仓上要好几秒。
+staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$staged_go" ]; then
+    unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
+    if [ -n "$unformatted" ]; then
+        echo "✗ 以下文件未格式化（CI 会在第一步失败，导致测试与门禁全部不执行）："
+        echo "$unformatted" | sed 's/^/    /'
+        echo "  修复：gofmt -w $(echo $unformatted | tr '\n' ' ')"
+        fail=1
+    fi
+fi
+
+# --- 2. 合并冲突残留 ---
+# 冲突标记进主干后，编译错误的现场往往离真正原因很远。
+if git diff --cached --check >/dev/null 2>&1; then
+    :
+else
+    echo "✗ 暂存内容含空白错误或冲突标记："
+    git diff --cached --check | sed 's/^/    /'
+    fail=1
+fi
+
+# --- 3. 明显的密钥 ---
+# 只拦形态明确的长期令牌，不做通用密钥扫描：误报多了就会被绕过。
+secrets=$(git diff --cached -U0 | grep -E '^\+' | \
+          grep -oE 'sk-ant-[a-z0-9]+-[A-Za-z0-9_-]{20,}' | head -3 || true)
+if [ -n "$secrets" ]; then
+    echo "✗ 暂存内容里出现疑似 API 令牌，已阻止提交。"
+    echo "  若确属误报，用 git commit --no-verify；否则请先撤销该令牌。"
+    fail=1
+fi
+
+# --- 4. 生产环境标识 ---
+# 本仓库对外发布。真实地址进入提交后 git 历史里永久可查，已被克隆的副本也收不回，
+# 所以必须在写进历史之前拦住，而不是事后清理。
+#
+# 判据与 internal/deploy/no_production_identifiers_test.go 一致：
+#   - 地址走白名单——只放行文档保留段，其余一律拦下。黑名单要把真实网段写进
+#     这个公开仓库，防泄露的东西自己就成了泄露源。
+#   - 公司名/业务线/主机名前缀这类字面量放在 .production-identifiers（已 gitignore），
+#     有则查、无则跳过。
+#
+# 这里只做粗筛，完整判定（版本号排除、等保条款号等）交给 make test。
+# 先剥掉紧跟 "/" 或 "-" 的四段数字：User-Agent 里的 Chrome/125.0.0.0 这类版本号
+# 与地址在数字上无法区分，只能靠前缀字符判断。
+# 排除门禁自身：它按职责必须持有"应被拦下"的合成地址作为反例固件。
+addrs=$(git diff --cached -U0 -- . ':(exclude)internal/deploy/no_production_identifiers_test.go' | grep -E '^\+' | \
+        sed -E 's#[/-][0-9]{1,3}(\.[0-9]{1,3}){3}##g' | \
+        grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | sort -u | \
+        grep -vE '^(10\.0\.|10\.1\.2\.3|10\.96\.|10\.255\.255\.255|127\.|169\.254\.|172\.16\.|172\.17\.|172\.31\.255\.|172\.32\.0\.1|192\.0\.2\.|192\.168\.[01]\.|198\.51\.100\.|203\.0\.113\.|0\.0\.0\.0|255\.255\.255\.255|8\.8\.[84]\.[84]|1\.1\.1\.1|114\.114\.114\.114|223\.[56]\.[56]\.[56]|93\.184\.216\.34|999\.|8\.1\.4\.|[0-9]\.[0-9]+\.[0-9]+\.[0-9]+$)' || true)
+if [ -n "$addrs" ]; then
+    echo "✗ 暂存内容里出现文档白名单之外的 IP 地址，已阻止提交："
+    echo "$addrs" | head -5 | sed 's/^/    /'
+    echo "  改用 203.0.113.x（公网示例）或 10.0.0.x（内网示例）。"
+    echo "  确需记录真实环境细节，请写到 local-reports/（已 gitignore）。"
+    echo "  若确属通用示例，同时更新 internal/deploy/no_production_identifiers_test.go 的白名单。"
+    fail=1
+fi
+
+if [ -f .production-identifiers ]; then
+    terms=$(grep -vE '^\s*(#|$)' .production-identifiers | tr -d '\r')
+    if [ -n "$terms" ]; then
+        hits=$(git diff --cached -U0 | grep -E '^\+' | grep -iF "$terms" | head -3 || true)
+        if [ -n "$hits" ]; then
+            echo "✗ 暂存内容命中 .production-identifiers 中登记的环境特有标识，已阻止提交。"
+            echo "  改用中性名称，或把内容移到 local-reports/。"
+            fail=1
+        fi
+    fi
+fi
+
+# --- 5. 生产来源声明 ---
+# 判据是来源不是长相：一个数字读起来再像技术依据，只要它取自生产环境，
+# 写进公开仓库就等于发布运行数据。这里拦「来源标记 + 具体数字」的组合，
+# 不带来源标记的实验室基准不受影响。
+# 完整规则见 internal/deploy/no_prod_sourced_claims_test.go。
+added=$(git diff --cached -U0 | grep -E '^\+' | grep -v '^+++' || true)
+if [ -n "$added" ]; then
+    marked=$(echo "$added" | grep -iE 'prod ?实测|生产实测|线上实测|现网实测|生产上表现|生产表现|prod 上|on the live fleet|in production' || true)
+    if [ -n "$marked" ]; then
+        both=$(echo "$marked" | grep -E '[0-9]{4,}|[0-9]{1,3}(,[0-9]{3})+|[0-9]+(\.[0-9]+)? ?[kKwW]\+?|[0-9]+(\.[0-9]+)? ?(万|亿|台|条|次|个|行|GB|TB|%|/天|/秒|/周)' | head -3 || true)
+        if [ -n "$both" ]; then
+            echo "✗ 暂存内容含「生产来源 + 具体数字」的表述，已阻止提交："
+            echo "$both" | sed 's/^/    /' | cut -c1-120
+            echo "  改法：数字换成量级（\"数十万条\"），或删掉来源标记只留技术判据；"
+            echo "  确需记录真实环境细节，写到 local-reports/（已 gitignore）。"
+            fail=1
+        fi
+    fi
+fi
+
+# --- 6. 组织标识 ---
+# 业务线编号与真实主机名前缀不需要搭配数字，本身就能把内容关联到具体组织。
+orgs=$(git diff --cached -U0 | grep -E '^\+' | grep -v '^+++' \
+       | grep -E 'G0[0-9]-(UAT|PROD)' | head -3 || true)
+if [ -n "$orgs" ]; then
+    echo "✗ 暂存内容含组织标识（业务线编号），已阻止提交："
+    echo "$orgs" | sed 's/^/    /' | cut -c1-120
+    echo "  改法：测试固件用中性名（line-a / host-1），注释里描述角色而非具体实例。"
+    fail=1
+fi
+
+
+if [ "$fail" -ne 0 ]; then
+    echo ""
+    echo "提交已中止。"
+    exit 1
+fi

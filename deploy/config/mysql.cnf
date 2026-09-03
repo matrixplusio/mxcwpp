@@ -1,0 +1,42 @@
+# Matrix Cloud Security Platform - MySQL 配置
+# 适用于 MySQL 8.0+
+
+[mysqld]
+# 字符集
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# 连接
+max_connections = 1200
+max_connect_errors = 1000
+wait_timeout = 28800
+interactive_timeout = 28800
+
+# Binlog (单机部署无主从复制，关闭 binlog 节省磁盘)
+disable-log-bin
+
+# InnoDB
+innodb_buffer_pool_size = 1G
+innodb_log_file_size = 256M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+
+# 日志
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+log_error = /var/log/mysql/error.log
+
+# 临时表和排序
+tmp_table_size = 64M
+max_heap_table_size = 64M
+sort_buffer_size = 4M
+
+# 禁用 DNS 反解析
+skip-name-resolve
+
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4

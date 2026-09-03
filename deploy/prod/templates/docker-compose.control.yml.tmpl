@@ -1,0 +1,220 @@
+name: mxcwpp-control
+
+# 容器 stdout 日志轮转。
+#
+# json-file 驱动默认无上限：容器一旦进入错误刷屏，单个日志文件可以在数小时内
+# 吃掉整块根盘，届时数据库停止写入、docker exec 也会因无空间而失败，连排查都做不了。
+# 此处给所有服务设硬上限：单文件 100MB、保留 3 个 = 每容器 300MB 封顶。
+# 应用自身的结构化日志另有 DataRoot/logs/<svc> 卷挂载，不受此影响。
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "100m"
+    max-file: "3"
+
+services:
+{{- if .HasManager }}
+  manager:
+    image: {{ .ManagerImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/manager:/var/log/mxcwpp
+      - {{ .DataRoot }}/plugins:/opt/mxcwpp/plugins
+      - {{ .DataRoot }}/uploads:/opt/mxcwpp/uploads
+      - {{ .DataRoot }}/data:/opt/mxcwpp/data
+      - {{ .DataRoot }}/clamav:/var/lib/clamav
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+{{- end }}
+
+{{- if .HasAgentCenter }}
+  agentcenter:
+    image: {{ .AgentCenterImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server-ac.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/agentcenter:/var/log/mxcwpp
+      - {{ .DataRoot }}/plugins:/opt/mxcwpp/plugins
+      - {{ .DataRoot }}/data:/opt/mxcwpp/data:ro
+      - {{ .DataRoot }}/uploads:/opt/mxcwpp/uploads:ro
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 6751"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+{{- end }}
+
+{{- if .HasConsumer }}
+  consumer:
+    image: {{ .ConsumerImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/consumer:/var/log/mxcwpp
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+{{- end }}
+
+{{- if .HasEngine }}
+  # ===== Engine v2.0 检测分析引擎 =====
+  # 订阅 mxcwpp.agent.* (ConsumerGroup B "mxcwpp-engine"), 与 consumer 独立 offset.
+  # 16 stages: CEL / sequence / anomaly / ML / audit / intrusion / kube / RASP / storyline 等.
+  engine:
+    image: {{ .EngineImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/engine:/var/log/mxcwpp
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+{{- end }}
+
+{{- if .HasLLMProxy }}
+  # ===== LLMProxy v2.0 多 LLM 厂商适配网关 =====
+  # 7 providers: OpenAI / Anthropic / Gemini / DashScope / DeepSeek / Ollama / vLLM
+  # 4 scene routing: alert_explain / storyline_summary / nl2query / rule_draft
+  llmproxy:
+    image: {{ .LLMProxyImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/llmproxy:/var/log/mxcwpp
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8085/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+{{- end }}
+
+{{- if .HasVulnSync }}
+  # ===== VulnSync v2.0 漏洞情报融合 =====
+  # 11+ sources: NVD / OSV / RHSA / USN / CISA KEV / EPSS / CNNVD / 信创 (Kylin/UOS/openEuler/anolis)
+  # PURL+NEVRA 双索引 + Leader Election (redsync 避免多副本重复抓取).
+  vulnsync:
+    image: {{ .VulnSyncImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    volumes:
+      - {{ .InstallDir }}/current/config/server.yaml:/etc/mxcwpp/server.yaml:ro
+      - {{ .InstallDir }}/current/certs:/etc/mxcwpp/certs:ro
+      - {{ .DataRoot }}/logs/vulnsync:/var/log/mxcwpp
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8083/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+{{- end }}
+
+{{- if .HasUI }}
+  ui:
+    image: {{ .UIImage }}
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    {{- if .HasManager }}
+    depends_on:
+      manager:
+        condition: service_healthy
+    {{- end }}
+    volumes:
+      - {{ .InstallDir }}/current/config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # nginx 443 读 /etc/nginx/ssl/server.{crt,key}。只挂 certs/ssl 子目录：
+      # 整个 certs 目录含 CA 私钥 / client.key / enroll_token.secret，不得进入 nginx 容器。
+      - {{ .InstallDir }}/current/certs/ssl:/etc/nginx/ssl:ro
+      - {{ .DataRoot }}/logs/nginx:/var/log/nginx
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+{{- end }}
+
+{{- if .HasManager }}
+  # ===== PDF 服务端渲染（可选）=====
+  # Gotenberg 8 sidecar，提供 Chromium → PDF 转换。
+  # 替代前端 jsPDF（万行级数据集会让浏览器崩）。
+  # 配套 server.yaml 的 pdf.gotenberg_url 与 pdf.internal_url 字段。
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    command:
+      - "gotenberg"
+      - "--api-port=3000"
+      - "--chromium-disable-web-security"
+      - "--chromium-allow-list=.*"
+    environment:
+      TZ: {{ .Timezone }}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{{- end }}
+
+  # ===== 主机资源指标 =====
+  # 主机 CPU/内存/磁盘指标。每个节点都要有，缺一个该节点就是监控盲区——
+  # 盘满时进程仍存活，只靠服务存活告警发现不了。
+  # 监听 9101 而非默认 9100 —— consumer 的 metrics 端点已占用 9100。
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: mxcwpp-node-exporter
+    restart: always
+    logging: *default-logging
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+      - "--web.listen-address=:9101"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run)($|/)"
+    volumes:
+      - /:/host:ro,rslave
+    environment:
+      TZ: {{ .Timezone }}

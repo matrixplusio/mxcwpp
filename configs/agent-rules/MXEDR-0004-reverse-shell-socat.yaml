@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0004
+name: reverse_shell_socat
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: execution
+  technique: T1059
+tags: [reverse_shell, socat]
+agent:
+  enabled: true
+  action: kill
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "socat"
+      - field: cmdline
+        op: regex
+        value: "(?i)(exec|pty).*tcp"
+    logic: and
+metadata:
+  description: "socat 通过 EXEC/PTY + TCP 建立反弹 Shell"
+  confidence: 90
