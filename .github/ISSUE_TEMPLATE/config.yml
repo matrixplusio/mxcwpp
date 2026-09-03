@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/matrixplusio/mxcwpp/security/policy
+    about: 不要用公开 issue 报告安全漏洞，请按 SECURITY.md 的流程提交
