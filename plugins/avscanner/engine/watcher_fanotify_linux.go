@@ -23,7 +23,6 @@ import (
 
 // FanotifyWatcher 高精度 fanotify 监控 (M1-8 骨架)。
 type FanotifyWatcher struct {
-	logger *zap.Logger
 	events chan decoyEvent
 }
 

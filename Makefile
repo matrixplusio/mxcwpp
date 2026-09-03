@@ -10,17 +10,17 @@ GOOS ?= linux
 
 proto:
 	@echo "Generating Protobuf Go code..."
-	@if ! command -v protoc &> /dev/null; then \
+	@if ! command -v protoc >/dev/null 2>&1; then \
 		echo "Error: protoc not found. Please install protoc first."; \
 		echo "macOS: brew install protobuf"; \
 		echo "Ubuntu/Debian: sudo apt-get install protobuf-compiler"; \
 		exit 1; \
 	fi
-	@if ! command -v protoc-gen-go &> /dev/null; then \
+	@if ! command -v protoc-gen-go >/dev/null 2>&1; then \
 		echo "Installing protoc-gen-go..."; \
 		go install google.golang.org/protobuf/cmd/protoc-gen-go@latest; \
 	fi
-	@if ! command -v protoc-gen-go-grpc &> /dev/null; then \
+	@if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then \
 		echo "Installing protoc-gen-go-grpc..."; \
 		go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest; \
 	fi
@@ -140,7 +140,7 @@ test-race:
 
 security:
 	@echo "=== 依赖漏洞扫描 (govulncheck) ==="
-	@if command -v govulncheck &> /dev/null; then \
+	@if command -v govulncheck >/dev/null 2>&1; then \
 		govulncheck ./...; \
 	else \
 		echo "govulncheck not found, installing..."; \
@@ -148,7 +148,7 @@ security:
 	fi
 	@echo ""
 	@echo "=== 静态安全分析 (gosec) ==="
-	@if command -v gosec &> /dev/null; then \
+	@if command -v gosec >/dev/null 2>&1; then \
 		gosec -quiet ./...; \
 	else \
 		echo "gosec not found, installing..."; \
@@ -162,7 +162,7 @@ fmt:
 	go fmt ./...
 
 lint:
-	@if command -v golangci-lint &> /dev/null; then \
+	@if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run; \
 	else \
 		echo "golangci-lint not found, skipping lint"; \

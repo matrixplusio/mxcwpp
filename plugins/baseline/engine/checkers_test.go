@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -571,6 +572,18 @@ func TestCommandExecChecker(t *testing.T) {
 }
 
 // TestSysctlChecker 测试 SysctlChecker
+// sysctlOSTypeKey 返回当前平台上表示内核名称的 sysctl 键。
+//
+// 两个平台的键名互斥，不存在通用写法：Linux 只认 kernel.ostype，
+// macOS 只认 kern.ostype，查另一个会直接报错。写死其一会让测试只在
+// 作者的机器上通过——这正是它在 Linux CI 上第一次运行就失败的原因。
+func sysctlOSTypeKey() string {
+	if runtime.GOOS == "linux" {
+		return "kernel.ostype"
+	}
+	return "kern.ostype"
+}
+
 func TestSysctlChecker(t *testing.T) {
 	logger := setupTestLogger(t)
 	checker := NewSysctlChecker(logger)
@@ -585,14 +598,14 @@ func TestSysctlChecker(t *testing.T) {
 	}{
 		{
 			name:     "pass - sysctl value matches",
-			key:      "kern.ostype", // 使用 macOS/Linux 都存在的参数
-			expected: ".*",          // 匹配任何值（正则表达式）
+			key:      sysctlOSTypeKey(),
+			expected: ".*", // 匹配任何值（正则表达式）
 			wantPass: true,
 			wantErr:  false,
 		},
 		{
 			name:     "fail - sysctl value mismatch",
-			key:      "kern.ostype",
+			key:      sysctlOSTypeKey(),
 			expected: "nonexistent-value-12345",
 			wantPass: false,
 			wantErr:  false,

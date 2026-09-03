@@ -92,7 +92,9 @@ func (l *cnProcListener) readLoop(ctx context.Context, wg *sync.WaitGroup) {
 				case <-ctx.Done():
 					return
 				default:
-					syscall.Select(0, nil, nil, nil, &syscall.Timeval{Usec: 50000}) // 50ms
+					// 无 fd 的 Select 在这里只当睡眠用：返回值区分不出超时与被信号打断，
+					// 而两种情况都该回到循环重试，所以显式忽略。
+					_, _ = syscall.Select(0, nil, nil, nil, &syscall.Timeval{Usec: 50000}) // 50ms
 					continue
 				}
 			}

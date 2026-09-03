@@ -42,9 +42,6 @@ const (
 	pathModeBasename   = 1
 )
 
-// pathDelimiter separates dentry components in BPF output (\xff).
-const pathDelimiter = '\xff'
-
 // processEvent mirrors struct process_event from bpf/common.h.
 // Field order, sizes, and padding MUST stay in sync with the C struct.
 // Verified against bpf2go-generated processProcessEvent in process_bpfel.go.
