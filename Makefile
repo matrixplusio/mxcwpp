@@ -127,8 +127,13 @@ hooks:
 	@echo "已启用 .githooks/（提交前自动检查 gofmt / 冲突标记 / 明文令牌）"
 	@echo "跳过单次检查：git commit --no-verify"
 
-test:
+test: vuln
 	go test ./...
+
+# 依赖漏洞检查与 CI 共用 scripts/check-vuln.sh。本地没装 govulncheck 会跳过
+# 并打印提示——CI 上这项一定会跑，跳过不代表能过。
+vuln:
+	@./scripts/check-vuln.sh
 
 test-ui:
 	cd web && pnpm test
