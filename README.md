@@ -55,7 +55,7 @@ To build a more comprehensive security operations system, we recommend extending
 | Memory threat detection (memfd_exec / process hollowing / shellcode / LSASS dump) | :white_check_mark: | :white_check_mark: |
 | AD / LDAP domain controller audit (7 rules: DCSync / Kerberoasting / brute force / etc.) | :white_check_mark: | :white_check_mark: |
 | DKOM rootkit detection (hidden PID / kernel module / port / LD_PRELOAD) | :white_check_mark: | :white_check_mark: |
-| Honeypot sensors (SSH / HTTP decoys + file decoy policy) | :white_check_mark: | :white_check_mark: |
+| Honeypot sensors (SSH / HTTP decoys + file decoy policy) | :construction: | :construction: |
 | VEX vulnerability statement export (CycloneDX 1.5 / CSAF 2.0) | :white_check_mark: | :white_check_mark: |
 | YARA-X malware signature library (73 rules / 50 families) | :white_check_mark: | :white_check_mark: |
 | Threat hunting (SPL-like DSL → SQL transpiler) | :white_check_mark: | :white_check_mark: |
@@ -65,7 +65,7 @@ To build a more comprehensive security operations system, we recommend extending
 | Active defense (NPatch eBPF hot-patching) | `built-in samples` | :white_check_mark: |
 | Cloud antivirus | :x: | :construction: |
 
-> :white_check_mark: Supported &nbsp; `built-in samples` includes sample rules &nbsp; :x: Not supported &nbsp; :construction: Planned
+> :white_check_mark: Supported &nbsp; `built-in samples` includes sample rules &nbsp; :x: Not supported &nbsp; :construction: In development / planned, not yet shipped
 
 ## Features
 
@@ -82,7 +82,7 @@ To build a more comprehensive security operations system, we recommend extending
 | Threat Intelligence | MISP IOC import + Redis cache + CEL real-time matching |
 | Memory Forensics | memfd_exec / process hollowing / shellcode injection / LSASS dump detection (EDR-3) |
 | AD/LDAP Audit | 7 detection rules: DCSync, Kerberoasting, brute force, off-hour RDP, privilege assignment, etc. (EDR-4) |
-| Honeypot Sensors | SSH/HTTP decoys + file decoys with whitelist for legitimate backup tools (C1) |
+| Honeypot Sensors | SSH/HTTP decoys + file decoys with whitelist for legitimate backup tools (C1) — **in development, not yet shipped** |
 | Rootkit Detection | DKOM hidden PID / kernel module / port / LD_PRELOAD / /proc inconsistency (C2) |
 | Threat Hunting | SPL-like DSL → SQL transpiler over ClickHouse event archive |
 | VEX Export | CycloneDX VEX 1.5 + CSAF 2.0 for vendor vulnerability statements (B7) |
@@ -113,7 +113,7 @@ Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer �
 Manager ──HTTP──→ LLMProxy ×N (multi-LLM gateway)   VulnSync ×N ──Kafka──→ Manager/Engine
 ```
 
-In v2.0 the backend is split into **six microservices**: Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync. The control plane is fully stateless and scales horizontally. Kafka decouples data persistence from detection (two ConsumerGroups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and event archives. VulnSync pulls OS vendor advisories and publishes them to Kafka, where the Manager consumer matches them against host software.
+In v2.0 the backend is split into **seven services**: Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync / Scanner. The control plane is fully stateless and scales horizontally. Kafka decouples data persistence from detection (two ConsumerGroups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and event archives. VulnSync pulls OS vendor advisories and publishes them to Kafka, where the Manager consumer matches them against host software.
 
 See [Architecture Documentation](docs/architecture.md) for details.
 
@@ -192,7 +192,8 @@ mxcwpp/
 - [API Reference](docs/api-reference.md) - REST API endpoints, request/response formats, authentication
 - [FAQ](docs/faq.md) - Common issues and troubleshooting
 - [Governance](docs/governance.md) - Project governance model, decision process, security policy
-- [Contributing](docs/contributing.md) - Contribution guide, dev environment, code standards, submission process
+- [Contributing](CONTRIBUTING.md) - Branch and PR workflow, commit format, publishing rules
+- [Development](docs/development.md) - Local setup, database migrations, plugin development
 
 ## Star History
 
@@ -204,4 +205,6 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE)
+
+AGPL-3.0 requires that modifications remain available under the same licence, including when the software is offered as a network service.

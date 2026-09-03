@@ -874,6 +874,10 @@ DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD 异常 / /proc 不一致.
 
 SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).
 
+> **开发验证中，尚未随社区版发布。** 以下接口可调用, 但 agent 侧探针未接线:
+> `POST /sensors` 只写一条部署记录、不下发命令, `GET /events` 过滤 `alerts.source=honeypot`
+> 而该来源当前无生产者, 故两个列表恒空。详见 [roadmap](roadmap.md) §5.3。
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET  | `/api/v1/v2/honeypot/sensors` | 已部署传感器列表 (按租户隔离) |

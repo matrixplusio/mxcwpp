@@ -127,7 +127,62 @@ go.mod 也没有相关依赖，proto 里没有 manifest 字段，agent 侧没有
 `ml_model_specs` / `ml_model_subscriptions` / `ml_model_deployment_status` 三张表
 在已部署环境里留着（零路由，必为空），不做 DROP。
 
-Stage 与 biz 层已无未接线代码。
+2026-09-03 蜜罐（C1）改标未接线，社区反馈发现。三段链路全断：
+
+- **agent 侧**：`internal/agent/edr/honeypot`（SSH/HTTP 假回应监听器，296 行）与
+  `internal/agent/edr/canary`（诱饵文件哈希巡检）都是零 importer，agent 任何入口
+  都不构造它们，端口从未监听过——所以"扫蜜罐端口没告警"不是告警缺失，是没端口。
+- **事件面**：文件诱饵另有一套在 `plugins/avscanner`，插件内接线完整
+  （`NewHoneypotManager` → `Deploy` → `Run` → DataType 7020 上报），但 consumer
+  router 没有 7020 分支，事件进 DLQ；对应的 `engine/honeypot` Detector 已于
+  2026-08-03 因"无条件产 critical"删除，两头都没了。
+- **server 侧**：`api/honeypot.go` 的 events 查 `alerts.source='honeypot'`，全系统
+  无生产者，恒空；sensors 聚合 `HoneypotDeploymentRecord`，写入口
+  `biz/honeypot.RecordDeployment` 零调用方（agent 没有回报端点），`CreateSensor`
+  只写一条 DB 记录，不下发任何命令。
+
+README 两份已从 :white_check_mark: 改标 :construction:。恢复需要五件事，缺一不可：
+agent 装配 + 配置开关（默认关，绑定端口是攻击面）、7020 路由与告警分级
+（原 Detector 无条件 critical 正是它被删的原因）、部署回报端点、以及端到端验证
+（判据是有 alert 产出，不是端口 listen）。
+
+2026-09-03 把"有没有接线"变成构建期能看见的事实。上一条蜜罐是社区反馈才发现的，
+说明靠人读代码找不出这类缺陷，于是改成机器查：`TestNoUndeclaredUnwiredPackages`
+以 linux 视角枚举全部包，`internal/` 与 `pkg/` 下没有任何导入者的包必须登记在
+`internal/deploy/testdata/unwired-packages.tsv` 并写明原因，否则构建失败；
+已经接线却还留在清单里的同样失败，防止清单慢慢失真。
+
+首次扫描得 38 个零导入包，其中已能定性的：
+
+- `manager/init` 与 `manager/setup` 是同名同签名的两份 `Initialize`，manager 实际
+  走后者。这正是 AC 两个同步调度器静默缺失数月的同一种形状——改错文件不会有任何
+  报错。待删除。
+- `manager/handler` 的 GraphQL endpoint 从未在 router 注册，它与依赖的 `biz/graphql`
+  一并悬空。
+- `pkg/util/worker`（A10 审计修复引入的统一 RunLoop）与 `pkg/util/strutil` 无任何引用。
+- `llmproxy/{quota,cache,audit}` 属服务骨架未完成（`Version 0.1.0-skeleton`）；
+  在 quota 接入之前，LLM 调用没有花费上限。
+- `common/mode/gate`（observe→protect 的 6 门槛准入）是**有意**未接线：切换入口随
+  多租户管理面一并移除，只余 GET 查询。
+
+其余 27 个（`edr/{clamav,elfparse,fanotify,forensics,lsm,npatch,quarantine,rootkit,weakpass}`、
+`biz/{sbom,soar,hunting,imagescan,npatch,pocvalidation}`、`engine/{adaudit,microseg,rollout,ruleimport,replay}`
+等）尚未定性，清单里标为"待确认：接线或删除"。**上一条里"biz 层仅剩
+`biz/honeypot.RecordDeployment` 这一处"的说法据此作废**——biz 下共有 7 个零导入包。
+
+同日补了三处测试盲区，并在其中一处查出真缺陷：
+
+- `internal/common/compressor`（gRPC Snappy 压缩，agent↔server 全量流量经过它）
+  把 `sync.Pool` 的归还标记放在被复用的对象上。读到 EOF 之后再读一次——`io.Reader`
+  允许的调用序列——会二次入池，同一个 reader 被两个流取走，各自 `Reset` 到不同数据源；
+  写入侧重复 `Close` 同理。现改为一次性句柄借用池中对象，归还且仅归还一次。
+  5 个用例含 `-race` 并发还原校验。
+- `internal/common/signing`（Ed25519）与 agent 的 `verifySignature`：插件二进制执行前
+  的唯一关卡，放行一次伪造签名等于全机群任意代码执行。补了篡改、异己密钥、空签名与
+  八种畸形输入的拒绝用例。
+- `TestProductionBuildRequiresSigningKey` 钉住 `scripts/build.sh` 的构建期闸门：
+  公钥为空时 `verifySignature` 会跳过整道校验且只留一条 Warn，这条 fail-open 分支
+  可以接受的唯一理由就是生产构建缺 `SIGN_PUBLIC_KEY` 时直接失败。
 
 ---
 
@@ -354,6 +409,23 @@ eBPF 网络事件只提供 `comm`，不提供 `exe`（`collector/ebpf.go:756-762
 | celengine 进程树无有效回收 | `进程树定期清理` 每轮回收的节点数远小于同期新增，节点总数单调增长，清理条件形同虚设 | 常驻内存持续膨胀，突破 `GOMEMLIMIT` 后 GC 死亡螺旋表现为 CPU 打满。判据看 `nodes` 是否收敛，不是看 RSS |
 | `host_vulnerabilities.resurfaced_at` 未写入 | 状态可以翻成 `resurfaced`，但该时间戳字段始终为 NULL | 无法按时间维度分析复现，只能退回看 `updated_at` |
 | 修复回执落 DLQ | agent 上报的修复结果按 `host_vuln_id` 关联，关联不到即整条转 DLQ；同一 `vulnerabilities` 行并发 UPDATE 会触发死锁（`remediation/vuln_patch.go`）| 修复状态对不上账，已修的漏洞可能被判回未修 |
+
+#### 三、蜜罐（C1）接线
+
+2026-09-03 社区反馈发现三段链路全断（断点详见 §5.3）。README 已改标 :construction:，
+但能力本身仍欠。恢复要五件事，缺一不可——只做前两件会得到「端口开着但不产告警」，
+只做第三件会得到「无条件 critical 刷屏」，都比现状更糟：
+
+| 步骤 | 内容 | 判据 |
+|------|------|------|
+| 1 | agent 装配 `edr/honeypot`（SSH/HTTP 监听器）与 `edr/canary`（诱饵巡检） | 进程实际 listen，不是编译过 |
+| 2 | 配置开关，**默认关**——绑定端口本身是攻击面，且与业务端口可能撞车 | 关时零监听、零资源占用 |
+| 3 | consumer 补 DataType 7020 路由 + 告警分级 | 7020 不再进 DLQ；原 `engine/honeypot` 因无条件产 critical 被删，重做必须按命中类型分级 |
+| 4 | agent 侧部署回报端点，接上 `biz/honeypot.RecordDeployment` | sensors 列表出真实记录，不再恒空 |
+| 5 | 端到端验证 | **判据是有 alert 产出**，不是端口 listen、不是日志无报错 |
+
+文件诱饵那套（`plugins/avscanner` 内）插件侧已完整，卡的只有第 3 步；
+网络蜜罐则 1-5 全欠。两者可拆开做，先做文件诱饵成本最低。
 
 ### 漏洞情报：跨发行版标签污染（已根治，存量待回填）
 
