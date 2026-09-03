@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"unsafe"
 
 	"go.uber.org/zap"
@@ -46,7 +45,6 @@ type Watcher struct {
 	fd     int
 	logger *zap.Logger
 
-	mu     sync.RWMutex
 	stop   chan struct{}
 	events chan Event
 }

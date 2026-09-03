@@ -42,7 +42,11 @@ is_strong_secret "$v1" || { echo "FAIL:not-strong"; exit 1; }
 [ "$v1" = "$v2" ] || { echo "FAIL:rotated"; exit 1; }
 n="$(grep -c '^INTERNAL_SECRET=' "$ENV_FILE" || true)"
 [ "$n" = "1" ] || { echo "FAIL:lines=$n"; exit 1; }
-perm="$(stat -f '%Lp' "$ENV_FILE" 2>/dev/null || stat -c '%a' "$ENV_FILE")"
+# GNU 与 busybox 都用 -c '%a'，BSD(macOS) 用 -f '%Lp'。
+# 不能写成 "stat -f 失败就回退 -c"：GNU 的 -f 是查文件系统，对普通文件
+# 退出码为 1 却仍往 stdout 打印 File:/Blocks: 等内容，与后一段拼在一起，
+# 权限比对永远失败。先试 -c，仅在它不被支持时回退 BSD 写法。
+perm="$(stat -c '%a' "$ENV_FILE" 2>/dev/null)" || perm="$(stat -f '%Lp' "$ENV_FILE")"
 [ "$perm" = "600" ] || { echo "FAIL:perm=$perm"; exit 1; }
 if [ -n "${EXPECT:-}" ]; then [ "$v1" = "$EXPECT" ] || { echo "FAIL:not-preserved"; exit 1; }; fi
 echo "OK"`
@@ -123,7 +127,7 @@ echo "$text" | grep -q "IP Address:$SERVER_IP" || { echo "FAIL:no-san-ip"; exit 
 : > enroll_token.secret
 sync_nginx_ssl
 ls ssl | sort | tr '\n' ' ' | grep -qx "server.crt server.key " || { echo "FAIL:ssl-extra-files:$(ls ssl | tr '\n' ' ')"; exit 1; }
-perm="$(stat -f '%Lp' ssl/server.key 2>/dev/null || stat -c '%a' ssl/server.key)"
+perm="$(stat -c '%a' ssl/server.key 2>/dev/null)" || perm="$(stat -f '%Lp' ssl/server.key)"
 [ "$perm" = "600" ] || { echo "FAIL:ssl-key-perm=$perm"; exit 1; }
 echo "OK"`
 

@@ -24,6 +24,13 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # 镜像内核 ABI 的类型与常量沿用内核里的写法：eBPF C 结构体逐字段对应 Go struct，
+      # fanotify 常量抄自 <linux/fanotify.h>。改成 Go 驼峰会让两边对不上，
+      # 日后核对字段偏移或搜内核头文件都要多绕一层，收益抵不过代价。
+      - linters:
+          - staticcheck
+        path: internal/agent/edr/(collector|fanotify|npatch)/
+        text: ST1003
       - linters:
           - forbidigo
         path: ^cmd/
