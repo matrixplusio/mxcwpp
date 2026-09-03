@@ -1,0 +1,51 @@
+# 零导入者的包清单：每行 "包路径<TAB>原因"。
+#
+# 本项目最贵的缺陷不是崩溃，是静默失效——代码写完、编译通过、日志干净，
+# 但没有任何调用方，于是那项能力从来没有存在过。已知的例子包括 AC 的两个
+# 同步调度器、celengine 的清理协程、蜜罐的三段链路。它们的共同特征是
+# "没人导入这个包"，而这件事编译器不会说，测试也不会说。
+#
+# 于是把它变成一条必须回答的问题：一个包若没有任何导入者，要么它在这里
+# 登记原因，要么就该接线或删除。清单与实际状况不一致时构建失败——
+# 新出现的未接线包会被拦下,已经接线的包留在清单里也会被拦下。
+#
+# 只含 _test.go 的包（如 internal/deploy 自身）由规则排除,不必登记。
+
+internal/agent/edr/av/clamav	未接线，用途待确认：接线或删除
+internal/agent/edr/canary	蜜罐 C1 接线缺失，roadmap 已记录待办
+internal/agent/edr/elfparse	未接线，用途待确认：接线或删除
+internal/agent/edr/fanotify	未接线，用途待确认：接线或删除
+internal/agent/edr/forensics	未接线，用途待确认：接线或删除
+internal/agent/edr/honeypot	蜜罐 C1 接线缺失，roadmap 已记录待办
+internal/agent/edr/lsm	未接线，用途待确认：接线或删除
+internal/agent/edr/npatch	未接线，用途待确认：接线或删除
+internal/agent/edr/quarantine	未接线，用途待确认：接线或删除
+internal/agent/edr/rootkit	未接线，用途待确认：接线或删除
+internal/agent/edr/weakpass	未接线，用途待确认：接线或删除
+internal/agent/forensics	未接线，用途待确认：接线或删除
+internal/server/common/canary	未接线，用途待确认：接线或删除
+internal/server/common/gmcrypt	未接线，用途待确认：接线或删除
+internal/server/common/mode/gate	有意未接线：observe→protect 的切换入口随多租户管理面一并移除，只余 GET 查询，门槛校验没有调用点
+internal/server/common/otel	未接线，用途待确认：接线或删除
+internal/server/engine/adaudit	未接线，用途待确认：接线或删除
+internal/server/engine/celengine/replay	未接线，用途待确认：接线或删除
+internal/server/engine/microseg	未接线，用途待确认：接线或删除
+internal/server/engine/rollout	未接线，用途待确认：接线或删除
+internal/server/engine/ruleimport	未接线，用途待确认：接线或删除
+internal/server/llmproxy/audit	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入
+internal/server/llmproxy/cache	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入
+internal/server/llmproxy/quota	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入；接入前 LLM 调用没有花费上限
+internal/server/manager/api/admission	未接线，用途待确认：接线或删除
+internal/server/manager/biz/honeypot	蜜罐 C1 接线缺失，roadmap 已记录待办
+internal/server/manager/biz/hunting	未接线，用途待确认：接线或删除
+internal/server/manager/biz/imagescan	未接线，用途待确认：接线或删除
+internal/server/manager/biz/npatch	未接线，用途待确认：接线或删除
+internal/server/manager/biz/pocvalidation	未接线，用途待确认：接线或删除
+internal/server/manager/biz/sbom	未接线，用途待确认：接线或删除
+internal/server/manager/biz/soar	未接线，用途待确认：接线或删除
+internal/server/manager/client	未接线，用途待确认：接线或删除
+internal/server/manager/handler	GraphQL endpoint 从未在 router 注册，本包与其依赖的 biz/graphql 一并悬空
+internal/server/manager/init	与 internal/server/manager/setup 重复：同名同签名的 Initialize，manager 实际走 setup。留着会让人改错文件——AC 的两个同步调度器正是这样静默缺失数月的。待删除
+internal/server/vulnsync/ti	未接线，用途待确认：接线或删除
+pkg/util/strutil	无任何引用，待删除
+pkg/util/worker	A10 审计修复引入的统一 RunLoop，项目里没有一处采用；要么推广，要么删除
