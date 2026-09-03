@@ -1,0 +1,126 @@
+name: CI
+
+# 本仓库的质量约束大部分写成了 Go 测试（internal/deploy/ 下的门禁）。
+# 它们在贡献者本机由 make test 和 pre-commit 钩子执行，但 fork 出去的人
+# 装不上钩子、也不会主动跑——所以必须在这里再执行一次，否则这些约束
+# 对外部 PR 完全不生效。
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建与测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # api/proto/ 下的生成代码不入库，不生成则整个仓库编译不过。
+      - name: 安装 protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: 生成 Protobuf 代码
+        run: make proto
+
+      # 只检查格式，不接受 CI 自行改写代码：格式问题应当在本地解决。
+      - name: 检查格式
+        run: |
+          make fmt
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "以下文件未格式化，请在本地执行 make fmt 后重新提交："
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+
+      - name: 构建
+        run: go build ./...
+
+      # 门禁在这里执行：地址、组织标识、来源声明、文档同步、告警覆盖等。
+      - name: 测试
+        run: make test
+
+  lint:
+    name: 静态检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 安装 protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: 生成 Protobuf 代码
+        run: make proto
+      # 版本必须锁定并与本地一致：golangci-lint 会拒绝加载 go 版本高于
+      # 自身构建版本的项目，而 latest 解析到的往往是上一个大版本。
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
+          args: --timeout=10m
+
+  vuln:
+    name: 依赖漏洞
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 安装 protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: 生成 Protobuf 代码
+        run: make proto
+      # 一个做漏洞管理的项目，自己的依赖也要被扫。
+      #
+      # 已知无修复版本的通告列在 .govulncheck-allow 里，逐条写明理由与复查条件。
+      # 不用 continue-on-error：那会让整个 job 永远是绿的，包括真正该拦的新漏洞。
+      # 这里只放行清单内的编号，出现清单外的通告仍然失败。
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... > /tmp/vuln.txt 2>&1 || true
+          cat /tmp/vuln.txt
+
+          found=$(grep -oE 'GO-[0-9]{4}-[0-9]+' /tmp/vuln.txt | sort -u || true)
+          allowed=$(grep -oE 'GO-[0-9]{4}-[0-9]+' .govulncheck-allow | sort -u || true)
+          unexpected=$(comm -23 <(echo "$found") <(echo "$allowed"))
+
+          if [ -n "$unexpected" ]; then
+            echo ""
+            echo "以下通告不在 .govulncheck-allow 中："
+            echo "$unexpected"
+            echo ""
+            echo "若上游已有修复版本，升级依赖；确无版本可升时，把编号加进"
+            echo ".govulncheck-allow 并写明理由与复查条件。"
+            exit 1
+          fi
+
+          # 清单里的条目若已不再出现，说明上游修了，应当升级依赖并移除该行。
+          stale=$(comm -13 <(echo "$found") <(echo "$allowed"))
+          if [ -n "$stale" ]; then
+            echo ""
+            echo "以下通告已不再出现，请升级依赖并从 .govulncheck-allow 移除："
+            echo "$stale"
+            exit 1
+          fi
