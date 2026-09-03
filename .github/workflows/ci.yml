@@ -7,9 +7,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 permissions:
   contents: read
@@ -96,31 +96,8 @@ jobs:
       # 已知无修复版本的通告列在 .govulncheck-allow 里，逐条写明理由与复查条件。
       # 不用 continue-on-error：那会让整个 job 永远是绿的，包括真正该拦的新漏洞。
       # 这里只放行清单内的编号，出现清单外的通告仍然失败。
+      # 判定逻辑与本地 make vuln 共用 scripts/check-vuln.sh，避免两边漂移。
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... > /tmp/vuln.txt 2>&1 || true
-          cat /tmp/vuln.txt
-
-          found=$(grep -oE 'GO-[0-9]{4}-[0-9]+' /tmp/vuln.txt | sort -u || true)
-          allowed=$(grep -oE 'GO-[0-9]{4}-[0-9]+' .govulncheck-allow | sort -u || true)
-          unexpected=$(comm -23 <(echo "$found") <(echo "$allowed"))
-
-          if [ -n "$unexpected" ]; then
-            echo ""
-            echo "以下通告不在 .govulncheck-allow 中："
-            echo "$unexpected"
-            echo ""
-            echo "若上游已有修复版本，升级依赖；确无版本可升时，把编号加进"
-            echo ".govulncheck-allow 并写明理由与复查条件。"
-            exit 1
-          fi
-
-          # 清单里的条目若已不再出现，说明上游修了，应当升级依赖并移除该行。
-          stale=$(comm -13 <(echo "$found") <(echo "$allowed"))
-          if [ -n "$stale" ]; then
-            echo ""
-            echo "以下通告已不再出现，请升级依赖并从 .govulncheck-allow 移除："
-            echo "$stale"
-            exit 1
-          fi
+          make vuln
