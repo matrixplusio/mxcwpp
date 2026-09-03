@@ -197,7 +197,12 @@ mxcwpp/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=matrixplusio/mxcwpp&type=Date)](https://star-history.com/#matrixplusio/mxcwpp&Date)
+[![Star History](docs/assets/star-history.svg)](https://github.com/matrixplusio/mxcwpp/stargazers)
+
+> The chart is generated monthly by [`scripts/star-history.py`](scripts/star-history.py) and committed to this repo.
+> GitHub now requires authentication on the stargazers endpoint, which broke third-party star history
+> services and led them to ask users for write-scoped personal tokens. We generate it ourselves instead,
+> using the repo-scoped ephemeral token that Actions provides.
 
 ## Contributors
 

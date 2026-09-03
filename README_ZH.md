@@ -197,7 +197,11 @@ mxcwpp/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=matrixplusio/mxcwpp&type=Date)](https://star-history.com/#matrixplusio/mxcwpp&Date)
+[![Star History](docs/assets/star-history.svg)](https://github.com/matrixplusio/mxcwpp/stargazers)
+
+> 曲线由 [`scripts/star-history.py`](scripts/star-history.py) 每月生成并提交进本仓库。
+> GitHub 已把 stargazers 接口收成必须认证，第三方 star history 服务因此失效，
+> 且会索要带写权限的个人 token——本仓库改用 Actions 内置的仓库级临时凭据自产。
 
 ## Contributors
 
