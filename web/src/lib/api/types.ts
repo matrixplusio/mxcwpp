@@ -226,7 +226,7 @@ export interface ComponentVersion {
   created_by: string; created_at: string;
 }
 export interface ComponentDetail {
-  component: Component; versions: ComponentVersion[];
+  component: Component; versions: ComponentVersion[] | null;
 }
 export interface PluginSyncStatus {
   name: string; type: string;

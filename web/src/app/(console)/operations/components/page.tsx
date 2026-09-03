@@ -316,6 +316,8 @@ export default function ComponentsPage() {
   ];
 
   const detailData = detailQuery.data;
+  // 组件尚无版本时后端可能返回 null（旧版本 manager），统一兜底为空数组
+  const detailVersions = detailData?.versions ?? [];
 
   return (
     <>
@@ -418,10 +420,10 @@ export default function ComponentsPage() {
 
             {detailQuery.isLoading && <div className="text-sm text-muted">{t("common.loading")}</div>}
             {detailQuery.isError && <div className="text-sm text-danger">{t("operations.components.loadError")}</div>}
-            {detailData && detailData.versions.length === 0 && <EmptyState title={t("operations.components.emptyVersions")} desc="" />}
+            {detailData && detailVersions.length === 0 && <EmptyState title={t("operations.components.emptyVersions")} desc="" />}
 
             <div className="space-y-3">
-              {detailData?.versions.map((v) => (
+              {detailVersions.map((v) => (
                 <VersionCard
                   key={v.id}
                   version={v}

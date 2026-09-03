@@ -147,7 +147,7 @@ func (h *ComponentsHandler) ListComponents(c *gin.Context) {
 	}
 
 	// 构建带统计信息的响应
-	var result []gin.H
+	result := make([]gin.H, 0)
 	for _, comp := range components {
 		// 获取最新版本
 		var latestVersion model.ComponentVersion
@@ -382,7 +382,7 @@ func (h *ComponentsHandler) ListVersions(c *gin.Context) {
 	}
 
 	// 构建带包信息的响应
-	var result []gin.H
+	result := make([]gin.H, 0)
 	for _, ver := range versions {
 		// 获取该版本的所有包
 		var packages []model.ComponentPackage
@@ -1104,7 +1104,7 @@ func (h *ComponentsHandler) GetPluginSyncStatus(c *gin.Context) {
 		Status         string   `json:"status"`
 	}
 
-	var statuses []PluginStatus
+	statuses := make([]PluginStatus, 0)
 
 	// 查询所有插件配置
 	var pluginConfigs []model.PluginConfig
@@ -1540,7 +1540,7 @@ func (h *ComponentsHandler) ListPushRecords(c *gin.Context) {
 	}
 
 	// 计算进度并构建响应
-	var response []map[string]interface{}
+	response := make([]map[string]interface{}, 0)
 	for _, record := range records {
 		progress := 0.0
 		if record.TotalCount > 0 {
@@ -1602,7 +1602,7 @@ func (h *ComponentsHandler) GetPushRecord(c *gin.Context) {
 	}
 
 	// 查询主机推送详情
-	var pushHosts []model.ComponentPushHost
+	pushHosts := make([]model.ComponentPushHost, 0)
 	h.db.Where("record_id = ?", record.ID).Order("status DESC, hostname ASC").Find(&pushHosts)
 
 	response := map[string]interface{}{
