@@ -161,4 +161,4 @@ CHANGELOG 通过 `git log` 生成，按以下分类组织：
 
 ## 许可证
 
-本项目使用 [Apache License 2.0](../LICENSE)。所有贡献将在同一许可下发布。提交 PR 即表示你同意将你的贡献以 Apache 2.0 许可发布。
+本项目使用 [GNU Affero General Public License v3.0](../LICENSE)。所有贡献将在同一许可下发布。提交 PR 即表示你同意将你的贡献以 AGPL-3.0 许可发布。

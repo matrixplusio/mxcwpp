@@ -292,5 +292,5 @@ case "your_type":
 ## 参考文档
 
 - [架构文档](../../docs/architecture.md)
-- [贡献指南](../../docs/contributing.md)
+- [贡献指南](../../docs/development.md)
 - [代码规范](../../docs/code-style.md)

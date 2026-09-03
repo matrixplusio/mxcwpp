@@ -1,12 +1,12 @@
 # 架构设计
 
-> 最后更新：2026-06-09 | 适用版本：v2.x（六微服务架构）
+> 最后更新：2026-09-03 | 适用版本：v2.x（七服务后端）
 
 ## 概述
 
-MxCwpp Platform 采用 **Agent + Plugin + 六服务后端** 分层架构。后端拆分为 **Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync** 六个独立服务，每个服务独立部署、独立扩缩容。控制面无状态，支持多实例水平扩展；数据面通过 Kafka 异步解耦，按存储特征分层写入 MySQL（业务主数据）和 ClickHouse（时序与事件归档）。
+MxCwpp Platform 采用 **Agent + Plugin + 七服务后端** 分层架构。后端拆分为 **Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync / Scanner** 七个独立服务，每个服务独立部署、独立扩缩容。控制面无状态，支持多实例水平扩展；数据面通过 Kafka 异步解耦，按存储特征分层写入 MySQL（业务主数据）和 ClickHouse（时序与事件归档）。
 
-### 六微服务职责一览
+### 七服务职责一览
 
 | 服务 | 入口 | 职责 |
 |------|------|------|
@@ -16,6 +16,7 @@ MxCwpp Platform 采用 **Agent + Plugin + 六服务后端** 分层架构。后�
 | Engine | `cmd/server/engine/main.go` | 检测分析引擎：CEL/序列/ML/Storyline/K8s Audit/RASP/Microseg |
 | LLMProxy | `cmd/server/llmproxy/main.go` | 多 LLM 厂商适配网关，告警分析/Storyline 总结/NL2Query |
 | VulnSync | `cmd/server/vulnsync/main.go` | 11+ 漏洞情报源融合（NVD/OSV/RHSA/CNNVD/EPSS 等） |
+| Scanner | `cmd/server/scanner/main.go` | 镜像扫描：从 scan_jobs 认领任务、调用 trivy、结果写回 image_scans |
 
 ## 系统拓扑
 
@@ -143,7 +144,8 @@ v2.0 新增的检测分析引擎，独立服务，与 Consumer 并行消费 Kafk
   - `microseg/` — 微隔离流量识别 + 策略生成 + Kubernetes NetworkPolicy 推荐
   - `kube/` — K8s Audit Event 检测（PSS 等）
   - `rasp/` — RASP 事件汇聚（Java / Python / PHP / Node / Go）
-  - `honeypot/` — 反勒索 / 蜜罐告警归并
+  - `honeypot/` — 反勒索 / 蜜罐告警归并。**开发验证中**：策略 CRUD 可用，
+    但 `RecordDeployment` 零调用方（agent 侧未接线，见 [roadmap](roadmap.md) §5.3）
   - `ml/` — Go 原生 IForest + Registry。**未接线**（capability 清单 `ml_anomaly` = unwired），
     且**没有 ONNX**：go.mod 无 onnxruntime 依赖，ONNX 适配仍是 TODO
   - `anomaly/` — 行为基线异常检测（IForest + 多指标关联）。四档 `off/shadow/context/ranking`，
@@ -223,8 +225,8 @@ Agent 内置 EDR 子模块（`internal/agent/edr/`）：
 |---|---|
 | collector | eBPF + Tetragon 进程 / 文件 / 网络事件采集 |
 | rootkit | DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD / /proc 不一致扫描 (C2) |
-| honeypot | SSH / HTTP 假回应蜜罐 (C1) |
-| canary | 反勒索 / 反横移诱饵文件 (B9) |
+| honeypot | SSH / HTTP 假回应蜜罐 (C1)。**未接线**：零 importer，agent 不装配 |
+| canary | 反勒索 / 反横移诱饵文件 (B9)。**未接线**：零 importer；在跑的是 `plugins/avscanner` 内的那套 |
 | forensics | 内存威胁取证 (memfd_exec / process hollowing / shellcode / LSASS dump) (EDR-3) |
 | memfd | memfd_create 内存马检测 |
 | bde | Boot Disk / 文件系统加密检测（反勒索） |

@@ -1,6 +1,9 @@
-# 社区规范
+# 开发指南
 
-感谢你对 MxCwpp Platform 的关注。本文档说明如何参与项目开发。
+本文档讲**怎么在本地把项目跑起来、怎么改各个模块**。
+
+协作规则（分支、提交格式、PR 流程、发布约束、自动门禁）见根目录的
+[CONTRIBUTING.md](../CONTRIBUTING.md)，那份是提 PR 前必读的，此处不重复。
 
 ## 开发环境
 
@@ -45,74 +48,6 @@ make test            # 运行测试
 make fmt             # 格式化代码
 make lint            # 代码检查
 ```
-
-## 代码规范
-
-### Go
-
-- 使用 Zap 结构化日志，禁止 `fmt.Println` / `log.Println`
-- 使用统一响应函数（`internal/server/manager/api/response.go`），禁止直接 `c.JSON()`
-- 返回错误而非 panic，使用 `fmt.Errorf` 包装错误上下文
-- 使用 Preload 避免 N+1 查询，使用事务保证一致性
-- 配置从配置文件读取，禁止硬编码
-- 测试命名：`TestXxx_描述`，使用 table-driven tests
-
-### TypeScript / React（Next.js）
-
-- API 调用统一封装在 `web/src/lib/api/` 目录，禁止组件内直接调用 axios
-- 定义接口类型，使用 TypeScript 严格模式
-- 数据请求统一走 TanStack Query，不在组件里手写 loading/error 状态机
-- 组件命名 PascalCase，函数 camelCase，常量 UPPER_CASE
-- 请求失败要显式呈现，**不要渲染成 0 或空白**——
-  用户分不清「值就是 0」和「没取到」，而这两者的处置完全不同
-
-### 通用
-
-- 匹配现有代码风格，不"顺手优化"无关代码
-- 不添加超出需求的功能和抽象
-- 提交前运行 `make fmt lint test` 确保通过
-
-## 提交前检查项
-
-本仓库不跑 CI 流水线，以下检查全部由提交者手动执行：
-
-### 后端
-
-| 检查项 | 命令 | 说明 |
-|--------|------|------|
-| 代码格式化 | `make fmt` | 执行 gofmt，确保代码风格统一 |
-| 静态检查 | `make lint` | 执行 golangci-lint，捕获潜在问题 |
-| 单元测试 | `make test` | 执行 `go test ./...`，确保所有测试通过 |
-| 编译检查 | `go vet ./...` | 检查代码中的可疑结构，如 printf 格式串不匹配等 |
-
-### 前端
-
-前端为 Next.js + TypeScript，包管理用 **pnpm**（不是 npm）。
-
-| 检查项 | 命令 | 说明 |
-|--------|------|------|
-| 类型检查 | `pnpm lint` | 实际执行 `tsc --noEmit` |
-| 单元测试 | `pnpm test` | vitest |
-| 端到端测试 | `pnpm test:e2e` | playwright，需先起服务 |
-| 构建 | `pnpm build` | next build |
-
-建议在提交前按顺序执行：
-
-```bash
-# 后端
-make fmt
-go vet ./...
-make test        # 含文档同步、路由清单、告警覆盖等门禁
-
-# 前端（在 web/ 目录下）
-pnpm lint        # tsc --noEmit
-pnpm test
-```
-
-> `make lint`（golangci-lint）存量告警已清零，必须保持全绿。
->
-> 装 `make hooks` 后，提交前会自动拦下未格式化的文件——
-> gofmt 是第一道检查，它失败会让后面的测试与门禁全部不执行。
 
 ## 数据库迁移指南
 
@@ -237,106 +172,6 @@ make package-plugins-all
 
 构建产物输出到 `dist/plugins/` 目录。
 
-## 提交流程
-
-### 1. 选择或创建 Issue
-
-在开始编码之前，先确认对应的 Issue 存在。如果是新功能或你发现的 Bug，先创建 Issue 描述清楚需求或问题。
-
-### 2. 开发
-
-项目采用 **feature branch → dev → main** 三层分支模型：
-
-| 分支 | 用途 | 规则 |
-|------|------|------|
-| `main` | 稳定发布 | 不直接提交，仅从 dev 合并 |
-| `dev` | 集成测试 | 功能分支合并到此处验证 |
-| `<name>/<type>-<desc>` | 个人开发 | 从 dev 拉取，完成后合并回 dev |
-
-分支命名示例：`kerbos/feat-baseline-rules`、`zhangsan/fix-login-bug`
-
-**内部开发者**：
-
-```bash
-# 从 dev 创建个人功能分支
-git checkout dev
-git pull origin dev
-git checkout -b kerbos/feat-xxx
-
-# 开发完成后验证
-make fmt
-make lint
-make test
-
-# 合并到 dev 进行集成测试
-git checkout dev
-git merge kerbos/feat-xxx
-git push origin dev
-
-# dev 验证通过后合并到 main
-git checkout main
-git merge dev
-git push origin main
-
-# 清理已合并的功能分支
-git branch -d kerbos/feat-xxx
-```
-
-**外部贡献者**：Fork 仓库后基于 `dev` 分支通过 PR 提交。
-
-```bash
-# Fork 后克隆
-git clone https://github.com/<your-username>/mxcwpp.git
-cd mxcwpp
-git checkout dev
-
-# 创建功能分支开发
-git checkout -b <your-name>/feat-xxx
-
-# 开发并测试
-make fmt
-make lint
-make test
-
-# 提交 PR 到上游 dev 分支
-```
-
-### 3. 提交代码
-
-Commit 信息格式：
-
-```
-<type>: <简短描述>
-
-- 详细改动点1
-- 详细改动点2
-```
-
-Type 类型：
-
-| Type | 说明 |
-|------|------|
-| feat | 新功能 |
-| fix | Bug 修复 |
-| refactor | 重构（不改变外部行为） |
-| docs | 文档变更 |
-| test | 测试相关 |
-| chore | 构建、依赖、配置等 |
-
-### 4. 提交 Pull Request
-
-- PR 标题简洁明了，描述清楚做了什么以及为什么
-- 关联对应的 Issue（`Closes #123`）
-- 确保本地 `make fmt lint test` 通过
-- 新增功能包含对应测试
-- 如有 API 变更，更新对应文档
-
-### 5. 代码审查
-
-- 至少一名 Committer 或 Maintainer 审查通过
-- 根据审查意见修改后更新 PR
-- 审查通过后由 Committer 合并
-
 ## 测试要求
 
 - 核心路径覆盖率 >= 85%，整体 >= 70%
@@ -355,25 +190,6 @@ go test ./... -cover
 # 指定包
 go test ./internal/server/manager/... -v
 ```
-
-## Issue 规范
-
-### Bug 报告
-
-提交 Bug 报告时请包含：
-
-- 环境信息（OS、Go 版本、Docker 版本）
-- 复现步骤
-- 预期行为 vs 实际行为
-- 相关日志（脱敏后）
-
-### 功能建议
-
-提交功能建议时请说明：
-
-- 使用场景和动机
-- 期望的行为
-- 是否愿意参与实现
 
 ## 沟通渠道
 
