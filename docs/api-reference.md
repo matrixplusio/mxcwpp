@@ -846,30 +846,6 @@ memfd_exec / 进程镂空 / shellcode 注入 / LSASS dump 检测.
 
 ---
 
-## AD / LDAP 域控审计 (EDR-4)
-
-7 条规则: DCSync / Kerberoasting / 暴力破解 / 非工时 RDP / 特权分配 / 高权限组成员添加 / 攻击工具执行.
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/api/v1/ad-audit/events` | 原始 AD 审计事件列表 (filter: kind / username / source_ip) |
-| GET  | `/api/v1/ad-audit/alerts` | 命中规则的告警列表 (filter: rule_id / status) |
-| GET  | `/api/v1/ad-audit/stats` | 24h 统计 (total / by_kind / top_failed_users) |
-
----
-
-## Rootkit / DKOM 检测 (C2)
-
-DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD 异常 / /proc 不一致.
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/api/v1/rootkit/findings` | 已发现 Rootkit 异常列表 (filter: host_id / status) |
-| POST | `/api/v1/rootkit/scan` | 触发一台主机扫描 (body: {host_id}); 返回最近一次扫描快照 |
-| POST | `/api/v1/rootkit/findings/:id/resolve` | 标记一条 finding 为已处理 (body: {note}) |
-
----
-
 ## 蜜罐传感器 (C1)
 
 SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).

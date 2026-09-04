@@ -36,9 +36,6 @@ DELETE	/api/v1/users/:id	authenticated-perm	user_manage:manage
 DELETE	/api/v1/vulnerabilities/schedules/:id	authenticated-perm	vuln:manage
 GET	/agent/install.sh	public	-
 GET	/agent/uninstall.sh	public	-
-GET	/api/v1/ad-audit/alerts	authenticated-perm	detection:view
-GET	/api/v1/ad-audit/events	authenticated-perm	detection:view
-GET	/api/v1/ad-audit/stats	authenticated-perm	detection:view
 GET	/api/v1/agent/download/:pkg_type/:arch	public	-
 GET	/api/v1/agent/update-check	public	-
 GET	/api/v1/alerts	authenticated-perm	alerts:view
@@ -232,7 +229,6 @@ GET	/api/v1/results/host/:host_id/export	authenticated-perm	baseline:view
 GET	/api/v1/results/host/:host_id/score	authenticated-perm	baseline:view
 GET	/api/v1/results/host/:host_id/summary	authenticated-perm	baseline:view
 GET	/api/v1/retention-policies	authenticated-perm	system_config:view
-GET	/api/v1/rootkit/findings	authenticated-perm	virus:view
 GET	/api/v1/rules/:rule_id	authenticated-perm	baseline:view
 GET	/api/v1/sbom/projects	authenticated-perm	vuln:view
 GET	/api/v1/sbom/projects/:name	authenticated-perm	vuln:view
@@ -426,8 +422,6 @@ POST	/api/v1/response-actions/:id/approve	authenticated-perm	alerts:manage
 POST	/api/v1/response-actions/:id/execute	authenticated-perm	alerts:manage
 POST	/api/v1/response-actions/:id/reject	authenticated-perm	alerts:manage
 POST	/api/v1/response-actions/:id/rollback	authenticated-perm	alerts:manage
-POST	/api/v1/rootkit/findings/:id/resolve	authenticated-perm	virus:respond
-POST	/api/v1/rootkit/scan	authenticated-perm	virus:manage
 POST	/api/v1/sbom/import	authenticated-perm	vuln:manage
 POST	/api/v1/storylines/:story_id/resolve	authenticated-perm	alerts:respond
 POST	/api/v1/system-config/upload-logo	authenticated-perm	system_config:manage
