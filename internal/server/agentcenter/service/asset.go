@@ -1,4 +1,18 @@
-// Package service 提供 AgentCenter 的业务逻辑服务
+// Package service 提供 AgentCenter 的业务逻辑服务。
+//
+// ⚠️ 本包的资产处理代码在生产环境里跑在 **consumer 进程**中，不是 AgentCenter。
+//
+// 数据实际走 agent → AgentCenter → Kafka → consumer → MySQL；consumer 的
+// writer.WriteAsset 直接委托给这里的 AssetService.HandleAssetData。
+// AgentCenter 里还留着一条同名调用，那是 Kafka 未配置时的向后兼容回退路径，
+// 生产上不会执行。
+//
+// 代码放在 agentcenter/ 下是历史原因：它最早只为那条直写路径而写，
+// 引入 Kafka 后被 consumer 复用，位置没跟着搬。
+//
+// 后果不是理论上的：改了这里的逻辑却只重建 AgentCenter，改动不会生效——
+// 真正执行它的 consumer 用的还是旧镜像。
+// **改动本包后要重建 consumer。**
 package service
 
 import (

@@ -16,6 +16,8 @@ import (
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"go.uber.org/zap"
+
+	"github.com/matrixplusio/mxcwpp/internal/server/metrics"
 )
 
 var (
@@ -43,7 +45,12 @@ func nowVersion() uint64 {
 }
 
 // chLogError 容错记录 CH 写入失败（不抛错，业务路径继续）。
+//
+// 除日志外必须计数：镜像停了不会有任何东西报错，而查询侧照常从 CH 读，
+// 表现为数据停在某个时刻——与「最近本来就没有写入」完全一样。
+// 只有指标能让「不该停的时候停了」被看见。
 func chLogError(table string, err error) {
+	metrics.IncCHMirrorSyncFailure(table)
 	if chSyncLog != nil {
 		chSyncLog.Warn("ClickHouse 同步失败",
 			zap.String("table", table),

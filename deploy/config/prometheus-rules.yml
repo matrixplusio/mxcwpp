@@ -171,6 +171,39 @@ groups:
           summary: "Consumer DLQ 写入失败，消息已丢失"
           description: "dlq_topic={{ $labels.dlq_topic }} 近 5 分钟丢失 {{ $value }} 条，不可恢复。"
 
+      # 持续进 DLQ：与错误率不同，这里看的是"有没有"而不是"占比多少"。
+      #
+      # MxCwppConsumerHighErrorRate 用的是比例阈值（>5%），对低量永久失败完全失明：
+      # consumer 每天过数千万条遥测，一类永远处理不了的消息即使天天出现，
+      # 占比也只有百万分之一，永远够不到阈值。而它意味着某一类数据在持续丢失。
+      #
+      # 偶发失败（一次网络抖动、一条脏消息）会在几小时内消失；连续 6 小时每小时都有，
+      # 才是"有一类消息永远处理不了"的形状。
+      - alert: MxCwppConsumerDLQPersistent
+        expr: increase(mxcwpp_consumer_records_consumed_total{status="dlq"}[1h]) > 0
+        for: 6h
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "存在持续进入 DLQ 的消息（已 6 小时）"
+          description: "topic={{ $labels.topic }} data_type={{ $labels.data_type }} 每小时都有消息处理失败转入 DLQ。占比极低不会触发错误率告警，但意味着这一类数据在持续丢失。查 consumer 日志里的「转入 DLQ」失败原因。"
+
+      # ClickHouse 镜像同步失败。
+      #
+      # alerts / vulnerabilities / host_vulnerabilities 经 GORM 钩子镜像到 CH，
+      # 失败只有一条 Warn 日志。镜像一旦停了，查询侧照常从 CH 读，
+      # 表现为"数据停在某个时刻"——与"最近本来就没有写入"完全一样，肉眼分不出来。
+      - alert: MxCwppCHMirrorSyncFailure
+        expr: increase(mxcwpp_ch_mirror_sync_failures_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 镜像写入失败"
+          description: "table={{ $labels.table }} 近 10 分钟失败 {{ $value }} 次。MySQL 仍是事实来源，但 CH 侧的查询与报表会停在失败前的状态。"
+
       # AgentCenter 投递到未登记路由的 DataType：消息进心跳兜底 Topic，消费者不认识 → 静默丢弃。
       # 非零即代表存在接线缺口（缺 RouteDataType 或缺 Consumer handler）。
       - alert: MxCwppUnroutedDataType

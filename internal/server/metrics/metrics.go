@@ -121,7 +121,25 @@ var (
 		},
 		[]string{"version", "pid", "commit"},
 	)
+
+	// ClickHouse 镜像同步失败。
+	//
+	// alerts / vulnerabilities / host_vulnerabilities 经 GORM 钩子镜像到 ClickHouse。
+	// 失败此前只有一条 Warn 日志——镜像停了没有任何东西会喊，而查询侧照常从 CH 读，
+	// 表现为数据停在某个时刻，看上去与"最近没有写入"完全一样。
+	chMirrorSyncFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "mxcwpp_ch_mirror_sync_failures_total",
+			Help: "ClickHouse 镜像写入失败次数（按目标表）",
+		},
+		[]string{"table"},
+	)
 )
+
+// IncCHMirrorSyncFailure 记一次 ClickHouse 镜像写入失败。
+func IncCHMirrorSyncFailure(table string) {
+	chMirrorSyncFailures.WithLabelValues(table).Inc()
+}
 
 // Init 初始化 Prometheus 指标
 func Init(logger *zap.Logger) *prometheus.Registry {
@@ -145,6 +163,7 @@ func Init(logger *zap.Logger) *prometheus.Registry {
 			dbQueryDuration,
 			chQueryDuration,
 			buildInfo,
+			chMirrorSyncFailures,
 		)
 
 		if logger != nil {

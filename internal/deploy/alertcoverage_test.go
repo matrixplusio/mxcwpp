@@ -41,6 +41,7 @@ func TestCriticalMetricsHaveAlerts(t *testing.T) {
 		"mxcwpp_anomaly_training_hosts":                  "训练集变窄 = 模型向少数主机收敛，其余主机的正常行为被判异常",
 		"mxcwpp_anomaly_score_flush_failed_total":        "异常分落库失败 = ranking 档静默失效但显示已启用",
 		"mxcwpp_engine_abnormal_login_hosts_graduated":   "无主机走完学习期 = 异常登录检测一直静默，与没接线无异",
+		"mxcwpp_ch_mirror_sync_failures_total":           "CH 镜像写失败 = 报表停在某个时刻，与「最近没写入」肉眼无法区分",
 	}
 
 	for metric, why := range critical {
