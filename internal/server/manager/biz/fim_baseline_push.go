@@ -67,15 +67,64 @@ type agentBaseline struct {
 // 只更新被确认的那一个路径，不整体重建：未经确认的其它变更必须继续告警，
 // 否则一次确认就等于批准了这台机器上所有待确认的变更。
 func (p *FIMBaselinePusher) PushForConfirmedEvent(ev *model.FIMEvent) error {
+	return p.AdoptDecided([]*model.FIMEvent{ev})
+}
+
+// AdoptDecided 把一批已有定论的事件并入各自主机的基线并下发。
+//
+// 「有定论」指这条变更已经走完处理流程——被确认为合法、升级成了告警、或判定
+// 无需告警。三种情形的共同点是系统对它已经表过态，再逐轮重复报告同一件事
+// 不增加任何信息。不并入基线的后果是它每轮扫描复报一次，形成每天数量几乎
+// 不变的稳定复读，而这些文件的内容早已不再变化。
+//
+// 必须按主机批量处理：下发的是整份基线而非增量，逐事件调用会把同一份基线
+// 重复下发几十上百次，还会让版本号连跳。
+func (p *FIMBaselinePusher) AdoptDecided(events []*model.FIMEvent) error {
 	if p == nil || p.sender == nil {
 		return fmt.Errorf("基线下发未接线：CommandSender 为空")
 	}
+	if len(events) == 0 {
+		return nil
+	}
 
+	// 同一主机同一策略的事件合成一次下发。
+	type groupKey struct{ hostID, taskID string }
+	groups := make(map[groupKey][]*model.FIMEvent)
+	order := make([]groupKey, 0, len(events))
+	for _, ev := range events {
+		if ev == nil {
+			continue
+		}
+		k := groupKey{hostID: ev.HostID, taskID: ev.TaskID}
+		if _, seen := groups[k]; !seen {
+			order = append(order, k)
+		}
+		groups[k] = append(groups[k], ev)
+	}
+
+	var firstErr error
+	for _, k := range order {
+		if err := p.adoptOneHost(k.hostID, k.taskID, groups[k]); err != nil {
+			p.logger.Warn("并入 FIM 基线失败，这些路径下一轮会复报",
+				zap.String("host_id", k.hostID),
+				zap.Int("events", len(groups[k])),
+				zap.Error(err))
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// adoptOneHost 处理单台主机上的一批事件：读一次基线、合并全部变更、下发一次。
+func (p *FIMBaselinePusher) adoptOneHost(hostID, taskID string, events []*model.FIMEvent) error {
 	// PolicyID 不在事件上，经产生该事件的任务反查。
 	var task model.FIMTask
-	if err := p.db.Where("task_id = ?", ev.TaskID).First(&task).Error; err != nil {
+	if err := p.db.Where("task_id = ?", taskID).First(&task).Error; err != nil {
 		return fmt.Errorf("查询事件所属任务失败: %w", err)
 	}
+	ev := events[0]
 
 	var bl model.FIMBaseline
 	if err := p.db.Where("policy_id = ? AND host_id = ?", task.PolicyID, ev.HostID).
@@ -101,15 +150,17 @@ func (p *FIMBaselinePusher) PushForConfirmedEvent(ev *model.FIMEvent) error {
 		}
 	}
 
-	// 用事件里的新值覆盖该路径。删除类事件则从基线移除，
+	// 用事件里的新值覆盖对应路径。删除类事件则从基线移除，
 	// 否则文件已经不在了，基线还留着条目，下一轮又报一次 removed。
-	switch ev.ChangeType {
-	case "removed", "deleted":
-		delete(out.Entries, ev.FilePath)
-	default:
-		cur := out.Entries[ev.FilePath] // 基线里没有则为零值，added 事件即走此路径
-		applyChange(&cur, ev.ChangeDetail)
-		out.Entries[ev.FilePath] = cur
+	for _, e := range events {
+		switch e.ChangeType {
+		case "removed", "deleted":
+			delete(out.Entries, e.FilePath)
+		default:
+			cur := out.Entries[e.FilePath] // 基线里没有则为零值，added 事件即走此路径
+			applyChange(&cur, e.ChangeDetail)
+			out.Entries[e.FilePath] = cur
+		}
 	}
 
 	payload, err := json.Marshal(out)
@@ -123,31 +174,30 @@ func (p *FIMBaselinePusher) PushForConfirmedEvent(ev *model.FIMEvent) error {
 		Data:       string(payload),
 		Token:      bl.TaskID,
 	}}}
-	if err := p.sender.SendCommand(ev.HostID, cmd); err != nil {
+	if err := p.sender.SendCommand(hostID, cmd); err != nil {
 		return fmt.Errorf("下发基线失败: %w", err)
 	}
 
 	// 服务端侧同步落库，让两边版本号一致；下发成功才写，避免服务端version
 	// 领先于 Agent 实际持有的基线。
-	if err := p.persist(&bl, out, ev); err != nil {
+	if err := p.persist(&bl, out, events); err != nil {
 		p.logger.Warn("基线已下发但服务端落库失败，版本号将落后于 Agent",
-			zap.String("host_id", ev.HostID),
+			zap.String("host_id", hostID),
 			zap.String("policy_id", bl.PolicyID),
 			zap.Error(err))
 	}
 
-	p.logger.Info("已确认变更并回写 FIM 基线",
-		zap.String("host_id", ev.HostID),
+	p.logger.Info("已并入 FIM 基线",
+		zap.String("host_id", hostID),
 		zap.String("policy_id", task.PolicyID),
-		zap.String("file_path", ev.FilePath),
-		zap.String("change_type", ev.ChangeType),
+		zap.Int("paths", len(events)),
 		zap.Int("version", out.Version),
 		zap.Int("entries", len(out.Entries)))
 	return nil
 }
 
 // persist 把新版本写回服务端基线表。
-func (p *FIMBaselinePusher) persist(bl *model.FIMBaseline, out agentBaseline, ev *model.FIMEvent) error {
+func (p *FIMBaselinePusher) persist(bl *model.FIMBaseline, out agentBaseline, events []*model.FIMEvent) error {
 	return p.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(bl).Updates(map[string]any{
 			"version":     out.Version,
@@ -156,28 +206,35 @@ func (p *FIMBaselinePusher) persist(bl *model.FIMBaseline, out agentBaseline, ev
 		}).Error; err != nil {
 			return err
 		}
-		if ev.ChangeType == "removed" || ev.ChangeType == "deleted" {
-			return tx.Where("baseline_id = ? AND file_path = ?", bl.ID, ev.FilePath).
-				Delete(&model.FIMBaselineEntry{}).Error
+		for _, ev := range events {
+			if ev.ChangeType == "removed" || ev.ChangeType == "deleted" {
+				if err := tx.Where("baseline_id = ? AND file_path = ?", bl.ID, ev.FilePath).
+					Delete(&model.FIMBaselineEntry{}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			e := out.Entries[ev.FilePath]
+			if err := tx.Where("baseline_id = ? AND file_path = ?", bl.ID, ev.FilePath).
+				Assign(model.FIMBaselineEntry{
+					SHA256: e.SHA256, FileSize: e.Size, FileMode: e.Mode,
+					UID: e.UID, GID: e.GID, MTime: e.MTime,
+				}).
+				FirstOrCreate(&model.FIMBaselineEntry{
+					BaselineID: bl.ID, FilePath: ev.FilePath,
+				}).Error; err != nil {
+				return err
+			}
 		}
-		e := out.Entries[ev.FilePath]
-		return tx.Where("baseline_id = ? AND file_path = ?", bl.ID, ev.FilePath).
-			Assign(model.FIMBaselineEntry{
-				SHA256: e.SHA256, FileSize: e.Size, FileMode: e.Mode,
-				UID: e.UID, GID: e.GID, MTime: e.MTime,
-			}).
-			FirstOrCreate(&model.FIMBaselineEntry{
-				BaselineID: bl.ID, FilePath: ev.FilePath,
-			}).Error
+		return nil
 	})
 }
 
 // applyChange 把事件里的变更后状态并入基线条目。
 //
-// 事件只携带 hash / size / mode 的变更后值（model.ChangeDetail），uid 与 gid 只有
-// 一个 OwnerChanged 布尔，没有新值。所以纯属主变更确认后仍会在下一轮复报——
-// 要根治得让 Agent 在事件里带上完整的当前条目。这里保留基线中的旧 uid/gid 而不是
-// 清零：清零会让 compareEntries 把属主判成从 0 变成真实值，反而每轮都报。
+// uid / gid / mtime 用指针接收：老版本 Agent 不送这三个字段，此时保留基线中的旧值，
+// 不能清零——uid 0 是 root，清零会让 compareEntries 把属主判成从 0 变成真实值，
+// 于是每轮都报。新版本 Agent 送来当前值，属主变更才能真正收敛。
 func applyChange(e *agentFileEntry, d model.ChangeDetail) {
 	if d.HashAfter != "" {
 		e.SHA256 = d.HashAfter
@@ -189,5 +246,14 @@ func applyChange(e *agentFileEntry, d model.ChangeDetail) {
 		if n, err := strconv.ParseInt(d.SizeAfter, 10, 64); err == nil {
 			e.Size = n
 		}
+	}
+	if d.UIDAfter != nil {
+		e.UID = *d.UIDAfter
+	}
+	if d.GIDAfter != nil {
+		e.GID = *d.GIDAfter
+	}
+	if d.MTimeAfter != nil {
+		e.MTime = *d.MTimeAfter
 	}
 }

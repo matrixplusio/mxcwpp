@@ -37,16 +37,22 @@ type FIMEvent struct {
 
 // ChangeDetail 变更详情
 type ChangeDetail struct {
-	SizeBefore        string `json:"size_before,omitempty"`
-	SizeAfter         string `json:"size_after,omitempty"`
-	HashBefore        string `json:"hash_before,omitempty"`
-	HashAfter         string `json:"hash_after,omitempty"`
-	ModeBefore        string `json:"mode_before,omitempty"`
-	ModeAfter         string `json:"mode_after,omitempty"`
-	Attributes        string `json:"attributes,omitempty"`
-	HashChanged       bool   `json:"hash_changed"`
-	PermissionChanged bool   `json:"permission_changed"`
-	OwnerChanged      bool   `json:"owner_changed"`
+	SizeBefore string `json:"size_before,omitempty"`
+	SizeAfter  string `json:"size_after,omitempty"`
+	HashBefore string `json:"hash_before,omitempty"`
+	HashAfter  string `json:"hash_after,omitempty"`
+	ModeBefore string `json:"mode_before,omitempty"`
+	ModeAfter  string `json:"mode_after,omitempty"`
+	Attributes string `json:"attributes,omitempty"`
+	// UIDAfter / GIDAfter / MTimeAfter 是变更后的当前值，服务端回写基线时需要。
+	// 老版本 Agent 不带这三个字段，服务端解出零值并据此保留基线中的旧值——
+	// 只要用指针区分"没送"和"送了 0"，root 属主（uid 0）才不会被当成缺值。
+	UIDAfter          *uint32 `json:"uid_after,omitempty"`
+	GIDAfter          *uint32 `json:"gid_after,omitempty"`
+	MTimeAfter        *int64  `json:"mtime_after,omitempty"`
+	HashChanged       bool    `json:"hash_changed"`
+	PermissionChanged bool    `json:"permission_changed"`
+	OwnerChanged      bool    `json:"owner_changed"`
 }
 
 // FIMSummary FIM 检查摘要

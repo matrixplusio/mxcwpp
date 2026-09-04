@@ -99,7 +99,7 @@ func fimEventStatus(t *testing.T, db *gorm.DB, eventID string) string {
 func TestEscalatePendingFIMEvents_MarksEscalated(t *testing.T) {
 	db := setupFIMEscalationDB(t)
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	require.Equal(t, "escalated", fimEventStatus(t, db, "ev-1"))
 
@@ -119,7 +119,7 @@ func TestEscalatePendingFIMEvents_RecoversFromExistingAlert(t *testing.T) {
 	require.NoError(t, db.Exec(
 		`INSERT INTO alerts (result_id, host_id, status) VALUES ('fim-escalation-ev-1','h1','active')`).Error)
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	require.Equal(t, "escalated", fimEventStatus(t, db, "ev-1"),
 		"告警已存在时必须补齐事件状态，否则形成无限重试")
@@ -139,8 +139,8 @@ func TestEscalatePendingFIMEvents_RecoversFromExistingAlert(t *testing.T) {
 func TestEscalatePendingFIMEvents_IsIdempotent(t *testing.T) {
 	db := setupFIMEscalationDB(t)
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var alerts int64
 	require.NoError(t, db.Model(&model.Alert{}).Count(&alerts).Error)
@@ -173,7 +173,7 @@ func TestEscalatePendingFIMEvents_BatchesWidespreadChange(t *testing.T) {
 			"/usr/bin/systemctl", "changed", "critical")
 	}
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var alerts int64
 	require.NoError(t, db.Model(&model.Alert{}).Count(&alerts).Error)
@@ -206,7 +206,7 @@ func TestEscalatePendingFIMEvents_BelowThresholdStaysIndividual(t *testing.T) {
 			"/usr/bin/curl", "changed", "critical")
 	}
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var alerts int64
 	require.NoError(t, db.Model(&model.Alert{}).Count(&alerts).Error)
@@ -225,7 +225,7 @@ func TestEscalatePendingFIMEvents_SuppressesSelfUpgrade(t *testing.T) {
 	insertFIMEvent(t, db, "ev-self-2", "h2", "/opt/mxcwpp/plugins/fim", "changed", "critical")
 	insertFIMEvent(t, db, "ev-other", "h3", "/etc/ssh/sshd_config", "changed", "high")
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var alerts int64
 	require.NoError(t, db.Model(&model.Alert{}).Count(&alerts).Error)
@@ -251,7 +251,7 @@ func TestEscalatePendingFIMEvents_BatchIsIdempotent(t *testing.T) {
 			fmt.Sprintf("ev-idem-%d", i), fmt.Sprintf("host-%d", i),
 			"/usr/bin/journalctl", "changed", "critical")
 	}
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	// 第二批同样的变更稍后才超时，应并进已有的那条
 	for i := 0; i < fimBatchHostThreshold; i++ {
@@ -259,7 +259,7 @@ func TestEscalatePendingFIMEvents_BatchIsIdempotent(t *testing.T) {
 			fmt.Sprintf("ev-idem2-%d", i), fmt.Sprintf("host2-%d", i),
 			"/usr/bin/journalctl", "changed", "critical")
 	}
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var alerts int64
 	require.NoError(t, db.Model(&model.Alert{}).Count(&alerts).Error)
@@ -294,7 +294,7 @@ func TestEscalatePendingFIMEvents_CountsAlreadyEscalatedTowardBatchSize(t *testi
 			fmt.Sprintf("ev-late-%d", i), fmt.Sprintf("host-l%d", i), path, stale).Error)
 	}
 
-	EscalatePendingFIMEvents(db, zap.NewNop())
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
 
 	var batch, single int64
 	require.NoError(t, db.Raw(
@@ -304,4 +304,52 @@ func TestEscalatePendingFIMEvents_CountsAlreadyEscalatedTowardBatchSize(t *testi
 
 	require.Equal(t, int64(1), batch, "已知总规模超阈值时，迟到的这几台也该并入聚合")
 	require.Zero(t, single, "不得因为本轮只捞到 3 台就退化成逐条告警")
+}
+
+// TestEscalationAdoptsBaseline 升级成告警之后，变更必须并入基线。
+//
+// 这是 FIM 告警面能不能收敛的关键。Agent 每轮扫描都拿本地基线作比对基准；
+// 基线不动，同一个文件的同一处差异就会每轮重新比出来，天天复报——数字每天
+// 几乎一模一样，因为它们根本不是新变更。
+//
+// 告警已经产生并留在告警列表里等人处置，基线并入不会让这次变更被忽略；
+// 不并入才会让它淹没在自己的重复里。
+func TestEscalationAdoptsBaseline(t *testing.T) {
+	db := setupFIMEscalationDB(t)
+	require.NoError(t, db.Exec(`CREATE TABLE fim_baselines (
+		tenant_id TEXT DEFAULT 't-default', id INTEGER PRIMARY KEY AUTOINCREMENT,
+		policy_id TEXT, host_id TEXT, hostname TEXT, version INTEGER DEFAULT 1,
+		status TEXT DEFAULT 'pending', entry_count INTEGER DEFAULT 0,
+		approved_by TEXT, approved_at TIMESTAMP, task_id TEXT,
+		created_at TIMESTAMP, updated_at TIMESTAMP)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE fim_baseline_entries (
+		tenant_id TEXT DEFAULT 't-default', id INTEGER PRIMARY KEY AUTOINCREMENT,
+		baseline_id INTEGER, file_path TEXT, sha256 TEXT, file_size INTEGER,
+		file_mode TEXT, uid INTEGER, gid INTEGER, mtime INTEGER)`).Error)
+	require.NoError(t, db.Exec(
+		`INSERT INTO fim_baselines (id, policy_id, host_id, version, task_id) VALUES (1,'p1','h1',3,'t1')`).Error)
+	require.NoError(t, db.Exec(
+		`INSERT INTO fim_baseline_entries (baseline_id, file_path, sha256) VALUES (1,'/etc/passwd','old')`).Error)
+
+	fs := &fakeSender{}
+	EscalatePendingFIMEvents(db, zap.NewNop(), NewFIMBaselinePusher(db, fs, zap.NewNop()))
+
+	require.Equal(t, "escalated", fimEventStatus(t, db, "ev-1"))
+	require.Equal(t, 1, fs.calls, "事件走到终态却没有下发基线，该路径下一轮会复报")
+
+	var version int
+	require.NoError(t, db.Raw(`SELECT version FROM fim_baselines WHERE id = 1`).Scan(&version).Error)
+	require.Equal(t, 4, version, "服务端基线版本没推进，与 Agent 手上的版本会对不上")
+}
+
+// TestEscalationWithoutPusherStillAdvances pusher 未接线时不得卡住状态推进。
+//
+// 降级要降在正确的地方：拿不到下发通道时，事件仍须走到终态，否则它停在
+// pending，下一轮再次命中，形成无限重试——比不回写基线更糟。
+func TestEscalationWithoutPusherStillAdvances(t *testing.T) {
+	db := setupFIMEscalationDB(t)
+
+	EscalatePendingFIMEvents(db, zap.NewNop(), nil)
+
+	require.Equal(t, "escalated", fimEventStatus(t, db, "ev-1"))
 }

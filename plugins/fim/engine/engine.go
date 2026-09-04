@@ -197,5 +197,10 @@ func compareEntries(old, cur FileEntry) *ChangeDetail {
 	if !changed {
 		return nil
 	}
+
+	// 带上当前值，服务端回写基线时才有东西可写。缺了它们，基线里的属主与 mtime
+	// 停在旧值，同一处差异每轮重新比出来——修好了哈希那条路，属主这条仍会复读。
+	uid, gid, mtime := cur.UID, cur.GID, cur.MTime
+	detail.UIDAfter, detail.GIDAfter, detail.MTimeAfter = &uid, &gid, &mtime
 	return detail
 }

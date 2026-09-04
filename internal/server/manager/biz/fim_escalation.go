@@ -264,7 +264,11 @@ type pendingFIMEvent struct {
 
 // EscalatePendingFIMEvents 检查超时未确认的 FIM 事件并升级为告警
 // 规则：event.status='pending' 且 detected_at 距今超过所属策略的 escalation_timeout_min
-func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger) {
+//
+// pusher 可为 nil（未接线时降级为只推进状态、不回写基线）。给了它，事件走到终态
+// 后会把变更并入基线：不并入，Agent 每轮扫描都会拿首扫快照重新比出同一批差异，
+// 同一个文件于是天天复报——这就是 FIM 稳定复读的成因。
+func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger, pusher *FIMBaselinePusher) {
 	// 1. 加载所有策略的超时配置
 	var policies []model.FIMPolicy
 	if err := db.Select("policy_id, escalation_timeout_min").Find(&policies).Error; err != nil {
@@ -299,6 +303,10 @@ func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger) {
 	recovered := 0 // 告警已存在、本轮仅补齐状态的数量
 	suppressed := 0
 
+	// 本轮走到终态的事件，稍后一并并入基线。
+	// 收集而不是逐条下发：下发的是整份基线，逐条会把同一份内容重复发几十次。
+	decided := make([]*model.FIMEvent, 0, len(events))
+
 	// 先筛出真正超时的事件，并按「同一文件的同种变更」分组。
 	// 不分组直接逐条升级，就是当前 alerts 表被同一条规则灌满的原因：
 	// 一次系统包更新会在每台主机上改写同一批二进制，逐条升级等于把一次
@@ -316,10 +324,16 @@ func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger) {
 
 		// 平台自身的升级不算完整性违规。状态照常推进，只是不产生告警。
 		if isFIMSelfPath(ev.FilePath) {
-			db.Model(&model.FIMEvent{}).
+			if err := db.Model(&model.FIMEvent{}).
 				Where("event_id = ?", ev.EventID).
-				Update("status", fimSuppressedStatus)
+				Update("status", fimSuppressedStatus).Error; err != nil {
+				logger.Warn("推进 FIM 事件状态失败",
+					zap.String("event_id", ev.EventID), zap.Error(err))
+				continue
+			}
 			suppressed++
+			e := ev.FIMEvent
+			decided = append(decided, &e)
 			continue
 		}
 
@@ -364,6 +378,10 @@ func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger) {
 			if n > 0 {
 				batched++
 			}
+			for _, pe := range group {
+				e := pe.ev.FIMEvent
+				decided = append(decided, &e)
+			}
 			continue
 		}
 
@@ -375,6 +393,20 @@ func EscalatePendingFIMEvents(db *gorm.DB, logger *zap.Logger) {
 			if rec {
 				recovered++
 			}
+			if ok || rec {
+				e := pe.ev.FIMEvent
+				decided = append(decided, &e)
+			}
+		}
+	}
+
+	// 走到终态就并入基线。升级成告警同样要并入：告警已经产生、它会一直留在
+	// 告警列表里等人处置，而基线不动只会让同一个变更每轮再报一次，
+	// 除了淹没告警面没有别的作用。
+	if pusher != nil && len(decided) > 0 {
+		if err := pusher.AdoptDecided(decided); err != nil {
+			logger.Warn("部分 FIM 基线未能回写，相关路径下一轮仍会复报",
+				zap.Int("events", len(decided)), zap.Error(err))
 		}
 	}
 

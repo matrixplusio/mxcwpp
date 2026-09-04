@@ -237,3 +237,156 @@ var errSendFailed = errSend{}
 type errSend struct{}
 
 func (errSend) Error() string { return "send failed" }
+
+// TestAdoptDecidedBatchesPerHost 同一主机的多条变更只下发一次基线。
+//
+// 下发的是整份基线而不是增量。逐条调用会把同一份内容重复发送，主机数乘以
+// 路径数就是命令条数——一轮系统升级就能涉及上千个路径，乘上主机数，
+// 逐条下发就是数十万条命令，而且基线版本号会连跳同样的次数。
+func TestAdoptDecidedBatchesPerHost(t *testing.T) {
+	db := setupFIMDB(t)
+	fs := &fakeSender{}
+	p := NewFIMBaselinePusher(db, fs, zap.NewNop())
+
+	events := []*model.FIMEvent{
+		{EventID: "e1", HostID: "host-1", TaskID: "task-1", FilePath: "/usr/sbin/zramctl",
+			ChangeType: "changed", ChangeDetail: model.ChangeDetail{HashAfter: "new-a"}},
+		{EventID: "e2", HostID: "host-1", TaskID: "task-1", FilePath: "/etc/hosts",
+			ChangeType: "changed", ChangeDetail: model.ChangeDetail{HashAfter: "new-b"}},
+	}
+	if err := p.AdoptDecided(events); err != nil {
+		t.Fatalf("AdoptDecided: %v", err)
+	}
+
+	if fs.calls != 1 {
+		t.Fatalf("下发了 %d 次，同一主机应当只下发 1 次", fs.calls)
+	}
+	bl := decodeBaseline(t, fs.cmd)
+	if bl.Entries["/usr/sbin/zramctl"].SHA256 != "new-a" {
+		t.Errorf("第一条变更没进基线: %+v", bl.Entries["/usr/sbin/zramctl"])
+	}
+	if bl.Entries["/etc/hosts"].SHA256 != "new-b" {
+		t.Errorf("第二条变更没进基线: %+v", bl.Entries["/etc/hosts"])
+	}
+	if bl.Version != 4 {
+		t.Errorf("版本号 = %d，两条变更合并为一次下发应当只 +1（原为 3）", bl.Version)
+	}
+
+	// 服务端侧两条都要落库，否则下次读基线又回到旧值。
+	var got []model.FIMBaselineEntry
+	db.Where("baseline_id = ?", 1).Find(&got)
+	byPath := map[string]string{}
+	for _, e := range got {
+		byPath[e.FilePath] = e.SHA256
+	}
+	if byPath["/usr/sbin/zramctl"] != "new-a" || byPath["/etc/hosts"] != "new-b" {
+		t.Errorf("服务端基线未同步两条变更: %v", byPath)
+	}
+}
+
+// TestAdoptDecidedSeparatesHosts 不同主机各自下发，不互相污染。
+func TestAdoptDecidedSeparatesHosts(t *testing.T) {
+	db := setupFIMDB(t)
+	db.Create(&model.FIMBaseline{ID: 2, PolicyID: "policy-1", HostID: "host-2", Version: 1, TaskID: "task-1"})
+	fs := &fakeSender{}
+	p := NewFIMBaselinePusher(db, fs, zap.NewNop())
+
+	err := p.AdoptDecided([]*model.FIMEvent{
+		{EventID: "e1", HostID: "host-1", TaskID: "task-1", FilePath: "/etc/hosts",
+			ChangeType: "changed", ChangeDetail: model.ChangeDetail{HashAfter: "h1"}},
+		{EventID: "e2", HostID: "host-2", TaskID: "task-1", FilePath: "/etc/hosts",
+			ChangeType: "changed", ChangeDetail: model.ChangeDetail{HashAfter: "h2"}},
+	})
+	if err != nil {
+		t.Fatalf("AdoptDecided: %v", err)
+	}
+	if fs.calls != 2 {
+		t.Fatalf("下发了 %d 次，两台主机应当各下发 1 次", fs.calls)
+	}
+}
+
+// TestAdoptDecidedRemovesDeletedPath 删除类变更要把条目从基线摘掉。
+//
+// 留着条目，文件已经不在，下一轮又报一次 removed，同样收敛不了。
+func TestAdoptDecidedRemovesDeletedPath(t *testing.T) {
+	db := setupFIMDB(t)
+	fs := &fakeSender{}
+	p := NewFIMBaselinePusher(db, fs, zap.NewNop())
+
+	err := p.AdoptDecided([]*model.FIMEvent{
+		{EventID: "e1", HostID: "host-1", TaskID: "task-1", FilePath: "/etc/hosts", ChangeType: "removed"},
+	})
+	if err != nil {
+		t.Fatalf("AdoptDecided: %v", err)
+	}
+	bl := decodeBaseline(t, fs.cmd)
+	if _, still := bl.Entries["/etc/hosts"]; still {
+		t.Error("被删除的路径仍留在下发的基线里，下一轮会再报一次 removed")
+	}
+	var n int64
+	db.Model(&model.FIMBaselineEntry{}).Where("baseline_id = ? AND file_path = ?", 1, "/etc/hosts").Count(&n)
+	if n != 0 {
+		t.Error("服务端基线仍留着已删除路径的条目")
+	}
+}
+
+// TestAdoptDecidedCarriesOwnerAndMTime 新 Agent 送来的属主与 mtime 必须进基线。
+//
+// Agent 比对属主时没有"基线侧缺值就跳过"的护栏（uid 0 是 root，无法与缺值区分）。
+// 所以基线里的 uid/gid 只要与实际不符，就会每轮判一次 OwnerChanged 而永不收敛。
+// added 类事件尤其危险：基线里本来没有这个路径，条目从零值建起，
+// 文件若不属 root，回写之后反而开始天天复报。
+func TestAdoptDecidedCarriesOwnerAndMTime(t *testing.T) {
+	db := setupFIMDB(t)
+	fs := &fakeSender{}
+	p := NewFIMBaselinePusher(db, fs, zap.NewNop())
+
+	uid, gid, mtime := uint32(1000), uint32(1000), int64(1725400000)
+	err := p.AdoptDecided([]*model.FIMEvent{{
+		EventID: "e1", HostID: "host-1", TaskID: "task-1", FilePath: "/opt/app/config.yaml",
+		ChangeType: "added",
+		ChangeDetail: model.ChangeDetail{
+			HashAfter: "h", UIDAfter: &uid, GIDAfter: &gid, MTimeAfter: &mtime,
+		},
+	}})
+	if err != nil {
+		t.Fatalf("AdoptDecided: %v", err)
+	}
+
+	got := decodeBaseline(t, fs.cmd).Entries["/opt/app/config.yaml"]
+	if got.UID != 1000 || got.GID != 1000 {
+		t.Errorf("属主没进基线: uid=%d gid=%d，Agent 下一轮会判 OwnerChanged", got.UID, got.GID)
+	}
+	if got.MTime != mtime {
+		t.Errorf("mtime 没进基线: %d", got.MTime)
+	}
+}
+
+// TestAdoptDecidedKeepsOwnerWhenAgentOmitsIt 老 Agent 不送属主时保留旧值。
+//
+// 清零会更糟：基线 uid 变成 0 而实际是别的值，于是每轮都判属主变更。
+func TestAdoptDecidedKeepsOwnerWhenAgentOmitsIt(t *testing.T) {
+	db := setupFIMDB(t)
+	db.Model(&model.FIMBaselineEntry{}).
+		Where("baseline_id = ? AND file_path = ?", 1, "/etc/hosts").
+		Updates(map[string]any{"uid": 1001, "gid": 1002})
+
+	fs := &fakeSender{}
+	p := NewFIMBaselinePusher(db, fs, zap.NewNop())
+
+	err := p.AdoptDecided([]*model.FIMEvent{{
+		EventID: "e1", HostID: "host-1", TaskID: "task-1", FilePath: "/etc/hosts",
+		ChangeType: "changed", ChangeDetail: model.ChangeDetail{HashAfter: "new"},
+	}})
+	if err != nil {
+		t.Fatalf("AdoptDecided: %v", err)
+	}
+
+	got := decodeBaseline(t, fs.cmd).Entries["/etc/hosts"]
+	if got.UID != 1001 || got.GID != 1002 {
+		t.Errorf("老 Agent 未送属主时被清零了: uid=%d gid=%d", got.UID, got.GID)
+	}
+	if got.SHA256 != "new" {
+		t.Errorf("哈希未更新: %q", got.SHA256)
+	}
+}

@@ -14,6 +14,11 @@ type ChangeDetail struct {
 	PermissionChanged bool   `json:"permission_changed"`
 	OwnerChanged      bool   `json:"owner_changed"`
 	Attributes        string `json:"attributes,omitempty"`
+	// 变更后的属主与 mtime。用指针是为了把"老 Agent 没送这个字段"和
+	// "送了 0"分开：uid 0 是 root，不能当作缺值处理。
+	UIDAfter   *uint32 `json:"uid_after,omitempty"`
+	GIDAfter   *uint32 `json:"gid_after,omitempty"`
+	MTimeAfter *int64  `json:"mtime_after,omitempty"`
 }
 
 // Value 实现 driver.Valuer 接口

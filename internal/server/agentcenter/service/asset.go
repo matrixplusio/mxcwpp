@@ -116,6 +116,7 @@ func (s *AssetService) handleProcessData(hostID, jsonData string) error {
 		assets = []engine.ProcessAsset{asset}
 	}
 
+	upserted := make([]string, 0, len(assets))
 	for _, asset := range assets {
 		process := &model.Process{
 			ID:          shortHash(hostID, asset.PID),
@@ -140,7 +141,14 @@ func (s *AssetService) handleProcessData(hostID, jsonData string) error {
 				zap.Error(err))
 			continue
 		}
+		upserted = append(upserted, process.ID)
 	}
+
+	// 采集器遍历整个 /proc，上报的是当下在跑的全部进程。本轮没出现的行
+	// 属于已退出的进程，留着它们这张表就从「当前进程」变成「历史上出现过的进程」：
+	// 行 ID 是 hash(host, pid)，PID 会回绕，几个月下来单机能堆出上万条，
+	// 资产盘点因此给出的答案不可信。
+	s.pruneStaleAssets(hostID, upserted, &model.Process{}, "进程")
 
 	s.logger.Debug("processed process data",
 		zap.String("host_id", hostID),
@@ -165,6 +173,7 @@ func (s *AssetService) handlePortData(hostID, jsonData string) error {
 	// 直接 UPSERT，不再 DELETE+INSERT
 	// ID 由 shortHash(hostID, protocol, port) 确定性生成，OnConflict 天然去重
 	// 避免 DELETE 产生的 gap lock 导致并发 Lock wait timeout
+	upserted := make([]string, 0, len(assets))
 	for _, asset := range assets {
 		port := &model.Port{
 			ID:          shortHash(hostID, asset.Protocol, fmt.Sprintf("%d", asset.Port)),
@@ -186,7 +195,13 @@ func (s *AssetService) handlePortData(hostID, jsonData string) error {
 				zap.Error(err))
 			continue
 		}
+		upserted = append(upserted, port.ID)
 	}
+
+	// 同上：采集的是当下全部 socket，含 ESTABLISHED / TIME_WAIT。行 ID 是
+	// hash(host, 协议, 端口号)，临时端口范围有两万多个，不清理就会把每一个
+	// 用过的临时端口永久留在「当前开放端口」里。
+	s.pruneStaleAssets(hostID, upserted, &model.Port{}, "端口")
 
 	s.logger.Debug("processed port data",
 		zap.String("host_id", hostID),
@@ -302,6 +317,29 @@ func (s *AssetService) handleSoftwareData(hostID, jsonData string) error {
 		zap.Int("count", len(assets)))
 
 	return nil
+}
+
+// pruneStaleAssets 删除该主机本轮全量快照未出现的资产行。
+//
+// 只能用于「每次上报都是完整快照」的资产类型。护栏与 pruneStaleSoftware 一致：
+// 快照条数太少视为部分上报或采集异常，此时删除会把库存清空，宁可留着陈旧行。
+func (s *AssetService) pruneStaleAssets(hostID string, upsertedIDs []string, dest any, kind string) {
+	const minSnapshot = 20
+	if len(upsertedIDs) < minSnapshot {
+		return
+	}
+	res := s.db.Where("host_id = ? AND id NOT IN ?", hostID, upsertedIDs).Delete(dest)
+	if res.Error != nil {
+		s.logger.Warn("清理陈旧资产失败",
+			zap.String("host_id", hostID), zap.String("kind", kind), zap.Error(res.Error))
+		return
+	}
+	if res.RowsAffected > 0 {
+		s.logger.Info("清理陈旧资产",
+			zap.String("host_id", hostID),
+			zap.String("kind", kind),
+			zap.Int64("removed", res.RowsAffected))
+	}
 }
 
 // pruneStaleSoftware 删除该 host 本轮全量快照未见的同类型软件行（已卸载的残留包）。

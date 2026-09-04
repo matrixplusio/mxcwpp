@@ -13,7 +13,7 @@ import (
 const (
 	baselineMaintInterval      = 12 * time.Hour // 维护周期
 	behaviorAlertRetentionDays = 30             // behavior_alerts 保留天数(瞬态异常快照,过期删)
-	scanResultRetentionDays    = 90             // scan_results 保留天数(基线扫描历史,过期删,与 CH scan_results_history 对齐)
+	scanResultRetentionDays    = 90             // scan_results 保留天数（基线扫描历史，过期删）
 	scanResultDeleteBatch      = 5000           // scan_results 批量删除大小(避免长事务锁)
 )
 

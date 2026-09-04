@@ -61,18 +61,25 @@ type TaskScheduler struct {
 	lastSyncStart          time.Time // 上次漏洞库同步触发时间
 	lastFullScanStart      time.Time // 上次全量扫描触发时间
 	lastZombieCheck        time.Time // 上次僵尸任务检查时间
+	fimBaselinePusher      *FIMBaselinePusher
 }
 
 // NewTaskScheduler 创建 TaskScheduler
 // redisClient 可为 nil：降级为无锁模式（单 Manager 实例时安全）
 func NewTaskScheduler(db *gorm.DB, dispatcher *sd.ACDispatcher, redisClient *redis.Client, logger *zap.Logger) *TaskScheduler {
-	return &TaskScheduler{
+	s := &TaskScheduler{
 		db:          db,
 		taskService: service.NewTaskService(db, logger),
 		dispatcher:  dispatcher,
 		redisClient: redisClient,
 		logger:      logger,
 	}
+	// dispatcher 为 nil 时不构造：pusher 拿不到下发通道也做不了事，
+	// 留 nil 让升级流程走「只推进状态」的降级路径，而不是每轮报一次下发失败。
+	if dispatcher != nil {
+		s.fimBaselinePusher = NewFIMBaselinePusher(db, dispatcher, logger)
+	}
+	return s
 }
 
 // Start 启动调度循环，ctx 取消时退出（应在 goroutine 中调用）
@@ -134,7 +141,7 @@ func (s *TaskScheduler) runOnce(ctx context.Context) {
 
 	// FIM 事件超时升级检查（节流：默认 5 分钟检查一次）
 	if time.Since(s.lastFIMEscalationCheck) >= fimEscalationCheckInterval {
-		EscalatePendingFIMEvents(s.db, s.logger)
+		EscalatePendingFIMEvents(s.db, s.logger, s.fimBaselinePusher)
 		s.lastFIMEscalationCheck = time.Now()
 	}
 

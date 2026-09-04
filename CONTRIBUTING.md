@@ -136,6 +136,8 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 
 包没有导入者本身不是错，不声明才是错。确实还不该接线的，登记到 `internal/deploy/testdata/unwired-packages.tsv` 并写明原因。清单双向校验：新出现的未接线包会被拦下，已经接线却仍留在清单里的也会被拦下。
 
+`TestEveryClickHouseTableHasAWriter` 盯的是同一类问题的另一种形态：表建在 `deploy/init-clickhouse.sql` 里，部署时照常创建，查询它的代码也编译得过 —— 只是永远查到空。Go 包的导入者关系看不到它。每张建出来的表都必须在代码里有 `INSERT INTO`，否则登记到 `internal/deploy/testdata/clickhouse-tables-without-writer.tsv`。物化视图由源表驱动，不在检查范围。
+
 ---
 
 ## 文档同步
@@ -150,6 +152,7 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 | 新增 DataType | `docs/datatype-allocation.md` | ✅ |
 | 新增基线策略文件 | `plugins/baseline/config/README.md` 的统计 | ✅ |
 | 新增 `internal/`/`pkg/` 下的包 | 必须有导入者，否则登记 `internal/deploy/testdata/unwired-packages.tsv` | ✅ |
+| 新增 ClickHouse 表 | 必须有写入方，否则登记 `internal/deploy/testdata/clickhouse-tables-without-writer.tsv` | ✅ |
 | 新增服务/模块/包 | `docs/architecture.md` | ❌ |
 | 配置项增删 | `docs/configuration.md` | ❌ |
 | 部署步骤变化 | `docs/deployment.md` | ❌ |
