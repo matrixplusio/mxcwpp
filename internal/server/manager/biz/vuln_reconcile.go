@@ -239,11 +239,18 @@ func (r *VulnReconciler) loadCurrentPURLsByHosts(hostIDs []string) (map[string]m
 	type row struct {
 		HostID  string `gorm:"column:host_id"`
 		PURL    string `gorm:"column:purl"`
+		Epoch   string `gorm:"column:epoch"`
 		Version string `gorm:"column:version"`
+		Release string `gorm:"column:release"`
 	}
 	var rows []row
+	// 必须取全 epoch 与 release：RPM 通告给的是完整 NEVRA（如 0:0.10.4-18.el9），
+	// 只拿 version（0.10.4）去比，release 段恒缺，比较结果永远是「装的比修复版旧」。
+	// 大部分已修复的漏洞会因此被判成回潮。
+	// 发行版把上游修复回合进同一个上游版本号、只改 release——丢掉 release
+	// 就等于丢掉了「这个洞到底修没修」的唯一凭据。
 	err := r.db.Model(&model.Software{}).
-		Select("host_id, purl, version").
+		Select("host_id, purl, epoch, version, `release`").
 		Where("host_id IN ? AND purl != '' AND purl IS NOT NULL", hostIDs).
 		Find(&rows).Error
 	if err != nil {
@@ -257,12 +264,35 @@ func (r *VulnReconciler) loadCurrentPURLsByHosts(hostIDs []string) (map[string]m
 		// 按包身份（去版本、去限定符）建索引；同名多版本时保留最高版本，
 		// 与「主机是否已经装上了修复版」这个判断口径一致。
 		key := purlIdentity(rec.PURL)
-		if existing, ok := result[rec.HostID][key]; !ok || compareVersionStrings(rec.Version, existing) > 0 {
-			result[rec.HostID][key] = rec.Version
+		nevra := joinNEVRA(rec.Epoch, rec.Version, rec.Release)
+		if existing, ok := result[rec.HostID][key]; !ok || compareVersionStrings(nevra, existing) > 0 {
+			result[rec.HostID][key] = nevra
 		}
 	}
 
 	return result, nil
+}
+
+// joinNEVRA 把采集到的 epoch / version / release 拼回通告使用的版本串形态。
+//
+// 通告写作 "epoch:version-release"（epoch 为 0 时常省略冒号前缀）。
+// 采集侧三段分开存，比较前必须拼回去，否则拿 "0.10.4" 比 "0:0.10.4-18.el9"，
+// release 段缺失会让比较器判定装的版本更旧。
+//
+// 语言生态（Go module、npm 等）没有 epoch / release，此时原样返回 version。
+func joinNEVRA(epoch, version, release string) string {
+	if version == "" {
+		return ""
+	}
+	out := version
+	if release != "" {
+		out += "-" + release
+	}
+	// epoch 为空或 "0" 时不加前缀：通告侧同样省略，加上反而不一致。
+	if epoch != "" && epoch != "0" && epoch != "(none)" {
+		out = epoch + ":" + out
+	}
+	return out
 }
 
 // DetectResurfaced 检测之前 patched/vanished 现在又匹配上的漏洞 → resurfaced

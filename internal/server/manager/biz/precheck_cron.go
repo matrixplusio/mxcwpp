@@ -121,17 +121,24 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 
 		// 拉该 host 待巡检列表（带 vuln join 拿 component/fixed_version/vuln_category），上限 maxBatch
 		type hvWithVuln struct {
-			HostVulnID           uint   `gorm:"column:id"`
-			VulnID               uint   `gorm:"column:vuln_id"`
-			CveID                string `gorm:"column:cve_id"`
-			Component            string `gorm:"column:component"`
+			HostVulnID uint   `gorm:"column:id"`
+			VulnID     uint   `gorm:"column:vuln_id"`
+			CveID      string `gorm:"column:cve_id"`
+			// Component 是 CVE 级塌缩包名：一条通告覆盖几十个二进制包，
+			// vulnerabilities.component 只留了其中一个，往往是本机根本不会装的
+			// debuginfo / RT 内核 / 图形包。拿它去问主机「装了吗」，答案必然是没装。
+			Component string `gorm:"column:component"`
+			// MatchedComponent 是建立这条关联时，在这台主机上实际匹配到的包名。
+			// 判定必须用它——问塌缩包名会把大部分关联误判为已修复。
+			MatchedComponent     string `gorm:"column:matched_component"`
 			FixedVersion         string `gorm:"column:fixed_version"`
 			VulnCategory         string `gorm:"column:vuln_category"`
 			VulnCategoryOverride string `gorm:"column:vuln_category_override"`
 		}
 		var rows []hvWithVuln
 		if err := c.db.Table("host_vulnerabilities AS hv").
-			Select("hv.id, hv.vuln_id, v.cve_id, v.component, v.fixed_version, v.vuln_category, v.vuln_category_override").
+			Select("hv.id, hv.vuln_id, v.cve_id, v.component, hv.matched_component, "+
+				"v.fixed_version, v.vuln_category, v.vuln_category_override").
 			Joins("JOIN vulnerabilities v ON v.id = hv.vuln_id").
 			Where(
 				`hv.host_id = ? AND hv.status = 'unpatched' AND (
@@ -148,7 +155,14 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 
 		hostDispatched := 0
 		for _, r := range rows {
-			if r.Component == "" {
+			// 问主机的必须是这台主机上真正匹配到的包名，不是 CVE 级塌缩包名。
+			// 塌缩包名往往是本机不会安装的变体（debuginfo / RT 内核 / 图形包），
+			// 拿它去 rpm -q 必然得到「未安装」，进而被判成「已修复」。
+			component := r.MatchedComponent
+			if component == "" {
+				component = r.Component
+			}
+			if component == "" {
 				continue
 			}
 			// P5.2: shared_lib 类要求 agent lsof 找受影响进程
@@ -157,14 +171,14 @@ func (c *PreCheckCron) tickOnce(ctx context.Context) {
 				effectiveCat = r.VulnCategoryOverride
 			}
 			// 优先 advisory_packages 按 host OS 取精确 fixed_version
-			fixedVer := ResolveFixedVersionForHost(c.db, r.CveID, r.Component, b.HostID)
+			fixedVer := ResolveFixedVersionForHost(c.db, r.CveID, component, b.HostID)
 			if fixedVer == "" {
 				fixedVer = r.FixedVersion
 			}
 			payload := preCheckCronPayload{
 				RequestID:              fmt.Sprintf("pc-cron-%d-%d", r.HostVulnID, time.Now().Unix()),
 				HostVulnID:             r.HostVulnID,
-				Component:              r.Component,
+				Component:              component,
 				FixedVersion:           fixedVer,
 				CheckAffectedProcesses: effectiveCat == model.VulnCategorySharedLib,
 			}
