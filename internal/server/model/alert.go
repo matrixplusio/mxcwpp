@@ -94,29 +94,19 @@ func (a *Alert) AfterUpdate(tx *gorm.DB) error {
 	return nil
 }
 
-func (a *Alert) AfterSave(tx *gorm.DB) error {
-	syncAlertToCH(a)
-	return nil
-}
-
 // syncAlertToCH 把 Alert INSERT 到 CH alerts 表（ReplacingMergeTree by result_id）。
 // 每次状态变更增 version（unix nano），CH 合并保留最新。
 func syncAlertToCH(a *Alert) {
 	if !chSyncOpen || a == nil {
 		return
 	}
-	ctx, cancel := chCtx()
-	defer cancel()
-	err := chConn.Exec(ctx, `
+	chEnqueue("alerts", `
 		INSERT INTO alerts (
 			id, result_id, host_id, rule_id, policy_id, source, severity, category,
 			title, description, actual, expected, fix_suggestion, status,
 			first_seen_at, last_seen_at, hit_count, last_notified_at, notify_count,
 			resolved_at, resolved_by, resolve_reason, created_at, updated_at, version
-		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-		)
-	`,
+		)`,
 		uint64(a.ID), a.ResultID, a.HostID, a.RuleID, a.PolicyID, a.Source, a.Severity, a.Category,
 		a.Title, a.Description, a.Actual, a.Expected, a.FixSuggestion, string(a.Status),
 		time.Time(a.FirstSeenAt), time.Time(a.LastSeenAt), uint32(a.HitCount),
@@ -124,7 +114,4 @@ func syncAlertToCH(a *Alert) {
 		asTime(a.ResolvedAt), a.ResolvedBy, a.ResolveReason,
 		time.Time(a.CreatedAt), time.Time(a.UpdatedAt), nowVersion(),
 	)
-	if err != nil {
-		chLogError("alerts", err)
-	}
 }

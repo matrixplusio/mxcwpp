@@ -17,10 +17,22 @@
     <query_log>
         <database>system</database>
         <table>query_log</table>
-        <partition_by>toYYYYMM(event_date)</partition_by>
+        <!-- 日分区：TTL 到期直接丢分区，按月分区就只能逐行删，代价大得多 -->
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
-        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
     </query_log>
+
+    <!-- part 操作日志。不配就走默认：月分区、长保留。
+         它记录每一次 part 的新建与合并，所以插入越碎它涨得越快——
+         逐行写入 CH 时它一天涨到八百多万行，占掉数据目录约十分之一。 -->
+    <part_log>
+        <database>system</database>
+        <table>part_log</table>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </part_log>
 
     <!-- part 操作日志（排查 merge 异常用），同样必须限制保留期 -->
     <part_log>

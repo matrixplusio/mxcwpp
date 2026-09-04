@@ -4,13 +4,14 @@
 //   - 注入全局 ChConn（manager / consumer / agentcenter 启动时各自注入一次）
 //   - Alert / Vulnerability / HostVulnerability 三类 model 在 AfterCreate /
 //     AfterUpdate GORM hook 内调用对应 syncXxxToCH() 自动写 CH
-//   - 同步异步混合：写 CH 失败仅 log，不阻塞 MySQL 事务（事务已 commit 后才触发 hook）
+//   - 写入经 ch_batch.go 的缓冲攒批后发出：逐行 INSERT 会让 ClickHouse
+//     每行产出一个 part，合并压力全落在存储节点上
+//   - 写 CH 失败仅 log，不阻塞 MySQL 事务（事务已 commit 后才触发 hook）
 //
 // 这样所有 200+ 处 db.Create/Save/Updates 调用自动获得双写能力，无需手改业务代码。
 package model
 
 import (
-	"context"
 	"time"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -29,16 +30,16 @@ func SetClickHouse(c chdriver.Conn, logger *zap.Logger) {
 	chConn = c
 	chSyncLog = logger
 	chSyncOpen = c != nil
+	if chSyncOpen {
+		// 与连接注入绑死：能入队就一定已经启动过冲刷器，
+		// 不存在「写了缓冲但没人冲刷」这种半接线状态。
+		startCHFlusher()
+	}
 }
 
 // nowVersion 用 UnixNano 作为 ReplacingMergeTree 版本号，保证单调递增。
 func nowVersion() uint64 {
 	return uint64(time.Now().UnixNano())
-}
-
-// chCtx 返回带 3s 超时的 ctx，防止 CH 慢 hang 业务。
-func chCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 3*time.Second)
 }
 
 // chLogError 容错记录 CH 写入失败（不抛错，业务路径继续）。
