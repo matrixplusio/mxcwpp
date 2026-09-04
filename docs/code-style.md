@@ -169,7 +169,6 @@ db.Where("host_id = ?", id).First(&host)         // ❌
 |---|------|
 | `internal/server/common/kafka` | Kafka Producer / Topic 路由 / MQMessage |
 | `internal/server/common/tenant` | 多租户 Identity / Scope / Middleware / Hook |
-| `internal/server/common/canary` | 灰度发布 Driver / Registry |
 | `internal/server/common/observability` | OTel 追踪初始化 |
 
 ---

@@ -124,8 +124,11 @@ package-all-arch:
 
 hooks:
 	@git config core.hooksPath .githooks
-	@echo "已启用 .githooks/（提交前自动检查 gofmt / 冲突标记 / 明文令牌）"
-	@echo "跳过单次检查：git commit --no-verify"
+	@echo "已启用 .githooks/"
+	@echo "  pre-commit  提交前检查 gofmt / 冲突标记 / 明文令牌"
+	@echo "  pre-push    推 GitHub 默认拒绝，需先上生产验证再显式批准："
+	@echo "              echo <sha> > .git/push-approval"
+	@echo "跳过单次提交检查：git commit --no-verify"
 
 test: vuln
 	go test ./...

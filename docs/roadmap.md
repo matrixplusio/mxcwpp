@@ -152,23 +152,57 @@ agent 装配 + 配置开关（默认关，绑定端口是攻击面）、7020 路
 `internal/deploy/testdata/unwired-packages.tsv` 并写明原因，否则构建失败；
 已经接线却还留在清单里的同样失败，防止清单慢慢失真。
 
-首次扫描得 38 个零导入包，其中已能定性的：
+首次扫描得 38 个零导入包，其中当时已能定性的：
 
 - `manager/init` 与 `manager/setup` 是同名同签名的两份 `Initialize`，manager 实际
   走后者。这正是 AC 两个同步调度器静默缺失数月的同一种形状——改错文件不会有任何
-  报错。待删除。
+  报错。已于 2026-09-04 删除。
 - `manager/handler` 的 GraphQL endpoint 从未在 router 注册，它与依赖的 `biz/graphql`
-  一并悬空。
-- `pkg/util/worker`（A10 审计修复引入的统一 RunLoop）与 `pkg/util/strutil` 无任何引用。
+  一并悬空——整条 GraphQL 链没有入口，已于 2026-09-04 一并删除。
+- `pkg/util/worker`（A10 审计修复引入的统一 RunLoop）与 `pkg/util/strutil` 无任何引用，
+  已于 2026-09-04 删除。`pkg/` 目录随之为空。
 - `llmproxy/{quota,cache,audit}` 属服务骨架未完成（`Version 0.1.0-skeleton`）；
   在 quota 接入之前，LLM 调用没有花费上限。
 - `common/mode/gate`（observe→protect 的 6 门槛准入）是**有意**未接线：切换入口随
   多租户管理面一并移除，只余 GET 查询。
 
-其余 27 个（`edr/{clamav,elfparse,fanotify,forensics,lsm,npatch,quarantine,rootkit,weakpass}`、
-`biz/{sbom,soar,hunting,imagescan,npatch,pocvalidation}`、`engine/{adaudit,microseg,rollout,ruleimport,replay}`
-等）尚未定性，清单里标为"待确认：接线或删除"。**上一条里"biz 层仅剩
-`biz/honeypot.RecordDeployment` 这一处"的说法据此作废**——biz 下共有 7 个零导入包。
+**上一条里"biz 层仅剩 `biz/honeypot.RecordDeployment` 这一处"的说法据此作废**——
+首次扫描时 biz 下就有 7 个零导入包。
+
+2026-09-04 把其余 27 个逐个定性并处置，清单从 38 条降到 23 条，
+零条仍写"待确认"。
+
+**删掉 15 个（5229 行）**。九个是重复品，被删的那份都能指出已接线的对应实现：
+`edr/av/clamav`（scanner / avscanner 两个插件已直连 clamd）、`edr/fanotify`
+（`edr/collector` 里那份才是接线的）、`edr/quarantine`（`plugins/scanner` 在做，
+AC 与 consumer 都在写 `QuarantineFile`）、`common/otel`（`common/observability`
+初始化追踪）、`common/canary` 与 `engine/rollout`（都是 `canary_scheduler`
+这件事的更早尝试，同一张 `canary_rollout` 表）、`biz/imagescan`
+（`biz.ImageScanner` 经 `api/image_scans` 接线）、`biz/sbom`（`api/sbom`
+产出同样的 CycloneDX 1.5）、`biz/hunting`（`api/hunting` 用 `mql` 编译查询，
+这里的 SPL 方言更早）。六个是纯死代码：`biz/soar`（752 行，无表无路由无页面）、
+`engine/adaudit`（Windows 域控审计，而本产品不发 Windows agent）、
+`common/gmcrypt`、`edr/elfparse`、`edr/lsm`、`manager/client`（后两个的注释
+自己写着"骨架"）。删前逐个复核过零引用；两处需要人工比对的（SBOM 的
+CycloneDX 版本、hunting 的两套 DSL）确认在用的那份不比被删的差。
+
+**下架两组 API**。`/rootkit/findings` 查的表全仓库无写入方，恒空；
+`/rootkit/scan` 更进一步——它不向任何 agent 下发命令，只是把那张空表重查
+一遍当作扫描结果返回。控制台上一个"扫描 rootkit"按钮永远回答"未发现"，
+这不是缺功能，是**汇报一次没有发生过的检查**。`/ad-audit/*` 三条同形，
+其生产者正是本次删掉的 `engine/adaudit`。路由、handler、API 文档一并移除；
+两张表留着（已部署环境里存在，DROP 是另一个决定），
+`internal/agent/edr/rootkit` 也留着——agent 侧检测是真的，只是从未接线。
+
+这五个包已在同日删除（`manager/init`、`manager/handler`、`biz/graphql`、
+`pkg/util/worker`、`pkg/util/strutil`），清单降到 19 条。`biz/graphql` 本身有
+导入者、不在清单里，但它唯一的导入者就是 `manager/handler`，删掉后整条链无人引用。
+
+**其余 11 个转为待排期**，清单里换成了具体理由与阻塞项，不再是"待确认"。
+值得单独记的两条：`biz/pocvalidation` 依赖 agent 侧"安全执行预定义 PoC"的通道，
+那正是先前判为 RCE 风险的那类能力，接线前先定执行沙箱；
+`celengine/replay` 卡的不是接线是语料（见本文件"T1486 勒索加密：无检测、无语料"），
+语料建起来之前接了也没有输入。
 
 同日补了三处测试盲区，并在其中一处查出真缺陷：
 

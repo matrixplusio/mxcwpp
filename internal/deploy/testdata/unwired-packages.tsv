@@ -11,41 +11,22 @@
 #
 # 只含 _test.go 的包（如 internal/deploy 自身）由规则排除,不必登记。
 
-internal/agent/edr/av/clamav	未接线，用途待确认：接线或删除
 internal/agent/edr/canary	蜜罐 C1 接线缺失，roadmap 已记录待办
-internal/agent/edr/elfparse	未接线，用途待确认：接线或删除
-internal/agent/edr/fanotify	未接线，用途待确认：接线或删除
-internal/agent/edr/forensics	未接线，用途待确认：接线或删除
+internal/agent/edr/forensics	内存取证（live dump + volatility 集成）。接线需要 AC 命令通道、大文件回传、以及主机上有 volatility 运行时；无表无路由无页面。排期做
 internal/agent/edr/honeypot	蜜罐 C1 接线缺失，roadmap 已记录待办
-internal/agent/edr/lsm	未接线，用途待确认：接线或删除
-internal/agent/edr/npatch	未接线，用途待确认：接线或删除
-internal/agent/edr/quarantine	未接线，用途待确认：接线或删除
-internal/agent/edr/rootkit	未接线，用途待确认：接线或删除
-internal/agent/edr/weakpass	未接线，用途待确认：接线或删除
-internal/agent/forensics	未接线，用途待确认：接线或删除
-internal/server/common/canary	未接线，用途待确认：接线或删除
-internal/server/common/gmcrypt	未接线，用途待确认：接线或删除
+internal/agent/edr/npatch	虚拟补丁的 agent 侧探针，与 biz/npatch 成对，两头都没接；无表无路由无页面。排期做
+internal/agent/edr/rootkit	能力已实现但从未接线（无 AC 下发、无结果回报），对应的 /rootkit/* 三条 API 已下架——它们查的是零写入的表，POST /rootkit/scan 更是不下发任何命令、只重查一遍空表。接线需要四处改动，单独排期
+internal/agent/edr/weakpass	弱口令检测，173 行是这批里最小的一个；缺的是 server 侧接收端与结果落库。排期做
+internal/agent/forensics	远程取证命令的 argv 白名单，自带单测却没有调用方——它是为一条尚不存在的远程取证命令通道准备的守卫。通道做出来时一并接上，不要另写一份
 internal/server/common/mode/gate	有意未接线：observe→protect 的切换入口随多租户管理面一并移除，只余 GET 查询，门槛校验没有调用点
-internal/server/common/otel	未接线，用途待确认：接线或删除
-internal/server/engine/adaudit	未接线，用途待确认：接线或删除
-internal/server/engine/celengine/replay	未接线，用途待确认：接线或删除
-internal/server/engine/microseg	未接线，用途待确认：接线或删除
-internal/server/engine/rollout	未接线，用途待确认：接线或删除
-internal/server/engine/ruleimport	未接线，用途待确认：接线或删除
+internal/server/engine/celengine/replay	用标注语料回放规则、测量召回率与误报率。卡的不是接线是语料——roadmap 已记「T1486 勒索加密：无检测、无语料」。语料建起来之前接了也没有输入
+internal/server/engine/microseg	微隔离：流量观察 + 策略推荐 + enforcement，689 行；无表无路由无页面。enforcement 会改主机网络策略，接线前需要先定失败模式。排期做
+internal/server/engine/ruleimport	Falco / Sigma / Tetragon 规则转 CEL。既无 CLI 入口也无 API，转换结果无处可去。要么给它一个 cmd/tools 入口，要么删
 internal/server/llmproxy/audit	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入
 internal/server/llmproxy/cache	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入
 internal/server/llmproxy/quota	llmproxy 仍是骨架（Version 0.1.0-skeleton），子包待接入；接入前 LLM 调用没有花费上限
-internal/server/manager/api/admission	未接线，用途待确认：接线或删除
+internal/server/manager/api/admission	K8s ValidatingAdmissionWebhook。现有 K8s 能力是扫描不是准入；接线要 webhook 证书、集群侧注册、以及 failurePolicy 的取舍（选错会挡住整个集群的部署）。排期做
 internal/server/manager/biz/honeypot	蜜罐 C1 接线缺失，roadmap 已记录待办
-internal/server/manager/biz/hunting	未接线，用途待确认：接线或删除
-internal/server/manager/biz/imagescan	未接线，用途待确认：接线或删除
-internal/server/manager/biz/npatch	未接线，用途待确认：接线或删除
-internal/server/manager/biz/pocvalidation	未接线，用途待确认：接线或删除
-internal/server/manager/biz/sbom	未接线，用途待确认：接线或删除
-internal/server/manager/biz/soar	未接线，用途待确认：接线或删除
-internal/server/manager/client	未接线，用途待确认：接线或删除
-internal/server/manager/handler	GraphQL endpoint 从未在 router 注册，本包与其依赖的 biz/graphql 一并悬空
-internal/server/manager/init	与 internal/server/manager/setup 重复：同名同签名的 Initialize，manager 实际走 setup。留着会让人改错文件——AC 的两个同步调度器正是这样静默缺失数月的。待删除
-internal/server/vulnsync/ti	未接线，用途待确认：接线或删除
-pkg/util/strutil	无任何引用，待删除
-pkg/util/worker	A10 审计修复引入的统一 RunLoop，项目里没有一处采用；要么推广，要么删除
+internal/server/manager/biz/npatch	虚拟补丁的 server 侧规则模型，与 edr/npatch 成对。排期做
+internal/server/manager/biz/pocvalidation	PoC 自动验证，依赖 agent 侧“安全执行预定义 PoC”的通道——那正是之前判为 RCE 风险的那类能力。接线前先定执行沙箱，不要直接开通道
+internal/server/vulnsync/ti	STIX/TAXII 2.x 订阅。现有情报走 AC 的 IOC 同步调度器，接它之前要先定两套源池的关系，否则会重复灌入。排期做

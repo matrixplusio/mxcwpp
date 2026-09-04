@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# 推送到 GitHub 前的闸门：默认拒绝。
+#
+# 为什么需要它：CLAUDE.md 的开发流程规定「先上生产验证，再推 GitHub」，
+# 顺序不能调换——部署可以回滚，推送不可收回。2026-09-04 这条规则被违反了两次，
+# 违反者（我）当时的判据是「本地 make test 绿 + CI 绿就该推」,
+# 那是一条自己发明的标准。仓库里所有门禁检查的都是「内容对不对」,
+# 没有一道管「顺不顺序」,于是这一步全靠自觉,而自觉失效了。
+#
+# 它挡的是什么：因惯性、因「反正 CI 绿了」而顺手推出去。
+# 它挡不住什么：任何存心绕过的人——写一次批准文件就过了。
+# 真正的强制在服务端（GitHub 分支保护要求 PR + 审阅）,不在这里。
+# 本闸的价值是让推送成为一个必须显式做、并且留下痕迹的动作。
+#
+# 放行方式（二选一，都必须写明本次要推的 commit）：
+#   echo <sha> > .git/push-approval
+#   MXCWPP_PUSH_APPROVED=<sha> git push ...
+#
+# sha 必须与实际要推的 commit 一致；批准文件用后即焚,不会留到下一次。
+
+set -uo pipefail
+
+remote_name="${1:-}"
+remote_url="${2:-}"
+
+# 只管 GitHub。本地 remote、备份仓库不拦。
+case "$remote_url" in
+  *github.com*) ;;
+  *) exit 0 ;;
+esac
+
+approval_file="$(git rev-parse --git-dir)/push-approval"
+approved="${MXCWPP_PUSH_APPROVED:-}"
+if [ -z "$approved" ] && [ -f "$approval_file" ]; then
+  approved="$(tr -d '[:space:]' < "$approval_file")"
+fi
+
+deny() {
+  echo "" >&2
+  echo "推送被拦下：$remote_name ($remote_url)" >&2
+  echo "" >&2
+  echo "  $1" >&2
+  echo "" >&2
+  echo "CLAUDE.md 的顺序是「先上生产验证，再推 GitHub」——" >&2
+  echo "部署可以回滚，推送不可收回。CI 绿只说明能编译能测，" >&2
+  echo "不说明这一版在生产上验过。" >&2
+  echo "" >&2
+  echo "确实要推时：" >&2
+  echo "  echo <完整 sha> > .git/push-approval && git push ..." >&2
+  echo "" >&2
+  exit 1
+}
+
+# 逐条比对 stdin 给出的待推引用。删除分支（全零 sha）不拦。
+zero="0000000000000000000000000000000000000000"
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  [ "$local_sha" = "$zero" ] && continue
+
+  if [ -z "$approved" ]; then
+    deny "没有找到批准记录（.git/push-approval 或 MXCWPP_PUSH_APPROVED）。"
+  fi
+  case "$local_sha" in
+    "$approved"*) ;;
+    *) deny "批准记录指向 ${approved}，但本次要推的是 ${local_sha}。请重新确认后再批。" ;;
+  esac
+done
+
+# 用后即焚：一次批准只放行一次推送，避免它变成长期敞开的后门。
+rm -f "$approval_file"
+exit 0
