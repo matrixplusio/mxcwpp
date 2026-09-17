@@ -436,6 +436,54 @@ eBPF 网络事件只提供 `comm`，不提供 `exe`（`collector/ebpf.go:756-762
 附带：procfs 降级路径的网络事件 `pid` 恒为 0 且无 `comm`（`collector/procnet.go:128`），
 该路径产生的告警无进程归属。
 
+> FP-10 起为后续一次全量告警核验后补登。那次核验里 FP-1 / FP-4 / FP-5 / FP-6 / FP-7
+> 均再次复现，说明上面几条仍是告警面的主要来源。
+
+**FP-10　FIM 变更不对照包管理器，且变更明细从未落库**
+
+两个缺陷叠在一起，使 FIM 告警在平台内**无法研判**，只能登主机查：
+
+1. 明细字段名不一致：插件上报 `change_detail`（`plugins/fim/main.go:170`），
+   ClickHouse 写入读 `detail`（`consumer/writer/clickhouse.go:612`），`fim_events.detail` 恒为空。
+   前后 hash、size、mode 全部丢失——又一例静默失效。
+2. 不区分变更来源：包管理器升级（含 dnf-automatic 这类无人值守更新）改写的系统二进制，
+   与被人替换的二进制告警完全相同。叠加 FP-1，一次例行升级即产生整批 critical。
+   Agent 长期离线后恢复时尤其严重：首轮扫描拿离线前的旧基线比对，期间所有合法升级一次性涌出。
+
+方案：
+1. 字段名对齐（一行，先做），并补一条端到端断言：`detail` 非空
+2. 插件对 `changed` 的文件做 `rpm -Vf` / `dpkg --verify` 对照：与包数据库一致则降级为 info
+   并标注所属包，不一致才保留原级别。这是区分「升级」与「篡改」的唯一可靠判据
+3. Agent 离线超过阈值后恢复，首轮结果单独标记「基线过期」，不直接产 critical
+
+验证：升级一个包后，对应文件事件带包名且级别为 info；手工改写同一文件仍为 critical。
+
+**FP-11　CEL 进程规则用无边界的子串匹配**
+
+`builtin-rules.yaml` 里有多条规则对 `exe` 做 `contains` 短串匹配，命中面远超本意：
+
+| 规则 | 写法 | 实际命中 |
+|------|------|---------|
+| 信息收集 - 网络枚举（`builtin-rules.yaml:422`）| `exe.contains("ss")` | `sshd-session`，以及任何路径里带 `ss` 的业务进程 |
+| 信息收集 - 用户枚举（`builtin-rules.yaml:438`）| `exe.contains("id")`、`exe.contains("w")` | `unix_chkpwd` 等几乎一切含 `w` / `id` 的路径 |
+
+方案：改为按 basename 精确匹配（`exe.endsWith("/ss") || exe == "ss"` 一类），
+并在规则加载时加一条 lint：`contains` 的字面量短于 3 个字符即拒绝。
+
+验证：`sshd-session`、`unix_chkpwd` 不再命中；`/usr/sbin/ss -tunlp` 仍命中。
+
+**FP-12　Agent 规则 MXEDR-0005 把证书检查判成反弹 Shell**
+
+`configs/agent-rules/MXEDR-0005-reverse-shell-openssl.yaml` 只要求 cmdline 含 `s_client` 与 `connect`，
+critical。运维查证书到期的标准写法 `openssl s_client -connect host:443 | openssl x509 -noout -enddate`
+恰好满足。真正的 openssl 反弹 shell 特征是 stdin/stdout 接到 shell（父或子进程为 `sh`/`bash`，
+或 cmdline 带 `-quiet` 且伴随 `mkfifo`）。
+
+方案：增加「同进程组内存在 `openssl x509`」的排除，或改为要求 shell 管道特征；
+短期先降为 high。
+
+验证：证书检查命令不命中；`mkfifo /tmp/f; sh -i < /tmp/f 2>&1 | openssl s_client -quiet -connect …` 仍命中。
+
 #### 二、其它
 
 | 项 | 缺陷 | 影响 |
@@ -443,6 +491,10 @@ eBPF 网络事件只提供 `comm`，不提供 `exe`（`collector/ebpf.go:756-762
 | celengine 进程树无有效回收 | `进程树定期清理` 每轮回收的节点数远小于同期新增，节点总数单调增长，清理条件形同虚设 | 常驻内存持续膨胀，突破 `GOMEMLIMIT` 后 GC 死亡螺旋表现为 CPU 打满。判据看 `nodes` 是否收敛，不是看 RSS |
 | `host_vulnerabilities.resurfaced_at` 未写入 | 状态可以翻成 `resurfaced`，但该时间戳字段始终为 NULL | 无法按时间维度分析复现，只能退回看 `updated_at` |
 | 修复回执落 DLQ | agent 上报的修复结果按 `host_vuln_id` 关联，关联不到即整条转 DLQ；同一 `vulnerabilities` 行并发 UPDATE 会触发死锁（`remediation/vuln_patch.go`）| 修复状态对不上账，已修的漏洞可能被判回未修 |
+| 事件自动关闭绕过研判结论 | `casework.Resolve` 要求 verdict + reason，但关联调度器直接写 `resolved_by = "auto"` 翻状态（`scheduler/incident_correlation.go:332`、`:395`），不经 casework。关闭后评论接口也拒绝（`ErrAlreadyResolved`）| 成员告警被处置后事件被自动关掉，研判结论既写不进也补不回。应改为自动关闭只打「待确认关闭」标记，或允许已关闭事件补录 verdict / 评论 |
+| 忽略告警不记原因 | `BatchResolveAlerts` 接收并落库 `reason`，`IgnoreAlert` / `BatchIgnoreAlerts` 不接收（`api/alerts.go:224`、`:357`）| 忽略语义是永久静音，恰恰最需要留依据，却是唯一不留依据的动作；审计与自动调优都拿不到原因 |
+| 主机遥测长期为空不告警 | 心跳离线有 `agent_offline`，但「心跳在、指标与事件全无」没有任何告警。已观察到主机连续数周零遥测、平台无感知，恢复后才由 FIM 批量误报暴露（见 FP-10）| 与 capability 的 `starved` 档同一类问题，但落在主机粒度。判据应是「在线主机 N 小时内无 host_metrics」|
+| ML 异常告警长期零产出（待查）| consumer 侧 IForest 按周期正常重训、模型版本持续递增，`anomaly_alerts` 却长期无新增 | 可能是治理阈值收紧后确实判不出，也可能是写入链路断了。先按 §5「静默失效」判据查：构造一台明显偏离的主机，看是否端到端产出 |
 
 #### 三、蜜罐（C1）接线
 
