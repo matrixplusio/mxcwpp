@@ -10,7 +10,7 @@
 #
 # 它挡的是什么：因惯性、因「反正 CI 绿了」而顺手推出去。
 # 它挡不住什么：任何存心绕过的人——写一次批准文件就过了。
-# 真正的强制在服务端（GitHub 分支保护要求 PR + 审阅）,不在这里。
+# 服务端没有第二道：我们自己的提交直推 main、不走 PR，分支保护只禁强推与删除，不看内容。
 # 本闸的价值是让推送成为一个必须显式做、并且留下痕迹的动作。
 #
 # 放行方式（二选一，都必须写明本次要推的 commit）：
@@ -18,6 +18,11 @@
 #   MXCWPP_PUSH_APPROVED=<sha> git push ...
 #
 # sha 必须与实际要推的 commit 一致；批准文件用后即焚,不会留到下一次。
+#
+# 批准之前先过内容扫描（.githooks/leakscan.sh）：要推出去的**每一个** commit 的
+# 新增行、commit message、新增文件路径。命中即拒绝，批准记录放不过它——
+# 批准管的是「该不该现在推」，内容扫描管的是「这些东西能不能公开」，后者没有例外。
+# 扫的是每个 commit 而不是最终 diff：中间 commit 一样会公开，删掉的内容照样留在历史里。
 
 set -uo pipefail
 
@@ -52,8 +57,55 @@ deny() {
   exit 1
 }
 
+# shellcheck source=leakscan.sh
+. "$(dirname "$0")/leakscan.sh"
+
+# 本地字典（真实主机名、地址段、项目名）不在仓库里。它缺席时扫描会悄悄变弱，
+# 而「看着在跑、实际没在查」正是本项目最危险的那类失效——所以缺了就不推。
+if [ ! -s "$(git rev-parse --show-toplevel)/.production-identifiers" ]; then
+  echo "" >&2
+  echo "推送被拦下：找不到 .production-identifiers（或为空）。" >&2
+  echo "没有它，内容扫描认不出真实主机名与地址段。从主工作区复制一份再推。" >&2
+  exit 1
+fi
+
+leak_deny() {
+  echo "" >&2
+  echo "推送被拦下：要推出去的内容里有不该公开的东西（见上）。" >&2
+  echo "" >&2
+  echo "  推送不可收回——fork 与克隆会永久保留它。批准记录放不过这一关。" >&2
+  echo "  改掉之后重写相应 commit（commit --amend / rebase）再推；" >&2
+  echo "  只改最新 commit 不够，出过问题的旧 commit 同样会被推出去。" >&2
+  echo "" >&2
+  exit 1
+}
+
 # 逐条比对 stdin 给出的待推引用。删除分支（全零 sha）不拦。
 zero="0000000000000000000000000000000000000000"
+refs="$(cat)"
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  [ "$local_sha" = "$zero" ] && continue
+
+  # 要公开的 commit：远端已有的不算。远端 sha 本地没有（强推覆盖、首次推送）时，
+  # 退回到「所有远端引用都不含的」。
+  if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    range=("$remote_sha..$local_sha")
+  else
+    range=("$local_sha" --not --remotes="$remote_name")
+  fi
+
+  git log --no-color --no-ext-diff -p -U0 --format='@@@COMMIT %h%n%an <%ae> / %cn <%ce>%n%B@@@END' "${range[@]}" \
+    | awk '/^@@@COMMIT /{h=$2; msg=1; next}
+           /^@@@END$/{msg=0; next}
+           msg{print h " message\t" $0; next}
+           /^\+\+\+ b\//{f=substr($0,7); next}
+           /^\+/ && !/^\+\+\+/{print h " " f "\t" substr($0,2)}' \
+    | leakscan_lines || leak_deny
+  git log --no-color --format= --name-only --diff-filter=A "${range[@]}" | sort -u \
+    | leakscan_paths || leak_deny
+done <<< "$refs"
+
 while read -r _local_ref local_sha _remote_ref _remote_sha; do
   [ -z "${local_sha:-}" ] && continue
   [ "$local_sha" = "$zero" ] && continue
@@ -65,7 +117,7 @@ while read -r _local_ref local_sha _remote_ref _remote_sha; do
     "$approved"*) ;;
     *) deny "批准记录指向 ${approved}，但本次要推的是 ${local_sha}。请重新确认后再批。" ;;
   esac
-done
+done <<< "$refs"
 
 # 用后即焚：一次批准只放行一次推送，避免它变成长期敞开的后门。
 rm -f "$approval_file"
