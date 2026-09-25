@@ -223,3 +223,9 @@ deploy/certs/enroll_token.secret
 
 # 环境特有标识清单（供 no_production_identifiers_test 读取，不入库）
 .production-identifiers
+
+# 本地文件，不进仓库：带环境细节的东西只留在工作区
+/CLAUDE.md
+/docs/internal/
+/hack/internal-data-patterns.local.txt
+/local.mk
