@@ -30,7 +30,7 @@
     "clsx": "^2.1.1",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
-    "framer-motion": "^12.40.0",
+    "framer-motion": "^13.4.4",
     "i18next": "^26.3.1",
     "lucide-react": "^1.18.0",
     "next": "^15.5.19",
