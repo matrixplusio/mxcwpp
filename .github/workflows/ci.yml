@@ -97,7 +97,9 @@ jobs:
       # 不用 continue-on-error：那会让整个 job 永远是绿的，包括真正该拦的新漏洞。
       # 这里只放行清单内的编号，出现清单外的通告仍然失败。
       # 判定逻辑与本地 make vuln 共用 scripts/check-vuln.sh，避免两边漂移。
+      # 版本固定：@latest 会随上游抬高对 Go 版本的要求，与上面固定的工具链脱节，
+      # 结果是工具装不上、检查根本没跑。漏洞库在线拉取，固定工具版本不影响数据新旧。
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
           make vuln
