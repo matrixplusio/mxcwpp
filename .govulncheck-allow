@@ -8,3 +8,9 @@
 # golang.org/x/crypto —— 上游尚未发布修复版本（govulncheck 报 Fixed in: N/A）。
 # 复查条件：x/crypto 发布含修复的版本后升级依赖并移除本行。
 GO-2026-5932
+
+# google.golang.org/grpc —— 例外：修复版本已有（v1.83.1 同时覆盖两条），但 gRPC 是
+# agent 与 AgentCenter 的接入协议，升级须先在部署环境验证再发布，单独跟进。
+# 复查条件：grpc 升到 v1.83.1 及以上并完成部署验证后移除这两行；最迟 2026-10-15。
+GO-2026-6348
+GO-2026-6443
