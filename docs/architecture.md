@@ -145,7 +145,7 @@ v2.0 新增的检测分析引擎，独立服务，与 Consumer 并行消费 Kafk
   - `kube/` — K8s Audit Event 检测（PSS 等）
   - `rasp/` — RASP 事件汇聚（Java / Python / PHP / Node / Go）
   - `honeypot/` — 反勒索 / 蜜罐告警归并。**开发验证中**：策略 CRUD 可用，
-    但 `RecordDeployment` 零调用方（agent 侧未接线，见 [roadmap](roadmap.md) §5.3）
+    但 `RecordDeployment` 零调用方（agent 侧未接线）
   - `ml/` — Go 原生 IForest + Registry。**未接线**（capability 清单 `ml_anomaly` = unwired），
     且**没有 ONNX**：go.mod 无 onnxruntime 依赖，ONNX 适配仍是 TODO
   - `anomaly/` — 行为基线异常检测（IForest + 多指标关联）。四档 `off/shadow/context/ranking`，

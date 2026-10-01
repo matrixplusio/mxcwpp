@@ -228,7 +228,7 @@ func loadRequiredTechniques(t *testing.T) []string {
 // 总召回率反而会因为少测一类而变好看。
 //
 // 这道门禁挡的是倒退：删语料、改标注、或规则改到某类技术不再被覆盖，都会红。
-// 它不给覆盖率定目标，还没覆盖的技术记在 roadmap，不放进清单。
+// 它不给覆盖率定目标，还没覆盖的技术另行记录，不放进清单。
 func TestRequiredTechniquesRemainCovered(t *testing.T) {
 	c, err := replay.Load(corpusDir)
 	if err != nil {
@@ -243,7 +243,7 @@ func TestRequiredTechniquesRemainCovered(t *testing.T) {
 	if missing := rep.UncoveredTechniques(want); len(missing) > 0 {
 		t.Fatalf("以下技术已无语料覆盖: %v\n"+
 			"  它们的召回率现在是「未知」，不是 100%%。\n"+
-			"  要么补回样本，要么把这几行从 %s 删掉并在 docs/roadmap.md §5.1 记下缺口——\n"+
+			"  要么补回样本，要么把这几行从 %s 删掉并另行记下缺口——\n"+
 			"  但不要让清单和语料悄悄脱节。", missing, requiredTechniquesFile)
 	}
 }

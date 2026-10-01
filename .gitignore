@@ -173,9 +173,8 @@ memory/
 PLATFORM-REVIEW.md
 TODOLIST*.md
 docs/TODO.md
-# docs/roadmap.md 已入库：它是交付状态的权威来源，且有 CI 门禁依赖它
-# （docs_sync_test.go 校验其存在、带核实日期、规模数字与代码一致）。
-# 忽略它会让别人 clone 后测试直接失败。
+# 路线图在 docs/internal/roadmap.md，不入库：交付状态与待办里免不了运行环境的事实。
+# docs_sync_test.go 在它缺失时跳过路线图校验，所以 clone 下来的仓库和 CI 照样能过。
 # 涉及具体部署环境的运维细节留在 local-reports/roadmap-internal.md（不入库）。
 .superpowers/
 docs/superpowers/

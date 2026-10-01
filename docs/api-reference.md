@@ -526,7 +526,7 @@
 `still_shared` 是仍在使用全网共享证书的在线 agent 数。
 **新版 AgentCenter 强制客户端证书 CN == AgentID，该值不为 0 时升级会让这些 agent
 全部掉线且不会自愈**（agent 侧没有被拒后重新 enroll 的逻辑）。
-`deploy.sh upgrade` 以此为闸门，详见 [路线图 · 第四节](roadmap.md)。
+`deploy.sh upgrade` 以此为闸门。
 
 只统计在线连接：离线 agent 的证书状态无从得知，把它们算作已迁移会给出偏乐观的结论。
 
@@ -852,7 +852,7 @@ SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).
 
 > **开发验证中，尚未随社区版发布。** 以下接口可调用, 但 agent 侧探针未接线:
 > `POST /sensors` 只写一条部署记录、不下发命令, `GET /events` 过滤 `alerts.source=honeypot`
-> 而该来源当前无生产者, 故两个列表恒空。详见 [roadmap](roadmap.md) §5.3。
+> 而该来源当前无生产者, 故两个列表恒空（蜜罐链路尚未接线）。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

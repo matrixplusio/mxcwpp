@@ -156,7 +156,7 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 | 新增服务/模块/包 | `docs/architecture.md` | ❌ |
 | 配置项增删 | `docs/configuration.md` | ❌ |
 | 部署步骤变化 | `docs/deployment.md` | ❌ |
-| 任务完成/受阻 | `docs/roadmap.md` | ❌ |
+| 任务完成/受阻 | 维护者的内部路线图（不入库） | ❌ |
 
 ---
 
@@ -209,5 +209,4 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 [配置](docs/configuration.md) ·
 [部署](docs/deployment.md) ·
 [代码规范](docs/code-style.md) ·
-[DataType 分配](docs/datatype-allocation.md) ·
-[路线图](docs/roadmap.md)
+[DataType 分配](docs/datatype-allocation.md)

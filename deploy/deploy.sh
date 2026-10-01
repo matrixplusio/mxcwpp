@@ -824,7 +824,7 @@ wait_healthy() {
 # 不符的连接一律拒绝。存量 agent 持有的是全网共享证书（CN 为固定值），
 # 因此升级后会**立即全部掉线，且不会自愈**——agent 侧没有「被拒后重新 enroll」的逻辑。
 #
-# 迁移做法见 docs/roadmap.md。判定依据：still_shared 为仍在使用共享证书的 agent 数，
+# 判定依据：still_shared 为仍在使用共享证书的 agent 数，
 # 由 AgentCenter 的 /internal/agent-cert-stats 汇总（CN != agent_id 即计入）。
 #
 # 确认迁移完成后，设置 AGENT_TRUST_MIGRATED=true 跳过本检查。
@@ -859,7 +859,7 @@ check_agent_trust_migration() {
 
     if [ "$shared" -gt 0 ]; then
         log_error "仍有 ${shared} 台 agent 使用共享证书，升级 AgentCenter 会让它们全部掉线。"
-        log_error "请先完成信任链迁移（docs/roadmap.md 第四节），或确认后用："
+        log_error "请先完成信任链迁移（让存量 agent 换成各自签发的证书），或确认后用："
         log_error "    AGENT_TRUST_MIGRATED=true ./deploy.sh upgrade"
         exit 1
     fi
