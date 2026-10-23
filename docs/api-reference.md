@@ -947,7 +947,7 @@ IForest 每 30 分钟用滑动窗口重训。这带来一个固有弱点：攻�
 
 ---
 
-## 内存威胁 (EDR-3)
+## 内存威胁
 
 memfd_exec / 进程镂空 / shellcode 注入 / LSASS dump 检测.
 
@@ -959,7 +959,7 @@ memfd_exec / 进程镂空 / shellcode 注入 / LSASS dump 检测.
 
 ---
 
-## 蜜罐传感器 (C1)
+## 蜜罐传感器
 
 SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).
 
@@ -976,7 +976,7 @@ SSH / HTTP 蜜罐 + 文件诱饵, 命中即告警 (合法备份工具白名单).
 
 ---
 
-## VEX 漏洞利用性声明 (B7)
+## VEX 漏洞利用性声明
 
 CycloneDX VEX 1.5 + CSAF 2.0 标准. 4 状态: not_affected / affected / fixed / under_investigation.
 

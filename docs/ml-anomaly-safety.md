@@ -1,7 +1,7 @@
-# ML 异常检测安全说明（M0 + M1 部分）
+# ML 异常检测安全说明
 
-本文档说明 ML 异常检测引擎（Isolation Forest + 多指标关联）在 M0 的安全默认、模式语义、
-schema 闸、可观测性以及启用/回滚方式。M0 的目标是**安全默认**：让这套尚不成熟的 ML 信号
+本文档说明 ML 异常检测引擎（Isolation Forest + 多指标关联）在第一阶段的安全默认、模式语义、
+schema 闸、可观测性以及启用/回滚方式。第一阶段的目标是**安全默认**：让这套尚不成熟的 ML 信号
 默认不产生任何业务影响，只在显式开启且前置条件就绪后才逐步落库。
 
 ## 五种安全模式
@@ -34,21 +34,21 @@ schema 闸、可观测性以及启用/回滚方式。M0 的目标是**安全默�
 ## 严重度上限（不把 ML 信号当正式高危定罪）
 
 - 仅**生效** `alert` 模式允许 critical，其余（含 `context`）一律封顶 high；
-- `c2_beacon` 关联在 M0 仅有 proc/net/DNS **量级**联合升高，**无周期性（beaconing）特征**，
+- `c2_beacon` 关联在第一阶段仅有 proc/net/DNS **量级**联合升高，**无周期性（beaconing）特征**，
   pattern 声明上限即为 high，Description 明确为"待研判的 process/network/DNS-volume correlation、
   未验证 C2 周期性"。`pattern_name` 保留 `c2_beacon` 仅为兼容既有查询/UI/反馈数据，不代表已证实 C2。
 
-## DNS M0 限制
+## DNS 限制
 
 agent 侧尚未采集真实 DNS 的 domain / rcode，因此：
 
 - `dns_unique_domain`（idx 11）/ `dns_nx_ratio`（idx 12）两维不可信，不计入关联判定；
-- `reconnaissance` 依赖 NXDOMAIN 枚举，M0 **整体禁用**；
+- `reconnaissance` 依赖 NXDOMAIN 枚举，第一阶段**整体禁用**；
 - `dns_query` 事件的 `remote_addr` 是 resolver IP，不是被查询域名，**绝不**作为 `SuspiciousDomains` 富化
   （避免"把 resolver IP 称作 domain"）；
 - `dns_query_count`（idx 10）只是计数、不依赖 domain/rcode，仍可信。
 
-`dnsValid` 默认 `false`；M1 接通真实 domain/rcode 后再放开（同时置位 `dns_field_ready` 指标）。
+`dnsValid` 默认 `false`；第二阶段接通真实 domain/rcode 后再放开（同时置位 `dns_field_ready` 指标）。
 
 ## 可观测性：/readyz 与 Prometheus
 
@@ -72,9 +72,9 @@ agent 侧尚未采集真实 DNS 的 domain / rcode，因此：
 - 立即止血：把 flag 设回 `shadow`（继续观测但不落库）或 `off`（完全停）。Consumer 每 30 秒重载一次，最迟一个刷新周期生效；重启也会立即加载。
 - 无需回滚代码：模式是运行时开关，安全默认恒为 `shadow`。
 
-## M1 进展
+## 第二阶段进展
 
-M0 只是安全止血，**不代表 ML 达到行业先进水平**。M1 清单及当前状态：
+第一阶段只是安全止血，**不代表 ML 达到行业先进水平**。第二阶段清单及当前状态：
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |

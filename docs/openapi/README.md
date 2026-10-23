@@ -6,7 +6,7 @@ OpenAPI 3.0 schema + 客户 SDK.
 
 | 文件 | 用途 |
 |---|---|
-| `openapi.yaml` | 完整 v1 + v2 API 定义 (P2-10 起步, ~15 端点) |
+| `openapi.yaml` | v1 + v2 API 定义（已收录约 15 个端点） |
 | `README.md` | 本文档 |
 
 ## 生成 SDK
@@ -51,7 +51,7 @@ docker run -p 8088:8080 \
 # 访问 http://localhost:8088
 ```
 
-## 已收录端点 (P2-10 首批)
+## 已收录端点
 
 - auth: /api/v1/auth/login
 - hosts: GET /api/v1/hosts, GET /api/v1/hosts/{host_id}

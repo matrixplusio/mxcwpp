@@ -110,7 +110,7 @@ Agent 接入层，核心职责为连接管理与数据转发；同时依赖 MySQ
 
 ### Consumer
 
-Kafka 异步消费服务，**仅负责数据持久化**（v2.0 起检测能力已剥离至 Engine 服务）。
+Kafka 异步消费服务，**仅负责数据持久化**（检测能力在 Engine 服务）。
 
 - 订阅 8 个业务 Topic（ConsumerGroup A "mxcwpp-consumer"），按 DataType 路由写入 MySQL / ClickHouse
 - 幂等写入：MySQL `ON DUPLICATE KEY UPDATE`（逐条 Upsert），ClickHouse `ReplacingMergeTree`
@@ -127,7 +127,7 @@ Kafka 异步消费服务，**仅负责数据持久化**（v2.0 起检测能力�
 
 ### Engine
 
-v2.0 新增的检测分析引擎，独立服务，与 Consumer 并行消费 Kafka。
+检测分析引擎，独立服务，与 Consumer 并行消费 Kafka。
 
 - 订阅 `mxcwpp.agent.*` 全部业务 Topic（ConsumerGroup B "mxcwpp-engine"），与 Consumer 互不影响 offset
 - **检测 Stage**（`internal/server/engine/stage_*.go`）：清单以 `capability.go` 为准，
@@ -165,7 +165,7 @@ v2.0 新增的检测分析引擎，独立服务，与 Consumer 并行消费 Kafk
 
 ### LLMProxy
 
-v2.0 新增的多 LLM 厂商适配网关，提供统一 Provider 抽象。
+多 LLM 厂商适配网关，提供统一 Provider 抽象。
 
 - **7 种 Provider**：OpenAI / Anthropic / Gemini / DashScope / DeepSeek / Ollama / vLLM
 - **4 种场景路由**：alert_explain（告警解读）/ storyline_summary（攻击链总结）/ nl2query（自然语言转查询）/ rule_draft（规则起草）
@@ -178,7 +178,7 @@ v2.0 新增的多 LLM 厂商适配网关，提供统一 Provider 抽象。
 
 ### VulnSync
 
-v2.0 新增的漏洞情报融合服务，定时拉取 OS 厂商权威 advisory。
+漏洞情报融合服务，定时拉取 OS 厂商权威 advisory。
 
 - **OS advisory 源**：RHSA / Rocky / USN / Debian / Alpine / CentOS + 信创 4 源（产 NEVRA + fixed_version + OS gate 的可匹配 advisory）
 - 每条 advisory 经 `advisory.AdvisoryMessage` 推送到 Kafka `mxcwpp.vuln.advisory`
@@ -228,10 +228,10 @@ Agent 内置 EDR 子模块（`internal/agent/edr/`）：
 | 子模块 | 能力 |
 |---|---|
 | collector | eBPF + Tetragon 进程 / 文件 / 网络事件采集 |
-| rootkit | DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD / /proc 不一致扫描 (C2) |
-| honeypot | SSH / HTTP 假回应蜜罐 (C1)。**未接线**：零 importer，agent 不装配 |
-| canary | 反勒索 / 反横移诱饵文件 (B9)。**未接线**：零 importer；在跑的是 `plugins/avscanner` 内的那套 |
-| forensics | 内存威胁取证 (memfd_exec / process hollowing / shellcode / LSASS dump) (EDR-3) |
+| rootkit | DKOM 隐藏 PID / 内核模块 / 端口 / LD_PRELOAD / /proc 不一致扫描 |
+| honeypot | SSH / HTTP 假回应蜜罐。**未接线**：零 importer，agent 不装配 |
+| canary | 反勒索 / 反横移诱饵文件。**未接线**：零 importer；在跑的是 `plugins/avscanner` 内的那套 |
+| forensics | 内存威胁取证 (memfd_exec / process hollowing / shellcode / LSASS dump) |
 | memfd | memfd_create 内存马检测 |
 | bde | Boot Disk / 文件系统加密检测（反勒索） |
 | npatch | eBPF cgroup_skb (4.10+) + AF_PACKET v3 (CentOS 7 fallback) 热补丁 |
@@ -879,7 +879,7 @@ internal/server/agentcenter/scheduler/  # AC 调度器 8 个（更新/超时/IOC
 internal/server/manager/biz/     # Manager 业务逻辑（漏洞同步/LLM 接入/SBOM 等）
 internal/deploy/cluster/         # 集群部署引擎（mxctl 底层）
 internal/common/signing/         # Ed25519 签名/验证
-plugins/                         # 11 个插件实现（含 lib/go/ 共享库）
+plugins/                         # 12 个插件实现，lib/ 为插件共享 SDK
 cmd/tools/mxctl/                 # 集群部署 CLI 工具
 cmd/tools/ch-spill-replay/       # 把转存的 ClickHouse 行写回
 ```

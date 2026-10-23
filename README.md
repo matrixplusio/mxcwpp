@@ -1,4 +1,4 @@
-# MxCwpp Platform Community Edition
+# MxCwpp
 
 **English | [中文](README_ZH.md)**
 
@@ -9,83 +9,29 @@
 [![Last Commit](https://img.shields.io/github/last-commit/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/commits/main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/matrixplusio/mxcwpp)](https://goreportcard.com/report/github.com/matrixplusio/mxcwpp)
 
-An open-source, enterprise-grade host and container security management platform. Covers security baselines, asset management, vulnerability scanning, antivirus, runtime detection, and compliance auditing — providing a unified management view for security operations teams.
+An open-source host and container security platform (CWPP) for Linux and Kubernetes. It covers security baselines, asset inventory, vulnerability management, malware scanning, file integrity monitoring, runtime detection and response, and gives security operations teams a single management console.
 
-## Community Edition
+The whole platform is in this repository — agent, plugins, backend services and console — free to deploy under AGPL-3.0.
 
-MxCwpp Platform **Community Edition** includes the complete platform framework and all core security capabilities, sharing the same architecture as the internal version. The Community Edition is fully free with no license required. Currently open-sourced capabilities include:
+## Capabilities
 
-- **Full on-device capabilities**: Agent data collection, asset fingerprinting, eBPF runtime probes, baseline check plugins, etc.
-- **Full backend capabilities**: AgentCenter, Manager, Consumer, service discovery — all horizontally scalable.
-- **Complete management console**: Security overview, asset center, alert management, baseline checks, vulnerability management, container security, and more.
-- **Built-in detection rules**: 212 CIS baseline rules, 80 container baseline rules, CEL runtime detection policy samples.
+| Area | What it does |
+|------|--------------|
+| Security baseline | CIS Benchmark, MLPS 2.0 (等保) and middleware checks — 30 policies, 614 rules; single-host and batch auto-remediation |
+| Asset inventory | Processes, ports, users, packages, containers and more, with relationship mapping, global fingerprinting and export; Kubernetes cluster assets |
+| Vulnerability management | Package PURL collection, OS vendor advisories plus OSV.dev matching, CVSS v3.1 scoring, SBOM and VEX (CycloneDX 1.5 / CSAF 2.0) export |
+| Malware scanning | ClamAV and YARA-X engines, scan tasks and file quarantine |
+| File integrity monitoring | AIDE-based FIM with policies, events and tasks |
+| Runtime detection | eBPF event collection, CEL rule engine with MITRE ATT&CK mapping, behavioral sequence rules, ML anomaly scoring |
+| Memory and rootkit detection | memfd_exec, process hollowing, shellcode injection, LSASS dump; DKOM hidden PID / kernel module / port / LD_PRELOAD |
+| Kubernetes security | Cluster management, container CIS baseline, audit-log intrusion detection via audit webhook |
+| AD / LDAP audit | DCSync, Kerberoasting, brute force, off-hour RDP, privilege assignment and more |
+| Alerting and response | Aggregation, whitelists, attack storyline (ATT&CK kill-chain timeline), kill / quarantine / network block |
+| Threat intelligence | MISP IOC import with real-time matching in the rule engine |
+| Threat hunting | SPL-like query language translated to SQL over the ClickHouse event archive |
+| Operations | Audit log, component and plugin distribution, Prometheus monitoring, inspection reports |
 
-To build a more comprehensive security operations system, we recommend extending policies via the built-in CEL rule engine and integrating threat intelligence for secondary processing.
-
-## Function List
-
-| Feature | Community Edition | Enterprise Edition |
-|---------|-------------------|--------------------|
-| Linux data collection (eBPF) | :white_check_mark: | :white_check_mark: |
-| Agent control plane (upgrade/config/task dispatch) | :white_check_mark: | :white_check_mark: |
-| Host status and details | :white_check_mark: | :white_check_mark: |
-| Asset collection (11 types) | :white_check_mark: | :white_check_mark: |
-| Asset fingerprint (global view) | :white_check_mark: | :white_check_mark: |
-| K8s cluster asset collection | :white_check_mark: | :white_check_mark: |
-| Host/container intrusion detection | `built-in samples` | :white_check_mark: |
-| Runtime detection (eBPF + CEL) | `built-in samples` | :white_check_mark: |
-| K8s Audit intrusion detection | `built-in samples` | :white_check_mark: |
-| Behavioral sequence detection | :x: | :white_check_mark: |
-| Alert whitelist | :white_check_mark: | :white_check_mark: |
-| Alert aggregation and tracing | :white_check_mark: | :white_check_mark: |
-| Threat response (kill/quarantine/network block) | :white_check_mark: | :white_check_mark: |
-| File quarantine | :white_check_mark: | :white_check_mark: |
-| Vulnerability detection (OSV.dev + CVSS) | :white_check_mark: | :white_check_mark: |
-| Vulnerability intelligence hot-update | :x: | :white_check_mark: |
-| Baseline check (CIS Benchmark) | :white_check_mark: | :white_check_mark: |
-| Baseline auto-remediation | :white_check_mark: | :white_check_mark: |
-| Virus scanning (ClamAV + YARA-X) | :white_check_mark: | :white_check_mark: |
-| File integrity monitoring (FIM) | :white_check_mark: | :white_check_mark: |
-| Threat intelligence (MISP IOC) | :white_check_mark: | :white_check_mark: |
-| Container CIS baseline (80 rules) | :white_check_mark: | :white_check_mark: |
-| Audit log | :white_check_mark: | :white_check_mark: |
-| Component management and plugin distribution | :white_check_mark: | :white_check_mark: |
-| System monitoring (Prometheus) | :white_check_mark: | :white_check_mark: |
-| Ops inspection and report export | :white_check_mark: | :white_check_mark: |
-| Memory threat detection (memfd_exec / process hollowing / shellcode / LSASS dump) | :white_check_mark: | :white_check_mark: |
-| AD / LDAP domain controller audit (7 rules: DCSync / Kerberoasting / brute force / etc.) | :white_check_mark: | :white_check_mark: |
-| DKOM rootkit detection (hidden PID / kernel module / port / LD_PRELOAD) | :white_check_mark: | :white_check_mark: |
-| Honeypot sensors (SSH / HTTP decoys + file decoy policy) | :construction: | :construction: |
-| VEX vulnerability statement export (CycloneDX 1.5 / CSAF 2.0) | :white_check_mark: | :white_check_mark: |
-| YARA-X malware signature library (73 rules / 50 families) | :white_check_mark: | :white_check_mark: |
-| Threat hunting (SPL-like DSL → SQL transpiler) | :white_check_mark: | :white_check_mark: |
-| Attack storyline (ATT&CK kill-chain timeline) | :white_check_mark: | :white_check_mark: |
-| Behavior baseline detection (ML anomaly scoring) | :white_check_mark: | :white_check_mark: |
-| Windows support | :x: | :construction: |
-| Active defense (NPatch eBPF hot-patching) | `built-in samples` | :white_check_mark: |
-| Cloud antivirus | :x: | :construction: |
-
-> :white_check_mark: Supported &nbsp; `built-in samples` includes sample rules &nbsp; :x: Not supported &nbsp; :construction: In development / planned, not yet shipped
-
-## Features
-
-| Module | Description |
-|--------|-------------|
-| Security Baseline | 9 checkers, 212 rules covering CIS Benchmark core items, single-host and batch auto-remediation |
-| Asset Center | 11 asset types (processes, ports, users, packages, containers, etc.), relationship mapping and export |
-| Vulnerability Management | Package PURL collection + OSV.dev matching + CVSS v3.1 scoring + SBOM export |
-| Antivirus | ClamAV + YARA-X dual-engine scanning, task management + quarantine |
-| File Integrity | AIDE-based FIM checks with full-cycle policy, event, and task management |
-| Runtime Detection | Tetragon/eBPF event collection + CEL rule engine + MITRE ATT&CK mapping |
-| Container Security | K8s cluster management, container CIS baseline (80 rules), Audit Webhook integration |
-| Alert Center | Alert aggregation, whitelisting, auto-response (kill/quarantine), tracing timeline |
-| Threat Intelligence | MISP IOC import + Redis cache + CEL real-time matching |
-| Memory Forensics | memfd_exec / process hollowing / shellcode injection / LSASS dump detection (EDR-3) |
-| AD/LDAP Audit | 7 detection rules: DCSync, Kerberoasting, brute force, off-hour RDP, privilege assignment, etc. (EDR-4) |
-| Honeypot Sensors | SSH/HTTP decoys + file decoys with whitelist for legitimate backup tools (C1) — **in development, not yet shipped** |
-| Rootkit Detection | DKOM hidden PID / kernel module / port / LD_PRELOAD / /proc inconsistency (C2) |
-| Threat Hunting | SPL-like DSL → SQL transpiler over ClickHouse event archive |
-| VEX Export | CycloneDX VEX 1.5 + CSAF 2.0 for vendor vulnerability statements (B7) |
+**In development, not yet shipped:** honeypot sensors (SSH / HTTP decoys), NPatch eBPF virtual patching (Log4j proof of concept only), Windows support.
 
 ## Architecture
 
@@ -96,27 +42,27 @@ Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer �
 Manager ──HTTP──→ LLMProxy ×N (multi-LLM gateway)   VulnSync ×N ──Kafka──→ Manager/Engine
 ```
 
-In v2.0 the backend is split into **seven services**: Manager / AgentCenter / Consumer / Engine / LLMProxy / VulnSync / Scanner. The control plane is fully stateless and scales horizontally. Kafka decouples data persistence from detection (two ConsumerGroups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and event archives. VulnSync pulls OS vendor advisories and publishes them to Kafka, where the Manager consumer matches them against host software.
+The backend consists of seven services: Manager, AgentCenter, Consumer, Engine, LLMProxy, VulnSync and Scanner. The control plane is stateless and scales horizontally. Kafka decouples persistence from detection (separate consumer groups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and the event archive. VulnSync pulls OS vendor advisories and publishes them to Kafka for matching against host software.
 
-See [Architecture Documentation](docs/architecture.md) for details.
+See [Architecture](docs/architecture.md) for details.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Go 1.25+ (Gin / gRPC / Gorm / Zap) |
+| Backend | Go 1.26 (Gin / gRPC / GORM / Zap) |
 | Frontend | Next.js 15 + React 19 + TypeScript + TailwindCSS + Zustand + TanStack Query |
 | Storage | MySQL 8.0+ / Redis 7 / ClickHouse 24 |
-| Messaging | Kafka (KRaft mode, 7 Topics + DLQ) |
-| Monitoring | Prometheus (sole data source for host metrics) |
+| Messaging | Kafka (KRaft mode) |
+| Monitoring | Prometheus |
 | Communication | gRPC bidirectional streaming + mTLS + Protobuf |
-| Deployment | Docker Compose / Systemd + Nginx |
+| Deployment | Docker Compose / systemd + Nginx |
 
 ## Supported Platforms
 
 **Host OS**: Rocky Linux 9/10, Oracle Linux 7/8/9, CentOS 7/8/9, Debian 10/11/12, Ubuntu 20.04/22.04
 
-**Runtime**: Physical / Virtual machines, Docker container hosts, Kubernetes nodes and clusters
+**Runtime**: Physical and virtual machines, Docker hosts, Kubernetes nodes and clusters
 
 ## Quick Start
 
@@ -127,16 +73,16 @@ cd mxcwpp/deploy
 cp .env.example .env
 vim .env  # Edit SERVER_IP / JWT_SECRET / database passwords
 
-# Start control plane (HA mode)
+# Start the control plane (HA mode)
 docker compose --env-file .env up -d \
   --scale manager=2 --scale agentcenter=2 --scale consumer=2
 ```
 
-Visit `http://<SERVER_IP>` to access the management console. Default credentials: `admin / admin123`.
+Open `http://<SERVER_IP>` and sign in as `admin / admin123`. You will be required to change the password on first login.
 
-See [Deployment Documentation](docs/deployment.md) for detailed setup instructions.
+See [Deployment](docs/deployment.md) for prerequisites, cluster deployment and agent installation.
 
-## Build Commands
+## Build
 
 ```bash
 make build-server                                        # Build server
@@ -145,47 +91,50 @@ make package-agent-all VERSION=1.0.0 SERVER_HOST=IP:6751 # Package agent (RPM/DE
 make package-plugins-all VERSION=1.0.0                   # Package plugins
 make proto                                               # Generate Protobuf code
 make test                                                # Run tests
-make lint                                                # Lint check
+make lint                                                # Lint
 ```
 
 ## Project Structure
 
 ```
 mxcwpp/
-├── cmd/                    # Entry points (agent + 6 server services + mxctl + tools)
-│   ├── agent/              # Agent entry
-│   └── server/             # manager / agentcenter / consumer / engine / llmproxy / vulnsync
+├── cmd/
+│   ├── agent/              # Agent entry point
+│   ├── server/             # agentcenter / consumer / engine / llmproxy / manager / scanner / vulnsync
+│   └── tools/              # Maintenance tools (replay, ETL, migration)
 ├── internal/
-│   ├── server/             # Server packages (manager / agentcenter / consumer / engine / llmproxy / vulnsync / common)
-│   └── agent/              # Agent (connection / transport / plugin / heartbeat / edr 25+ submods)
-├── plugins/                # 11 plugins (baseline / collector / fim / scanner / avscanner / remediation / rasp-go / rasp-java / rasp-python / rasp-php / rasp-node)
+│   ├── agent/              # Agent (connection, transport, plugin management, EDR modules)
+│   ├── server/             # Backend services and shared server packages
+│   ├── common/             # Packages shared by agent and server
+│   └── deploy/             # Deployment rendering and repository checks
+├── plugins/                # avscanner / baseline / collector / fim / logcollector / remediation / scanner
+│                           # rasp-go / rasp-java / rasp-node / rasp-php / rasp-python; lib/ is the shared plugin SDK
 ├── api/proto/              # Protobuf definitions
-├── web/                    # Frontend (Next.js 15 + React 19 + TypeScript)
-├── configs/                # Config files (server.yaml / agent.yaml / rule files)
-├── deploy/                 # Docker Compose (dev / v2 / pret) + Nginx + systemd + prod cluster
+├── web/                    # Console (Next.js 15 + React 19 + TypeScript)
+├── configs/                # Configuration samples and detection rules
+├── deploy/                 # Docker Compose, Nginx, systemd and cluster deployment
+├── sdk/                    # Client SDKs (Go / Java / Python)
 ├── scripts/                # Build and deployment scripts
+├── tests/                  # API, end-to-end, performance and rule tests
 └── docs/                   # Documentation
 ```
 
 ## Documentation
 
 - [Architecture](docs/architecture.md) - System topology, component responsibilities, data pipeline, HA design
-- [Deployment](docs/deployment.md) - Environment setup, single/cluster deployment, Agent installation, upgrades and backups
-- [Configuration](docs/configuration.md) - Server config, Agent config, environment variables
-- [API Reference](docs/api-reference.md) - REST API endpoints, request/response formats, authentication
+- [Deployment](docs/deployment.md) - Prerequisites, single-node and cluster deployment, agent installation, upgrades and backups
+- [Configuration](docs/configuration.md) - Server and agent configuration, environment variables
+- [API Reference](docs/api-reference.md) - REST endpoints, request/response formats, authentication
 - [FAQ](docs/faq.md) - Common issues and troubleshooting
-- [Governance](docs/governance.md) - Project governance model, decision process, security policy
-- [Contributing](CONTRIBUTING.md) - Branch and PR workflow, commit format, publishing rules
 - [Development](docs/development.md) - Local setup, database migrations, plugin development
+- [Contributing](CONTRIBUTING.md) - How to report bugs and request features
+- [Governance](docs/governance.md) - Project roles, decision process, security policy
+
+The detailed documents under `docs/` are currently written in Chinese.
 
 ## Star History
 
 [![Star History](docs/assets/star-history.svg)](https://github.com/matrixplusio/mxcwpp/stargazers)
-
-> The chart is generated monthly by [`scripts/star-history.py`](scripts/star-history.py) and committed to this repo.
-> GitHub now requires authentication on the stargazers endpoint, which broke third-party star history
-> services and led them to ask users for write-scoped personal tokens. We generate it ourselves instead,
-> using the repo-scoped ephemeral token that Actions provides.
 
 ## Contributors
 

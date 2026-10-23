@@ -1,4 +1,4 @@
-# YARA 规则库 (P2-8)
+# YARA 规则库
 
 YARA 完整规则库 (suspiciousDirs + 恶意代码 + WebShell)
 
@@ -37,7 +37,7 @@ ls /var/lib/mxcwpp/yara-rules/
 | T1059.004 | Bash | 1 |
 | T1059.006 | Python | 2 |
 
-## 后续 PR (M2 路线)
+## 后续计划
 
 - WebShell 扩到 50 条 (常见框架: WordPress/ThinkPHP/Discuz 内嵌马)
 - 勒索家族签名 (LockBit/Conti/REvil/Maze/Phobos)

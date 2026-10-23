@@ -1,4 +1,4 @@
-# Privilege escalation eBPF hooks (M1-1)
+# Privilege escalation eBPF hooks
 
 `privilege.c` 实现 6 个 kprobe 抓提权/容器逃逸/Rootkit 加载关键路径:
 

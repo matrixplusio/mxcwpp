@@ -383,3 +383,64 @@ func itoaDocs(n int) string {
 	}
 	return ""
 }
+
+// TestReadmeMatchesRepository 校验中英文 README 与仓库实际一致：服务、插件、Go 版本。
+//
+// README 是外人看到的第一份文档。服务数、插件数、Go 版本对不上，读者会连带怀疑
+// 其余内容；这些数据都能从仓库直接算出来，就不靠人记着同步。
+func TestReadmeMatchesRepository(t *testing.T) {
+	root := repoRootFromDeploy(t)
+
+	dirs := func(rel string, skip ...string) []string {
+		entries, err := os.ReadDir(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", rel, err)
+		}
+		var out []string
+	next:
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			for _, s := range skip {
+				if e.Name() == s {
+					continue next
+				}
+			}
+			out = append(out, e.Name())
+		}
+		return out
+	}
+	services := dirs("cmd/server")
+	plugins := dirs("plugins", "lib") // lib 是插件共享 SDK，不是插件
+
+	gomod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^go (\d+\.\d+)`).FindSubmatch(gomod)
+	if m == nil {
+		t.Fatal("go.mod 里找不到 go 指令")
+	}
+	goVersion := "Go " + string(m[1])
+
+	for _, doc := range []string{"README.md", "README_ZH.md"} {
+		data, err := os.ReadFile(filepath.Join(root, doc))
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", doc, err)
+		}
+		body := string(data)
+		var missing []string
+		for _, name := range append(append([]string{}, services...), plugins...) {
+			if !strings.Contains(body, name) {
+				missing = append(missing, name)
+			}
+		}
+		if len(missing) > 0 {
+			t.Errorf("%s 没有提到这些服务或插件：%s", doc, strings.Join(missing, ", "))
+		}
+		if !strings.Contains(body, goVersion) {
+			t.Errorf("%s 写的 Go 版本与 go.mod 不一致，应为 %s", doc, goVersion)
+		}
+	}
+}

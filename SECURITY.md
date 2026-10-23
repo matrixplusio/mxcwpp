@@ -2,42 +2,36 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, **please DO NOT open a public issue**.
+If you discover a security vulnerability, **please do not open a public issue**.
 
-Please report it privately via email:
+Report it privately by email:
 
 - **Email**: contact@matrixplus.io
-- **Subject format**: `[SECURITY] Brief description`
+- **Subject**: `[SECURITY] Brief description`
 
-## Response SLA
+Please include the affected component and version, reproduction steps or a proof of concept, and the impact you observed. Remove host names, addresses and credentials from logs before sending.
 
-| Stage | Timeframe | Type |
-|-------|-----------|------|
-| Acknowledge receipt | 48 hours | Hard requirement |
-| Initial assessment & severity rating | 7 business days | Target |
-| Start fix for critical vulnerabilities (CVSS >= 9.0) | Within 24 hours | Hard requirement |
+## What to Expect
+
+This project is maintained on a best-effort basis. Our targets are:
+
+| Stage | Target |
+|-------|--------|
+| Acknowledge receipt | Within 3 business days |
+| Initial assessment and severity rating (CVSS v3.1) | Within 10 business days |
+| Fix | Prioritised by severity; critical issues are handled ahead of all other work |
+
+We will keep you informed of progress and credit you in the advisory unless you prefer to remain anonymous.
 
 ## Process
 
-1. A security response lead is assigned upon receiving the report
-2. Acknowledge receipt within 48 hours
-3. Validate the vulnerability and assess impact with CVSS scoring
-4. If CVSS >= 9.0, initiate fix within 24 hours
-5. Develop fix in a private branch
-6. Notify affected users before releasing the fix
-7. Publish security update and advisory
-8. Record in CHANGELOG (without exposing exploit details)
+1. Validate the report and assess impact
+2. Develop the fix privately
+3. Publish the fix together with a GitHub Security Advisory
+4. Record it in the CHANGELOG without exploit details
 
-## Security Updates
-
-Security fixes are released as PATCH versions and communicated through:
-
-- GitHub Security Advisory
-- Release Notes
-- Direct notification to affected users
+Please allow us to publish a fix before disclosing the issue publicly.
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 1.0.x   | Yes       |
+Security fixes are made on the `main` branch. Once versioned releases are published, fixes will be shipped in a patch release of the latest minor version.

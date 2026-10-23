@@ -1,4 +1,4 @@
-# NPatch eBPF PoC (P2-16)
+# NPatch eBPF PoC
 
 NPatch 虚拟补丁：eBPF 字节码注入 + 30 条规则。
 
@@ -48,7 +48,7 @@ int npatch_log4j_filter(struct __sk_buff *skb)
 - 单包延迟 ≤ 5μs (无命中)
 - throughput 影响 ≤ 1%
 
-## 限制 (M2 完善)
+## 限制
 
 - 仅明文 HTTP (TLS 流量走 RASP / JNI hook)
 - chunked encoding / 大 body 跨多包合并未实现
@@ -77,11 +77,11 @@ bpftool map update pinned /sys/fs/bpf/rules_enabled key 0x4 0xA8 0xBC 0x00 value
 # rule_id 44228 (Log4j) → enabled=1
 ```
 
-## 后续 PR (P3-* / M2)
+## 后续计划
 
-- P3-1: NPatch eBPF loader (Go cilium/ebpf 集成)
-- P3-2: Spring4Shell (CVE-2022-22965) eBPF hook
-- P3-3: Shellshock (CVE-2014-6271) eBPF hook
-- P3-4: NPatch eBPF benchmark + 性能 SLO 验证
-- M2-P2-1: NPatch UI 配置 + 监控视图
-- M2-P2-2: 30 条规则全部上 eBPF (当前仅 Log4j PoC)
+- NPatch eBPF loader（Go cilium/ebpf 集成）
+- Spring4Shell (CVE-2022-22965) eBPF hook
+- Shellshock (CVE-2014-6271) eBPF hook
+- NPatch eBPF 性能基准与 SLO 验证
+- NPatch 控制台配置与监控视图
+- 30 条规则全部改用 eBPF（当前仅 Log4j 原型）
