@@ -715,22 +715,8 @@ func setDefaults(cfg *Config, logFileSet bool) {
 
 // Validate 验证配置
 func (c *Config) Validate() error {
-	// 验证 mTLS 证书文件
-	if c.MTLS.CACert != "" {
-		if _, err := os.Stat(c.MTLS.CACert); os.IsNotExist(err) {
-			return fmt.Errorf("CA 证书文件不存在: %s", c.MTLS.CACert)
-		}
-	}
-	if c.MTLS.ServerCert != "" {
-		if _, err := os.Stat(c.MTLS.ServerCert); os.IsNotExist(err) {
-			return fmt.Errorf("server 证书文件不存在: %s", c.MTLS.ServerCert)
-		}
-	}
-	if c.MTLS.ServerKey != "" {
-		if _, err := os.Stat(c.MTLS.ServerKey); os.IsNotExist(err) {
-			return fmt.Errorf("server 私钥文件不存在: %s", c.MTLS.ServerKey)
-		}
-	}
+	// 不在这里检查 mTLS 证书文件：配置是各服务共用的，而只有 AgentCenter 加载证书，
+	// 它加载失败时自己会拒绝启动。在这里检查会让不用证书的服务也必须挂上证书（含私钥）。
 
 	// 验证 Prometheus 配置
 	if c.Metrics.Prometheus.Enabled {

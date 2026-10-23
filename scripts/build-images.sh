@@ -70,7 +70,7 @@ cd "$PROJECT_ROOT"
 
 # 构建 AgentCenter
 echo ""
-echo "[1/4] 构建 AgentCenter..."
+echo "[1/7] 构建 AgentCenter..."
 docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
@@ -81,7 +81,7 @@ docker build \
 
 # 构建 Manager
 echo ""
-echo "[2/4] 构建 Manager..."
+echo "[2/7] 构建 Manager..."
 docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
@@ -91,7 +91,7 @@ docker build \
     .
 
 echo ""
-echo "[3/4] 构建 Consumer..."
+echo "[3/7] 构建 Consumer..."
 docker build \
     --network=host \
     --build-arg VERSION="${VERSION}" \
@@ -140,13 +140,6 @@ docker build \
     -t "${PREFIX}mxcwpp-ui:${VERSION}" \
     -t "${PREFIX}mxcwpp-ui:latest" \
     .
-
-echo ""
-echo "[mxctl] 编译 mxctl 部署工具（host 二进制）..."
-# mxctl 是部署工具 binary，不在容器内跑；改 internal/deploy/cluster/render.go 等
-# 时若不重 build，prometheus.yml 等模板配置不会更新。
-export PATH=/usr/local/go/bin:$PATH
-go build -o ./bin/mxctl ./cmd/tools/mxctl && ls -la ./bin/mxctl
 
 echo ""
 echo "构建完成!"

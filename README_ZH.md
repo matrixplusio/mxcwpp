@@ -2,6 +2,8 @@
 
 **[English](README.md) | 中文**
 
+[![CI](https://github.com/matrixplusio/mxcwpp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/matrixplusio/mxcwpp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp)
 [![License](https://img.shields.io/github/license/matrixplusio/mxcwpp)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/matrixplusio/mxcwpp?style=social)](https://github.com/matrixplusio/mxcwpp/stargazers)
@@ -12,6 +14,8 @@
 开源的主机与容器安全平台（CWPP），面向 Linux 与 Kubernetes。覆盖安全基线、资产清点、漏洞管理、病毒查杀、文件完整性监控、运行时检测与响应，为安全运营团队提供统一的管理控制台。
 
 Agent、插件、后端服务与控制台全部在本仓库中，按 AGPL-3.0 免费部署使用。
+
+**项目状态：**可用于生产。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)，各版本变化见 [CHANGELOG](CHANGELOG.md)。
 
 ## 功能
 
@@ -33,16 +37,37 @@ Agent、插件、后端服务与控制台全部在本仓库中，按 AGPL-3.0 �
 
 **开发中，尚未发布：**蜜罐传感器（SSH / HTTP 诱饵）、NPatch eBPF 虚拟补丁（目前只有 Log4j 原型）、Windows 支持。
 
+## 截图
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/dashboard.png" alt="安全概览" width="100%"><br><b>安全概览</b></td>
+    <td><img src="docs/screenshots/alerts.png" alt="告警中心" width="100%"><br><b>告警中心</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/hosts.png" alt="主机列表" width="100%"><br><b>主机列表</b></td>
+    <td><img src="docs/screenshots/fingerprint.png" alt="资产指纹" width="100%"><br><b>资产指纹</b></td>
+  </tr>
+</table>
+
+截图取自使用合成数据的演示环境。
+
 ## 架构
 
-```
-浏览器 ─→ Nginx ─→ Manager ×N ─→ MySQL / Redis / ClickHouse / Prometheus
-Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ 存储层（持久化）
-                                                 └→ Engine ×N    ─→ 告警（检测分析）
-Manager ──HTTP──→ LLMProxy ×N（多 LLM 适配）   VulnSync ×N ──Kafka──→ Manager/Engine
+```mermaid
+flowchart LR
+  browser[浏览器] --> ui[Nginx / 控制台] --> manager[Manager]
+  agent[Agent + 插件] -- gRPC + mTLS --> proxy[AgentCenter 代理] --> ac[AgentCenter]
+  ac --> kafka[(Kafka)]
+  kafka --> consumer[Consumer] --> store[(MySQL / ClickHouse)]
+  kafka --> engine[Engine] --> alerts[告警与攻击故事线]
+  vulnsync[VulnSync] -- 厂商安全公告 --> kafka
+  manager --> store
+  manager --> redis[(Redis)]
+  manager --> llm[LLMProxy]
 ```
 
-后端由七个服务组成：Manager、AgentCenter、Consumer、Engine、LLMProxy、VulnSync、Scanner。控制面无状态，可水平扩展。Kafka 把持久化与检测解耦（两个消费组，offset 互相独立），Redis 负责服务发现与分布式锁，ClickHouse 承载时序分析与事件归档。VulnSync 拉取 OS 厂商公告并发布到 Kafka，用于与主机软件匹配。
+后端由七个服务组成：Manager、AgentCenter、Consumer、Engine、LLMProxy、VulnSync、Scanner（可选，容器镜像扫描）。控制面无状态，可水平扩展。Kafka 把持久化与检测解耦（两个消费组，offset 互相独立），Redis 负责服务发现与分布式锁，ClickHouse 承载时序分析与事件归档。VulnSync 拉取 OS 厂商公告并发布到 Kafka，用于与主机软件匹配。
 
 详见 [架构设计](docs/architecture.md)。
 
@@ -66,21 +91,66 @@ Manager ──HTTP──→ LLMProxy ×N（多 LLM 适配）   VulnSync ×N ─�
 
 ## 快速开始
 
+### 前置条件
+
+- Linux 或 macOS，Docker 24+ 与 Docker Compose v2
+- 至少 4 核 CPU、8 GiB 内存（建议 16 GiB）、50 GiB 磁盘——全套服务运行时约占 6 GiB 内存
+- 端口：控制台 80 / 443，Agent 接入 6751。80 / 443 被占用时，先在 `deploy/` 下执行 `cp .env.example .env`，再修改 `HTTP_PORT` / `HTTPS_PORT`
+
+### 1. 启动平台
+
 ```bash
 git clone https://github.com/matrixplusio/mxcwpp.git
 cd mxcwpp/deploy
-
-cp .env.example .env
-vim .env  # 修改 SERVER_IP / JWT_SECRET / 数据库密码
-
-# 启动控制面（HA 模式）
-docker compose --env-file .env up -d \
-  --scale manager=2 --scale agentcenter=2 --scale consumer=2
+./deploy.sh quickstart
 ```
 
-访问 `http://<SERVER_IP>`，用 `admin / admin123` 登录，首次登录会强制修改密码。
+`quickstart` 自动生成全部口令、密钥与证书，拉取镜像，以单机单副本启动并等待全部服务就绪。可以重复执行：已有的 `.env` 与证书原样沿用。自动探测的地址不是 Agent 要连的地址时，在命令前加 `SERVER_IP=<地址>`。
 
-前置条件、集群部署与 Agent 安装见 [安装部署](docs/deployment.md)。
+确认启动成功：
+
+```bash
+docker compose ps                                   # 全部服务 running / healthy
+curl -k https://<SERVER_IP>/api/v1/health           # 返回 "status":"ok"
+```
+
+访问 `https://<SERVER_IP>`（自签名证书），用 `admin / admin123` 登录，首次登录会强制修改密码。
+
+### 2. 接入第一台主机
+
+1. 在 **系统管理 → 基本设置** 中把后端接口地址填为 `https://<SERVER_IP>`。Agent 从这个地址下载插件与更新。
+2. 构建 Agent 与插件安装包，在 **运维中心 → 组件管理** 上传：Agent 安装包传到 `agent` 组件，每个插件传到同名组件。
+   ```bash
+   make package-agent-all   VERSION=1.0.0 SERVER_HOST=<SERVER_IP>:6751
+   make package-plugins-all VERSION=1.0.0
+   ```
+3. 在主机上先信任平台 CA（`deploy/certs/ca.crt`），再带上 enroll 令牌（`deploy/.env` 里的 `ENROLL_TOKEN`）执行安装：
+   ```bash
+   sudo cp ca.crt /etc/pki/ca-trust/source/anchors/mxcwpp-ca.crt && sudo update-ca-trust
+   # Debian / Ubuntu：拷到 /usr/local/share/ca-certificates/mxcwpp-ca.crt 后执行 update-ca-certificates
+
+   read -rs MXCWPP_ENROLL_TOKEN && export MXCWPP_ENROLL_TOKEN
+   export MXCWPP_HTTP_SERVER=https://<SERVER_IP> MXCWPP_AGENT_SERVER=<SERVER_IP>:6751
+   sudo -E bash -c "$(curl -fsSL https://<SERVER_IP>/agent/install.sh)"
+   ```
+
+一分钟内主机会出现在 **资产中心 → 主机列表**。Agent 运行在 systemd 管理的主机上；容器主机不会下发插件。
+
+### 3. 停止与清理
+
+```bash
+./deploy.sh stop                       # 停止，保留数据
+docker compose down                    # 删除容器；数据仍在 deploy/data
+```
+
+要从头再来，再删除 `deploy/data`、`deploy/certs/*.crt`、`deploy/certs/*.key` 与 `deploy/.env`。
+
+集群部署、高可用、升级与备份见 [安装部署](docs/deployment.md)。
+
+### 已知限制
+
+- `HTTPS_PORT` 不是默认值时，HTTP 跳转 HTTPS 会丢掉端口，请直接访问 HTTPS 端口。
+- Rocky Linux 的漏洞匹配只覆盖首次启动之后发布的安全公告。
 
 ## 构建
 

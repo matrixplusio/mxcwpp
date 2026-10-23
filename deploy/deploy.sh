@@ -93,6 +93,14 @@ check_ports() {
     done
 }
 
+# detect_server_ip 取本机对外地址：Linux 用 hostname -I，macOS 用默认网卡；都取不到时用 127.0.0.1。
+detect_server_ip() {
+    local ip
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$ip" ] && ip=$(ipconfig getifaddr en0 2>/dev/null)
+    echo "${ip:-127.0.0.1}"
+}
+
 # ============================================================
 # 初始化配置
 # ============================================================
@@ -127,7 +135,7 @@ init_env() {
     DATA_DIR="${DATA_DIR:-/data/mxcwpp}"
 
     # 服务器IP
-    DEFAULT_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
+    DEFAULT_IP=$(detect_server_ip)
     read -p "服务器 IP [$DEFAULT_IP]: " SERVER_IP
     SERVER_IP="${SERVER_IP:-$DEFAULT_IP}"
 
@@ -142,9 +150,9 @@ init_env() {
     MANAGER_PORT="${MANAGER_PORT:-8080}"
 
     # Redis 密码
-    read -sp "Redis 密码 (回车留空，无密码): " REDIS_PASSWORD
+    read -sp "Redis 密码 (回车自动生成): " REDIS_PASSWORD
     echo
-    REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+    REDIS_PASSWORD="${REDIS_PASSWORD:-$(openssl rand -hex 16)}"
 
     # JWT 密钥
     JWT_SECRET=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
@@ -209,7 +217,7 @@ CLICKHOUSE_ENABLED=true
 CLICKHOUSE_ADDR=clickhouse:9000
 CLICKHOUSE_DATABASE=mxcwpp
 CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=
+CLICKHOUSE_PASSWORD=$(openssl rand -hex 16)
 
 # ============ Prometheus ============
 PROMETHEUS_ENABLED=true
@@ -267,12 +275,15 @@ init_dirs() {
     source "$ENV_FILE"
 
     log_step "创建数据目录..."
-    sudo mkdir -p "$DATA_DIR"/{mysql,redis,logs/{agentcenter,manager,nginx,mysql},plugins,uploads}
+    # 有写权限就直接建（数据目录在当前目录下时不该弹 sudo 密码），否则才用 sudo。
+    local SUDO=""
+    mkdir -p "$DATA_DIR" 2>/dev/null && [ -w "$DATA_DIR" ] || SUDO="sudo"
+    $SUDO mkdir -p "$DATA_DIR"/{mysql,redis,logs/{agentcenter,manager,nginx,mysql},plugins,uploads,prometheus}
     # 可选服务目录（即使不启用也创建，避免挂载失败）
-    sudo mkdir -p "$DATA_DIR"/{kafka-1,kafka-2,kafka-3,clickhouse}
-    sudo chown -R $(id -u):$(id -g) "$DATA_DIR" 2>/dev/null || true
-    # MySQL 日志目录需要 mysql 用户可写（容器内 uid=999）
-    sudo chmod 777 "$DATA_DIR/logs/mysql" 2>/dev/null || true
+    $SUDO mkdir -p "$DATA_DIR"/{kafka-1,kafka-2,kafka-3,clickhouse}
+    [ -n "$SUDO" ] && sudo chown -R "$(id -u):$(id -g)" "$DATA_DIR" 2>/dev/null || true
+    # MySQL 日志目录需要容器内 mysql 用户（uid=999）可写；Prometheus 以 nobody 运行，同理
+    chmod 777 "$DATA_DIR/logs/mysql" "$DATA_DIR/prometheus" 2>/dev/null || true
     log_info "数据目录: $DATA_DIR"
 }
 
@@ -372,9 +383,8 @@ init_certs() {
 
     cd "$PROJECT_ROOT"
     if [ -f "./scripts/generate-certs.sh" ]; then
-        # 传入 SERVER_IP，保证 server.crt SAN 覆盖 agent 实际连接地址。
-        EXTRA_IPS="${SERVER_IP:-}" ./scripts/generate-certs.sh
-        cp -r certs/* "$SCRIPT_DIR/certs/"
+        # 传入 SERVER_IP，保证 server.crt SAN 覆盖 agent 实际连接地址；直接生成到部署目录。
+        CERT_DIR="$SCRIPT_DIR/certs" EXTRA_IPS="${SERVER_IP:-}" ./scripts/generate-certs.sh
     else
         # 手动生成证书（部署包内无 scripts/ 时的兜底路径）
         cd "$SCRIPT_DIR/certs"
@@ -472,7 +482,12 @@ init_config() {
         log_error "配置模板不存在: $SCRIPT_DIR/config/server.yaml.tpl"
         exit 1
     fi
-    cp "$SCRIPT_DIR/config/server.yaml.tpl" "$SCRIPT_DIR/config/server.yaml"
+    # 先渲染到临时文件，最后原地写回（cat >）：server.yaml 是单文件挂载进容器的，
+    # cp / sed -i 都会换掉 inode，运行中的容器随即读不到配置，下次重启就起不来。
+    local rendered
+    rendered="$(mktemp)"
+    chmod 600 "$rendered"
+    cp "$SCRIPT_DIR/config/server.yaml.tpl" "$rendered"
 
     local kafka1 kafka2 kafka3
     kafka1="${KAFKA_BROKER_1:-}"
@@ -536,9 +551,12 @@ init_config() {
         -e "s|__ENROLL_TOKEN__|${ENROLL_TOKEN}|g" \
         -e "s|__MANAGER_ADDR__|${MANAGER_ADDR:-http://manager:8080}|g" \
         -e "s|__INSTANCE_ID__|${INSTANCE_ID:-}|g" \
-        "$SCRIPT_DIR/config/server.yaml"
+        "$rendered"
 
-    rm -f "$SCRIPT_DIR/config/server.yaml.bak"
+    rm -f "$rendered.bak"
+    [ -f "$SCRIPT_DIR/config/server.yaml" ] || install -m 600 /dev/null "$SCRIPT_DIR/config/server.yaml"
+    cat "$rendered" > "$SCRIPT_DIR/config/server.yaml"
+    rm -f "$rendered"
 
     log_info "配置生成完成（所有参数来自 .env）"
 }
@@ -604,8 +622,8 @@ start() {
     echo ""
     log_info "部署完成!"
     log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    log_info "Web 控制台: http://$SERVER_IP:$HTTP_PORT"
-    log_info "AgentCenter gRPC: 默认 compose 不直接暴露 ${GRPC_PORT}，需额外做端口映射或接入四层负载均衡"
+    log_info "Web 控制台: https://$SERVER_IP:${HTTPS_PORT:-443}"
+    log_info "Agent 接入地址: $SERVER_IP:${GRPC_PORT:-6751}"
     log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -793,14 +811,20 @@ rollback() {
 #
 # 升级/回滚此前是 sleep 10 后无条件打印"完成"——服务起没起来都一样。
 # 部署脚本说了"成功"就必须真的成功，否则运维会带着错误的结论离开现场。
+# not_ready_services 列出没就绪的服务：未在运行（重启中、已退出），或带健康检查但不是 healthy。
+# 只看健康状态不够：反复重启的容器在两次启动之间没有健康状态，会被当成就绪。
+not_ready_services() {
+    dc ps -a --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null \
+        | awk '$2 != "running" || ($3 != "" && $3 != "healthy") {print $1}' | sort -u | tr '\n' ' '
+}
+
 wait_healthy() {
     local timeout="${1:-180}"
     local waited=0
     log_step "等待服务就绪（最多 ${timeout}s）..."
     while [ "$waited" -lt "$timeout" ]; do
         local unhealthy
-        unhealthy=$(dc ps --format '{{.Service}} {{.Health}}' 2>/dev/null \
-            | awk '$2 != "" && $2 != "healthy" {print $1}' | tr '\n' ' ')
+        unhealthy=$(not_ready_services)
         if [ -z "$unhealthy" ]; then
             log_info "全部服务已就绪"
             return 0
@@ -809,8 +833,7 @@ wait_healthy() {
         waited=$((waited + 5))
     done
     local still
-    still=$(dc ps --format '{{.Service}} {{.Health}}' 2>/dev/null \
-        | awk '$2 != "" && $2 != "healthy" {print $1}' | tr '\n' ' ')
+    still=$(not_ready_services)
     log_error "以下服务未在 ${timeout}s 内就绪: ${still:-未知}"
     return 1
 }
@@ -975,6 +998,54 @@ clean_logs() {
 # ============================================================
 # 主流程
 # ============================================================
+# ensure_env_secret KEY：.env 中 KEY 为空或仍是模板占位值时生成随机值并写回；已有真实值不动。
+ensure_env_secret() {
+    local key="$1" cur
+    cur="$(grep -m1 "^${key}=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)"
+    case "$(printf '%s' "$cur" | tr '[:upper:]' '[:lower:]')" in
+        "" | *change*)
+            persist_env_kv "$key" "$(openssl rand -hex 16)"
+            log_info "已生成 $key"
+            ;;
+    esac
+}
+
+# quickstart 非交互单机部署，用于评估与功能验证：生成全部口令、密钥、证书与配置，
+# 单副本启动并等待就绪。可重复执行：已有的 .env 与证书原样沿用，不会轮换。
+# 服务器地址默认自动探测，可用环境变量覆盖：SERVER_IP=10.0.0.5 ./deploy.sh quickstart
+quickstart() {
+    local server_ip="${SERVER_IP:-}"
+    # .env 里的 DATA_DIR 是相对路径，compose 按 deploy/ 解析；建目录前切过去，两边才一致。
+    cd "$SCRIPT_DIR"
+    check_os
+    check_ports
+
+    if [ ! -f "$ENV_FILE" ]; then
+        cp "$SCRIPT_DIR/.env.example" "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+        log_info "已从 .env.example 生成 $ENV_FILE"
+    fi
+    for k in MYSQL_ROOT_PASSWORD MYSQL_PASSWORD REDIS_PASSWORD CLICKHOUSE_PASSWORD; do
+        ensure_env_secret "$k"
+    done
+    if [ -n "$server_ip" ]; then
+        persist_env_kv SERVER_IP "$server_ip"
+    elif grep -qE '^SERVER_IP=(127\.0\.0\.1)?$' "$ENV_FILE"; then
+        persist_env_kv SERVER_IP "$(detect_server_ip)"
+    fi
+
+    init_dirs
+    init_certs
+    init_config
+    start
+    wait_healthy 300 || exit 1
+
+    source "$ENV_FILE"
+    echo ""
+    log_info "控制台: https://$SERVER_IP:${HTTPS_PORT:-443}  （admin / admin123，首次登录须修改密码）"
+    log_info "Agent 接入: $SERVER_IP:${GRPC_PORT:-6751}，安装方法见 docs/deployment.md 的「Agent 部署」"
+}
+
 full_deploy() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1015,6 +1086,7 @@ show_help() {
     echo ""
     echo "命令:"
     echo "  (无参数)    交互式首次部署"
+    echo "  quickstart  非交互单机部署（自动生成全部口令与证书，单副本），用于评估与功能验证"
     echo "  start       启动服务"
     echo "  stop        停止服务"
     echo "  restart     重启服务 (可指定服务名: restart agentcenter)"
@@ -1036,6 +1108,9 @@ main() {
     case "${1:-}" in
         "")
             full_deploy
+            ;;
+        quickstart)
+            quickstart
             ;;
         start)
             start

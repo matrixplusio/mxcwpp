@@ -500,7 +500,7 @@ MXCWPP_ENROLL_TOKEN=<token> bash -c "$(curl -fsSL http://SERVER_IP:8080/agent/in
 Agent 会自行识别「ID 文件是随镜像复制来的」并重新生成；machine-id 本身相同的情况由 AgentCenter
 比对机器指纹发现（见 [配置 · mtls](configuration.md#mtls) 的 `identity_conflict`）。
 手工处理用 `mxcwpp-agent --reset-identity` 作废本机身份与证书，再 `systemctl restart mxcwpp-agent`
-（需要 `agent.env` 里仍有 enroll 令牌）。制作系统镜像时，装好 Agent 后不要启动它，或在封装镜像前执行一次 `--reset-identity`。生产构建（`PROD_BUILD=1`）的安装包只含 `ca.crt`，不再下发共享 client 证书。
+（需要 `agent.env` 里仍有 enroll 令牌）。制作系统镜像时，装好 Agent 后不要启动它，或在封装镜像前执行一次 `--reset-identity`。安装包默认只含 `ca.crt`，不打包共享 client 证书（显式设置 `INCLUDE_SHARED_CLIENT_CERT=1` 才打包，仅供开发调试）。生产构建（`PROD_BUILD=1`）还会把 CA 指纹与插件签名公钥嵌入二进制，需要提供 `SIGN_PUBLIC_KEY`（插件签名公钥），缺少时构建直接失败。
 
 ---
 
@@ -536,13 +536,36 @@ make package-plugins-all VERSION=1.0.0
 
 ### 安装
 
-```bash
-# RPM (CentOS / Rocky / Oracle)
-sudo rpm -ivh mxcwpp-agent-1.0.0.x86_64.rpm
+安装前的准备（每套平台做一次）：
 
-# DEB (Debian / Ubuntu)
-sudo dpkg -i mxcwpp-agent_1.0.0_amd64.deb
+1. **系统管理 → 基本设置** 里填好后端接口地址（如 `https://<SERVER_IP>`）。Agent 下载插件与更新用的是这个地址；不填时会退回 `localhost`，插件全部下载失败。
+2. **运维中心 → 组件管理** 上传安装包：Agent 包传到名为 `agent` 的组件（下载接口按这个名字查找），插件传到同名组件。主机是什么架构就要上传对应架构的包。
+
+推荐用一键安装脚本，它会先写好 enroll 令牌，再装包：
+
+```bash
+# 1. 信任平台 CA（deploy/certs/ca.crt）；控制台是自签名证书时，不信任就无法通过 HTTPS 下载安装包
+sudo cp ca.crt /etc/pki/ca-trust/source/anchors/mxcwpp-ca.crt && sudo update-ca-trust          # RHEL 系
+# sudo cp ca.crt /usr/local/share/ca-certificates/mxcwpp-ca.crt && sudo update-ca-certificates  # Debian 系
+
+# 2. 安装（令牌取自部署机 deploy/.env 的 ENROLL_TOKEN）
+read -rs MXCWPP_ENROLL_TOKEN && export MXCWPP_ENROLL_TOKEN
+export MXCWPP_HTTP_SERVER=https://<SERVER_IP> MXCWPP_AGENT_SERVER=<SERVER_IP>:6751
+sudo -E bash -c "$(curl -fsSL https://<SERVER_IP>/agent/install.sh)"
 ```
+
+手工安装包时，**必须先写令牌再装包**：安装包会立即启动服务，启动时读不到令牌就无法接入，只能事后补写再重启。
+
+```bash
+sudo install -d -m 700 /etc/mxcwpp-agent
+echo "MXCWPP_ENROLL_TOKEN=<token>" | sudo tee /etc/mxcwpp-agent/agent.env >/dev/null
+sudo chmod 600 /etc/mxcwpp-agent/agent.env
+
+sudo rpm -ivh mxcwpp-agent-1.0.0-amd64.rpm        # RPM (CentOS / Rocky / Oracle)
+sudo dpkg -i mxcwpp-agent_1.0.0_amd64.deb         # DEB (Debian / Ubuntu)
+```
+
+Agent 依赖 systemd 管理进程；容器主机会被识别为容器运行时，平台不向它下发主机插件。
 
 ### 目录结构
 

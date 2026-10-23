@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils/cn";
 import { useSiteStore } from "@/stores/site-config";
 import { useAuthStore } from "@/stores/auth";
 import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/ui/BrandMark";
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -23,7 +24,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface">
       <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
-        <img src={logo || "/logo.png"} alt="logo" className="h-9 w-9 shrink-0 object-contain" />
+        {logo ? <img src={logo} alt="logo" className="h-9 w-9 shrink-0 object-contain" /> : <BrandMark size={36} />}
         <span className="truncate font-extrabold tracking-tight text-ink">{siteName}</span>
       </div>
       <div className="px-5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-faint">{t("nav.section")}</div>

@@ -175,14 +175,15 @@ package_agent() {
     mkdir -p "$pkg_tmp/usr/lib/systemd/system-preset"
     echo "enable mxcwpp-agent.service" > "$pkg_tmp/usr/lib/systemd/system-preset/90-mxcwpp.preset"
 
-    # 证书：仅打包 CA（供 agent 校验 AC）。生产不下发共享 client.crt/key——agent 首连凭
-    # CA 指纹 pin + enroll 令牌换取一机一证（per_agent_cert）。共享 client key 仅 dev 便利，
-    # 生产构建（PROD_BUILD=1）绝不打入包内。
+    # 证书：默认只打包 CA（供 agent 校验 AC）。agent 首连凭 enroll 令牌换取一机一证（per_agent_cert）。
+    # 共享 client.crt/key 会让所有主机共用一把私钥，只在显式设置 INCLUDE_SHARED_CLIENT_CERT=1 时打包，
+    # 生产构建（PROD_BUILD=1）无论如何不打包。证书生成脚本会顺带生成它们，默认打包等于人人带私钥。
     local cert_dir="deploy/certs"
     if [ -f "$cert_dir/ca.crt" ]; then
         cp "$cert_dir/ca.crt" "$pkg_tmp/var/lib/mxcwpp-agent/certs/"
     fi
-    if [ "${PROD_BUILD:-0}" != "1" ] && [ -f "$cert_dir/client.crt" ] && [ -f "$cert_dir/client.key" ]; then
+    if [ "${PROD_BUILD:-0}" != "1" ] && [ "${INCLUDE_SHARED_CLIENT_CERT:-0}" = "1" ] \
+        && [ -f "$cert_dir/client.crt" ] && [ -f "$cert_dir/client.key" ]; then
         cp "$cert_dir/client.crt" "$cert_dir/client.key" "$pkg_tmp/var/lib/mxcwpp-agent/certs/"
     fi
 

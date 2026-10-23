@@ -97,6 +97,7 @@ type ComponentPackage struct {
 	FileName   string         `gorm:"size:256;not null" json:"file_name"`                              // 原始文件名
 	FileSize   int64          `gorm:"not null" json:"file_size"`                                       // 文件大小 (字节)
 	SHA256     string         `gorm:"size:64" json:"sha256"`                                           // SHA256 校验和
+	Signature  string         `gorm:"size:256" json:"signature"`                                       // 对本包 SHA256 的签名；插件按主机架构下发时用
 	Enabled    bool           `gorm:"default:true" json:"enabled"`                                     // 是否启用
 	UploadedBy string         `gorm:"size:64" json:"uploaded_by"`                                      // 上传用户
 	UploadedAt LocalTime      `json:"uploaded_at"`                                                     // 上传时间

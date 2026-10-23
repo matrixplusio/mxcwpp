@@ -13,6 +13,73 @@ import (
 
 // 插件灰度：指定版本只下发给指定主机。见 model.PluginCanary。
 
+// signVersionPackages 给版本下每个启用的插件包分别签名并写回。插件配置只存一份（优先 amd64）的
+// 哈希与签名，AgentCenter 下发时按主机架构换成对应包的；不逐包签名，非 amd64 主机拿到的签名
+// 对不上自己那份包，插件会被拒绝加载。未配置签名器时把签名清空，与插件配置的行为一致。
+func (h *ComponentsHandler) signVersionPackages(versionID uint) error {
+	var pkgs []model.ComponentPackage
+	if err := h.db.Where("version_id = ? AND enabled = ? AND pkg_type IN ?", versionID, true,
+		[]model.PackageType{model.PackageTypeBinary, model.PackageTypeTGZ}).Find(&pkgs).Error; err != nil {
+		return err
+	}
+	// 一个包失败不影响其余的包：能签的都签上，错误汇总返回。
+	var errs []error
+	for _, p := range pkgs {
+		sig := ""
+		if h.signer != nil && p.SHA256 != "" {
+			var err error
+			if sig, err = h.signer.SignSHA256(p.SHA256); err != nil {
+				errs = append(errs, fmt.Errorf("签名 %s 包失败: %w", p.Arch, err))
+				continue
+			}
+		}
+		if p.Signature == sig {
+			continue
+		}
+		if err := h.db.Model(&model.ComponentPackage{}).Where("id = ?", p.ID).Update("signature", sig).Error; err != nil {
+			errs = append(errs, fmt.Errorf("保存 %s 包签名失败: %w", p.Arch, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// backfillPackageSignatures 给插件配置与灰度正在使用的版本补签。逐包签名是后加的：
+// 升级前上传的包都没有签名，不补的话启用了签名的平台上，非 amd64 主机一律加载失败。
+// 签名不变的包不写库，多个 Manager 副本同时执行也安全。
+func (h *ComponentsHandler) backfillPackageSignatures() {
+	if h.signer == nil {
+		return
+	}
+	type ref struct{ Name, Version string }
+	var refs, canaries []ref
+	if err := h.db.Model(&model.PluginConfig{}).Select("name, version").Scan(&refs).Error; err != nil {
+		h.logger.Error("补签插件包：读取插件配置失败", zap.Error(err))
+		return
+	}
+	// 灰度读不出来不影响全局配置用到的版本补签
+	if err := h.db.Model(&model.PluginCanary{}).Select("plugin_name AS name, version").Scan(&canaries).Error; err != nil {
+		h.logger.Error("补签插件包：读取插件灰度失败，只补签全局配置使用的版本", zap.Error(err))
+		canaries = nil
+	}
+	signed := 0
+	for _, r := range append(refs, canaries...) {
+		if r.Name == "" || r.Version == "" {
+			continue
+		}
+		_, ver, err := h.pluginVersion(r.Name, r.Version)
+		if err != nil {
+			continue
+		}
+		if err := h.signVersionPackages(ver.ID); err != nil {
+			h.logger.Error("补签插件包失败，非 amd64 主机可能无法加载该版本",
+				zap.String("plugin", r.Name), zap.String("version", r.Version), zap.Error(err))
+			continue
+		}
+		signed++
+	}
+	h.logger.Info("插件包签名补签完成", zap.Int("versions", signed))
+}
+
 // pluginPackageFor 取版本的包（优先 amd64）。全局插件配置与灰度用同一个取法，sha256 才对得上。
 func (h *ComponentsHandler) pluginPackageFor(versionID uint) (model.ComponentPackage, error) {
 	var pkg model.ComponentPackage
@@ -114,6 +181,11 @@ func (h *ComponentsHandler) StartPluginCanary(c *gin.Context) {
 			InternalError(c, "插件签名失败")
 			return
 		}
+	}
+	if err := h.signVersionPackages(ver.ID); err != nil {
+		h.logger.Error("灰度版本逐包签名失败", zap.String("plugin", name), zap.String("version", req.Version), zap.Error(err))
+		InternalError(c, "插件签名失败")
+		return
 	}
 
 	// 全新插件还没有全局配置，而 AC 只给已有的全局配置换灰度版本——不先有一条，灰度什么也不下发。

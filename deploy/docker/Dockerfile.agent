@@ -34,7 +34,7 @@ RUN BUILD_TIME_FINAL=${BUILD_TIME:-${BUILD_TIME_DEFAULT}} && \
     if [ -z "$BUILD_TIME_FINAL" ]; then BUILD_TIME_FINAL=$(date -u +"%Y-%m-%dT%H:%M:%SZ"); fi && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-X main.serverHost=$SERVER_HOST -X main.buildVersion=$VERSION -X main.buildTime=$BUILD_TIME_FINAL -s -w" \
-    -o /build/mxcsec-agent \
+    -o /build/mxcwpp-agent \
     ./cmd/agent
 
 # 运行时镜像：使用 Rocky Linux 9
@@ -50,14 +50,14 @@ RUN dnf install -y \
 ENV TZ=Asia/Shanghai
 
 # 创建必要的目录
-RUN mkdir -p /var/lib/mxcsec-agent/{certs,cache} /var/log/mxcsec-agent
+RUN mkdir -p /var/lib/mxcwpp-agent/{certs,cache} /var/log/mxcwpp-agent
 
 # 复制二进制文件
-COPY --from=builder /build/mxcsec-agent /usr/local/bin/mxcsec-agent
-RUN chmod +x /usr/local/bin/mxcsec-agent
+COPY --from=builder /build/mxcwpp-agent /usr/local/bin/mxcwpp-agent
+RUN chmod +x /usr/local/bin/mxcwpp-agent
 
 # 设置工作目录
-WORKDIR /var/lib/mxcsec-agent
+WORKDIR /var/lib/mxcwpp-agent
 
 # 运行 Agent（以 root 运行，需要主机级操作权限）
-ENTRYPOINT ["/usr/local/bin/mxcsec-agent"]
+ENTRYPOINT ["/usr/local/bin/mxcwpp-agent"]

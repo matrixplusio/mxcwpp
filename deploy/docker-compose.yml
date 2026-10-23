@@ -1,13 +1,14 @@
 name: mxcwpp
 
-# 生产环境 compose 文件（独立，不依赖其他 compose 文件）
-# 启动：docker compose up -d
+# 单机部署 compose 文件（独立，不依赖其他 compose 文件）
+# 用 deploy/deploy.sh 启动：它负责生成密钥与证书、渲染配置，并按 .env 的 *_REPLICAS 设置副本数。
+# 数据库与消息队列的宿主机端口只绑本机；对外只开放控制台（HTTP_PORT/HTTPS_PORT）与 Agent 接入（GRPC_PORT）。
+# 不写死 container_name：容器名由 compose 按项目名生成，同一台机器上的多套环境才能共存。
 
 services:
   # ==================== 基础设施 ====================
   mysql:
     image: mysql:8.0
-    container_name: mxcwpp-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -23,7 +24,9 @@ services:
       - ./config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
       - ${DATA_DIR:-./data}/logs/mysql:/var/log/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      # 走 TCP（127.0.0.1）而不是 socket（localhost）：首次初始化时镜像会先起一个只开 socket 的临时实例，
+      # socket 检查会提前判健康，依赖它的服务随即连 TCP 被拒、崩溃重启。
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -37,7 +40,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mxcwpp-redis
     restart: always
     command: >
       sh -c '
@@ -64,10 +66,9 @@ services:
 
   kafka-1:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxcwpp-kafka-1
     restart: always
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -102,10 +103,9 @@ services:
 
   kafka-2:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxcwpp-kafka-2
     restart: always
     ports:
-      - "9094:9092"
+      - "127.0.0.1:9094:9092"
     environment:
       KAFKA_NODE_ID: 2
       KAFKA_PROCESS_ROLES: broker,controller
@@ -140,10 +140,9 @@ services:
 
   kafka-3:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: mxcwpp-kafka-3
     restart: always
     ports:
-      - "9095:9092"
+      - "127.0.0.1:9095:9092"
     environment:
       KAFKA_NODE_ID: 3
       KAFKA_PROCESS_ROLES: broker,controller
@@ -178,13 +177,12 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
-    container_name: mxcwpp-clickhouse
     restart: always
     cap_add:
       - SYS_NICE
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-mxcwpp}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
@@ -208,8 +206,21 @@ services:
           memory: 8G
 
   # ==================== 应用服务 ====================
+  # Agent 接入入口：AgentCenter 可多副本，不能各自映射同一个宿主端口，统一由四层代理转发。
+  ac-proxy:
+    image: haproxy:2.8-alpine
+    restart: always
+    depends_on:
+      - agentcenter
+    ports:
+      - "${GRPC_PORT:-6751}:6751"
+    volumes:
+      - ./config/haproxy-agentcenter.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - mxcwpp-net
+
   agentcenter:
-    image: mxcwpp-agentcenter:${VERSION:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-agentcenter:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -239,13 +250,12 @@ services:
     networks:
       - mxcwpp-net
     deploy:
-      replicas: 2
       resources:
         limits:
           memory: 4G
 
   manager:
-    image: mxcwpp-manager:${VERSION:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-manager:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -276,13 +286,12 @@ services:
     networks:
       - mxcwpp-net
     deploy:
-      replicas: 2
       resources:
         limits:
           memory: 4G
 
   consumer:
-    image: mxcwpp-consumer:${VERSION:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-consumer:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -312,7 +321,6 @@ services:
     networks:
       - mxcwpp-net
     deploy:
-      replicas: 2
       resources:
         limits:
           memory: 2G
@@ -322,8 +330,7 @@ services:
   # deploy.sh 一键装出来的系统没有检测引擎（不产告警）、没有漏洞同步（库不更新）、
   # 没有 PDF 渲染（报告导出坏）。装起来"能跑"，但核心能力都不在。
   engine:
-    image: mxcwpp-engine:${VERSION:-latest}
-    container_name: mxcwpp-engine
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-engine:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -357,8 +364,7 @@ services:
 
   # ===== VulnSync 漏洞库同步 =====
   vulnsync:
-    image: mxcwpp-vulnsync:${VERSION:-latest}
-    container_name: mxcwpp-vulnsync
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-vulnsync:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -390,8 +396,7 @@ services:
 
   # ===== LLMProxy 多 LLM 厂商适配网关 =====
   llmproxy:
-    image: mxcwpp-llmproxy:${VERSION:-latest}
-    container_name: mxcwpp-llmproxy
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-llmproxy:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -423,7 +428,6 @@ services:
   # 报告导出依赖它；缺失时导出的是损坏的 .pdf 而非报错，属静默失败。
   gotenberg:
     image: gotenberg/gotenberg:8
-    container_name: mxcwpp-gotenberg
     restart: always
     command:
       - "gotenberg"
@@ -445,9 +449,33 @@ services:
         limits:
           memory: 1G
 
+  # ===== Prometheus 监控 =====
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: always
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus-rules.yml:/etc/prometheus/rules.yml:ro
+      - ${DATA_DIR:-./data}/prometheus:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mxcwpp-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   ui:
-    image: mxcwpp-ui:${VERSION:-latest}
-    container_name: mxcwpp-ui
+    image: ${IMAGE_REGISTRY:-ghcr.io/matrixplusio}/mxcwpp-ui:${VERSION:-1.0.0}
     restart: always
     security_opt:
       - no-new-privileges:true

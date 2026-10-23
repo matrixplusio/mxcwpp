@@ -11,6 +11,7 @@ import { useThemeStore } from "@/stores/theme";
 import { systemApi } from "@/lib/api/system";
 import { MENUS } from "@/config/menu";
 import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { setLang } from "@/lib/i18n";
 import { Modal } from "@/components/ui/Modal";
 import { StatusTag } from "@/components/ui/Tag";
@@ -39,7 +40,7 @@ function AboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="max-h-[72vh] space-y-5 overflow-y-auto pr-1">
         {/* 版本横幅 */}
         <div className="flex flex-col items-center gap-2 rounded-card bg-surface-muted py-5 text-center">
-          <img src={logo || "/logo.png"} alt="logo" className="h-14 w-14 object-contain" />
+          {logo ? <img src={logo} alt="logo" className="h-14 w-14 object-contain" /> : <BrandMark size={56} />}
           <div className="mt-1 flex items-center gap-2">
             <span className="text-lg font-bold text-ink">{siteName}</span>
             <StatusTag tone="success">{t("about.community")}</StatusTag>

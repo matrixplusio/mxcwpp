@@ -10,6 +10,7 @@ import { systemApi } from "@/lib/api/system";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/Button";
 import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/ui/BrandMark";
 
 /** 自建的高保真产品预览(非真实截图,纯装饰示意) */
 function ProductMockup() {
@@ -71,7 +72,7 @@ export default function LoginPage() {
   // 站点配置为公开接口,登录前即可读取品牌(名称/Logo)
   const { data: site } = useQuery({ queryKey: ["site-config-public"], queryFn: () => systemApi.getSiteConfig() });
   const siteName = site?.site_name || "MXCWPP";
-  const siteLogo = site?.site_logo || "/logo.png";
+  const siteLogo = site?.site_logo || "";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,7 +98,7 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }}
           className="relative flex items-center gap-3"
         >
-          <img src={siteLogo} alt="logo" className="h-10 w-10 object-contain" />
+          {siteLogo ? <img src={siteLogo} alt="logo" className="h-10 w-10 object-contain" /> : <BrandMark size={40} />}
           <span className="text-lg font-extrabold tracking-tight">{siteName}</span>
         </motion.div>
 
@@ -132,7 +133,7 @@ export default function LoginPage() {
           className="w-full max-w-sm"
         >
           <div className="lg:hidden mb-8 flex items-center gap-3">
-            <img src={siteLogo} alt="logo" className="h-9 w-9 object-contain" />
+            {siteLogo ? <img src={siteLogo} alt="logo" className="h-9 w-9 object-contain" /> : <BrandMark size={36} />}
             <span className="text-lg font-extrabold tracking-tight text-ink">{siteName}</span>
           </div>
 

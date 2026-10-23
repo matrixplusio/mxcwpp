@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
+	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
@@ -23,6 +24,17 @@ func newPluginTestService(t *testing.T) *Service {
 	}
 	db.Exec("CREATE TABLE system_configs (id INTEGER PRIMARY KEY, `key` TEXT, category TEXT, value TEXT)")
 	db.Exec("INSERT INTO system_configs (`key`, category, value) VALUES ('site_config','site','{\"backend_url\":\"https://ac.example\"}')")
+	// 按架构取包要查这几张表；建空表，查不到即「没有记录」，而不是查询出错
+	for _, q := range []string{
+		"CREATE TABLE hosts (host_id TEXT, arch TEXT, deleted_at DATETIME)",
+		"CREATE TABLE components (id INTEGER PRIMARY KEY, name TEXT, category TEXT, deleted_at DATETIME)",
+		"CREATE TABLE component_versions (id INTEGER PRIMARY KEY, component_id INTEGER, version TEXT, deleted_at DATETIME)",
+		"CREATE TABLE component_packages (id INTEGER PRIMARY KEY, version_id INTEGER, arch TEXT, pkg_type TEXT, sha256 TEXT, signature TEXT, enabled BOOLEAN, deleted_at DATETIME)",
+	} {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	return &Service{db: db, cfg: &config.Config{}, logger: zap.NewNop()}
 }
 
@@ -41,7 +53,7 @@ func globalPlugins() []model.PluginConfig {
 // 全局版本、相对地址按 backend_url 拼全、运行时不匹配的插件照旧跳过。
 func TestBuildPluginConfigs_NoCanaryUnchanged(t *testing.T) {
 	s := newPluginTestService(t)
-	got := s.buildPluginConfigs(globalPlugins(), nil, "agent-1", model.RuntimeTypeVM)
+	got := mustBuild(t, s, globalPlugins(), nil, "agent-1", "")
 	if len(got) != 2 {
 		t.Fatalf("vm 主机应拿到 2 个插件，实际 %d", len(got))
 	}
@@ -59,7 +71,7 @@ func TestBuildPluginConfigs_CanaryOnlyForListedHosts(t *testing.T) {
 		"fim": {PluginName: "fim", Version: "1.0.2", SHA256: "sha-new", Signature: "sig-new", HostIDs: model.StringArray{"agent-1"}},
 	}
 
-	in := s.buildPluginConfigs(globalPlugins(), canaries, "agent-1", model.RuntimeTypeVM)
+	in := mustBuild(t, s, globalPlugins(), canaries, "agent-1", "")
 	f := in[0]
 	if f.Version != "1.0.2" || f.Sha256 != "sha-new" || f.Signature != "sig-new" ||
 		f.DownloadUrls[0] != "https://ac.example/api/v1/plugins/download/fim?version=1.0.2" {
@@ -69,14 +81,14 @@ func TestBuildPluginConfigs_CanaryOnlyForListedHosts(t *testing.T) {
 		t.Fatalf("其它插件不应受灰度影响: %+v", in[1])
 	}
 
-	out := s.buildPluginConfigs(globalPlugins(), canaries, "agent-2", model.RuntimeTypeVM)
+	out := mustBuild(t, s, globalPlugins(), canaries, "agent-2", "")
 	if out[0].Version != "1.0.1" || out[0].Sha256 != "sha-old" {
 		t.Fatalf("名单外主机应保持全局版本: %+v", out[0])
 	}
 
 	// 覆盖只作用于本次构造，不能改到调用方传入的全局配置
 	g := globalPlugins()
-	s.buildPluginConfigs(g, canaries, "agent-1", model.RuntimeTypeVM)
+	mustBuild(t, s, g, canaries, "agent-1", "")
 	if g[0].Version != "1.0.1" {
 		t.Fatal("灰度覆盖改写了全局配置切片")
 	}
@@ -91,7 +103,7 @@ func TestBuildPluginConfigs_PlaceholderOnlyForCanaryHosts(t *testing.T) {
 		"logcollector": {PluginName: "logcollector", Version: "1.0.0", SHA256: "sha-lc", Signature: "sig-lc", HostIDs: model.StringArray{"agent-1"}},
 	}
 	has := func(agent string) bool {
-		for _, c := range s.buildPluginConfigs(plugins, canaries, agent, model.RuntimeTypeVM) {
+		for _, c := range mustBuild(t, s, plugins, canaries, agent, "") {
 			if c.Name == "logcollector" {
 				if c.Version != "1.0.0" || c.Sha256 != "sha-lc" || len(c.DownloadUrls) != 1 {
 					t.Fatalf("灰度主机拿到的配置不对: %+v", c)
@@ -107,7 +119,16 @@ func TestBuildPluginConfigs_PlaceholderOnlyForCanaryHosts(t *testing.T) {
 	if has("agent-2") {
 		t.Fatal("名单外的主机不能拿到占位插件")
 	}
-	if got := s.buildPluginConfigs(plugins, nil, "agent-1", model.RuntimeTypeVM); len(got) != 2 {
+	if got := mustBuild(t, s, plugins, nil, "agent-1", ""); len(got) != 2 {
 		t.Fatalf("没有灰度时占位插件不下发，应只有原来的 2 个，实际 %d", len(got))
 	}
+}
+
+func mustBuild(t *testing.T, s *Service, plugins []model.PluginConfig, canaries map[string]model.PluginCanary, agentID, arch string) []*grpcProto.Config {
+	t.Helper()
+	configs, err := s.buildPluginConfigs(plugins, canaries, agentID, model.RuntimeTypeVM, arch)
+	if err != nil {
+		t.Fatalf("buildPluginConfigs: %v", err)
+	}
+	return configs
 }

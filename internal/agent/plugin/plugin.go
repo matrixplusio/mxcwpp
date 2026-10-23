@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -536,7 +538,7 @@ func (m *Manager) downloadPlugin(cfg *grpc.Config, workDir string) (string, erro
 
 		// 下载到临时文件
 		tmpPath := execPath + ".download"
-		if err := m.downloadFromURL(url, tmpPath); err != nil {
+		if err := m.downloadFromURL(withArchParam(url, runtime.GOARCH), tmpPath); err != nil {
 			lastErr = err
 			m.logger.Warn("failed to download from URL", zap.String("url", url), zap.Error(err))
 			os.Remove(tmpPath)
@@ -1692,4 +1694,25 @@ func (r *rateLimitedReader) Read(p []byte) (int, error) {
 	}
 
 	return n, err
+}
+
+// pluginDownloadPath 是平台自身插件下载端点的路径。只给它补架构参数：
+// 外部地址（如带签名的对象存储链接）多一个参数就会失效。
+const pluginDownloadPath = "/api/v1/plugins/download/"
+
+// withArchParam 给平台插件下载地址补上本机架构，已带 arch 时原样返回。
+// 下载端点缺省按 amd64 选包：不带架构时 arm64 主机拿到的是一条 404 响应，
+// 随后 SHA256 校验失败，插件永远加载不上，且只在日志里留下校验失败。
+func withArchParam(raw, arch string) string {
+	u, err := neturl.Parse(raw)
+	if err != nil || !strings.Contains(u.Path, pluginDownloadPath) {
+		return raw
+	}
+	q := u.Query()
+	if q.Get("arch") != "" {
+		return raw
+	}
+	q.Set("arch", arch)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

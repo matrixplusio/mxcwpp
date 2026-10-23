@@ -1,0 +1,109 @@
+name: Release
+
+# 推送版本 tag（v1.2.3）时：构建服务端与控制台镜像并推送到 GitHub Container Registry，
+# 再以 CHANGELOG 中对应版本段为说明创建 GitHub Release。
+# 只用 Actions 自带的临时令牌，不需要任何仓库密钥。
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # 创建 Release
+  packages: write   # 推送镜像到 ghcr.io
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: 镜像
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { image: mxcwpp-agentcenter, dockerfile: deploy/docker/Dockerfile.agentcenter }
+          - { image: mxcwpp-manager, dockerfile: deploy/docker/Dockerfile.manager }
+          - { image: mxcwpp-consumer, dockerfile: deploy/docker/Dockerfile.consumer }
+          - { image: mxcwpp-engine, dockerfile: deploy/docker/Dockerfile.engine }
+          - { image: mxcwpp-llmproxy, dockerfile: deploy/docker/Dockerfile.llmproxy }
+          - { image: mxcwpp-vulnsync, dockerfile: deploy/docker/Dockerfile.vulnsync }
+          - { image: mxcwpp-ui, dockerfile: deploy/docker/Dockerfile.web }
+    steps:
+      - uses: actions/checkout@v7
+
+      # 生成代码不入库，镜像构建依赖它
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 生成 Protobuf 代码
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler && make proto
+
+      # tag 名经环境变量传入，不直接拼进脚本
+      - name: 版本号
+        id: ver
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$REF_NAME" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "tag 不是 vX.Y.Z 格式：$REF_NAME" >&2
+            exit 1
+          fi
+          echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          build-args: VERSION=${{ steps.ver.outputs.version }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+  release:
+    name: Release
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # 说明取自 CHANGELOG 的「## [x.y.z]」段，找不到就失败：没有说明的 Release 不发。
+      - name: 发布说明
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          v="${REF_NAME#v}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            on && /^## \[/ {exit}
+            on {print}
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md 中没有 [$v] 段" >&2
+            exit 1
+          fi
+
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        run: gh release create "$REF_NAME" --title "$REF_NAME" --notes-file notes.md --verify-tag

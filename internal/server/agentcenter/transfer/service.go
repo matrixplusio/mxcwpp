@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"strconv"
@@ -50,6 +51,14 @@ type Connection struct {
 	// 升级 AgentCenter 前必须先把这类连接清零：新版强制 CN==AgentID，
 	// 它们会在升级瞬间全部被拒且不会自愈。
 	SharedCert bool
+	// arch 是 agent 心跳里上报的架构（已归一化），经 mu 读写。新主机首次连接时主机记录还没写入，
+	// 下发插件配置只能靠它；首包不一定是心跳，所以后续心跳里第一次出现或变化时会更新并重发。
+	arch string
+	// archChanges 是本连接上心跳架构变化的次数。正常 agent 上报 runtime.GOARCH，同一进程内不会变；
+	// 设上限防止被攻陷的主机来回改这个字段，借重发放大 AC 与数据库负载。
+	archChanges int
+	// pluginResendActive 保证每个连接同时只有一个插件配置重发 / 重试在跑。
+	pluginResendActive atomic.Bool
 	// Fingerprint 是 agent 建流时上报的机器指纹；旧版 agent 不上报，为空。
 	Fingerprint string
 	// remoteAddr 底层 TCP 连接的对端地址，排空时按它关闭连接。
@@ -62,6 +71,51 @@ type Connection struct {
 	sendCh          chan *grpcProto.Command
 	workerSem       chan struct{} // 限制异步 record 处理的并发数
 	mu              sync.RWMutex
+}
+
+// GetArch 线程安全地获取心跳上报的架构（已归一化，未知时为空串）。
+func (c *Connection) GetArch() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.arch
+}
+
+// maxArchChanges 每个连接最多响应几次心跳架构变化。
+const maxArchChanges = 2
+
+// updateArch 记录心跳上报的架构，第一次出现或发生变化时返回 true（调用方据此重发插件配置）。
+// 变化次数超过 maxArchChanges 后不再更新，也不再触发重发。
+func (c *Connection) updateArch(raw string) bool {
+	a := normalizeArch(raw)
+	if a == "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.arch == a {
+		return false
+	}
+	if c.arch != "" {
+		if c.archChanges >= maxArchChanges {
+			return false
+		}
+		c.archChanges++
+	}
+	c.arch = a
+	return true
+}
+
+// rememberArch 在还不知道架构时记下首次下发实际用的架构（取自主机记录），
+// 免得第一个心跳到达时把内容相同的配置再发一遍。
+func (c *Connection) rememberArch(a string) {
+	if a == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.arch == "" {
+		c.arch = a
+	}
 }
 
 // GetHostname 线程安全地获取主机名
@@ -372,6 +426,7 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 		// 迁移进度统计用；见 SharedCert 字段说明。
 		SharedCert:  usingSharedCert,
 		Fingerprint: fingerprint,
+		arch:        normalizeArch(heartbeatArch(firstData)),
 		remoteAddr:  remoteAddr,
 		stream:      stream,
 		ctx:         ctx,
@@ -409,11 +464,12 @@ func (s *Service) Transfer(stream grpc.BidiStreamingServer[grpcProto.PackagedDat
 		// 证书下发失败不影响连接，继续处理
 	}
 
-	// 下发插件配置（首次连接时）
+	// 下发插件配置（首次连接时）。失败时在本连接内退避重试：刚启动的 agent 进程里没有插件，
+	// 只等下次重连会让它整个连接期间一个插件都没有。
 	runtimeType := s.getAgentRuntimeType(agentID)
 	if err := s.sendPluginConfigsIfNeeded(ctx, conn, runtimeType); err != nil {
-		s.logger.Error("下发插件配置失败", zap.Error(err), zap.String("agent_id", agentID))
-		// 插件配置下发失败不影响连接，继续处理
+		s.logger.Error("下发插件配置失败，稍后重试", zap.Error(err), zap.String("agent_id", agentID))
+		go s.runPluginResend(conn, false)
 	}
 
 	// 处理第一个数据包（心跳）
@@ -614,6 +670,10 @@ func (s *Service) handleHeartbeat(ctx context.Context, data *grpcProto.PackagedD
 					if bridgeRecord.Data != nil && bridgeRecord.Data.Fields != nil {
 						fields := bridgeRecord.Data.Fields
 						// OS信息（含 P5.3 livepatch 能力）
+						// 架构第一次出现或变化：此前的插件配置可能是按默认（amd64）下发的，按新架构重发一次
+						if conn.updateArch(fields["arch"]) {
+							go s.runPluginResend(conn, true)
+						}
 						osInfo = map[string]string{
 							"os_family":          fields["os_family"],
 							"os_version":         fields["os_version"],
@@ -2232,7 +2292,16 @@ func (s *Service) sendPluginConfigsIfNeeded(ctx context.Context, conn *Connectio
 		return nil
 	}
 
-	configs := s.buildPluginConfigs(pluginConfigs, s.loadPluginCanaries(), conn.AgentID, runtimeType)
+	if conn.GetArch() == "" {
+		if a, err := s.getAgentArch(conn.AgentID); err == nil {
+			conn.rememberArch(a)
+		}
+	}
+	configs, err := s.buildPluginConfigs(pluginConfigs, s.loadPluginCanaries(), conn.AgentID, runtimeType, conn.GetArch())
+	if err != nil {
+		// 不用默认内容顶替：agent 发现哈希变了会停掉运行中的插件去重装，而重装必然失败。
+		return fmt.Errorf("组装插件配置失败（本次不下发，agent 保持现状）: %w", err)
+	}
 
 	// 构建命令
 	cmd := &grpcProto.Command{
@@ -2336,8 +2405,13 @@ func (s *Service) BroadcastPluginConfigs(ctx context.Context) (int, []string, er
 		// 获取该 Agent 的 runtime_type
 		runtimeType := s.getAgentRuntimeType(conn.AgentID)
 
-		// 为该 Agent 过滤插件配置（含灰度覆盖）
-		configs := s.buildPluginConfigs(pluginConfigs, canaries, conn.AgentID, runtimeType)
+		// 为该 Agent 过滤插件配置（含灰度覆盖、按架构取包）
+		configs, err := s.buildPluginConfigs(pluginConfigs, canaries, conn.AgentID, runtimeType, conn.GetArch())
+		if err != nil {
+			failedAgents = append(failedAgents, conn.AgentID)
+			s.logger.Error("组装插件配置失败，本次不向该 Agent 下发", zap.String("agent_id", conn.AgentID), zap.Error(err))
+			continue
+		}
 
 		// 如果该 Agent 没有适用的插件，跳过
 		if len(configs) == 0 {
@@ -3194,4 +3268,60 @@ func (s *Service) CertMigrationProgress() CertMigrationStats {
 		}
 	}
 	return stats
+}
+
+// heartbeatArch 从数据包的心跳记录（DataType 1000）里取 agent 上报的架构，没有心跳时返回空串。
+func heartbeatArch(data *grpcProto.PackagedData) string {
+	if data == nil {
+		return ""
+	}
+	for _, record := range data.Records {
+		if record.DataType != 1000 {
+			continue
+		}
+		var r bridge.Record
+		if err := proto.Unmarshal(record.Data, &r); err == nil && r.Data != nil {
+			if a := r.Data.Fields["arch"]; a != "" {
+				return a
+			}
+		}
+	}
+	return ""
+}
+
+// runPluginResend 在本连接上（可选先立即发一次）下发插件配置，失败则退避重试；连接断开即停止。
+// 同一连接同时只允许一个在跑，后来的请求直接合并掉：正在跑的那个会按最新架构组装。
+func (s *Service) runPluginResend(conn *Connection, immediate bool) {
+	if !conn.pluginResendActive.CompareAndSwap(false, true) {
+		return
+	}
+	defer conn.pluginResendActive.Store(false)
+	if immediate {
+		err := s.sendPluginConfigsIfNeeded(conn.ctx, conn, s.getAgentRuntimeType(conn.AgentID))
+		if err == nil {
+			return
+		}
+		s.logger.Warn("按心跳架构重发插件配置失败，稍后重试", zap.String("agent_id", conn.AgentID), zap.Error(err))
+	}
+	s.retryPluginConfigs(conn)
+}
+
+// retryPluginConfigs 退避重试下发插件配置；连接断开即停止。间隔带 ±30% 抖动，
+// 数据库恢复的那一刻不会让同一批 agent 同时打过来。
+func (s *Service) retryPluginConfigs(conn *Connection) {
+	for _, base := range []time.Duration{5 * time.Second, 15 * time.Second, 45 * time.Second} {
+		wait := time.Duration(float64(base) * (0.7 + 0.6*rand.Float64()))
+		select {
+		case <-conn.ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		err := s.sendPluginConfigsIfNeeded(conn.ctx, conn, s.getAgentRuntimeType(conn.AgentID))
+		if err == nil {
+			s.logger.Info("插件配置重试下发成功", zap.String("agent_id", conn.AgentID))
+			return
+		}
+		s.logger.Warn("插件配置重试下发失败", zap.String("agent_id", conn.AgentID), zap.Duration("after", wait), zap.Error(err))
+	}
+	s.logger.Error("插件配置多次下发失败，等待重连或手动推送", zap.String("agent_id", conn.AgentID))
 }

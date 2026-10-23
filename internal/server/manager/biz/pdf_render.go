@@ -35,11 +35,11 @@ var (
 )
 
 func init() {
-	if b, err := reportTemplates.ReadFile("templates/assets/logo.png"); err == nil {
-		logoDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
+	if b, err := reportTemplates.ReadFile("templates/assets/logo.svg"); err == nil {
+		logoDataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(b)
 	}
-	if b, err := reportTemplates.ReadFile("templates/assets/logo-wide.png"); err == nil {
-		logoWideDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
+	if b, err := reportTemplates.ReadFile("templates/assets/logo-wide.svg"); err == nil {
+		logoWideDataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(b)
 	}
 }
 

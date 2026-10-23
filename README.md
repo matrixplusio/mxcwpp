@@ -2,6 +2,8 @@
 
 **English | [中文](README_ZH.md)**
 
+[![CI](https://github.com/matrixplusio/mxcwpp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/matrixplusio/mxcwpp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/matrixplusio/mxcwpp)](https://github.com/matrixplusio/mxcwpp)
 [![License](https://img.shields.io/github/license/matrixplusio/mxcwpp)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/matrixplusio/mxcwpp?style=social)](https://github.com/matrixplusio/mxcwpp/stargazers)
@@ -12,6 +14,8 @@
 An open-source host and container security platform (CWPP) for Linux and Kubernetes. It covers security baselines, asset inventory, vulnerability management, malware scanning, file integrity monitoring, runtime detection and response, and gives security operations teams a single management console.
 
 The whole platform is in this repository — agent, plugins, backend services and console — free to deploy under AGPL-3.0.
+
+**Status:** production-ready. Versions follow [Semantic Versioning](https://semver.org/); see the [CHANGELOG](CHANGELOG.md) for changes between releases.
 
 ## Capabilities
 
@@ -33,16 +37,37 @@ The whole platform is in this repository — agent, plugins, backend services an
 
 **In development, not yet shipped:** honeypot sensors (SSH / HTTP decoys), NPatch eBPF virtual patching (Log4j proof of concept only), Windows support.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/dashboard.png" alt="Security overview" width="100%"><br><b>Security overview</b></td>
+    <td><img src="docs/screenshots/alerts.png" alt="Alerts" width="100%"><br><b>Alerts</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/hosts.png" alt="Hosts" width="100%"><br><b>Hosts</b></td>
+    <td><img src="docs/screenshots/fingerprint.png" alt="Asset fingerprint" width="100%"><br><b>Asset fingerprint</b></td>
+  </tr>
+</table>
+
+Screenshots are taken from a demo environment with synthetic data.
+
 ## Architecture
 
-```
-Browser ─→ Nginx ─→ Manager ×N ─→ MySQL / Redis / ClickHouse / Prometheus
-Agent ─→ gRPC(mTLS) ─→ AgentCenter ×N ─→ Kafka ─┬→ Consumer ×N ─→ Storage (persist)
-                                                 └→ Engine ×N    ─→ Alerts (detection)
-Manager ──HTTP──→ LLMProxy ×N (multi-LLM gateway)   VulnSync ×N ──Kafka──→ Manager/Engine
+```mermaid
+flowchart LR
+  browser[Browser] --> ui[Nginx / Console] --> manager[Manager]
+  agent[Agent + plugins] -- gRPC over mTLS --> proxy[AgentCenter proxy] --> ac[AgentCenter]
+  ac --> kafka[(Kafka)]
+  kafka --> consumer[Consumer] --> store[(MySQL / ClickHouse)]
+  kafka --> engine[Engine] --> alerts[Alerts and storylines]
+  vulnsync[VulnSync] -- vendor advisories --> kafka
+  manager --> store
+  manager --> redis[(Redis)]
+  manager --> llm[LLMProxy]
 ```
 
-The backend consists of seven services: Manager, AgentCenter, Consumer, Engine, LLMProxy, VulnSync and Scanner. The control plane is stateless and scales horizontally. Kafka decouples persistence from detection (separate consumer groups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and the event archive. VulnSync pulls OS vendor advisories and publishes them to Kafka for matching against host software.
+The backend consists of seven services: Manager, AgentCenter, Consumer, Engine, LLMProxy, VulnSync and Scanner (optional, container image scanning). The control plane is stateless and scales horizontally. Kafka decouples persistence from detection (separate consumer groups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and the event archive. VulnSync pulls OS vendor advisories and publishes them to Kafka for matching against host software.
 
 See [Architecture](docs/architecture.md) for details.
 
@@ -66,21 +91,66 @@ See [Architecture](docs/architecture.md) for details.
 
 ## Quick Start
 
+### Prerequisites
+
+- Linux or macOS with Docker 24+ and Docker Compose v2
+- At least 4 CPU cores, 8 GiB RAM (16 GiB recommended) and 50 GiB disk — the full stack uses about 6 GiB of memory
+- Ports 80 / 443 for the console and 6751 for agents. If 80 / 443 are taken, run `cp .env.example .env` in `deploy/` first and change `HTTP_PORT` / `HTTPS_PORT`
+
+### 1. Start the platform
+
 ```bash
 git clone https://github.com/matrixplusio/mxcwpp.git
 cd mxcwpp/deploy
-
-cp .env.example .env
-vim .env  # Edit SERVER_IP / JWT_SECRET / database passwords
-
-# Start the control plane (HA mode)
-docker compose --env-file .env up -d \
-  --scale manager=2 --scale agentcenter=2 --scale consumer=2
+./deploy.sh quickstart
 ```
 
-Open `http://<SERVER_IP>` and sign in as `admin / admin123`. You will be required to change the password on first login.
+`quickstart` generates every password, key and certificate, pulls the images, starts a single-node stack and waits until all services are healthy. It is safe to run again: the existing `.env` and certificates are kept. Set `SERVER_IP=<address>` in front of the command if the detected address is not the one agents will use.
 
-See [Deployment](docs/deployment.md) for prerequisites, cluster deployment and agent installation.
+Check that it is up:
+
+```bash
+docker compose ps                                   # every service running / healthy
+curl -k https://<SERVER_IP>/api/v1/health           # "status":"ok"
+```
+
+Open `https://<SERVER_IP>` (the certificate is self-signed) and sign in as `admin / admin123`. You will be asked to change the password.
+
+### 2. Connect the first host
+
+1. In **System → Basic settings**, set the backend URL to `https://<SERVER_IP>`. Agents download plugins and updates from this address.
+2. Build the agent and plugin packages and upload them in **Operations → Components** — the agent package goes to the `agent` component, each plugin to the component of the same name:
+   ```bash
+   make package-agent-all   VERSION=1.0.0 SERVER_HOST=<SERVER_IP>:6751
+   make package-plugins-all VERSION=1.0.0
+   ```
+3. On the host, trust the platform CA (`deploy/certs/ca.crt`), then run the installer with the enroll token (`ENROLL_TOKEN` in `deploy/.env`):
+   ```bash
+   sudo cp ca.crt /etc/pki/ca-trust/source/anchors/mxcwpp-ca.crt && sudo update-ca-trust
+   # Debian / Ubuntu: copy to /usr/local/share/ca-certificates/mxcwpp-ca.crt and run update-ca-certificates
+
+   read -rs MXCWPP_ENROLL_TOKEN && export MXCWPP_ENROLL_TOKEN
+   export MXCWPP_HTTP_SERVER=https://<SERVER_IP> MXCWPP_AGENT_SERVER=<SERVER_IP>:6751
+   sudo -E bash -c "$(curl -fsSL https://<SERVER_IP>/agent/install.sh)"
+   ```
+
+The host appears under **Assets → Hosts** within a minute. Agents run on hosts managed by systemd; plugins are not deployed to container hosts.
+
+### 3. Stop and clean up
+
+```bash
+./deploy.sh stop                       # stop, keep data
+docker compose down                    # remove containers; data stays in deploy/data
+```
+
+To start over, also delete `deploy/data`, `deploy/certs/*.crt`, `deploy/certs/*.key` and `deploy/.env`.
+
+See [Deployment](docs/deployment.md) for cluster deployment, HA, upgrades and backups.
+
+### Known limitations
+
+- With a non-default `HTTPS_PORT`, the HTTP-to-HTTPS redirect drops the port — open the HTTPS port directly.
+- Vulnerability matching for Rocky Linux only covers advisories published after the first start.
 
 ## Build
 

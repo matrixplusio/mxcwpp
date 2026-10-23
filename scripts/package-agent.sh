@@ -112,18 +112,20 @@ cp deploy/systemd/mxcwpp-agent.service "$TEMP_DIR/etc/systemd/system/mxcwpp-agen
 # 复制证书文件（如果存在）
 CERTS_INCLUDED=false
 if [ -d "$CERT_DIR" ]; then
-    if [ -f "$CERT_DIR/ca.crt" ] && [ -f "$CERT_DIR/client.crt" ] && [ -f "$CERT_DIR/client.key" ]; then
-        echo -e "${GREEN}  → 包含证书文件${NC}"
+    if [ -f "$CERT_DIR/ca.crt" ]; then
+        # 默认只打包 CA，agent 首连凭 enroll 令牌换取一机一证；共享 client 证书会让所有主机
+        # 共用一把私钥，只在显式设置 INCLUDE_SHARED_CLIENT_CERT=1 时打包。
+        echo -e "${GREEN}  → 包含 CA 证书${NC}"
         cp "$CERT_DIR/ca.crt" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
-        cp "$CERT_DIR/client.crt" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
-        cp "$CERT_DIR/client.key" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
         chmod 644 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/ca.crt"
-        chmod 644 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.crt"
-        chmod 600 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.key"
+        if [ "${INCLUDE_SHARED_CLIENT_CERT:-0}" = "1" ] && [ -f "$CERT_DIR/client.crt" ] && [ -f "$CERT_DIR/client.key" ]; then
+            cp "$CERT_DIR/client.crt" "$CERT_DIR/client.key" "$TEMP_DIR/var/lib/mxcwpp-agent/certs/"
+            chmod 644 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.crt"
+            chmod 600 "$TEMP_DIR/var/lib/mxcwpp-agent/certs/client.key"
+        fi
         CERTS_INCLUDED=true
     else
-        echo -e "${YELLOW}  → 证书文件不完整，跳过证书打包${NC}"
-        echo -e "${YELLOW}    需要: ca.crt, client.crt, client.key${NC}"
+        echo -e "${YELLOW}  → 缺少 ca.crt，跳过证书打包${NC}"
         echo -e "${YELLOW}    运行: make certs 生成证书${NC}"
     fi
 else

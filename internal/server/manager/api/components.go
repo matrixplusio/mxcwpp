@@ -78,6 +78,7 @@ func NewComponentsHandler(db *gorm.DB, logger *zap.Logger, cfg *config.Config, u
 			logger.Info("插件签名器初始化成功")
 		}
 	}
+	go handler.backfillPackageSignatures()
 
 	return handler
 }
@@ -777,6 +778,15 @@ func (h *ComponentsHandler) UploadPackage(c *gin.Context) {
 		zap.Int64("file_size", fileSize),
 	)
 
+	// 插件包逐包签名，不论这个版本是否最新：灰度版本补传某个架构的包后同样要能下发。
+	// 签名失败不中断后续同步（包已落库，跳过同步会让配置里的哈希与下载内容对不上），
+	// 但要在响应里告诉上传方，否则非 amd64 主机会静默加载失败。
+	if component.Category == model.ComponentCategoryPlugin {
+		if err := h.signVersionPackages(version.ID); err != nil {
+			h.logger.Error("插件包签名失败", zap.String("component", component.Name), zap.String("version", version.Version), zap.Error(err))
+		}
+	}
+
 	// 如果是插件，尝试同步更新插件配置
 	// 注意：这里需要重新查询版本以获取最新的 is_latest 状态
 	if component.Category == model.ComponentCategoryPlugin {
@@ -815,7 +825,26 @@ func (h *ComponentsHandler) UploadPackage(c *gin.Context) {
 		)
 	}
 
-	SuccessWithMessage(c, "上传成功", pkg)
+	// 同步时会再签一次，以最终结果为准：确实还有缺签名的包才告警。
+	signWarning := ""
+	if component.Category == model.ComponentCategoryPlugin && h.unsignedPackageCount(version.ID) > 0 {
+		signWarning = "；但该版本仍有插件包缺少签名，这些架构的主机会拒绝加载。请检查签名密钥配置后，" +
+			"在组件管理中把该版本重新设为最新（灰度版本则重新提交一次灰度）以补签"
+	}
+	SuccessWithMessage(c, "上传成功"+signWarning, pkg)
+}
+
+// unsignedPackageCount 返回版本下启用、却缺签名的插件包数量；未配置签名器时恒为 0（平台不签名）。
+func (h *ComponentsHandler) unsignedPackageCount(versionID uint) int64 {
+	if h.signer == nil {
+		return 0
+	}
+	var n int64
+	h.db.Model(&model.ComponentPackage{}).
+		Where("version_id = ? AND enabled = ? AND pkg_type IN ? AND sha256 <> '' AND (signature = '' OR signature IS NULL)",
+			versionID, true, []model.PackageType{model.PackageTypeBinary, model.PackageTypeTGZ}).
+		Count(&n)
+	return n
 }
 
 // DeletePackage 删除包
@@ -1341,6 +1370,12 @@ func (h *ComponentsHandler) syncPluginConfigForVersion(version *model.ComponentV
 				zap.String("name", componentName),
 				zap.String("sha256", pkg.SHA256))
 		}
+	}
+
+	// 各架构包分别签名：AgentCenter 按主机架构下发对应包的哈希与签名
+	if err := h.signVersionPackages(version.ID); err != nil {
+		h.logger.Error("插件逐包签名失败，非 amd64 主机将无法加载该版本",
+			zap.String("name", componentName), zap.String("version", version.Version), zap.Error(err))
 	}
 
 	// 查找或创建插件配置
