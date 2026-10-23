@@ -134,16 +134,16 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 
 | 改动 | 必须更新 | 有门禁 |
 |------|----------|--------|
-| 新增/修改 HTTP 路由 | `docs/api-reference.md` + `router/testdata/routes.golden` | ✅ |
+| 新增/修改 HTTP 路由 | `docs/reference/api-reference.md` + `router/testdata/routes.golden` | ✅ |
 | 新增 Prometheus 指标 | `deploy/config/prometheus-rules.yml` 加告警规则 | ✅ |
 | 新增/删除检测 Stage | `internal/server/engine/capability.go` 清单 | ✅ |
-| 新增 DataType | `docs/datatype-allocation.md` | ✅ |
+| 新增 DataType | `docs/development/datatype-allocation.md` | ✅ |
 | 新增基线策略文件 | `plugins/baseline/config/README.md` 的统计 | ✅ |
 | 新增 `internal/`/`pkg/` 下的包 | 必须有导入者，否则登记 `internal/deploy/testdata/unwired-packages.tsv` | ✅ |
 | 新增 ClickHouse 表 | 必须有写入方，否则登记 `internal/deploy/testdata/clickhouse-tables-without-writer.tsv` | ✅ |
-| 新增服务/模块/包 | `docs/architecture.md` | ❌ |
-| 配置项增删 | `docs/configuration.md` | ❌ |
-| 部署步骤变化 | `docs/deployment.md` | ❌ |
+| 新增服务/模块/包 | `docs/development/architecture.md` | ❌ |
+| 配置项增删 | `docs/operations/configuration.md` | ❌ |
+| 部署步骤变化 | `docs/operations/deployment.md` | ❌ |
 
 ---
 
@@ -210,9 +210,9 @@ pre-push 扫每个 commit 而不是最终 diff：中间 commit 一样会公开�
 
 ## 参考
 
-[架构](docs/architecture.md) ·
-[API](docs/api-reference.md) ·
-[配置](docs/configuration.md) ·
-[部署](docs/deployment.md) ·
-[代码规范](docs/code-style.md) ·
-[DataType 分配](docs/datatype-allocation.md)
+[架构](docs/development/architecture.md) ·
+[API](docs/reference/api-reference.md) ·
+[配置](docs/operations/configuration.md) ·
+[部署](docs/operations/deployment.md) ·
+[代码规范](docs/development/code-style.md) ·
+[DataType 分配](docs/development/datatype-allocation.md)

@@ -69,7 +69,7 @@ flowchart LR
 
 后端由七个服务组成：Manager、AgentCenter、Consumer、Engine、LLMProxy、VulnSync、Scanner（可选，容器镜像扫描）。控制面无状态，可水平扩展。Kafka 把持久化与检测解耦（两个消费组，offset 互相独立），Redis 负责服务发现与分布式锁，ClickHouse 承载时序分析与事件归档。VulnSync 拉取 OS 厂商公告并发布到 Kafka，用于与主机软件匹配。
 
-详见 [架构设计](docs/architecture.md)。
+详见 [架构设计](docs/development/architecture.md)。
 
 ## 技术栈
 
@@ -145,7 +145,7 @@ docker compose down                    # 删除容器；数据仍在 deploy/data
 
 要从头再来，再删除 `deploy/data`、`deploy/certs/*.crt`、`deploy/certs/*.key` 与 `deploy/.env`。
 
-集群部署、高可用、升级与备份见 [安装部署](docs/deployment.md)。
+集群部署、高可用、升级与备份见 [安装部署](docs/operations/deployment.md)。
 
 ### 已知限制
 
@@ -171,7 +171,7 @@ mxcwpp/
 ├── cmd/
 │   ├── agent/              # Agent 入口
 │   ├── server/             # agentcenter / consumer / engine / llmproxy / manager / scanner / vulnsync
-│   └── tools/              # 运维工具（回放、ETL、迁移）
+│   └── tools/              # mxctl（集群部署）、回放、ETL、迁移与压测工具
 ├── internal/
 │   ├── agent/              # Agent（连接、传输、插件管理、EDR 模块）
 │   ├── server/             # 后端服务与服务端共享包
@@ -191,14 +191,16 @@ mxcwpp/
 
 ## 文档
 
-- [架构设计](docs/architecture.md) - 系统拓扑、组件职责、数据链路、高可用设计
-- [安装部署](docs/deployment.md) - 前置条件、单机与集群部署、Agent 安装、升级与备份
-- [配置说明](docs/configuration.md) - 服务端与 Agent 配置、环境变量
-- [API 文档](docs/api-reference.md) - REST 端点、请求/响应格式、认证
-- [常见问题](docs/faq.md) - 常见问题与排查
-- [开发指南](docs/development.md) - 本地环境、数据库迁移、插件开发
+- [架构设计](docs/development/architecture.md) - 系统拓扑、组件职责、数据链路、高可用设计
+- [安装部署](docs/operations/deployment.md) - 前置条件、单机与集群部署、Agent 安装、升级与备份
+- [配置说明](docs/operations/configuration.md) - 服务端与 Agent 配置、环境变量
+- [API 文档](docs/reference/api-reference.md) - REST 端点、请求/响应格式、认证
+- [常见问题](docs/operations/faq.md) - 常见问题与排查
+- [开发指南](docs/development/development.md) - 本地环境、数据库迁移、插件开发
 - [贡献指南](CONTRIBUTING.md) - 如何报告问题与提出需求
 - [开源治理](docs/governance.md) - 项目角色、决策流程、安全策略
+
+全部文档见 [文档导航](docs/README.md)。
 
 ## Star History
 

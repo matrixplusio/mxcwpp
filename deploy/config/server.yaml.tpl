@@ -123,7 +123,7 @@ pdf:
   gotenberg_url: "http://gotenberg:3000"   # 同 mxcwpp-net 网络内的服务别名
   internal_url: "http://manager:8080"      # Gotenberg 回拉 manager 静态资源
 
-# 检测产出的通知灰度（见 docs/configuration.md「alerting」）
+# 检测产出的通知灰度（见 docs/operations/configuration.md「alerting」）
 #
 # 留空即全部类别不通知，告警仍照常入库、列表与大屏可见。
 # 一次全开容易被误报淹没，建议确认某类误报收敛后再逐个加入。

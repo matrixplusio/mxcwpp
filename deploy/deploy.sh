@@ -1051,7 +1051,7 @@ quickstart() {
     source "$ENV_FILE"
     echo ""
     log_info "控制台: https://$SERVER_IP:${HTTPS_PORT:-443}  （admin / admin123，首次登录须修改密码）"
-    log_info "Agent 接入: $SERVER_IP:${GRPC_PORT:-6751}，安装方法见 docs/deployment.md 的「Agent 部署」"
+    log_info "Agent 接入: $SERVER_IP:${GRPC_PORT:-6751}，安装方法见 docs/operations/deployment.md 的「Agent 部署」"
 }
 
 full_deploy() {

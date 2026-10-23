@@ -2,11 +2,15 @@
 
 OpenAPI 3.0 schema + 客户 SDK.
 
+> **覆盖范围**：`openapi.yaml` 目前只收录了部分端点（约 70 个路径），Manager 实际提供的路由有约 500 条。
+> 完整列表以 [API 参考](../api-reference.md) 为准——每个路由都必须登记在那里，有门禁检查；
+> 这份 OpenAPI 定义没有门禁，用它生成的 SDK 只覆盖已收录的端点。
+
 ## 文件
 
 | 文件 | 用途 |
 |---|---|
-| `openapi.yaml` | v1 + v2 API 定义（已收录约 15 个端点） |
+| `openapi.yaml` | v1 + v2 API 定义（部分端点，见上方覆盖范围） |
 | `README.md` | 本文档 |
 
 ## 生成 SDK
@@ -14,27 +18,27 @@ OpenAPI 3.0 schema + 客户 SDK.
 ```sh
 # Python SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
-  -i /local/docs/openapi/openapi.yaml \
+  -i /local/docs/reference/openapi/openapi.yaml \
   -g python \
   -o /local/sdk/python \
   --additional-properties=packageName=mxcwpp_sdk,packageVersion=2.0.0
 
 # Go SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
-  -i /local/docs/openapi/openapi.yaml \
+  -i /local/docs/reference/openapi/openapi.yaml \
   -g go \
   -o /local/sdk/go \
   --additional-properties=packageName=mxcwpp
 
 # TypeScript SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
-  -i /local/docs/openapi/openapi.yaml \
+  -i /local/docs/reference/openapi/openapi.yaml \
   -g typescript-axios \
   -o /local/sdk/typescript
 
 # Java SDK
 docker run --rm -v ${PWD}:/local openapitools/openapi-generator-cli generate \
-  -i /local/docs/openapi/openapi.yaml \
+  -i /local/docs/reference/openapi/openapi.yaml \
   -g java \
   -o /local/sdk/java \
   --additional-properties=groupId=io.mxcwpp,artifactId=mxcwpp-sdk,artifactVersion=2.0.0

@@ -220,7 +220,7 @@ func Setup(db *gorm.DB, logger *zap.Logger, cfg *config.Config, scoreCache *biz.
 	apiV2Admin := apiV2.Group("/admin")
 	apiV2Admin.Use(tenant.AdminMiddleware())
 	// 单租户产品：多租户管理面（租户 CRUD / 停用恢复 / MSSP 跨租户视图）已移除。
-	// 底层 tenant_id 保留并统一传默认租户，见 docs/architecture.md「单租户收敛」。
+	// 底层 tenant_id 保留并统一传默认租户，见 docs/development/architecture.md「单租户收敛」。
 
 	// /api/v2/system/mode：运行模式查询。按租户切换随多租户管理面一并移除，
 	// 模式现在是部署级设置，由 MemoryResolver 持有默认值。

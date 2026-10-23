@@ -14,7 +14,7 @@ import (
 // 也会让每次改动都要照顾一条没人交付的路径。
 //
 // 底层 tenant_id 刻意保留（262 处过滤点统一传默认租户）：删列是高风险数据迁移，
-// 收益只是少一个字段。收敛的是产品面，不是数据模型——见 docs/architecture.md。
+// 收益只是少一个字段。收敛的是产品面，不是数据模型——见 docs/development/architecture.md。
 func TestSingleTenant_NoMultiTenantProductSurface(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
 	if err != nil {

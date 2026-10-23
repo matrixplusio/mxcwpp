@@ -198,7 +198,7 @@ type JWTBlacklistConfig struct {
 // 启用后,sdclient 通过 https + 客户端证书向 Manager 注册/心跳/注销。
 // 兼容期内可与 InternalSecret 同时启用,二者构成纵深防御。
 //
-// 详见 docs/architecture.md §7 安全与通信 / docs/configuration.md
+// 详见 docs/development/architecture.md §7 安全与通信 / docs/operations/configuration.md
 type InternalMTLSConfig struct {
 	Enabled    bool   `mapstructure:"enabled"`      // 是否启用 mTLS,默认 false (v1 兼容)
 	CACertPath string `mapstructure:"ca_cert_path"` // PEM CA 证书路径

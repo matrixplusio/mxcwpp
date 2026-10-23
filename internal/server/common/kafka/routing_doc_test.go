@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// docPath 定位 docs/datatype-allocation.md（向上找 go.mod 确定仓库根）。
+// docPath 定位 docs/development/datatype-allocation.md（向上找 go.mod 确定仓库根）。
 func docPath(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -18,7 +18,7 @@ func docPath(t *testing.T) string {
 	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return filepath.Join(dir, "docs", "datatype-allocation.md")
+			return filepath.Join(dir, "docs", "development", "datatype-allocation.md")
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -116,7 +116,7 @@ func TestRouteDataTypeMatchesDoc(t *testing.T) {
 		}
 	}
 	if len(undocumented) > 0 {
-		t.Errorf("代码显式路由但 docs/datatype-allocation.md 未登记的 DataType 共 %d 个，起止：%d..%d",
+		t.Errorf("代码显式路由但 docs/development/datatype-allocation.md 未登记的 DataType 共 %d 个，起止：%d..%d",
 			len(undocumented), undocumented[0], undocumented[len(undocumented)-1])
 	}
 }

@@ -15,7 +15,7 @@
 //	ctx, span := tracer.Start(ctx, "ProcessAlert")
 //	defer span.End()
 //
-// 设计文档: docs/architecture.md §11 关键代码路径 / docs/configuration.md OTel.
+// 设计文档: docs/development/architecture.md §11 关键代码路径 / docs/operations/configuration.md OTel.
 package observability
 
 import (

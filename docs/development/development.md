@@ -3,7 +3,7 @@
 本文档讲**怎么在本地把项目跑起来、怎么改各个模块**。
 
 协作规则（分支、提交格式、PR 流程、发布约束、自动门禁）见根目录的
-[CONTRIBUTING.md](../CONTRIBUTING.md)，那份是提 PR 前必读的，此处不重复。
+[CONTRIBUTING.md](../../CONTRIBUTING.md)，那份是提 PR 前必读的，此处不重复。
 
 ## 开发环境
 

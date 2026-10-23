@@ -1,6 +1,24 @@
-# Matrix Cloud Security Platform - 生产环境部署
+# 部署
 
-当前部署包面向 V2 控制面，核心拓扑为 `UI + Manager + AgentCenter + Consumer + MySQL + Redis + Kafka + ClickHouse`。应用层支持多副本部署，建议在生产环境显式使用 `--scale` 启动 `manager / agentcenter / consumer`；MySQL、Redis、ClickHouse 的主从与容灾需按实际生产标准额外建设。默认 compose 通过 `ui` 暴露 Web/API 入口，`agentcenter` 的 gRPC 入口需要按生产环境额外做端口映射或接入四层负载均衡。
+单机部署的拓扑：控制台（Nginx）+ Manager + AgentCenter（前置四层代理 ac-proxy）+ Consumer + Engine + VulnSync + LLMProxy，
+基础设施为 MySQL、Redis、Kafka（3 节点 KRaft）、ClickHouse、Prometheus、Gotenberg。对外只开放控制台（`HTTP_PORT` / `HTTPS_PORT`）
+与 Agent 接入（`GRPC_PORT`，默认 6751）；数据库与消息队列的宿主机端口只绑本机。
+
+最快的方式是 `./deploy.sh quickstart`，见仓库根目录 README 的「快速开始」。多节点集群部署见
+[安装部署文档](../docs/operations/deployment.md)。
+
+## 目录与 compose 文件
+
+| 文件 | 用途 |
+|---|---|
+| `docker-compose.yml` | 单机部署，由 `deploy.sh` 驱动（生成密钥与证书、渲染配置、按 `.env` 的 `*_REPLICAS` 设置副本数） |
+| `docker-compose.dev.yml` | 本地开发：源码挂载 + Air 热重载 |
+| `docker-compose.pret.yml` | 压测环境：预构建镜像、多实例，配合 `scripts/pret-docker-start.sh` |
+| `config/` | 容器用的配置模板（`server.yaml.tpl`、Nginx、HAProxy、Prometheus 等） |
+| `prod/` | 多节点集群部署（`mxctl` 读取 `cluster.yaml` 渲染各节点配置） |
+| `systemd/` | systemd 单元（Agent、不用容器部署时的服务端、病毒库更新）与备份定时任务 |
+
+MySQL、Redis、ClickHouse 的主从与容灾需按生产标准另行建设。
 
 ## 部署流程
 

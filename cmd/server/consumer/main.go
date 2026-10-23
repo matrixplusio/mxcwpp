@@ -215,7 +215,7 @@ func main() {
 	dlqHandler := consumer.NewDLQHandler(dlqProducer, logger)
 
 	// Sprint 2 PR48: 分析模块可选启用 (默认 true 兼容 v1; v2 部署应设 false 由 Engine 服务承担)。
-	// 详见 docs/architecture.md §2.3 Consumer 职责: 只做 Kafka -> 存储幂等写入。
+	// 详见 docs/development/architecture.md §2.3 Consumer 职责: 只做 Kafka -> 存储幂等写入。
 	logger.Info("Consumer 仅 writer 路径 (v2 拆分: 检测由 Engine 服务承担)")
 
 	// 6.2 上下文 (后续多个组件需要 ctx 控制生命周期)

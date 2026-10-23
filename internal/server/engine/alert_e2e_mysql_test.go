@@ -19,7 +19,7 @@ import (
 // 为什么要单独验这条：Privilege / RASP 这类 Stage 自己不落库，
 // 告警要经 pipeline 的 alertWriter 统一写入 alerts 表，再由 manager 的
 // /api/v1/alerts 查出来。中间任何一环断了，Stage 都还在「正常产生告警」，
-// 只是没人看得到——这正是 E-WIRE-1 要治的那类断链。
+// 只是没人看得到——这正是运行时能力清单要治的那类断链。
 //
 // 单测里 Stage 返回了 Alert 只能证明它算出了结果，证明不了那条告警到得了界面。
 func alertE2EDB(t *testing.T) *gorm.DB {

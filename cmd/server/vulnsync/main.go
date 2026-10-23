@@ -9,7 +9,7 @@
 // 注: OSV/语言包(PURL 驱动)与 NVD/KEV/EPSS 元数据 enrich 仍在 Manager 侧,
 // 非时间增量拉取,不归 VulnSync 调度。
 //
-// 设计文档: docs/architecture.md (VulnSync 节) + docs/vulnsync-migration.md
+// 设计文档: docs/development/architecture.md (VulnSync 节) + docs/vulnsync-migration.md
 package main
 
 import (

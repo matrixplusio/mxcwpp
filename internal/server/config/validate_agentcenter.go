@@ -124,7 +124,7 @@ func (c *Config) ValidateAgentCenter() error {
 		return err
 	}
 
-	// 2. Agent↔AC 信任链 fail-fast（E-SEC-3）。
+	// 2. Agent↔AC 信任链 fail-fast。
 	//    显式 insecure_dev_mode 仅供本地/回环开发放行弱信任配置，且必须 gRPC + HTTP 双回环绑定；
 	//    官方 prod/deploy/cluster 渲染绝不设置此项。
 	if c.MTLS.InsecureDevMode {

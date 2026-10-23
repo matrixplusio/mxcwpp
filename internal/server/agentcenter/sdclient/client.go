@@ -51,7 +51,7 @@ func NewClient(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret strin
 // 客户端证书 / 私钥 / CA 证书必须可读。
 // 当 mtls.Enabled = false 时, 行为与 NewClient 相同(向后兼容)。
 //
-// 详见 docs/architecture.md §7 + docs/configuration.md mtls 配置示例.
+// 详见 docs/development/architecture.md §7 + docs/operations/configuration.md mtls 配置示例.
 func NewClientWithTLS(managerAddr, instanceID, grpcAddr, httpAddr, internalSecret string, mtls MTLSConfig, connCount func() int, logger *zap.Logger) (*Client, error) {
 	if instanceID == "" {
 		if h, err := os.Hostname(); err == nil {

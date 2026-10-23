@@ -1287,7 +1287,7 @@ func (s *Service) handleEncodedRecord(ctx context.Context, record *grpcProto.Enc
 				s.logger.Error("DataType 未登记 Kafka 路由，已走心跳兜底（消费者会静默忽略，等同丢数据）",
 					zap.Int32("data_type", record.DataType),
 					zap.String("fallback_topic", topic),
-					zap.String("fix", "同步更新 kafka.RouteDataType 与 Consumer handleMessage，并登记 docs/datatype-allocation.md"))
+					zap.String("fix", "同步更新 kafka.RouteDataType 与 Consumer handleMessage，并登记 docs/development/datatype-allocation.md"))
 			}
 		}
 		// 基线任务完成信号（8001/8004）是控制面关键低频消息：被丢弃会导致主机永不计完成、

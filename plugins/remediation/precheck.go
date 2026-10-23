@@ -34,7 +34,7 @@ const dataTypePreCheckResult int32 = 9201
 
 // 注意：9201 与 dataTypeRemediationProgress 是同一值。
 // 通过 payload.Fields["kind"] 区分（"progress" vs "precheck_result"）。
-// 详见 docs/datatype-allocation.md 漏洞修复结果扩展段。
+// 详见 docs/development/datatype-allocation.md 漏洞修复结果扩展段。
 
 // preCheckPayload 由 manager 推过来
 type preCheckPayload struct {

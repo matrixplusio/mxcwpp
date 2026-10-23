@@ -21,7 +21,7 @@ import (
 //     Secret 仍发送供 Manager 端二次校验(纵深防御)。
 //   - 仅配置 Secret 不配 MTLSConfig,继续走 v1 行为(HTTP + Secret)。
 //
-// 详见 docs/architecture.md §7 安全与通信 + docs/multi-tenant.md §1.
+// 详见 docs/development/architecture.md §7 安全与通信 + docs/multi-tenant.md §1.
 type MTLSConfig struct {
 	Enabled    bool   // 是否启用 mTLS
 	CACertPath string // PEM CA 证书(用于校验 Manager 端证书)

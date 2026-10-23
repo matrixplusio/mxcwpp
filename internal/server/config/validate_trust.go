@@ -14,7 +14,7 @@ import (
 	"github.com/matrixplusio/mxcwpp/internal/common/certissue"
 )
 
-// validateAgentTrust 对 Agent↔AC 信任链做生产级 fail-fast 校验（E-SEC-3）。
+// validateAgentTrust 对 Agent↔AC 信任链做生产级 fail-fast 校验。
 //
 // 只有全部满足才允许 AgentCenter 启动：
 //   - ca_cert / ca_key / server_cert / server_key 均配置、可读；

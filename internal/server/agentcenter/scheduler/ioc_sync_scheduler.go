@@ -14,7 +14,7 @@ import (
 
 const (
 	iocSyncInterval = 5 * time.Minute
-	iocTaskDataType = int32(9300) // DataType for IOC data push (registered in docs/datatype-allocation.md)
+	iocTaskDataType = int32(9300) // DataType for IOC data push (registered in docs/development/datatype-allocation.md)
 )
 
 // IOCSyncScheduler periodically checks for new IOC snapshots and broadcasts

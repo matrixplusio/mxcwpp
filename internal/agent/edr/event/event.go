@@ -9,7 +9,7 @@ import (
 )
 
 // DataType constants for EDR events, matching Server consumer expectations.
-// Registered in docs/datatype-allocation.md — update that doc before adding new values.
+// Registered in docs/development/datatype-allocation.md — update that doc before adding new values.
 const (
 	DataTypeProcess int32 = 3000 // process_exec / process_exit
 	DataTypeFile    int32 = 3001 // file_open / file_write / file_rename / file_unlink / file_chmod

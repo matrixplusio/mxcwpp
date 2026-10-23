@@ -79,7 +79,7 @@ build-consumer:
 	@echo "Consumer binary built: dist/server/consumer"
 
 # v2.0 六微服务新增二进制 (PR3 引入)
-# 详见 docs/architecture.md §2
+# 详见 docs/development/architecture.md §2
 build-engine:
 	@echo "Building engine..."
 	@mkdir -p dist/server

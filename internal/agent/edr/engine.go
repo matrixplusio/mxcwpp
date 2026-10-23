@@ -40,7 +40,7 @@ import (
 	"github.com/matrixplusio/mxcwpp/internal/agent/transport"
 )
 
-// Task DataType constants for Server→Agent push (registered in docs/datatype-allocation.md).
+// Task DataType constants for Server→Agent push (registered in docs/development/datatype-allocation.md).
 const (
 	iocTaskDataType     = int32(9300) // IOC data push
 	ruleTaskDataType    = int32(9400) // Detection rule push

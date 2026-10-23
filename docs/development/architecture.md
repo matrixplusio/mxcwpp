@@ -138,7 +138,7 @@ Kafka 异步消费服务，**仅负责数据持久化**（检测能力在 Engine
 - 多层检测子包：
   - `celengine/` — CEL 规则引擎，eBPF 事件实时匹配。
     规则按 `draft → shadow → context → alert` 分级，晋级门槛由人工研判结论决定
-    （见 [API · 规则生命周期](api-reference.md#规则生命周期)）；
+    （见 [API · 规则生命周期](../reference/api-reference.md#规则生命周期)）；
     ML 异常分经 `host_anomaly_scores` 参与告警排序，加权封顶 1.15，跨不过严重度档
   - `intrusion/` — 入侵检测合集（abnormal_login / reverse_shell / rootkit / webshell）
   - `adaudit/` — AD/LDAP 域控审计 7 条规则（DCSync / Kerberoasting / 暴破等）
@@ -151,7 +151,7 @@ Kafka 异步消费服务，**仅负责数据持久化**（检测能力在 Engine
     且**没有 ONNX**：go.mod 无 onnxruntime 依赖，ONNX 适配仍是 TODO
   - `anomaly/` — 行为基线异常检测（IForest + 多指标关联）。四档 `off/shadow/context/ranking`，
     **1.0 不开放 alert 档**；含长期参照基线（抗训练投毒）、模型版本与回滚、按主机配额的训练采样。
-    详见 [ML 异常检测安全说明](ml-anomaly-safety.md)
+    详见 [ML 异常检测安全说明](../reference/ml-anomaly-safety.md)
   - `baseline/` — BDE 每主机行为基线（EWMA，学满 7 天毕业）。偏离写 `behavior_alerts` 明细，
     同时并入主告警表（`source=behavior`，`rule_id=bde-<指标>`），可研判、可白名单、可通知；
     研判结论（误报 / 良性算噪声）按指标回灌阈值倍率，14 天内已关闭告警满 50 条才调整
@@ -304,7 +304,7 @@ Engine 与 Consumer 使用不同 ConsumerGroup，**offset 独立**，任一方�
 | `mxcwpp.agent.remediation` | 9100-9299 | 6 | 7d | 漏洞修复任务结果 -> MySQL |
 | `mxcwpp.agent.command-ack` | 9999 | 6 | 7d | Agent 命令执行结果 |
 
-> **DataType 分配详情**: 完整的 DataType 分配表、路由映射和新增检查清单见 [docs/datatype-allocation.md](datatype-allocation.md)。
+> **DataType 分配详情**: 完整的 DataType 分配表、路由映射和新增检查清单见 [docs/development/datatype-allocation.md](datatype-allocation.md)。
 > **注意**: 6004 (FIM 基线快照) 在 AC 侧直接处理，不走 Kafka；9000/9001 为插件 SDK 内部心跳，禁止业务使用。
 
 Partition Key 为 AgentID，保证同一 Agent 数据有序。Replication Factor = 2，`min.insync.replicas = 1`。
@@ -487,7 +487,7 @@ Redis 不可用时降级为无锁模式，依赖调度间隔的自然错开来�
 
 证书生成：`scripts/generate-certs.sh`
 
-### AgentCenter 管理端口鉴权与网络边界（E-SEC-1）
+### AgentCenter 管理端口鉴权与网络边界
 
 AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
 
@@ -509,9 +509,9 @@ AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
   - Manager：`Config.ValidateManager()` 在打开内部路由前强校验同一密钥，失败即退出（仅 Manager 专用初始化路径调用，不影响 Consumer/Engine 等共用 Config 的进程）。
   - 集群部署（`internal/deploy/cluster`）在 `Config.Validate()` 强校验 `app.internal_secret`，Manager 与所有 AC 渲染同一密钥。
 - **Manager 与 AC 必须配置同一 `server.internal_secret`**（含本地开发；否则 AC↔Manager 注册与命令下发被 401 阻断）。
-- 密钥来源：`server.internal_secret`（deploy.sh 从 `.env` 的 `INTERNAL_SECRET` 生成/幂等持久化为唯一强行；集群从 `app.internal_secret` 渲染）。
+- 密钥来源：`server.internal_secret`（deploy.sh 从 `.env` 的 `INTERNAL_SECRET` 生成/幂等持久化为唯一一行；集群从 `app.internal_secret` 渲染）。
 
-### 单租户收敛（E-TEN-1）
+### 单租户收敛
 
 产品定位是**单租户** Linux/K8s CWPP。曾存在的多租户/托管产品面已移除：
 
@@ -530,7 +530,7 @@ AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
 
 `internal/server/manager/router/single_tenant_test.go` 守住这条边界：多租户路由或已删包重新出现即失败。
 
-### 事件运营闭环（E-OPS-1）
+### 事件运营闭环
 
 事件此前只有 `active/investigating/resolved` 三态和一个 `resolved_by`（实际只会写
 `auto`）：**没有负责人、没有响应时限、没有研判结论、关闭不需要理由**。
@@ -558,7 +558,7 @@ AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
 研判结论同时是检测质量的唯一可信来源——precision 只能由它算出。拿 `resolved` 数量代替，
 会把"没人看所以批量关掉"算成检测准确。
 
-### 人工响应与硬禁自动处置（E-OPS-3）
+### 人工响应与硬禁自动处置
 
 隔离主机会切断业务流量。原实现是**一次 API 调用即刻生效**：没有第二个人看过、
 没有幂等键、没有回滚记录，事后也回答不了"这台机器当时为什么被隔离、谁批的"。
@@ -581,7 +581,7 @@ AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
 处置全过程回流为事件时间线上的证据，带幂等键便于追溯：复盘要能顺着一条时间线
 看完"发现→研判→申请→审批→执行"，而不是去另一个页面拼。
 
-### 值班表与响应时限（E-OPS-2）
+### 值班表与响应时限
 
 事件闭环加了认领与解决时限，但**没有任何东西去读它们**——没人看的截止时间只是一列
 数据，与「埋了点没人告警」是同一种毛病。现在两侧都补齐：
@@ -611,7 +611,7 @@ AC HTTP 管理端口承载高危接口，威胁模型与访问控制：
 
 一条无人认领的高危事件，与一条未被检出的攻击，对客户来说结果是一样的。
 
-### 单一外发出口（E-DEL-4）
+### 单一外发出口
 
 `biz/outbound` 下有 9 个连接器（Splunk HEC、QRadar LEEF、Elastic、阿里云 SLS 等），
 **全部零外部引用**；`SetSIEMForwarder` 只有定义、零调用。Consumer 里确实构造了
@@ -641,7 +641,7 @@ goroutine 去抢同一把锁，告警风暴下会堆出大量阻塞协程。现�
 满则丢弃并计入 `mxcwpp_alert_egress_total{outcome="dropped_queue_full"}`——
 宁可外发缺条目也不拖慢检测，但丢弃必须可见。
 
-### 恶意文件扫描的结果复态（E-DEL-4）
+### 恶意文件扫描的结果复态
 
 ClamAV / YARA 引擎不可用（未安装、内存不足）或执行出错时，扫描器此前返回
 `(nil, nil)`——调用方读到"零威胁、无错误"，任务上报 `status=completed`、
@@ -662,7 +662,7 @@ ClamAV / YARA 引擎不可用（未安装、内存不足）或执行出错时，
 **没扫是覆盖缺口，不是结论**——这与"请求失败渲染成 0"是同一类问题：
 把"不知道"显示成"没问题"。
 
-### 可观测性与告警覆盖（E-OBS-1）
+### 可观测性与告警覆盖
 
 平台此前的典型形态是"埋了点、没人报警"：agent 丢事件、engine 背压丢弃、Stage 报错
 三个指标一直在采集，图表上看得见，却没有任何规则会把人叫醒。数据在丢而无人知晓，
@@ -686,7 +686,7 @@ ClamAV / YARA 引擎不可用（未安装、内存不足）或执行出错时，
 在增长，只有前者能回答"我现在看到的漏洞数据可信到什么时候"。同步失败**不更新**
 该时间戳，否则停更时告警永远不会触发。
 
-### 运行时能力清单（E-WIRE-1）
+### 运行时能力清单
 
 代码里有 19 个检测 Stage 构造器，实际接进流水线的只有 8 个；接进去的里面还有 3 个把
 告警发往 `mxcwpp.engine.alert`，而该 topic **无任何消费者**——跑了也到不了界面。
@@ -698,7 +698,6 @@ ClamAV / YARA 引擎不可用（未安装、内存不足）或执行出错时，
 |---|---|---|
 | `active` | 已接线且告警有实际去处 | ✅ |
 | `dead_end` | 已接线但告警无人消费 | ❌ 必须注明缺什么 |
-
 | `unwired` | 有构造器但从未接线 | ❌ |
 
 清单经 `GET /capabilities`（Engine HTTP）以 JSON 发布，供运维与交付流程核对。
@@ -732,7 +731,7 @@ engine 把**每一次**检测命中（含低保真、观察阶段这些不单独
 
 engine 升级之前发出的命中没有 `stage` 字段，回补进来的这部分行 `stage` 为空、CEL 与攻击链的规则号无法区分，统计时要排除。
 
-信号表目前还没有读取方：2b 的风险累积上线之前，低保真规则的命中只是「可查」，不会叫醒任何人。
+信号表目前还没有读取方：风险累积上线之前，低保真规则的命中只是「可查」，不会叫醒任何人。
 
 ### 实体风险累积（影子阶段）
 
@@ -779,7 +778,7 @@ engine 每小时分批清理），**不产生告警**。
 告警：`MxCwppEngineRiskPersistDropped`、`MxCwppEngineRiskStalled`、`MxCwppEngineRiskDisabled`、`MxCwppEngineRiskDegraded`、
 `MxCwppSignalPrevalenceStale`。
 
-### 单一告警落库链路（E-DET-1）
+### 单一告警落库链路
 
 流水线里每个 Stage 的告警都会发往 `mxcwpp.engine.alert`。该 topic 只有信号落库在消费（见下节），
 不产生告警。CEL / Sequence / IOC 之所以能出现在界面上，是因为它们额外挂了 `AlertGenerator`
@@ -794,7 +793,7 @@ engine 每小时分批清理），**不产生告警**。
 `cel-%d` 结果键、依赖规则字段的低保真与观察期判定），给硬编码 Stage 合成假规则
 会让它们伪装成 CEL 规则并误用只对 CEL 有意义的治理语义。
 
-### Agent 身份信任链（E-SEC-3）
+### Agent 身份信任链
 
 Agent 接入的信任建立在三段上，任一段缺失都会被 fail-closed 拒绝：
 
@@ -806,7 +805,7 @@ Agent 接入的信任建立在三段上，任一段缺失都会被 fail-closed �
 
 `insecure_dev_mode` 是唯一放宽通路，被限制为仅在 gRPC 与 HTTP 均绑定回环时可用，官方部署渲染永不设置。
 
-### 下发命令的执行边界（E-SEC-4）
+### 下发命令的执行边界
 
 平台会把命令下发到 Agent 并以 root 执行，因此「谁能编辑内容」等价于「谁能在全舰队执行代码」。执行侧统一采用**结构化 argv + 显式允许集**，不再使用「危险词黑名单 + shell 字符串」：
 
@@ -824,7 +823,7 @@ Agent 接入的信任建立在三段上，任一段缺失都会被 fail-closed �
 
 `rpm` 与 `dpkg` 的安装操作只接受文件路径，而安装本地包必然以 root 运行包内维护者脚本——不存在安全的操作数形式，故整体移除；装包一律走包管理器按包名从已配置仓库取。
 
-### RBAC deny-by-default 与路由覆盖闸（E-SEC-2）
+### RBAC deny-by-default 与路由覆盖闸
 
 - 所有 JWT 认证路由（`apiV1Auth`）走 `EnforcePermissions`：按「模块 × 动作」（view/manage/respond）校验；**未登记路由对非 admin 一律拒绝（deny-by-default）并记 `access.denied` 审计**，不再因空映射放行；admin 为显式超管通路。
 - `/api/v2` 管理面路由（`/admin`、`/config/change-requests`、`/mssp`）显式 admin 门禁；`/system/mode` 为登录即可的只读查询。

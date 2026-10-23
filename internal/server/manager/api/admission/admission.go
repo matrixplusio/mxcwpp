@@ -1,6 +1,6 @@
 // Package admission 实现 K8s ValidatingAdmissionWebhook v1。
 //
-// 设计文档: docs/architecture.md §2.1 Manager
+// 设计文档: docs/development/architecture.md §2.1 Manager
 //
 // 12 条内置策略 (P2-22 扩展):
 //   - PRIVILEGED:           阻止 privileged: true Pod

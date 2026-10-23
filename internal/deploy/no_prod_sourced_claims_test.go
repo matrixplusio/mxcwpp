@@ -192,7 +192,7 @@ func TestLeakscanLocalRegexEntries(t *testing.T) {
 	if paths("notes/PRIVATE.md") {
 		t.Error("本地清单的 path: 条目没生效")
 	}
-	if !paths("docs/architecture.md") {
+	if !paths("docs/development/architecture.md") {
 		t.Error("普通路径被 path: 条目误拦")
 	}
 }

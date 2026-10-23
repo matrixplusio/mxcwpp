@@ -118,7 +118,7 @@ func (h *VulnerabilitiesHandler) buildVulnerabilityQuery(filter vulnerabilityLis
 			// 实例级口径:该 CVE 存在处于此状态的主机实例即命中。
 			// 禁用 vulnerabilities.status —— 它是 CVE 级 rollup,全部主机修好才置 patched,
 			// 用它筛"已修复"会漏掉"部分主机已修"的实例(如某 CVE 命中 3 台仅 1 台修好),
-			// 导致修复页显示已修数 >0 但列表筛已修返回空。详见 docs/vuln-stats-glossary.md。
+			// 导致修复页显示已修数 >0 但列表筛已修返回空。详见 docs/reference/vuln-stats-glossary.md。
 			query = query.Where(
 				"EXISTS (SELECT 1 FROM host_vulnerabilities WHERE host_vulnerabilities.vuln_id = vulnerabilities.id AND host_vulnerabilities.status = ?)",
 				filter.Status)
@@ -444,7 +444,7 @@ GROUP BY vuln_id`, vulnIDs).Scan(&aggs)
 
 	// 实例级统计（主机漏洞实例口径，与修复报告页同源）：在当前筛选的 vuln 集合上统计
 	// host_vulnerabilities。清掉状态约束以便按 patched/unpatched 拆分。CVE 级 total 是"漏洞种类"，
-	// 实例级是"主机×漏洞"，两者量纲不同、各自展示，见 docs/vuln-stats-glossary.md。
+	// 实例级是"主机×漏洞"，两者量纲不同、各自展示，见 docs/reference/vuln-stats-glossary.md。
 	baseFilter := filter
 	baseFilter.Status = ""
 	vulnIDQuery := h.buildVulnerabilityQuery(baseFilter).Select("vulnerabilities.id")

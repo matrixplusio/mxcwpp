@@ -13,7 +13,7 @@ import (
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
-// fimBaselineDataType 是基线下发的 DataType，见 docs/datatype-allocation.md。
+// fimBaselineDataType 是基线下发的 DataType，见 docs/development/datatype-allocation.md。
 //
 // Agent 侧接收方（plugins/fim/main.go）自始就存在，发送方一直没有写。后果是
 // FIM 基线只在首扫落地一次，此后每轮扫描都拿首扫快照作比对基准：凡相对首扫

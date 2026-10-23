@@ -1,6 +1,6 @@
 package kafka
 
-// Topic 常量（对应设计文档 docs/architecture.md §4.1 + docs/datatype-allocation.md）
+// Topic 常量（对应设计文档 docs/development/architecture.md §4.1 + docs/development/datatype-allocation.md）
 const (
 	// v1.x Agent → Server 数据 Topic
 	TopicHeartbeat   = "mxcwpp.agent.heartbeat"   // DataType 1000/1001, Retention 24h
@@ -20,7 +20,7 @@ const (
 
 	// v2.0 Engine → AC 命令 Topic (Sprint 2 PR14 新增)
 	// 解耦 Engine 决策与 AC 接入: Engine 产命令 → Kafka → AC 消费 → Agent 下发
-	// 详见 docs/architecture.md §3.1 + internal/server/engine/scheduler/README.md
+	// 详见 docs/development/architecture.md §3.1 + internal/server/engine/scheduler/README.md
 	TopicEngineCommand = "mxcwpp.engine.command" // DataType 11800-11899, Retention 24h
 
 	// v2.0 VulnSync 产出 Topic

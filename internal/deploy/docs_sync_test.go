@@ -163,7 +163,7 @@ func TestArchitectureDocCoversAllServices(t *testing.T) {
 		t.Fatal("cmd/server 下没有服务，检查测试假设是否已失效")
 	}
 
-	for _, doc := range []string{"docs/architecture.md"} {
+	for _, doc := range []string{"docs/development/architecture.md"} {
 		data, err := os.ReadFile(filepath.Join(root, doc))
 		if err != nil {
 			t.Fatalf("读取 %s 失败: %v", doc, err)
@@ -219,7 +219,7 @@ func TestConfigKeysDocumented(t *testing.T) {
 	if err != nil {
 		t.Skipf("读取 server.yaml.tpl 失败: %v", err)
 	}
-	doc, err := os.ReadFile(filepath.Join(root, "docs", "configuration.md"))
+	doc, err := os.ReadFile(filepath.Join(root, "docs", "operations", "configuration.md"))
 	if err != nil {
 		t.Fatalf("读取 configuration.md 失败: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestConfigKeysDocumented(t *testing.T) {
 		}
 	}
 	if len(missing) > 0 {
-		t.Fatalf("配置模板里有这些顶层配置节，但 docs/configuration.md 从未提及：%s\n"+
+		t.Fatalf("配置模板里有这些顶层配置节，但 docs/operations/configuration.md 从未提及：%s\n"+
 			"  没写进文档的配置项，部署时只能靠读模板猜。",
 			strings.Join(missing, ", "))
 	}
@@ -359,7 +359,7 @@ func TestServiceCountMatchesDocs(t *testing.T) {
 	cn := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
 	stale := regexp.MustCompile(`(六|七|八|5|6|7|8)\s*(个)?\s*(微)?服务`)
 
-	for _, doc := range []string{"docs/architecture.md", "README.md", "README_ZH.md"} {
+	for _, doc := range []string{"docs/development/architecture.md", "README.md", "README_ZH.md"} {
 		data, err := os.ReadFile(filepath.Join(root, doc))
 		if err != nil {
 			t.Errorf("读取 %s 失败: %v", doc, err)

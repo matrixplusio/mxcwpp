@@ -9,7 +9,7 @@
   - `/api/v2` — 平台管理面：配置变更审批 / 运行模式 / SOAR 等
 - **认证方式**: JWT Bearer Token（公开接口除外）
 - **请求头**: `Authorization: Bearer <token>`，`Content-Type: application/json`
-- **OpenAPI 规范**: 见 [`docs/openapi/openapi.yaml`](openapi/openapi.yaml)（包含 v1+v2 全部端点的标准定义，是本文档的权威来源）
+- **OpenAPI 规范**: 见 [`docs/reference/openapi/openapi.yaml`](openapi/openapi.yaml)（包含 v1+v2 全部端点的标准定义，是本文档的权威来源）
 
 **统一响应格式**：
 
@@ -172,7 +172,7 @@
 | DELETE | `/api/v1/rules/:rule_id` | 删除规则 |
 | GET | `/api/v1/policies/custom-exec-rules` | 自定义且携带可执行内容的规则清单 |
 
-创建、更新规则以及策略导入均**拒绝**自定义（非内置）规则携带 `command_exec` 检查或 `fix.command` 修复命令——这些内容会以 root 在全部目标主机执行。内置规则不受限；确需该能力由管理员开启 `server.security.allow_custom_exec_rules`（见 [配置](configuration.md)）。
+创建、更新规则以及策略导入均**拒绝**自定义（非内置）规则携带 `command_exec` 检查或 `fix.command` 修复命令——这些内容会以 root 在全部目标主机执行。内置规则不受限；确需该能力由管理员开启 `server.security.allow_custom_exec_rules`（见 [配置](../operations/configuration.md)）。
 
 `/api/v1/policies/custom-exec-rules` 列出**存量**此类规则（写入闸门不回溯清理已有数据），含所属策略、可执行内容位于 check 还是 fix、以及截断后的修复命令，供逐条研判后停用或保留。
 
@@ -998,7 +998,7 @@ CycloneDX VEX 1.5 + CSAF 2.0 标准. 4 状态: not_affected / affected / fixed /
 | GET  | `/api/v2/system/mode` | 当前生效的模式（observe/protect） |
 
 > 单租户收敛后，按租户切换模式的接口已移除——模式是部署级设置。
-> 详见 [架构](architecture.md)「单租户收敛」。
+> 详见 [架构](../development/architecture.md)「单租户收敛」。
 
 ### 配置变更审批
 
@@ -1014,7 +1014,7 @@ CycloneDX VEX 1.5 + CSAF 2.0 标准. 4 状态: not_affected / affected / fixed /
 
 ### 其它 v2 子领域
 
-以下 v2 端点详见 OpenAPI 规范（[`docs/openapi/openapi.yaml`](openapi/openapi.yaml)）：
+以下 v2 端点详见 OpenAPI 规范（[`docs/reference/openapi/openapi.yaml`](openapi/openapi.yaml)）：
 
 - `/api/v2/threat-intel/*` — 威胁情报 IOC 管理与匹配
 - `/api/v2/sbom/*` — SBOM 软件物料清单 + 差异比对

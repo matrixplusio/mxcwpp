@@ -69,7 +69,7 @@ flowchart LR
 
 The backend consists of seven services: Manager, AgentCenter, Consumer, Engine, LLMProxy, VulnSync and Scanner (optional, container image scanning). The control plane is stateless and scales horizontally. Kafka decouples persistence from detection (separate consumer groups with independent offsets), Redis handles service discovery and distributed locks, and ClickHouse stores time-series analytics and the event archive. VulnSync pulls OS vendor advisories and publishes them to Kafka for matching against host software.
 
-See [Architecture](docs/architecture.md) for details.
+See [Architecture](docs/development/architecture.en.md) for details.
 
 ## Tech Stack
 
@@ -145,7 +145,7 @@ docker compose down                    # remove containers; data stays in deploy
 
 To start over, also delete `deploy/data`, `deploy/certs/*.crt`, `deploy/certs/*.key` and `deploy/.env`.
 
-See [Deployment](docs/deployment.md) for cluster deployment, HA, upgrades and backups.
+See [Deployment](docs/operations/deployment.en.md) for cluster deployment, HA, upgrades and backups.
 
 ### Known limitations
 
@@ -171,7 +171,7 @@ mxcwpp/
 ├── cmd/
 │   ├── agent/              # Agent entry point
 │   ├── server/             # agentcenter / consumer / engine / llmproxy / manager / scanner / vulnsync
-│   └── tools/              # Maintenance tools (replay, ETL, migration)
+│   └── tools/              # mxctl (cluster deployment), replay, ETL, migration and load-test tools
 ├── internal/
 │   ├── agent/              # Agent (connection, transport, plugin management, EDR modules)
 │   ├── server/             # Backend services and shared server packages
@@ -191,16 +191,16 @@ mxcwpp/
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) - System topology, component responsibilities, data pipeline, HA design
-- [Deployment](docs/deployment.md) - Prerequisites, single-node and cluster deployment, agent installation, upgrades and backups
-- [Configuration](docs/configuration.md) - Server and agent configuration, environment variables
-- [API Reference](docs/api-reference.md) - REST endpoints, request/response formats, authentication
-- [FAQ](docs/faq.md) - Common issues and troubleshooting
-- [Development](docs/development.md) - Local setup, database migrations, plugin development
+- [Architecture](docs/development/architecture.en.md) - System topology, component responsibilities, data pipeline, HA design
+- [Deployment](docs/operations/deployment.en.md) - Prerequisites, single-node and cluster deployment, agent installation, upgrades and backups
+- [Configuration](docs/operations/configuration.md) - Server and agent configuration, environment variables
+- [API Reference](docs/reference/api-reference.md) - REST endpoints, request/response formats, authentication
+- [FAQ](docs/operations/faq.md) - Common issues and troubleshooting
+- [Development](docs/development/development.md) - Local setup, database migrations, plugin development
 - [Contributing](CONTRIBUTING.md) - How to report bugs and request features
 - [Governance](docs/governance.md) - Project roles, decision process, security policy
 
-The detailed documents under `docs/` are currently written in Chinese.
+The Deployment and Architecture guides are available in English; the other documents under `docs/` are currently in Chinese. See the [documentation index](docs/README.md).
 
 ## Star History
 

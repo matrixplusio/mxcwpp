@@ -16,7 +16,7 @@ import (
 
 const (
 	ruleSyncInterval = 5 * time.Minute
-	ruleTaskDataType = int32(9400) // DataType for rule push (registered in docs/datatype-allocation.md)
+	ruleTaskDataType = int32(9400) // DataType for rule push (registered in docs/development/datatype-allocation.md)
 )
 
 // RuleSyncScheduler periodically checks for updated agent rules and broadcasts

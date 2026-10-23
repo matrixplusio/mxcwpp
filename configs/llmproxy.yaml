@@ -1,4 +1,7 @@
-# mxcwpp LLMProxy 配置 (P1-5)
+# mxcwpp LLMProxy 配置
+#
+# 注意：LLMProxy 目前不读取这个文件（-config 参数只被记录、不被加载），实际配置全部来自
+# 环境变量 MXCWPP_LLMPROXY_*。本文件只说明有哪些配置项及其默认值，修改它不会生效。
 
 http_addr: ":8085"
 
