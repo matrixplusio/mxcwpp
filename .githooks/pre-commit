@@ -19,11 +19,19 @@ fail=0
 # 只检查本次暂存的 .go 文件，不扫全仓：全仓 gofmt 在大仓上要好几秒。
 staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
 if [ -n "$staged_go" ]; then
-    unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
+    # 用 go.mod 指定的 toolchain 自带的 gofmt：CI 按 go.mod 选版本，本机 Go 更新时
+    # 两个版本的格式规则可能不同，用系统 gofmt 会本地放行、CI 失败。取不到时退回系统 gofmt。
+    gofmt_bin=gofmt
+    tc=$(awk '$1 == "toolchain" {print $2}' go.mod 2>/dev/null)
+    if [ -n "$tc" ]; then
+        tc_root=$(GOTOOLCHAIN="$tc" go env GOROOT 2>/dev/null || true)
+        [ -x "$tc_root/bin/gofmt" ] && gofmt_bin="$tc_root/bin/gofmt"
+    fi
+    unformatted=$("$gofmt_bin" -l $staged_go 2>/dev/null || true)
     if [ -n "$unformatted" ]; then
         echo "✗ 以下文件未格式化（CI 会在第一步失败，导致测试与门禁全部不执行）："
         echo "$unformatted" | sed 's/^/    /'
-        echo "  修复：gofmt -w $(echo $unformatted | tr '\n' ' ')"
+        echo "  修复：$gofmt_bin -w $(echo $unformatted | tr '\n' ' ')"
         fail=1
     fi
 fi

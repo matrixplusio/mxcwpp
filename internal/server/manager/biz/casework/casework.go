@@ -99,14 +99,14 @@ func (s *Service) Assign(incidentID, owner, actor string) error {
 	return s.mutate(incidentID, func(inc *model.Incident) (map[string]any, model.IncidentEvent, error) {
 		now := model.ToLocalTime(s.now())
 		return map[string]any{
-			"owner":       owner,
-			"assigned_at": now,
-			"assigned_by": actor,
-		}, model.IncidentEvent{
-			Type:  model.IncidentEventAssigned,
-			Actor: actor,
-			Body:  fmt.Sprintf("指派给 %s", owner),
-		}, nil
+				"owner":       owner,
+				"assigned_at": now,
+				"assigned_by": actor,
+			}, model.IncidentEvent{
+				Type:  model.IncidentEventAssigned,
+				Actor: actor,
+				Body:  fmt.Sprintf("指派给 %s", owner),
+			}, nil
 	})
 }
 
@@ -163,14 +163,14 @@ func (s *Service) Escalate(incidentID, to, reason, actor string) error {
 	return s.mutate(incidentID, func(*model.Incident) (map[string]any, model.IncidentEvent, error) {
 		now := model.ToLocalTime(s.now())
 		return map[string]any{
-			"escalated":    true,
-			"escalated_at": now,
-			"escalated_to": to,
-		}, model.IncidentEvent{
-			Type:  model.IncidentEventEscalated,
-			Actor: actor,
-			Body:  fmt.Sprintf("升级至 %s：%s", to, reason),
-		}, nil
+				"escalated":    true,
+				"escalated_at": now,
+				"escalated_to": to,
+			}, model.IncidentEvent{
+				Type:  model.IncidentEventEscalated,
+				Actor: actor,
+				Body:  fmt.Sprintf("升级至 %s：%s", to, reason),
+			}, nil
 	})
 }
 
@@ -192,28 +192,28 @@ func (s *Service) Resolve(incidentID, verdict, reason, actor string) error {
 		if inc.AwaitingVerdict() {
 			// 补录只写结论：resolved_at / resolved_by 保留自动关闭的原值，MTTR 不被补录时间拉长。
 			return map[string]any{
-				"verdict":        verdict,
-				"verdict_reason": reason,
-				"close_reason":   reason,
-			}, model.IncidentEvent{
-				Type:  model.IncidentEventResolved,
-				Actor: actor,
-				Body:  fmt.Sprintf("补录结论 %s：%s", verdict, reason),
-			}, nil
+					"verdict":        verdict,
+					"verdict_reason": reason,
+					"close_reason":   reason,
+				}, model.IncidentEvent{
+					Type:  model.IncidentEventResolved,
+					Actor: actor,
+					Body:  fmt.Sprintf("补录结论 %s：%s", verdict, reason),
+				}, nil
 		}
 		now := model.ToLocalTime(s.now())
 		return map[string]any{
-			"status":         model.IncidentStatusResolved,
-			"verdict":        verdict,
-			"verdict_reason": reason,
-			"close_reason":   reason,
-			"resolved_at":    now,
-			"resolved_by":    actor,
-		}, model.IncidentEvent{
-			Type:  model.IncidentEventResolved,
-			Actor: actor,
-			Body:  fmt.Sprintf("结论 %s：%s", verdict, reason),
-		}, nil
+				"status":         model.IncidentStatusResolved,
+				"verdict":        verdict,
+				"verdict_reason": reason,
+				"close_reason":   reason,
+				"resolved_at":    now,
+				"resolved_by":    actor,
+			}, model.IncidentEvent{
+				Type:  model.IncidentEventResolved,
+				Actor: actor,
+				Body:  fmt.Sprintf("结论 %s：%s", verdict, reason),
+			}, nil
 	})
 }
 
