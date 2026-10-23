@@ -554,9 +554,17 @@ init_config() {
         "$rendered"
 
     rm -f "$rendered.bak"
-    [ -f "$SCRIPT_DIR/config/server.yaml" ] || install -m 600 /dev/null "$SCRIPT_DIR/config/server.yaml"
+    [ -f "$SCRIPT_DIR/config/server.yaml" ] || install -m 644 /dev/null "$SCRIPT_DIR/config/server.yaml"
     cat "$rendered" > "$SCRIPT_DIR/config/server.yaml"
     rm -f "$rendered"
+    # server.yaml 含全部口令。容器内 engine / llmproxy / vulnsync 以 uid 10001 运行、其余以 root 运行：
+    # root 执行时设为 10001:0 0640，只有它们读得到；普通用户执行改不了属主，只能保持 0644。
+    if [ "$(id -u)" = 0 ]; then
+        chown 10001:0 "$SCRIPT_DIR/config/server.yaml" && chmod 640 "$SCRIPT_DIR/config/server.yaml"
+    else
+        chmod 644 "$SCRIPT_DIR/config/server.yaml"
+        log_warn "以普通用户运行：config/server.yaml 权限为 0644（含口令，本机其他账号可读）；以 root 运行 deploy.sh 会收紧为属主 10001、0640"
+    fi
 
     log_info "配置生成完成（所有参数来自 .env）"
 }

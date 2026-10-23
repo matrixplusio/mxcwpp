@@ -54,7 +54,7 @@ else
         NFPM_CMD="$GOPATH/bin/nfpm"
     else
         echo -e "${YELLOW}nfpm not found, installing...${NC}"
-        go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
         
         # 等待安装完成
         sleep 2
@@ -72,7 +72,7 @@ else
         else
             echo -e "${RED}Error: nfpm installation failed or not found${NC}"
             echo "Please install nfpm manually:"
-            echo "  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest"
+            echo "  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0"
             echo "  export PATH=\$HOME/go/bin:\$PATH"
             exit 1
         fi

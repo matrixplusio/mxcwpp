@@ -22,7 +22,7 @@ fi
 GOPATH_BIN="$(go env GOPATH)/bin"
 if [ ! -f "${GOPATH_BIN}/protoc-gen-go" ]; then
     echo -e "${YELLOW}Installing protoc-gen-go...${NC}"
-    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
 fi
 
 # 将 GOPATH/bin 添加到 PATH（如果不在 PATH 中）

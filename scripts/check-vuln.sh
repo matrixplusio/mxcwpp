@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 if ! command -v govulncheck >/dev/null 2>&1; then
   echo "govulncheck 未安装，跳过依赖漏洞检查"
-  echo "  装法：go install golang.org/x/vuln/cmd/govulncheck@latest"
+  echo "  装法：go install golang.org/x/vuln/cmd/govulncheck@v1.3.0"
   echo "  注意：CI 上这项一定会跑，本地跳过不代表能过。"
   exit 0
 fi

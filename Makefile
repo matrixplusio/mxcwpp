@@ -18,11 +18,11 @@ proto:
 	fi
 	@if ! command -v protoc-gen-go >/dev/null 2>&1; then \
 		echo "Installing protoc-gen-go..."; \
-		go install google.golang.org/protobuf/cmd/protoc-gen-go@latest; \
+		go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12; \
 	fi
 	@if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then \
 		echo "Installing protoc-gen-go-grpc..."; \
-		go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest; \
+		go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2; \
 	fi
 	@./scripts/generate-proto.sh
 
@@ -160,7 +160,7 @@ security:
 		govulncheck ./...; \
 	else \
 		echo "govulncheck not found, installing..."; \
-		go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...; \
+		go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...; \
 	fi
 	@echo ""
 	@echo "=== 静态安全分析 (gosec) ==="
@@ -168,7 +168,7 @@ security:
 		gosec -quiet ./...; \
 	else \
 		echo "gosec not found, installing..."; \
-		go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec -quiet ./...; \
+		go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0 && gosec -quiet ./...; \
 	fi
 	@echo ""
 	@echo "=== go vet ==="

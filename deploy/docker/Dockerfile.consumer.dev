@@ -11,7 +11,7 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata
 
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@v1.67.4
 
 ENV PATH="${PATH}:/root/go/bin"
 

@@ -12,7 +12,7 @@
 #   ./scripts/build-agent-hardened.sh all          # amd64 + arm64
 #
 # 依赖:
-#   go install mvdan.cc/garble@latest
+#   go install mvdan.cc/garble@v0.18.0
 #   apt install upx-ucl  或  brew install upx
 
 set -euo pipefail
@@ -36,11 +36,11 @@ esac
 
 if ! command -v garble >/dev/null 2>&1; then
   echo "→ installing garble..."
-  go install mvdan.cc/garble@latest
+  go install mvdan.cc/garble@v0.18.0
 fi
 GARBLE_BIN="${GARBLE_BIN:-$(command -v garble || echo "$HOME/go/bin/garble")}"
 if [[ ! -x "$GARBLE_BIN" ]]; then
-  echo "garble not found, please run: go install mvdan.cc/garble@latest" >&2
+  echo "garble not found, please run: go install mvdan.cc/garble@v0.18.0" >&2
   exit 1
 fi
 

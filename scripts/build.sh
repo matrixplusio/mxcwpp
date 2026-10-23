@@ -93,7 +93,7 @@ elif [ -n "$GOPATH" ] && [ -f "$GOPATH/bin/nfpm" ]; then
     NFPM_CMD="$GOPATH/bin/nfpm"
 else
     echo -e "${YELLOW}安装 nFPM...${NC}"
-    go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+    go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
     NFPM_CMD="$HOME/go/bin/nfpm"
 fi
 

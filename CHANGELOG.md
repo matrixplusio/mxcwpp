@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-24
+
+### Changed
+- Release images are built for both linux/amd64 and linux/arm64
+- Build and release tooling is pinned to fixed versions
+
+### Fixed
+- When `deploy.sh` runs as root, `config/server.yaml` is restricted to the service user (0640)
+
 ## [1.0.0] - 2026-10-24
 
 ### Added
