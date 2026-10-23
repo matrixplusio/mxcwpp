@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0001
+name: reverse_shell_bash_devtcp
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: execution
+  technique: T1059.004
+tags: [reverse_shell, bash]
+agent:
+  enabled: true
+  action: kill
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: contains
+        value: "/dev/tcp/"
+      - field: cmdline
+        op: contains
+        value: "0>&1"
+    logic: and
+metadata:
+  description: "Bash 通过 /dev/tcp 建立反弹 Shell"
+  confidence: 95
+  false_positive:
+    - "合法的 bash 网络健康检查脚本（极少见）"

@@ -1,0 +1,29 @@
+schema_version: 1
+id: MXEDR-0052
+name: defense_evasion_security_stop
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: defense_evasion
+  technique: T1562.001
+tags: [defense_evasion, security_disable]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "(systemctl|service)\\s+(stop|disable)"
+      - field: cmdline
+        op: regex
+        value: "(firewalld|iptables|apparmor|selinux|auditd|rsyslog|fail2ban)"
+    logic: and
+metadata:
+  description: "检测停止或禁用安全防护工具"
+  confidence: 75
+  false_positive:
+    - "管理员维护期间正常操作"

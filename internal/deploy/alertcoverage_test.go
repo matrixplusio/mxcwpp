@@ -1,0 +1,71 @@
+package deploy
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// TestCriticalMetricsHaveAlerts 关键指标必须有对应告警规则。
+//
+// 平台此前的典型形态是"埋了点、没人报警"：agent 丢事件、engine 背压丢弃、
+// Stage 报错、消息处理失败四个指标都在采集，图表上看得见，却没有任何规则会把人叫醒。
+// 数据在丢而无人知晓，与没有这些指标没有区别——审计把这种叫"可观测空壳"。
+//
+// 本测试把清单钉住：新增关键指标必须同时补告警，否则失败。
+func TestCriticalMetricsHaveAlerts(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "deploy", "config", "prometheus-rules.yml"))
+	if err != nil {
+		t.Skipf("读取告警规则失败: %v", err)
+	}
+	rules := string(data)
+
+	// 每一项都代表一种"数据在丢或能力已失效"的状态，必须有人被叫醒。
+	critical := map[string]string{
+		"mxcwpp_agent_event_dropped_total":                                  "Agent 丢事件 = 该主机检测盲区",
+		"mxcwpp_engine_backpressure_drop_total":                             "Engine 背压丢弃 = 漏检",
+		"mxcwpp_engine_stage_errors_total":                                  "Stage 持续报错 = 该项检测能力静默失效",
+		"mxcwpp_consumer_dlq_write_failures_total":                          "DLQ 写失败 = 消息不可恢复地丢失",
+		"mxcwpp_consumer_ch_write_errors_total":                             "CH 写失败 = offset 暂停推进，需人工介入",
+		"mxcwpp_consumer_ch_rows_rejected_total":                            "CH 拒收行 = 这些行永久不在归档里，控制台与大屏看不到",
+		"mxcwpp_consumer_ch_retry_rows":                                     "CH 与转存都写不进去 = 数据滞留内存，整个 consumer 的 offset 停着",
+		"mxcwpp_consumer_ch_spilled_rows_total":                             "有数据转存 = CH 里缺这些行，需回放",
+		"mxcwpp_consumer_ch_spill_failures_total":                           "转存失败 = 数据只剩在内存里",
+		"mxcwpp_consumer_ch_spill_pending_records":                          "转存未回放 = CH 里缺这部分数据；-1 = 转存不可用",
+		"mxcwpp_consumer_ch_rows_dropped_total":                             "隔离丢弃 = 真正丢了的数据",
+		"mxcwpp_ac_unrouted_datatype_total":                                 "DataType 未登记路由 = 消息被静默忽略",
+		"mxcwpp_ac_stream_idle_closed_total":                                "Agent 连着却不发 = 该主机检测盲区",
+		"mxcwpp_vulnsync_last_success_timestamp_seconds":                    "漏洞库停更 = 界面显示的是旧数据",
+		"mxcwpp_incident_sla_breached":                                      "事件超时无人认领 = 检测到了但没人处置",
+		"mxcwpp_incident_unowned":                                           "无主事件堆积 = 即将变成超时",
+		"mxcwpp_anomaly_reference_baseline_ready":                           "参照基线缺失 = ML 训练投毒防护未生效",
+		"mxcwpp_anomaly_model_version":                                      "模型版本停滞 = 模型停止学习，分数越来越不反映当前环境",
+		"mxcwpp_anomaly_training_hosts":                                     "训练集变窄 = 模型向少数主机收敛，其余主机的正常行为被判异常",
+		"mxcwpp_anomaly_score_flush_failed_total":                           "异常分落库失败 = ranking 档静默失效但显示已启用",
+		"mxcwpp_engine_abnormal_login_hosts_graduated":                      "无主机走完学习期 = 异常登录检测一直静默，与没接线无异",
+		"mxcwpp_ch_mirror_sync_failures_total":                              "CH 镜像写失败 = 报表停在某个时刻，与「最近没写入」肉眼无法区分",
+		"mxcwpp_consumer_signals_write_failures_total":                      "信号写不进去 = 风险累积与普遍性统计的输入在积压",
+		"mxcwpp_consumer_signals_pending_keys":                              "信号积压到上限 = 消费暂停，主题保留期一过就丢",
+		"mxcwpp_consumer_signals_messages_total":                            "收不到命中 = 信号链路断了，下游静默失效",
+		"mxcwpp_consumer_signals_lag":                                       "信号消费落后 = 积压在被主题保留期删掉之前没人知道",
+		"mxcwpp_engine_alert_publish_failed_total":                          "engine 发送失败 = 信号部分缺失",
+		"mxcwpp_engine_risk_persist_dropped_total":                          "风险判断写不进库 = 影子对照数据残缺，阈值会定错",
+		"mxcwpp_engine_risk_hits_total":                                     "风险累积没有计分输入 = 接线断了，影子期白跑",
+		"mxcwpp_engine_risk_enabled":                                        "风险累积没在跑 = 计数全为 0，与「没有命中」分不开",
+		"mxcwpp_consumer_signals_prevalence_last_success_timestamp_seconds": "普遍性统计停了 = 系数表过期，影子期口径前后不一",
+		"mxcwpp_advisory_ingest_failures_total":                             "通告入库失败 = 漏洞数据停在旧状态或缺修复版本",
+	}
+
+	for metric, why := range critical {
+		if !strings.Contains(rules, metric) {
+			t.Errorf("关键指标 %s 没有任何告警规则引用\n  原因: %s\n"+
+				"  埋点而不告警等于没有埋点——请在 deploy/config/prometheus-rules.yml 补规则。",
+				metric, why)
+		}
+	}
+}

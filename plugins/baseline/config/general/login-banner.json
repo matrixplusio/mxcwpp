@@ -1,0 +1,203 @@
+{
+  "id": "LINUX_LOGIN_BANNER",
+  "name": "登录横幅安全基线",
+  "version": "1.0.0",
+  "description": "登录警告横幅配置检查（参考 CIS Benchmark）",
+  "os_family": ["rocky", "centos", "oracle", "almalinux", "rhel", "debian", "ubuntu"],
+  "os_version": ">=7",
+  "enabled": true,
+  "rules": [
+    {
+      "rule_id": "LINUX_BANNER_001",
+      "category": "banner",
+      "title": "/etc/motd 配置正确",
+      "description": "/etc/motd 应包含适当的警告信息，且不包含操作系统版本信息",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/motd"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/motd", "\\\\[mrsvn]", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/motd，移除操作系统版本信息，添加警告横幅",
+        "command": "echo 'Authorized users only. All activity may be monitored and reported.' > /etc/motd"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_002",
+      "category": "banner",
+      "title": "/etc/motd 权限正确",
+      "description": "/etc/motd 文件权限应为 644",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/motd", "0644"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/motd 权限为 644",
+        "command": "chmod 644 /etc/motd"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_003",
+      "category": "banner",
+      "title": "/etc/motd 属主正确",
+      "description": "/etc/motd 文件属主应为 root:root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_owner",
+            "param": ["/etc/motd", "root:root"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/motd 属主为 root:root",
+        "command": "chown root:root /etc/motd"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_004",
+      "category": "banner",
+      "title": "/etc/issue 配置正确",
+      "description": "/etc/issue 应包含适当的警告信息，且不包含操作系统版本信息",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/issue"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/issue", "\\\\[mrsvn]", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/issue，移除操作系统版本信息，添加警告横幅",
+        "command": "echo 'Authorized users only. All activity may be monitored and reported.' > /etc/issue"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_005",
+      "category": "banner",
+      "title": "/etc/issue 权限正确",
+      "description": "/etc/issue 文件权限应为 644",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/issue", "0644"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/issue 权限为 644",
+        "command": "chmod 644 /etc/issue"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_006",
+      "category": "banner",
+      "title": "/etc/issue 属主正确",
+      "description": "/etc/issue 文件属主应为 root:root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_owner",
+            "param": ["/etc/issue", "root:root"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/issue 属主为 root:root",
+        "command": "chown root:root /etc/issue"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_007",
+      "category": "banner",
+      "title": "/etc/issue.net 配置正确",
+      "description": "/etc/issue.net 应包含适当的警告信息，用于远程登录警告",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_exists",
+            "param": ["/etc/issue.net"]
+          },
+          {
+            "type": "file_line_match",
+            "param": ["/etc/issue.net", "\\\\[mrsvn]", "not_match"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "编辑 /etc/issue.net，移除操作系统版本信息，添加警告横幅",
+        "command": "echo 'Authorized users only. All activity may be monitored and reported.' > /etc/issue.net"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_008",
+      "category": "banner",
+      "title": "/etc/issue.net 权限正确",
+      "description": "/etc/issue.net 文件权限应为 644",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_permission",
+            "param": ["/etc/issue.net", "0644"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/issue.net 权限为 644",
+        "command": "chmod 644 /etc/issue.net"
+      }
+    },
+    {
+      "rule_id": "LINUX_BANNER_009",
+      "category": "banner",
+      "title": "/etc/issue.net 属主正确",
+      "description": "/etc/issue.net 文件属主应为 root:root",
+      "severity": "low",
+      "check": {
+        "condition": "all",
+        "rules": [
+          {
+            "type": "file_owner",
+            "param": ["/etc/issue.net", "root:root"]
+          }
+        ]
+      },
+      "fix": {
+        "suggestion": "设置 /etc/issue.net 属主为 root:root",
+        "command": "chown root:root /etc/issue.net"
+      }
+    }
+  ]
+}

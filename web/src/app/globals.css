@@ -1,0 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 246 248 251;
+  --surface: 255 255 255;
+  --surface-muted: 248 250 252;
+  --border: 233 237 243;
+  --border-strong: 220 226 234;
+  --primary: 37 99 235;
+  --primary-hover: 29 78 216;
+  --accent: 79 125 249;
+  --success: 22 163 74;
+  --warning: 245 158 11;
+  --danger: 229 72 77;
+  --info: 14 165 233;
+  --ink: 15 23 42;
+  --muted: 100 116 139;
+  --faint: 148 163 184;
+}
+
+.dark {
+  /* 让原生控件（单选框、下拉框、滚动条）跟随暗色主题，否则在深色背景上是刺眼的白点 */
+  color-scheme: dark;
+  --bg: 11 15 23;
+  --surface: 19 25 39;
+  --surface-muted: 26 33 50;
+  --border: 38 47 66;
+  --border-strong: 51 62 86;
+  --primary: 59 130 246;
+  --primary-hover: 96 165 250;
+  --accent: 96 165 250;
+  --success: 34 197 94;
+  --warning: 245 158 11;
+  --danger: 248 113 113;
+  --info: 14 165 233;
+  --ink: 226 232 240;
+  --muted: 148 163 184;
+  --faint: 100 116 139;
+}
+
+html, body { height: 100%; }
+body {
+  @apply text-ink font-sans antialiased;
+  background: linear-gradient(135deg, #F5F8FC 0%, #F6F8FB 50%, #F3F6FB 100%);
+  background-attachment: fixed;
+}
+.dark body { background: #0B0F17; }
+/* 按钮默认文字居中：表格里可点的名称一换行就变成居中块。跟随单元格对齐，按钮自身的 text-* 类仍优先 */
+td button { text-align: inherit; }

@@ -1,0 +1,37 @@
+schema_version: 1
+id: MXEDR-0012
+name: cryptominer_pool_port
+version: 2
+category: network
+severity: high
+mitre:
+  tactic: impact
+  technique: T1496
+tags: [cryptomining, pool]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: tcp_connect
+    conditions:
+      - field: remote_port
+        op: in
+        values: ["3333", "14444", "14433", "7777", "9999", "45700"]
+      - field: remote_addr
+        op: not_in_cidr
+        values:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.0/8"
+          - "169.254.0.0/16"
+          - "::1/128"
+          - "fc00::/7"
+          - "fe80::/10"
+    logic: and
+metadata:
+  description: "连接常见矿池端口（Stratum 协议端口）"
+  confidence: 80
+  false_positive:
+    - "已按目的地址排除私网：这些端口在内网被业务与运维组件普遍占用，东西向调用不再命中"

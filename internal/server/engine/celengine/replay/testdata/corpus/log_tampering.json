@@ -1,0 +1,465 @@
+{
+  "samples": [
+    {
+      "name": "attack/rm-secure",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/secure",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "直接删掉认证日志；文件事件补不出 exe 也要命中"
+    },
+    {
+      "name": "attack/rm-active-journal",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system.journal",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "rm -rf /var/log/journal/* 会删到正在写的 journal"
+    },
+    {
+      "name": "attack/sed-inplace-auth-log",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/sedAb12Cd",
+        "new_path": "/var/log/auth.log",
+        "comm": "sed",
+        "uid": "0"
+      },
+      "note": "sed -i 删掉几行登录记录：先写临时文件，再改名盖回原文件"
+    },
+    {
+      "name": "attack/move-wtmp-away",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/wtmp",
+        "new_path": "/dev/shm/x",
+        "comm": "mv",
+        "uid": "0"
+      },
+      "note": "把登录记录挪走"
+    },
+    {
+      "name": "attack/move-journal-out",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0001-0002.journal",
+        "new_path": "/tmp/j",
+        "comm": "mv",
+        "uid": "0"
+      },
+      "note": "把已归档的 journal 移出日志目录"
+    },
+    {
+      "name": "attack/journalctl-vacuum",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/journalctl",
+        "cmdline": "journalctl --vacuum-time=1s",
+        "pid": "4201",
+        "username": "root"
+      },
+      "note": "先 --rotate 再 vacuum，历史日志全部清掉"
+    },
+    {
+      "name": "attack/shred-btmp",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/shred",
+        "cmdline": "shred -u /var/log/btmp",
+        "pid": "4202",
+        "username": "root"
+      },
+      "note": "擦掉失败登录记录"
+    },
+    {
+      "name": "benign/logrotate-dateext-secure",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/secure",
+        "new_path": "/var/log/secure-20261019",
+        "comm": "logrotate",
+        "uid": "0"
+      },
+      "note": "RHEL 系默认每周轮转（dateext）；exe 常常补不出来"
+    },
+    {
+      "name": "benign/logrotate-numbered-auth-log",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/auth.log",
+        "new_path": "/var/log/auth.log.1",
+        "comm": "logrotate",
+        "uid": "0"
+      },
+      "note": "Debian 系轮转"
+    },
+    {
+      "name": "benign/logrotate-via-systemd-executor",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/btmp",
+        "new_path": "/var/log/btmp-20261101",
+        "exe": "/proc/self/fd/15",
+        "uid": "0"
+      },
+      "note": "新版 systemd 经 systemd-executor 拉起 logrotate，进程树里的 exe 是 /proc/self/fd/N"
+    },
+    {
+      "name": "benign/journald-rotate",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system.journal",
+        "new_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0001-0002.journal",
+        "comm": "systemd-journal",
+        "uid": "0"
+      },
+      "note": "journald 自己归档"
+    },
+    {
+      "name": "benign/journald-vacuum-archived",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0001-0002.journal",
+        "comm": "systemd-journal",
+        "uid": "0"
+      },
+      "note": "journald 按容量上限删除已归档的文件"
+    },
+    {
+      "name": "benign/logrotate-delete-old-rotated",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/secure-20260921",
+        "comm": "logrotate",
+        "uid": "0"
+      },
+      "note": "轮转后删除超过保留份数的旧文件"
+    },
+    {
+      "name": "benign/journalctl-read",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/journalctl",
+        "cmdline": "journalctl -u sshd --since today",
+        "pid": "4203",
+        "username": "root"
+      },
+      "note": "日常查日志"
+    },
+    {
+      "name": "attack/rename-then-rm-rotated-name",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/secure-x",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "先改名成轮转的样子再删：改名那一步放过了，删除这一步要抓住",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/rotate-then-rm-archived-journal",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0001-0002.journal",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "journalctl --rotate 后删归档文件",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/rename-journal-dir",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log/journal",
+        "new_path": "/var/log/j",
+        "comm": "mv",
+        "uid": "0"
+      },
+      "note": "整个 journal 目录改名后再删，按文件名的规则对不上",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/rm-secure-on-separate-var",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/log/secure",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "/var 单独分区时 agent 上报挂载点内的相对路径",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/rm-runtime-journal",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system.journal",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "没有持久化 journal 的主机，/run 是 tmpfs，路径从挂载点算起",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/journalctl-vacuum-abbrev",
+      "label": "attack",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/journalctl",
+        "cmdline": "journalctl --vacuum-t=1s",
+        "pid": "4204",
+        "username": "root"
+      },
+      "note": "长选项缩写",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/truncate-relative",
+      "label": "attack",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/truncate",
+        "cmdline": "truncate -s0 secure",
+        "cwd": "/var/log",
+        "pid": "4205",
+        "username": "root"
+      },
+      "note": "cd /var/log 后用相对路径",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "benign/rsyslog-append-secure",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_open",
+        "file_path": "/var/log/secure",
+        "open_flags": "0x441",
+        "comm": "rsyslogd",
+        "uid": "0"
+      },
+      "note": "rsyslog 以追加方式打开日志，没有 O_TRUNC"
+    },
+    {
+      "name": "benign/logrotate-delete-rotated-btmp",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/btmp-20260901",
+        "comm": "logrotate",
+        "uid": "0"
+      },
+      "note": "超过保留份数的旧轮转文件"
+    },
+    {
+      "name": "attack/dd-truncate-secure",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_open",
+        "file_path": "/var/log/secure",
+        "open_flags": "0x241",
+        "comm": "dd",
+        "uid": "0"
+      },
+      "note": "dd of=/var/log/secure 清空日志：O_WRONLY|O_CREAT|O_TRUNC"
+    },
+    {
+      "name": "attack/rm-journald-archive-truncated-name",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0123456789abcdef012345",
+        "comm": "rm",
+        "uid": "0"
+      },
+      "note": "journald 生成的归档名被 agent 截到 30 个字符，结尾的 .journal 没了",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/rename-var-log",
+      "label": "attack",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_rename",
+        "file_path": "/var/log",
+        "new_path": "/var/x",
+        "comm": "mv",
+        "uid": "0"
+      },
+      "note": "整个日志目录改名后再删",
+      "technique": "T1070.002"
+    },
+    {
+      "name": "attack/masquerade-logrotate",
+      "label": "attack",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/tmp/.x/logrotate",
+        "comm": "logrotate",
+        "cmdline": "logrotate /var/log/secure-20261019",
+        "pid": "4206",
+        "username": "root"
+      },
+      "note": "把 rm 复制成 logrotate 执行",
+      "technique": "T1036.005"
+    },
+    {
+      "name": "benign/journalctl-vacuum-unlink",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0123456789abcdef012345",
+        "comm": "journalctl",
+        "uid": "0"
+      },
+      "note": "vacuum 删归档发生在 journalctl 进程里，由清理命令规则按 medium 报，不重复报 high"
+    },
+    {
+      "name": "benign/real-logrotate-exec",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/sbin/logrotate",
+        "cmdline": "/usr/sbin/logrotate /etc/logrotate.conf",
+        "pid": "4207",
+        "username": "root",
+        "comm": "logrotate"
+      },
+      "note": "真正的 logrotate"
+    },
+    {
+      "name": "attack/masquerade-journalctl-symlink",
+      "label": "attack",
+      "technique": "T1036.005",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/rm",
+        "comm": "journalctl",
+        "cmdline": "/tmp/journalctl /var/log/journal/0a1b2c3d4e5f60718293a4b5c6d7e8f9/system@0123456789abcdef012345",
+        "pid": "4208",
+        "username": "root"
+      },
+      "note": "软链成 journalctl 再执行：进程名取链接名，exe 是真实的 rm"
+    },
+    {
+      "name": "benign/journal-upload",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/lib/systemd/systemd-journal-upload",
+        "comm": "systemd-journal",
+        "cmdline": "/usr/lib/systemd/systemd-journal-upload --save-state",
+        "pid": "4209",
+        "username": "systemd-journal-upload"
+      },
+      "note": "进程名被截到 15 个字符，和 journald 一样"
+    },
+    {
+      "name": "benign/cron-daily-logrotate-script",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/etc/cron.daily/logrotate",
+        "comm": "logrotate",
+        "cmdline": "/bin/sh /etc/cron.daily/logrotate",
+        "pid": "4210",
+        "username": "root"
+      },
+      "note": "cron 每天执行的 logrotate 包装脚本"
+    },
+    {
+      "name": "attack/perl-prctl-as-logrotate",
+      "label": "attack",
+      "technique": "T1070.002",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/secure-20261020",
+        "comm": "logrotate",
+        "exe": "/usr/bin/perl",
+        "uid": "0"
+      },
+      "note": "perl 里改 $0 成 logrotate 后删轮转日志：exec 时进程名还是 perl，冒名规则看不到"
+    },
+    {
+      "name": "attack/masquerade-journald-lookalike",
+      "label": "attack",
+      "technique": "T1036.005",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/lib/systemd/systemd-journalx",
+        "comm": "systemd-journal",
+        "cmdline": "/usr/lib/systemd/systemd-journalx",
+        "pid": "4211",
+        "username": "root"
+      },
+      "note": "放进系统目录、名字只差一个字符"
+    },
+    {
+      "name": "benign/logrotate-delete-rotated-known-exe",
+      "label": "benign",
+      "data_type": 3001,
+      "fields": {
+        "event_type": "file_unlink",
+        "file_path": "/var/log/secure-20260914",
+        "comm": "logrotate",
+        "exe": "/usr/sbin/logrotate",
+        "uid": "0"
+      },
+      "note": "进程树补出了真实的 logrotate"
+    }
+  ]
+}

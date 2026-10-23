@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0020
+name: privesc_suid_set
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: privilege_escalation
+  technique: T1548.001
+tags: [privilege_escalation, suid]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: contains
+        value: "chmod"
+      - field: cmdline
+        op: regex
+        value: "(\\+s|4[0-7]{3}|u\\+s)"
+    logic: and
+metadata:
+  description: "检测设置 SUID 位操作"
+  confidence: 80

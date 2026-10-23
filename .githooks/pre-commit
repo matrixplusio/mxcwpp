@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# 提交前本地拦截，避免把必然让 CI 变红的改动推上去。
+#
+# 为什么需要它：gofmt 是 CI 的第一步，未格式化的文件会让它失败，
+# 之后的 build 和 test 都不会执行，所有门禁形同虚设。
+#
+# 这里只做「快且必然失败」的检查。慢的（构建、测试）留给 CI，
+# 否则每次提交都要等几分钟，最后大家会用 --no-verify 绕过去。
+#
+# 安装：make hooks    （或 git config core.hooksPath .githooks）
+# 跳过：git commit --no-verify   （仅限确实需要时）
+
+set -euo pipefail
+
+fail=0
+
+# --- 1. gofmt ---
+# 只检查本次暂存的 .go 文件，不扫全仓：全仓 gofmt 在大仓上要好几秒。
+staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$staged_go" ]; then
+    unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
+    if [ -n "$unformatted" ]; then
+        echo "✗ 以下文件未格式化（CI 会在第一步失败，导致测试与门禁全部不执行）："
+        echo "$unformatted" | sed 's/^/    /'
+        echo "  修复：gofmt -w $(echo $unformatted | tr '\n' ' ')"
+        fail=1
+    fi
+fi
+
+# --- 2. 合并冲突残留 ---
+# 冲突标记进主干后，编译错误的现场往往离真正原因很远。
+if git diff --cached --check >/dev/null 2>&1; then
+    :
+else
+    echo "✗ 暂存内容含空白错误或冲突标记："
+    git diff --cached --check | sed 's/^/    /'
+    fail=1
+fi
+
+# --- 3. 生产信息 ---
+# 地址白名单、本地字典、生产来源表述、业务线编号、凭证。规则在 .githooks/leakscan.sh，
+# 与 pre-push 共用；pre-push 会对要推的每个 commit 再扫一遍，这里只是尽早发现。
+# shellcheck source=leakscan.sh
+. "$(dirname "$0")/leakscan.sh"
+if ! git diff --cached -U0 --no-color \
+     | awk '/^\+\+\+ b\//{f=substr($0,7);next} /^\+/&&!/^\+\+\+/{print f "\t" substr($0,2)}' \
+     | leakscan_lines; then
+    echo "  确需记录真实环境细节，写到 local-reports/（已 gitignore）。"
+    fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+    echo ""
+    echo "提交已中止。"
+    exit 1
+fi

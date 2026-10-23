@@ -1,0 +1,24 @@
+schema_version: 1
+id: MXEDR-0011
+name: cryptominer_stratum_cmdline
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: impact
+  technique: T1496
+tags: [cryptomining, stratum]
+agent:
+  enabled: true
+  action: kill
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "stratum\\+[ts]"
+    logic: and
+metadata:
+  description: "命令行包含 stratum+tcp/ssl 矿池协议特征"
+  confidence: 98

@@ -1,0 +1,210 @@
+{
+  "samples": [
+    {
+      "name": "benign/runc-console-socket-not-netcat",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/runc",
+        "cmdline": "runc --root /run/containerd/runc/k8s.io create --bundle /run/containerd/task/abc --console-socket /tmp/pty.sock abc",
+        "pid": "5001",
+        "ppid": "5000",
+        "username": "root"
+      },
+      "note": "exe.contains(\"nc\") 会命中 runc，--console-socket 又含 -c，于是容器每次启动都被判成 nc 反弹 shell。"
+    },
+    {
+      "name": "benign/unbound-anchor-not-netcat",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/sbin/unbound-anchor",
+        "cmdline": "/usr/sbin/unbound-anchor -a /var/lib/unbound/root.key -c /etc/unbound/icannbundle.pem",
+        "pid": "5101",
+        "ppid": "1",
+        "username": "unbound"
+      },
+      "note": "DNS 信任锚更新，路径含 nc、参数含 -c，同样被旧写法判成反弹 shell。"
+    },
+    {
+      "name": "benign/systemd-networkd-not-user-enum",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/lib/systemd/systemd-networkd",
+        "cmdline": "/usr/lib/systemd/systemd-networkd",
+        "pid": "5201",
+        "ppid": "1",
+        "username": "systemd-network"
+      },
+      "note": "exe.contains(\"w\") 命中任何路径里带 w 的进程。"
+    },
+    {
+      "name": "benign/pidstat-not-user-enum",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/pidstat",
+        "cmdline": "pidstat 1 1",
+        "pid": "5301",
+        "ppid": "5300",
+        "username": "monitor"
+      },
+      "note": "exe.contains(\"id\") 命中 pidstat。"
+    },
+    {
+      "name": "benign/sssd-not-network-enum",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/libexec/sssd/sssd_be",
+        "cmdline": "/usr/libexec/sssd/sssd_be --domain default --uid 0 --gid 0 --logger=files",
+        "pid": "5401",
+        "ppid": "5400",
+        "username": "root"
+      },
+      "note": "exe.contains(\"ss\") 命中 sssd。"
+    },
+    {
+      "name": "benign/inbound-from-ioc-ip-on-public-server",
+      "label": "benign",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_accept",
+        "comm": "nginx",
+        "exe": "/usr/sbin/nginx",
+        "local_addr": "192.0.2.20",
+        "local_port": "443",
+        "remote_addr": "198.51.100.66",
+        "remote_port": "51234",
+        "protocol": "tcp",
+        "ioc_match": "true",
+        "ioc_type": "ip",
+        "ioc_value": "198.51.100.66"
+      },
+      "note": "对公网服务的机器每天都会被情报库里的扫描源连入。入站命中是背景噪声，不是本机失陷。"
+    },
+    {
+      "name": "benign/crontab-list-polkitd-not-pwnkit",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/crontab",
+        "cmdline": "crontab -l -u polkitd",
+        "pid": "5601",
+        "ppid": "5600",
+        "uid": "0",
+        "username": "root"
+      },
+      "note": "脚本逐个列出系统用户的定时任务，polkitd 是用户名，不是 pkexec；按 polkit 子串匹配会误判为 PwnKit。"
+    },
+    {
+      "name": "attack/outbound-connect-to-ioc-ip",
+      "label": "attack",
+      "technique": "T1071",
+      "data_type": 3002,
+      "fields": {
+        "event_type": "tcp_connect",
+        "comm": "kworkerds",
+        "exe": "/tmp/.x/kworkerds",
+        "local_addr": "192.0.2.21",
+        "local_port": "40122",
+        "remote_addr": "198.51.100.67",
+        "remote_port": "443",
+        "protocol": "tcp",
+        "ioc_match": "true",
+        "ioc_type": "ip",
+        "ioc_value": "198.51.100.67"
+      },
+      "note": "本机主动连向情报库里的地址，才是 C2 信号。"
+    },
+    {
+      "name": "attack/w-command-user-enum",
+      "label": "attack",
+      "technique": "T1033",
+      "data_type": 3000,
+      "fields": {
+        "exe": "/usr/bin/w",
+        "cmdline": "w",
+        "pid": "5501",
+        "ppid": "5500",
+        "username": "www-data"
+      },
+      "note": "Web 进程用户执行 w 查看在线用户，按进程名精确匹配仍要命中。"
+    },
+    {
+      "name": "benign/batch-find-exec-rm",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/usr/bin/rm",
+        "cmdline": "rm -f /var/log/app/app.log.2026-01-01",
+        "pid": "6201",
+        "ppid": "6200",
+        "username": "root",
+        "agg_count": "5000"
+      },
+      "note": "日志清理 cron 用 find -exec rm 逐个删旧日志，短时间内执行 rm 数千次；同一程序高频执行是批处理，不是 fork 炸弹"
+    },
+    {
+      "name": "benign/monitor-getconf-loop",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/usr/bin/getconf",
+        "cmdline": "getconf CLK_TCK",
+        "pid": "6202",
+        "ppid": "6190",
+        "username": "root",
+        "agg_count": "300"
+      },
+      "note": "监控脚本每隔几秒调用 getconf/ps/grep"
+    },
+    {
+      "name": "benign/backup-retention-find-mtime",
+      "label": "benign",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/bin/sh",
+        "cmdline": "/bin/sh -c cd /var/backups/app-logs/ && find */* -type f -mtime +20 -exec rm -rf {} \\;",
+        "pid": "6301",
+        "ppid": "6300",
+        "username": "root"
+      },
+      "note": "每天清理 20 天前的日志备份，按文件年龄保留，不是把备份整体抹掉"
+    },
+    {
+      "name": "attack/wipe-backups-rm",
+      "label": "attack",
+      "technique": "T1490",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/usr/bin/rm",
+        "cmdline": "rm -rf /var/backups/ /data/backup/",
+        "pid": "4021",
+        "ppid": "3900",
+        "username": "root"
+      },
+      "note": "勒索前直接删除备份目录"
+    },
+    {
+      "name": "attack/wipe-backups-find-all",
+      "label": "attack",
+      "technique": "T1490",
+      "data_type": 3000,
+      "fields": {
+        "event_type": "process_exec",
+        "exe": "/usr/bin/find",
+        "cmdline": "find /backup -type f -mtime +0 -exec rm -rf {} ;",
+        "pid": "4022",
+        "ppid": "3900",
+        "username": "root"
+      },
+      "note": "用 find 删除所有超过 0 天的备份，等于全删"
+    }
+  ]
+}

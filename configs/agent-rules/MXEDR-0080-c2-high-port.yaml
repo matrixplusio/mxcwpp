@@ -1,0 +1,37 @@
+schema_version: 1
+id: MXEDR-0080
+name: c2_high_risk_port
+version: 2
+category: network
+severity: high
+mitre:
+  tactic: command_and_control
+  technique: T1571
+tags: [c2, backdoor]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: tcp_connect
+    conditions:
+      - field: remote_port
+        op: in
+        values: ["4444", "5555", "6666", "8888", "1337", "31337"]
+      - field: remote_addr
+        op: not_in_cidr
+        values:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.0/8"
+          - "169.254.0.0/16"
+          - "::1/128"
+          - "fc00::/7"
+          - "fe80::/10"
+    logic: and
+metadata:
+  description: "连接常见 C2/后门端口"
+  confidence: 75
+  false_positive:
+    - "已按目的地址排除私网：内网 这些端口在内网被业务服务普遍占用，东西向调用不再命中"

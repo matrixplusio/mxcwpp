@@ -1,0 +1,909 @@
+# MxCwpp Platform — Prometheus 告警规则（精简，仅自研服务）
+#
+# 设计原则：
+#   - 只关心 mxcwpp 自研服务（manager / agentcenter / consumer）
+#   - 不规则 mysql / redis / clickhouse / kafka — 这些由 mxcwpp monitor handler
+#     的 driver-level 检查覆盖，且 mxcwpp 内置告警系统会用其他路径上报
+#
+# 命名规范：MxCwpp<Component><Issue>
+# severity: critical (P0) / warning (P1) / info (P2)
+#
+# 告警流向：
+#   Prometheus 触发 → webhook /api/v1/internal/alerts/prometheus
+#                  → mxcwpp alerts 表 (source=prometheus_infra)
+#                  → notification 系统 (Lark/Webhook)
+
+groups:
+  # ============ 服务存活 ============
+  - name: mxcwpp_service_availability
+    interval: 30s
+    rules:
+      - alert: MxCwppServiceDown
+        expr: up{job=~"mxcwpp-.+"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务不可达 (job={{ $labels.job }})"
+          description: |
+            mxcwpp 服务 {{ $labels.service }} ({{ $labels.instance }}) 已 1 分钟无法 scrape。
+            可能原因：进程崩溃、网络中断、配置错误。
+            排查：docker ps / docker logs {{ $labels.instance }} / curl http://{{ $labels.instance }}/metrics
+
+      - alert: MxCwppServiceFlapping
+        expr: changes(up{job=~"mxcwpp-.+"}[10m]) > 4
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.service }} 服务状态频繁变化（10 分钟内 > 4 次）"
+          description: "服务在 10 分钟内状态翻转 {{ $value }} 次，可能崩溃重启循环。"
+
+  # ============ Manager HTTP RED 指标 ============
+  - name: mxcwpp_manager_http
+    interval: 30s
+    rules:
+      - alert: MxCwppManagerHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(mxcwpp_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "Manager 5xx 错误率 > 5% 持续 5 分钟"
+          description: "当前: {{ $value | humanizePercentage }}。查 manager 日志。"
+
+      - alert: MxCwppManagerHighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(mxcwpp_http_request_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager p99 延迟 > 1s 持续 5 分钟"
+          description: "当前 p99: {{ $value }}s。可能 DB 慢查询或下游卡顿。"
+
+  # ============ AgentCenter gRPC RED 指标 ============
+  - name: mxcwpp_ac_grpc
+    interval: 30s
+    rules:
+      - alert: MxCwppACHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_ac_grpc_handled_total{grpc_code!="OK"}[5m]))
+          / sum(rate(mxcwpp_ac_grpc_handled_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter gRPC 错误率 > 5%"
+          description: "当前: {{ $value | humanizePercentage }}。检查 Agent 连接和认证。"
+
+      # Transfer 是长生命周期双向流，grpc_handled_total 只在流结束才 +1，
+      # 用它判流量对长连接服务恒为 0（假阳）。改用 msg_received_total（流内每条消息计数）。
+      - alert: MxCwppACNoTraffic
+        expr: sum(rate(mxcwpp_ac_grpc_msg_received_total[5m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "AgentCenter 10 分钟无 Agent 上行消息"
+          description: "可能所有 Agent 离线，或 AC 实例不健康。"
+
+  # ============ Consumer 处理能力 ============
+  - name: mxcwpp_consumer_kafka
+    interval: 30s
+    rules:
+      - alert: MxCwppConsumerHighLag
+        expr: mxcwpp_consumer_lag > 50000
+        for: 5m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "Consumer 队列积压超过 50K"
+          description: "topic={{ $labels.topic }} partition={{ $labels.partition }} lag={{ $value }}"
+
+      - alert: MxCwppConsumerHighErrorRate
+        expr: |
+          sum(rate(mxcwpp_consumer_records_consumed_total{status=~"error|dlq"}[5m]))
+          / sum(rate(mxcwpp_consumer_records_consumed_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer 错误率 > 5%"
+          description: "{{ $value | humanizePercentage }} 消息处理失败或进入 DLQ。"
+
+      # DLQ 写入失败 = 数据保全的最后一米失守：消息处理失败已转 DLQ 保底，连 DLQ 也没写进去。
+      # 与错误率不同，这里没有阈值可言——任何一条都是不可恢复的丢失，出现即告警。
+      # ClickHouse 刷盘失败会让提交屏障暂停推进 offset（刻意如此：宁可重放produce重复行，
+      # 也不能提交"已落盘"却其实没落盘）。代价是 lag 会持续增长，必须能被看见。
+      # 事件超过认领时限仍无人认领。一条无人认领的高危事件与一条未被检出的攻击，
+      # 对客户来说结果是一样的——检测做到了，处置没接上。
+      - alert: MxCwppIncidentAckOverdue
+        expr: sum(mxcwpp_incident_sla_breached{kind="ack",severity=~"critical|high"}) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "有高危事件超过认领时限仍无人认领"
+          description: "当前 {{ $value }} 条 critical/high 事件已过认领时限；无人开始处置。"
+
+      # 无主事件堆积：还没到时限但已经没人认领，是即将变成超时的前兆。
+      - alert: MxCwppIncidentUnownedBacklog
+        expr: mxcwpp_incident_unowned > 20
+        for: 30m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "无负责人的事件正在堆积"
+          description: "当前 {{ $value }} 条未关闭事件没有负责人。"
+
+      # 不设持续时间：写失败常常只持续几秒，[5m] 窗口配 for: 5m 恰好永远够不着。
+      - alert: MxCwppConsumerCHFlushBlockingOffset
+        expr: increase(mxcwpp_consumer_ch_write_errors_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "ClickHouse 写入失败，数据留在内存里重试"
+          description: "op={{ $labels.op }} 写入失败。失败的行在 consumer 内存里重试，落盘前 offset 不推进；持续 2 分钟写不进去会转存到 Kafka（见 MxCwppConsumerCHSpilled）。"
+
+      # 写失败的行在内存里超过 5 分钟仍没清掉：正常情况下 2 分钟就会转存到 Kafka，
+      # 走到这里说明转存也失败了，数据只剩在 consumer 内存里，期间整个 consumer 的 offset 停着。
+      - alert: MxCwppConsumerCHRetryBacklog
+        expr: max by (table) (mxcwpp_consumer_ch_retry_rows) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "ClickHouse 与转存都写不进去，数据滞留在 consumer 内存"
+          description: "table={{ $labels.table }} 有 {{ $value }} 行等待重试超过 5 分钟。查 ClickHouse 与 Kafka 状态、consumer 日志「转存失败」；consumer 重启会由 Kafka 重投，不丢。"
+
+      # 信号写不进 ClickHouse：合并结果留在 consumer 内存里重试，offset 不提交，不丢。
+      # 持续写不进去时内存会满、信号消费暂停（见 MxCwppConsumerSignalsBacklog）。
+      - alert: MxCwppConsumerSignalsWriteFailing
+        expr: increase(mxcwpp_consumer_signals_write_failures_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "信号写入 ClickHouse 持续失败"
+          description: "15 分钟内失败 {{ $value }} 次。信号留在内存里重试，不影响告警产生；查 ClickHouse 状态与 consumer 日志「信号写入 ClickHouse 失败」。"
+
+      # 信号积压到上限：消费已暂停，积压留在 Kafka。engine.alert 主题只按体积保留一两天，
+      # 拖过这个时间就真的丢了。
+      - alert: MxCwppConsumerSignalsBacklog
+        expr: max(mxcwpp_consumer_signals_pending_keys) >= 200000
+        for: 10m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "信号积压到上限，信号消费已暂停"
+          description: "内存里有 {{ $value }} 个未写入的合并键。先恢复 ClickHouse 写入；engine.alert 主题保留期很短，久拖会丢信号。"
+
+      # engine 每时每刻都有命中，信号半小时一条都没有就是链路断了（主题名不对、消费组卡住、
+      # engine 不再发）。信号是风险累积与普遍性统计的输入，断了这两样都会静默失效。
+      - alert: MxCwppConsumerSignalsStalled
+        expr: sum(rate(mxcwpp_consumer_signals_messages_total{result="ok"}[15m])) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "30 分钟没有收到任何检测命中"
+          description: "信号消费组没有产出。核对 consumer 的 signals.topic 与 engine 的 alert_topic 是否一致、消费组 mxcwpp-consumer-signals 的积压。"
+
+      # 消费变慢但没停：上面三条都不会响，积压一直涨，直到被主题保留期（按体积，约一两天）删掉。
+      - alert: MxCwppConsumerSignalsLagging
+        expr: max(mxcwpp_consumer_signals_lag) > 500000
+        for: 15m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "信号消费落后过多"
+          description: "单个分区落后 {{ $value }} 条。engine.alert 主题保留期很短，落后到保留期之外的信号就丢了；查 consumer 资源与 ClickHouse 写入耗时。"
+
+      # 大部分命中解析不了（engine 改了消息格式之类）：ok 不为 0 时 Stalled 不会响。
+      - alert: MxCwppConsumerSignalsUnparsable
+        expr: |
+          sum(rate(mxcwpp_consumer_signals_messages_total{result!="ok"}[30m]))
+            / sum(rate(mxcwpp_consumer_signals_messages_total[30m])) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "大量检测命中无法解析成信号"
+          description: "超过 20% 的命中解析失败或没有主机。核对 engine 消息格式与 consumer 版本是否匹配。"
+
+      # 风险判断写不进库（写库队列满或 MySQL 写失败）：影子对照的数据缺了，阈值会按残缺数据定。
+      - alert: MxCwppEngineRiskPersistDropped
+        expr: increase(mxcwpp_engine_risk_persist_dropped_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "风险累积判断写库失败"
+          description: "15 分钟内丢了 {{ $value }} 条判断。查 MySQL 状态、risk_decisions 表是否存在（由 manager 建表），以及 engine 日志「风险判断写库失败」。"
+
+      # 风险累积收到命中却一条都没计分：主机快照没加载、主机号对不上，或命中全都推不出战术。
+      - alert: MxCwppEngineRiskStalled
+        expr: sum(rate(mxcwpp_engine_risk_hits_total{result=~"lineage|host_only|capped"}[30m])) == 0 and sum(rate(mxcwpp_engine_risk_hits_total[30m])) > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "风险累积收到命中但一条都没计分"
+          description: "看 mxcwpp_engine_risk_hits_total 的 result 分布：全是 unknown_host 说明主机快照没加载或主机号对不上。"
+
+      # 普遍性统计 3 小时没成功过：engine 那边系数表随之过期、不再降分，影子期前后口径不一致。
+      - alert: MxCwppSignalPrevalenceStale
+        expr: time() - max(mxcwpp_consumer_signals_prevalence_last_success_timestamp_seconds) > 3 * 3600
+        for: 15m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "信号普遍性统计超过 3 小时没有成功"
+          description: "查 consumer 日志「信号普遍性统计失败」与 ClickHouse signals 表；失败期间 engine 不降分。"
+
+      # 风险累积部分失效：大部分命中推不出战术，或血缘层被刷满上限、只能计入主机层。
+      - alert: MxCwppEngineRiskDegraded
+        expr: |
+          sum(rate(mxcwpp_engine_risk_hits_total{result=~"no_tactic|capped"}[1h]))
+            / sum(rate(mxcwpp_engine_risk_hits_total{result!~"shadow_rule|unknown_host"}[1h])) > 0.5
+        for: 1h
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "风险累积超过一半的命中没法正常计分"
+          description: "按 result 看：no_tactic 多说明有规则缺 ATT&CK 映射；capped 多说明有主机的血缘实体被刷满（可能是有意拆分）。"
+
+      # 风险累积没在跑：risk.mode 写错、celengine 起不来时它悄悄不启用，所有计数都是 0，
+      # 上面那条也不会响。影子阶段要连续跑满两周才有对照数据。
+      - alert: MxCwppEngineRiskDisabled
+        expr: max(mxcwpp_engine_risk_enabled) == 0
+        for: 1h
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "实体风险累积未启用"
+          description: "查 engine 配置 risk.mode 与 engine 日志「risk.mode 取值不支持」「celengine 初始化失败」。确为有意关闭时可静默此告警。"
+
+      # engine 发往 engine.alert 失败：信号部分缺失，信号链路自己发现不了。
+      - alert: MxCwppEngineAlertPublishFailing
+        expr: increase(mxcwpp_engine_alert_publish_failed_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "engine 发送检测命中失败"
+          description: "15 分钟内 {{ $value }} 条命中没有发出去，信号与下游关联会缺这部分；查 Kafka 状态与 engine 日志「engine alert send failed」。"
+
+      # 有行被转存：ClickHouse 里缺了这些行，控制台与大屏看不到，需要用 ch-spill-replay 回放。
+      - alert: MxCwppConsumerCHSpilled
+        expr: increase(mxcwpp_consumer_ch_spilled_rows_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "有数据写不进 ClickHouse，已转存到 Kafka 待回放"
+          description: "table={{ $labels.table }} reason={{ $labels.reason }} 近 1 小时转存 {{ $value }} 行。修好 ClickHouse（或表结构）后用 cmd/tools/ch-spill-replay 回放。"
+
+      # 「转存过」的告警一小时后会自己消失；「还没回放」要一直亮着，直到回放完。
+      - alert: MxCwppConsumerCHSpillPendingReplay
+        expr: mxcwpp_consumer_ch_spill_pending_records > 0
+        for: 1h
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "转存主题里有数据还没回放"
+          description: "还有 {{ $value }} 条转存记录没回放，ClickHouse 里缺这部分数据。确认 ClickHouse 正常后跑 ch-spill-replay -apply。"
+
+      # 转存器没建起来（主题不存在、保留策略不对、Kafka 不可用）或算不出待回放数。
+      # 此时 ClickHouse 一旦写不进去，数据只能压在内存里拦住整个 consumer 的 offset。
+      - alert: MxCwppConsumerCHSpillUnavailable
+        expr: mxcwpp_consumer_ch_spill_pending_records < 0
+        for: 30m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "ClickHouse 转存不可用"
+          description: "查 consumer 日志「ClickHouse 转存器初始化失败」：转存主题是否已建、retention.bytes 是否为 -1、保留期是否足够。"
+
+      # 写不进 ClickHouse、也转存不了的行（序列化失败或单行过大）被隔离丢弃：真正丢了的数据。
+      - alert: MxCwppConsumerCHRowsDropped
+        expr: increase(mxcwpp_consumer_ch_rows_dropped_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "有数据行无法写入也无法转存，已丢弃"
+          description: "table={{ $labels.table }} 近 1 小时丢弃 {{ $value }} 行；consumer 日志「这一行无法转存」里有 host_id，单行过大多半是那台主机上报异常。"
+
+      - alert: MxCwppConsumerCHSpillFailure
+        expr: increase(mxcwpp_consumer_ch_spill_failures_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "转存到 Kafka 失败，写不进 ClickHouse 的数据滞留在内存"
+          description: "table={{ $labels.table }} 转存失败。查 Kafka 与 consumer 日志「转存失败」。"
+
+      # 有行被 ClickHouse 拒收：取值与表结构不符，已剔除、不会重试，这些行永久不在归档里。
+      # 不设持续时间：拒收可能只在短时间内集中出现，带 for 的规则会恰好错过。
+      - alert: MxCwppConsumerCHRowsRejected
+        expr: increase(mxcwpp_consumer_ch_rows_rejected_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "ClickHouse 拒收了部分数据行，这些行未进入归档"
+          description: "table={{ $labels.table }} 近 1 小时拒收 {{ $value }} 行；看 consumer 日志「ClickHouse 拒收一行」里的取值，补表结构或修上报方。"
+
+      - alert: MxCwppConsumerDLQWriteFailure
+        expr: increase(mxcwpp_consumer_dlq_write_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer DLQ 写入失败，消息已丢失"
+          description: "dlq_topic={{ $labels.dlq_topic }} 近 5 分钟丢失 {{ $value }} 条，不可恢复。"
+
+      # 持续进 DLQ：与错误率不同，这里看的是"有没有"而不是"占比多少"。
+      #
+      # MxCwppConsumerHighErrorRate 用的是比例阈值（>5%），对低量永久失败完全失明：
+      # consumer 处理的遥测量很大时，一类永远处理不了的消息即使天天出现，
+      # 占比也只有百万分之一，永远够不到阈值。而它意味着某一类数据在持续丢失。
+      #
+      # 偶发失败（一次网络抖动、一条脏消息）会在几小时内消失；连续 6 小时每小时都有，
+      # 才是"有一类消息永远处理不了"的形状。
+      - alert: MxCwppConsumerDLQPersistent
+        expr: increase(mxcwpp_consumer_records_consumed_total{status="dlq"}[1h]) > 0
+        for: 6h
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "存在持续进入 DLQ 的消息（已 6 小时）"
+          description: "topic={{ $labels.topic }} data_type={{ $labels.data_type }} 每小时都有消息处理失败转入 DLQ。占比极低不会触发错误率告警，但意味着这一类数据在持续丢失。查 consumer 日志里的「转入 DLQ」失败原因。"
+
+      # ClickHouse 镜像同步失败。
+      #
+      # alerts / vulnerabilities / host_vulnerabilities 经 GORM 钩子镜像到 CH，
+      # 失败只有一条 Warn 日志。镜像一旦停了，查询侧照常从 CH 读，
+      # 表现为"数据停在某个时刻"——与"最近本来就没有写入"完全一样，肉眼分不出来。
+      - alert: MxCwppCHMirrorSyncFailure
+        expr: increase(mxcwpp_ch_mirror_sync_failures_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 镜像写入失败"
+          description: "table={{ $labels.table }} 近 10 分钟失败 {{ $value }} 次。MySQL 仍是事实来源，但 CH 侧的查询与报表会停在失败前的状态。"
+
+      # AgentCenter 投递到未登记路由的 DataType：消息进心跳兜底 Topic，消费者不认识 → 静默丢弃。
+      # 非零即代表存在接线缺口（缺 RouteDataType 或缺 Consumer handler）。
+      - alert: MxCwppUnroutedDataType
+        expr: increase(mxcwpp_ac_unrouted_datatype_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "存在未登记 Kafka 路由的 DataType"
+          description: "data_type={{ $labels.data_type }} 走了心跳兜底，会被消费者静默忽略；需补 RouteDataType 与 Consumer handler。"
+
+      # Agent 连接还在却长时间不发任何消息，AgentCenter 主动断流逼其重连。
+      # 偶发属自愈；短时间大量出现说明 Agent 发送侧成片停摆（如服务端写库延迟拖住流控）。
+      - alert: MxCwppAgentStreamIdleClosed
+        expr: increase(mxcwpp_ac_stream_idle_closed_total[10m]) > 10
+        for: 0m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "大量 Agent 流因空闲超时被断开"
+          description: "近 10 分钟 {{ $value }} 条 Agent 流连着却不发数据被断开重连；排查 AgentCenter 写库延迟与 Agent 发送超时日志。"
+
+      - alert: MxCwppConsumerNoMembers
+        expr: mxcwpp_consumer_group_members == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: consumer
+        annotations:
+          summary: "Consumer Group 无活跃成员"
+          description: "所有 consumer 实例已断开，Kafka 消息将停滞。"
+
+  # ============ Go 运行时饱和度（自动覆盖所有 mxcwpp-* 服务）============
+  - name: mxcwpp_saturation
+    interval: 60s
+    rules:
+      # Agent 侧丢事件：背压或 WAL 满时事件被丢弃。指标一直存在但从无告警——
+      # 数据在丢，图表上看得见，没人被叫醒。丢事件等于检测面出现盲区。
+      - alert: MxCwppAgentEventDrop
+        expr: sum(increase(mxcwpp_agent_event_dropped_total[10m])) by (host_id) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+        annotations:
+          summary: "Agent 丢弃事件，该主机存在检测盲区"
+          description: "host_id={{ $labels.host_id }} 近 10 分钟丢弃 {{ $value }} 条事件（背压或 WAL 满）。"
+
+      # Engine 背压丢弃：检测流水线来不及处理而主动丢事件。
+      - alert: MxCwppEngineBackpressureDrop
+        expr: increase(mxcwpp_engine_backpressure_drop_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: engine
+        annotations:
+          summary: "Engine 背压丢弃事件，检测出现漏检"
+          description: "近 10 分钟丢弃 {{ $value }} 条；被丢的事件不会经任何 Stage 检测。"
+
+      # Stage 报错：某个检测 Stage 持续异常，等于该项能力静默失效。
+      - alert: MxCwppEngineStageErrors
+        expr: sum(increase(mxcwpp_engine_stage_errors_total[10m])) by (stage) > 10
+        for: 10m
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "检测 Stage 持续报错"
+          description: "stage={{ $labels.stage }} 近 10 分钟报错 {{ $value }} 次；该能力可能已静默失效。"
+
+      # 漏洞库停更：同步挂了或上游拒服后，界面照常显示旧数据，看不出区别。
+      # 判据是"距上次成功多久"而非"跑了多少次"——后者在反复失败时同样在增长。
+      - alert: MxCwppVulnDataStale
+        expr: (time() - mxcwpp_vulnsync_last_success_timestamp_seconds) > 86400
+        for: 30m
+        labels:
+          severity: critical
+          service: vulnsync
+        annotations:
+          summary: "漏洞库超过 24 小时未成功同步"
+          description: "source={{ $labels.source }} 已 {{ $value | humanizeDuration }} 未成功同步；界面上的漏洞数据已停在那之前。"
+
+      - alert: MxCwppHighCPU
+        expr: 100 * rate(process_cpu_seconds_total{job=~"mxcwpp-.+"}[5m]) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} CPU 持续 > 80% (10min)"
+          description: "当前: {{ $value | humanize }}%"
+
+      - alert: MxCwppHighMemory
+        expr: process_resident_memory_bytes{job=~"mxcwpp-.+"} > 2147483648  # 2GB
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} RSS > 2GB (10min)"
+          description: "当前: {{ $value | humanize1024 }}B"
+
+      - alert: MxCwppGoroutineLeak
+        expr: go_goroutines{job=~"mxcwpp-.+"} > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} goroutine 数 > 10000，疑似泄漏"
+          description: "当前: {{ $value }}"
+
+      - alert: MxCwppGCPauseLong
+        expr: |
+          histogram_quantile(0.99, sum by (job, le)
+            (rate(go_gc_duration_seconds_bucket{job=~"mxcwpp-.+"}[5m]))) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} GC p99 暂停 > 500ms"
+          description: "当前: {{ $value }}s"
+
+  # ============ Manager → MySQL 视角（gorm callback 埋点）============
+  # 注：mxcwpp_db_query_duration_seconds 由 Manager 端 gorm callback 提供（Tier 1-2 新增）
+  - name: mxcwpp_db
+    interval: 60s
+    rules:
+      # 漏洞通告入库一小时内反复整批重做：一直写不进去（锁冲突、数据库故障）。这期间 Kafka
+      # 上的通告不提交、不丢，但漏洞数据停在旧状态。
+      - alert: MxCwppAdvisoryIngestFailing
+        expr: increase(mxcwpp_advisory_ingest_failures_total{kind="retry"}[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "漏洞通告入库反复失败，漏洞数据未更新"
+          description: "近 1 小时整批重做 {{ $value }} 次。看 manager 日志「advisory consumer flush 写入失败」里的错误。"
+
+      # 有通告行因不可重试错误被跳过：这些修复版本信息丢了，漏洞匹配与预检会缺这部分。
+      - alert: MxCwppAdvisoryIngestSkipped
+        expr: increase(mxcwpp_advisory_ingest_failures_total{kind="skipped"}[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "有漏洞通告数据写入失败被跳过"
+          description: "近 1 小时跳过 {{ $value }} 行。看 manager 日志「数据错误，已跳过」，修正数据或表结构后需重新消费。"
+
+      - alert: MxCwppDBSlowQuery
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxcwpp_db_query_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "Manager DB 查询 p99 > 1s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前: {{ $value }}s"
+
+  # ============ Manager → ClickHouse 视角（edr_events.go recordCHQuery 埋点）============
+  # 商业级 EDR 查询基线：列表 < 200ms，统计 < 1s。
+  # 慢于此说明 projection 未命中 / 数据量异常 / CH 资源紧张。
+  - name: mxcwpp_clickhouse
+    interval: 60s
+    rules:
+      - alert: MxCwppCHQuerySlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, operation, table) (rate(mxcwpp_clickhouse_query_duration_seconds_bucket[5m]))
+          ) > 3.0
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询 p99 > 3s ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            当前 p99: {{ $value }}s
+            排查：
+            1. SELECT * FROM system.parts WHERE table='{{ $labels.table }}' AND active 查 part 数
+            2. SELECT * FROM system.mutations WHERE table='{{ $labels.table }}' AND not is_done
+            3. EXPLAIN PIPELINE SELECT ... 看是否走 projection
+
+      - alert: MxCwppCHQueryTimeout
+        expr: |
+          sum by (operation, table) (
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="timeout"}[5m])
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询超时 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: |
+            5 分钟内出现超时（max_execution_time 50s 或 ctx 60s 触发）。
+            通常意味着 projection 未命中或数据量暴增。
+            立即检查 system.parts merge backlog + materialize projection 进度。
+
+      - alert: MxCwppCHQueryError
+        expr: |
+          sum by (operation, table) (
+            rate(mxcwpp_clickhouse_query_duration_seconds_count{status="error"}[5m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: manager
+        annotations:
+          summary: "ClickHouse 查询错误率高 ({{ $labels.operation }} on {{ $labels.table }})"
+          description: "当前错误率: {{ $value }} qps（持续 5 分钟）"
+
+  # Kafka 生产者 burst 丢弃（agent 重连风暴/扫描叠加遥测尖峰下，Input+fallback 满即静默丢，
+  # 含 EDR eBPF 遥测与任务结果）。稳态应为 0，任何持续 drop 都意味着遥测/检测数据丢失。
+  - name: mxcwpp_kafka_producer
+    rules:
+      - alert: MxCwppKafkaProducerDrops
+        expr: |
+          sum by (instance, reason) (
+            rate(mxcwpp_kafka_producer_dropped_total[5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者丢弃消息 ({{ $labels.reason }} on {{ $labels.instance }})"
+          description: |
+            burst 下 Input/降级队列满，消息被静默丢弃（含 EDR eBPF 事件 → 检测盲区）。
+            当前丢弃率: {{ $value }} msg/s。
+            排查：是否 agent 重连风暴/扫描叠加；考虑调大 producer channel_buffer_size / fallback_queue_size，
+            或 agent 侧 eBPF 采样限流。
+
+      - alert: MxCwppKafkaProducerFallbackHigh
+        expr: mxcwpp_kafka_producer_fallback_len > 5000
+        for: 1m
+        labels:
+          severity: warning
+          service: agentcenter
+        annotations:
+          summary: "Kafka 生产者降级队列积压 ({{ $labels.instance }})"
+          description: "降级队列长度 {{ $value }}，接近溢出阈值，生产者排空速率跟不上到达速率。"
+
+      # --- ML 异常检测：模型健康与投毒防护 ---
+      #
+      # 这几条监督的是"防护是否还在生效"，而不是"是否有攻击"。
+      # 防护失效与一切正常在外部表现完全一样，不主动告警就永远不会被发现。
+
+      - alert: MxCwppAnomalyReferenceBaselineMissing
+        expr: mxcwpp_anomaly_reference_baseline_ready == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测缺少参照基线（投毒防护未生效）"
+          description: |
+            长期参照基线未就绪，模型漂移与训练投毒防护当前不生效。
+            滑窗重训在无参照时会把任何缓慢变化学成新常态——攻击者放慢动作即可让
+            恶意行为成为基线。
+            刚部署时属正常（需积累样本），持续 30 分钟以上需排查：
+            anomaly_model_states 表是否可写、样本量是否长期不足。
+
+      - alert: MxCwppAnomalyRetrainRejected
+        expr: increase(mxcwpp_anomaly_retrain_rejected_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测拒绝重训（训练窗口偏离基线）"
+          description: |
+            过去 1 小时有 {{ $value }} 次重训被拒绝：训练窗口偏离长期参照超过 3σ。
+            两种可能，处理方式相反：
+              1. 业务确实变了（扩容/迁移/新业务上线）→ 需要人工重建参照基线；
+              2. 环境中正在发生持续异常 → 这是信号本身，应当排查。
+            模型此刻仍在用旧参数工作，不会漏报，但也学不进新数据。
+
+      - alert: MxCwppAnomalyModelStale
+        expr: mxcwpp_anomaly_model_age_seconds > 14400
+        for: 10m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常检测模型超过 4 小时未成功训练"
+          description: |
+            重训周期为 30 分钟，连续 8 次以上未训练成功说明这不是偶发。
+            模型仍在工作但已停止学习，对新出现的正常行为会逐渐开始误报。
+            结合 mxcwpp_anomaly_retrain_rejected_total 判断是被漂移闸拦下还是样本不足。
+
+      # --- ML 模型工程：版本、训练集、排序通路 ---
+
+      - alert: MxCwppAnomalyModelVersionStalled
+        # 版本号长时间不动 = 模型停止学习。它仍在打分，只是分数越来越不反映当前环境。
+        # 与「一切正常」在其它指标上看起来完全一样，不主动告警就不会被发现。
+        expr: changes(mxcwpp_anomaly_model_version[6h]) == 0 and mxcwpp_anomaly_model_version > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常模型 6 小时未产生新版本"
+          description: |
+            重训周期 30 分钟，6 小时内一个新版本都没有，说明训练持续没成功。
+            结合 mxcwpp_anomaly_retrain_rejected_total 判断：
+              非 0 → 被漂移闸拦下（环境变了或正在发生持续异常，两种处理方式相反）；
+              为 0 → 样本不足，检查 mxcwpp_anomaly_training_hosts 是否也在下降。
+            当前模型仍可用，但学到的是越来越旧的"正常"。
+
+      - alert: MxCwppAnomalyTrainingSetNarrowing
+        # 训练主机数骤降 = 模型正在向少数主机的行为收敛。
+        # 后果是其余主机的日常行为被判成异常——看起来像检测变敏感了，实际是训练集被带偏。
+        expr: mxcwpp_anomaly_training_hosts < 10 and mxcwpp_anomaly_training_hosts > 0
+        for: 1h
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 训练集主机数过少（当前 {{ $value }}）"
+          description: |
+            参与训练的主机不足 10 台时，"什么算正常"由这几台机器决定，
+            其余主机的正常行为会被判成异常。
+            排查：BDE 指标上报是否中断、agent 是否大面积离线。
+
+      - alert: MxCwppAnomalyScoreFlushFailing
+        # 异常分落库失败 = ranking 档静默退回"没有 ML 参与排序"，而界面上档位仍显示 ranking。
+        expr: increase(mxcwpp_anomaly_score_flush_failed_total[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: consumer
+        annotations:
+          summary: "ML 异常分落库失败，告警排序未生效"
+          description: |
+            host_anomaly_scores 写入失败，ranking 档实际未参与告警排序，
+            但档位配置仍显示已启用——功能看起来在，实际不起作用。
+            排查 MySQL 可写性与 host_anomaly_scores 表结构。
+
+      # --- 异常登录：学习期是否走得出去 ---
+
+      # 任一已接线 Stage 长达一周零产出。
+      #
+      # 零产出本身不是故障——没有威胁时它本就该是零。这条规则的价值在于让"零"
+      # 变成一个看得见、需要有人给出解释的事实，而不是沉默。本项目已多次出现
+      # 结构完整但管道为空的能力：Stage 注册了、指标导出了、状态表建了、
+      # 告警规则也配了，唯独没有任何数据流过，而所有面板显示的都是零，
+      # 与"一切正常"无法区分，最后只能靠人工翻代码发现。
+      #
+      # 依赖 Stage 计数器在注册时被预置为 0（见 PrewarmStageMetrics）；
+      # 不预置的话序列压根不存在，本规则也就无从判断。
+      #
+      # 收到后要回答的是：这一周该 Stage 处理过事件吗？如果处理过而没有告警，
+      # 是真没威胁；如果它读的字段根本没有生产者，那就是能力从未生效。
+      - alert: MxCwppStageNoOutputForAWeek
+        expr: |
+          sum by (stage_name) (increase(mxcwpp_engine_stage_alerts_total[7d])) == 0
+        for: 6h
+        labels:
+          severity: info
+          service: engine
+        annotations:
+          summary: "检测 Stage {{ $labels.stage_name }} 已一周无任何产出"
+          description: |
+            该 Stage 在流水线中已注册，但过去 7 天没有产生任何告警。
+            可能是这段时间确实没有对应威胁，也可能是它依赖的输入不存在、
+            或上游数据源已经断流——两种情况在监控上看起来完全一样。
+            排查：确认该 Stage 读取的字段有没有生产者，再看它处理过的事件量。
+
+      - alert: MxCwppAbnormalLoginNeverGraduates
+        # 学习期内检测静默不告警，和"检测根本没生效"在告警面上完全一样：都是零条。
+        # 学习期是 7 天且 ≥10 次登录，全机群一台都毕业不了说明画像没在积累——
+        # 常见原因是画像落库失败（每次重启从零开始）或登录事件根本没进 engine。
+        #
+        # 这里不能再加 `and hosts_learning > 0` 之类的前置条件。上面列的第二个原因
+        # ——登录事件根本没进 engine——恰好会让 learning 也停在 0，于是那个前置条件
+        # 反而把最该告警的场景排除掉，守卫对自己要守的情况永久静默。
+        # 判据只看结果：到期仍无一台毕业就报，至于是没毕业还是没开始，由排查区分。
+        expr: mxcwpp_engine_abnormal_login_hosts_graduated == 0
+        for: 8d
+        labels:
+          severity: warning
+          service: engine
+        annotations:
+          summary: "异常登录检测无一台主机走完学习期"
+          description: |
+            有 {{ $value }} 台主机在学习期内，却没有任何一台毕业。学习期是 7 天且
+            ≥10 次登录，这里等到第 8 天才判，正常上线不会触发。
+            排查顺序：host_login_profile_states 是否在增长（落库失败则每次重启归零）→
+            engine 是否真的收到成功登录事件 → 机群登录频率是否低于 10 次/7 天
+            （真低频则这条检测对它本就不生效，属预期）。
+
+      - alert: MxCwppACSchedulerMissing
+        # AC 的后台调度器漏接线不会有任何报错——ioc_sync 与 rule_sync 漏接线时
+        # 会长期不被发现：装配代码写在一份没有调用方的初始化文件里，
+        # 编译通过、启动正常、日志干净，而 agent 侧 IOC 集一直是空的，
+        # 规则也无法热更新。
+        #
+        # 每个调度器启动时自行登记，AC 启动后比对期望集合，缺失即置 1。
+        expr: mxcwpp_ac_scheduler_missing > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: agentcenter
+        annotations:
+          summary: "AC 后台调度器 {{ $labels.scheduler }} 未启动"
+          description: |
+            调度器 {{ $labels.scheduler }} 在 ExpectedSchedulers 中登记，但启动后
+            未调用 MarkStarted，说明它没有被真正 go 起来，对应能力静默缺失。
+            受影响能力：ioc_sync 缺失 → agent 本地威胁情报为空，IOC 匹配失效；
+            rule_sync 缺失 → agent 检测规则无法热更新，改规则必须重装且重装也不覆盖。
+            排查：确认 setup.StartBackgroundServices 里该调度器的 go 语句是否存在，
+            以及它的 Start 方法首行是否调用了 MarkStarted。
+
+  # ============ 主机资源 ============
+  # 只监控自研服务进程无法发现磁盘耗尽：盘满时进程仍然存活，服务存活类
+  # 告警不会触发，而 MySQL/ClickHouse/Redis 已经全部停止写入。
+  # 存储组件与 Prometheus 若同处一块盘，盘满时监控自身也会一并哑掉，
+  # 所以磁盘必须在触顶前告警，而不是等健康检查失败。
+  - name: mxcwpp_host_resources
+    interval: 60s
+    rules:
+      - alert: MxCwppHostDiskSpaceWarning
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+             / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 已用超 80%"
+          description: |
+            已用 {{ $value | humanizePercentage }}，剩余空间不足两成。
+            先查容器日志：`du -sh /var/lib/docker/containers/*/*-json.log | sort -rh | head`，
+            未配轮转的单个容器日志可以在数小时内吃掉整块盘。
+
+      - alert: MxCwppHostDiskSpaceCritical
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+             / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 已用超 90%"
+          description: |
+            已用 {{ $value | humanizePercentage }}。盘一旦写满，MySQL 报
+            "table is full"、ClickHouse 报 NOT_ENOUGH_SPACE、Redis 因 RDB 失败
+            禁止一切写入，且 docker exec 会因 /tmp 无空间而失败，届时连排查都做不了。
+            必须在此刻处理，不要等触顶。
+
+      # 触顶预测：比固定水位更早。慢性泄漏（无 TTL 的日志表）水位爬得慢但不会停，
+      # 突发泄漏（日志风暴）几小时就能吃掉整块盘，靠固定阈值往往来不及。
+      - alert: MxCwppHostDiskWillFill
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24*3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 预计 24 小时内写满"
+          description: |
+            按最近 6 小时的增长速度外推，24 小时内可用空间将归零。
+            排查顺序：容器日志 → ClickHouse system 库（query_log/part_log 若无 TTL 会无限涨）
+            → 业务表 TTL 是否失效。
+
+      - alert: MxCwppHostMemoryPressure
+        expr: |
+          (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.92
+        for: 15m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} 可用内存不足 8%"
+          description: "已用 {{ $value | humanizePercentage }}；接下来的 OOM Kill 会随机打掉容器。"
+
+      # node_exporter 自己不见了 = 主机层重新变成盲区，等同于本组全部规则失效
+      - alert: MxCwppHostExporterDown
+        expr: up{job="mxcwpp-node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: "{{ $labels.instance }} node_exporter 不可达"
+          description: "主机磁盘/内存指标已停止采集，磁盘告警在此期间不会触发。"

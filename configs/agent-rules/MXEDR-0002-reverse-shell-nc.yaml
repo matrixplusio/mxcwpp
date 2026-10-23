@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0002
+name: reverse_shell_nc
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: execution
+  technique: T1059.004
+tags: [reverse_shell, netcat]
+agent:
+  enabled: true
+  action: kill
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: regex
+        value: "(nc|ncat|netcat)$"
+      - field: cmdline
+        op: regex
+        value: "(-e\\s|-c\\s)"
+    logic: and
+metadata:
+  description: "nc/ncat 通过 -e/-c 参数执行命令，建立反弹 Shell"
+  confidence: 90

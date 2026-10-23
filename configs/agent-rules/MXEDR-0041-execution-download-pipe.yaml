@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0041
+name: download_pipe_exec
+version: 1
+category: process
+severity: high
+mitre:
+  tactic: execution
+  technique: T1105
+tags: [execution, download, pipe]
+agent:
+  enabled: true
+  action: alert
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: exe
+        op: regex
+        value: "(curl|wget)$"
+      - field: cmdline
+        op: regex
+        value: "(\\|\\s*(bash|sh|python|perl)|\\s+-O\\s+/tmp/)"
+    logic: and
+metadata:
+  description: "检测 curl/wget 管道执行或下载到临时目录"
+  confidence: 80

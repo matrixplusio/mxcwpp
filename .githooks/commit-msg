@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# 提交信息的生产信息扫描。规则与 pre-commit、pre-push 共用 .githooks/leakscan.sh。
+#
+# 为什么要在提交时就扫：提交信息一旦进入历史，改它就要改写这个提交及其后的全部提交；
+# 等到 pre-push 才发现，往往已经在它上面叠了很多提交。
+#
+# 安装：make hooks（core.hooksPath=.githooks）。
+
+set -uo pipefail
+
+msg_file="${1:?用法：commit-msg <提交信息文件>}"
+
+# shellcheck source=leakscan.sh
+. "$(dirname "$0")/leakscan.sh"
+
+# 去掉 git 的注释行（# 开头）与 --verbose 附带的 diff。
+if ! sed -e '/^# ------------------------ >8 ------------------------$/,$d' -e '/^#/d' "$msg_file" \
+     | awk '{print "message\t" $0}' | leakscan_lines; then
+  echo "  提交信息里出现了不该公开的内容，改写后再提交。" >&2
+  exit 1
+fi
+
+# core.hooksPath 会完全替换掉本机原有的钩子；本机另有提交信息检查时放在这里接上（不入库）。
+local_hook="$(dirname "$0")/commit-msg.local"
+if [ -x "$local_hook" ]; then
+  "$local_hook" "$msg_file" || exit 1
+fi
+exit 0

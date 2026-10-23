@@ -1,0 +1,24 @@
+schema_version: 1
+id: MXEDR-0021
+name: container_escape
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: privilege_escalation
+  technique: T1611
+tags: [container, escape]
+agent:
+  enabled: true
+  action: suspend
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: cmdline
+        op: regex
+        value: "(nsenter\\s.*-t\\s*1|chroot\\s+/host|mount\\s.*-o\\s.*bind.*proc)"
+    logic: and
+metadata:
+  description: "检测容器逃逸行为（nsenter 进入宿主 namespace、chroot /host、挂载 /proc）"
+  confidence: 90

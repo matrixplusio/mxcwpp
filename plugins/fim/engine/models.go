@@ -1,0 +1,80 @@
+// Package engine 提供 FIM 插件的核心引擎
+package engine
+
+// FIMPolicy 从任务 JSON 解析的策略配置
+type FIMPolicy struct {
+	PolicyID     string      `json:"policy_id"`
+	WatchPaths   []WatchPath `json:"watch_paths"`
+	ExcludePaths []string    `json:"exclude_paths"`
+}
+
+// WatchPath 监控路径配置
+type WatchPath struct {
+	Path    string `json:"path"`
+	Level   string `json:"level"` // NORMAL, CONTENT, PERMS
+	Comment string `json:"comment"`
+}
+
+// FileEntry 文件快照条目
+type FileEntry struct {
+	SHA256 string `json:"sha256,omitempty"`
+	Size   int64  `json:"size"`
+	Mode   string `json:"mode,omitempty"`
+	UID    uint32 `json:"uid"`
+	GID    uint32 `json:"gid"`
+	MTime  int64  `json:"mtime"`
+}
+
+// FIMEvent 单个文件变更事件
+type FIMEvent struct {
+	EventID      string       `json:"event_id"`
+	FilePath     string       `json:"file_path"`
+	ChangeType   string       `json:"change_type"` // added, removed, changed
+	Severity     string       `json:"severity"`    // critical, high, medium, low
+	Category     string       `json:"category"`    // binary, auth, ssh, config, other
+	ChangeDetail ChangeDetail `json:"change_detail"`
+}
+
+// ChangeDetail 变更详情
+type ChangeDetail struct {
+	SizeBefore string `json:"size_before,omitempty"`
+	SizeAfter  string `json:"size_after,omitempty"`
+	HashBefore string `json:"hash_before,omitempty"`
+	HashAfter  string `json:"hash_after,omitempty"`
+	ModeBefore string `json:"mode_before,omitempty"`
+	ModeAfter  string `json:"mode_after,omitempty"`
+	Attributes string `json:"attributes,omitempty"`
+	// UIDAfter / GIDAfter / MTimeAfter 是变更后的当前值，服务端回写基线时需要。
+	// 老版本 Agent 不带这三个字段，服务端解出零值并据此保留基线中的旧值——
+	// 只要用指针区分"没送"和"送了 0"，root 属主（uid 0）才不会被当成缺值。
+	UIDAfter          *uint32 `json:"uid_after,omitempty"`
+	GIDAfter          *uint32 `json:"gid_after,omitempty"`
+	MTimeAfter        *int64  `json:"mtime_after,omitempty"`
+	HashChanged       bool    `json:"hash_changed"`
+	PermissionChanged bool    `json:"permission_changed"`
+	OwnerChanged      bool    `json:"owner_changed"`
+	// Package 文件与包数据库一致时，所属的包。非空即说明这次变更来自包管理器。
+	Package string `json:"package,omitempty"`
+	// BaselineStale 距上一次扫描太久（主机长期离线或插件停摆），
+	// 这一轮的差异里混着期间所有合法升级，不能按实时变更定级。
+	BaselineStale bool   `json:"baseline_stale,omitempty"`
+	LastScanAt    string `json:"last_scan_at,omitempty"`
+}
+
+// FIMSummary FIM 检查摘要
+type FIMSummary struct {
+	TotalEntries   int `json:"total_entries"`
+	AddedEntries   int `json:"added_entries"`
+	RemovedEntries int `json:"removed_entries"`
+	ChangedEntries int `json:"changed_entries"`
+}
+
+// ExecuteResult 引擎执行结果
+type ExecuteResult struct {
+	PolicyID          string               `json:"policy_id,omitempty"`
+	Summary           FIMSummary           `json:"summary"`
+	Events            []FIMEvent           `json:"events"`
+	IsInitialBaseline bool                 `json:"is_initial_baseline,omitempty"`
+	Snapshot          map[string]FileEntry `json:"snapshot,omitempty"`
+	Error             string               `json:"error,omitempty"`
+}

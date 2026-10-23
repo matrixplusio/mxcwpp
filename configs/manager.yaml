@@ -1,0 +1,48 @@
+# ⚠️ 已弃用 / 仅供参考：此文件不会被任何服务加载。
+# Manager 二进制实际读取统一配置 configs/server.yaml（默认路径），
+# 容器化部署见 deploy/config/server.yaml。此处仅保留字段 schema 供参考，请勿直接照抄运行。
+#
+# mxcwpp Manager 配置 (P1-5 viper schema)
+#
+# 优先级: env (MXCWPP_MANAGER_*) > 本文件 > 内置默认
+# 示例 env:
+#   MXCWPP_MANAGER_HTTP_ADDR=:9080
+#   MXCWPP_MANAGER_DATABASE_DSN=mysql://...
+#   MXCWPP_MANAGER_KAFKA_BROKERS=k1:9092,k2:9092
+
+http_addr: ":8080"
+jwt_secret: ""               # >= 32 chars, 必填
+internal_secret: ""          # AC <-> Manager 内部调用密钥
+upload_dir: "./uploads"
+
+database:
+  dsn: ""                    # MySQL DSN, 必填
+  max_open_conns: 100
+  max_idle_conns: 20
+  conn_max_lifetime: "1h"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+kafka:
+  brokers: []
+  sasl_enabled: false
+  sasl_user: ""
+  sasl_pass: ""
+
+clickhouse:
+  addr: "localhost:9000"
+  database: mxcwpp
+  user: default
+  password: ""
+
+plugins:
+  base_url: "http://localhost:8080"
+
+otel:
+  enabled: false
+  endpoint: "localhost:4318"
+  insecure: true
+  sample_rate: 0.1

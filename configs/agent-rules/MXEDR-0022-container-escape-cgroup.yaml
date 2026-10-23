@@ -1,0 +1,27 @@
+schema_version: 1
+id: MXEDR-0022
+name: container_escape_cgroup_release
+version: 1
+category: process
+severity: critical
+mitre:
+  tactic: privilege_escalation
+  technique: T1611
+tags: [container, escape, cgroup]
+agent:
+  enabled: true
+  action: suspend
+  enforce: false
+  match:
+    event_type: process_exec
+    conditions:
+      - field: container_id
+        op: not_equals
+        value: ""
+      - field: cmdline
+        op: regex
+        value: "(echo\\s+.*>\\s*/sys/fs/cgroup/.*/release_agent|/sys/fs/cgroup/.*/notify_on_release)"
+    logic: and
+metadata:
+  description: "检测容器内通过 cgroup release_agent/notify_on_release 进行逃逸"
+  confidence: 95

@@ -1,0 +1,122 @@
+tests:
+  # --- reverse_shell_detect ---
+  - name: "反弹 Shell：bash + 外网连接 → 命中"
+    data_type: 3000
+    fields:
+      exe: "/bin/bash"
+      remote_addr: "1.2.3.4"
+      pid: "1234"
+      ppid: "1"
+      agent_id: "test-host-1"
+    expect_match: ["reverse_shell_detect"]
+
+  - name: "正常 bash 无网络连接 → 不命中"
+    data_type: 3000
+    fields:
+      exe: "/bin/bash"
+      remote_addr: ""
+      pid: "1235"
+      ppid: "1"
+      agent_id: "test-host-1"
+    expect_not_match: ["reverse_shell_detect"]
+
+  # --- crypto_miner_process ---
+  - name: "xmrig 挖矿进程 → 命中"
+    data_type: 3000
+    fields:
+      exe: "/tmp/xmrig"
+      cmdline: "/tmp/xmrig --pool stratum+tcp://pool.com:3333"
+      pid: "2000"
+      ppid: "1"
+      agent_id: "test-host-2"
+    expect_match: ["crypto_miner_process"]
+
+  - name: "minerd 挖矿进程 → 命中"
+    data_type: 3000
+    fields:
+      exe: "/opt/minerd"
+      cmdline: "/opt/minerd"
+      pid: "2001"
+      ppid: "1"
+      agent_id: "test-host-2"
+    expect_match: ["crypto_miner_process"]
+
+  - name: "正常 nginx 进程 → 不命中挖矿"
+    data_type: 3000
+    fields:
+      exe: "/usr/sbin/nginx"
+      cmdline: "nginx: master process"
+      pid: "3000"
+      ppid: "1"
+      agent_id: "test-host-3"
+    expect_not_match: ["crypto_miner_process", "reverse_shell_detect"]
+
+  # --- suspicious_crontab_write ---
+  - name: "写入 crontab → 命中"
+    data_type: 3001
+    fields:
+      file_path: "/var/spool/cron/crontabs/root"
+      exe: "/usr/bin/crontab"
+      agent_id: "test-host-1"
+    expect_match: ["suspicious_crontab_write"]
+
+  - name: "写入 cron.d 目录 → 命中"
+    data_type: 3001
+    fields:
+      file_path: "/etc/cron.d/malicious"
+      exe: "/bin/bash"
+      agent_id: "test-host-1"
+    expect_match: ["suspicious_crontab_write"]
+
+  - name: "写入普通文件 → 不命中 crontab"
+    data_type: 3001
+    fields:
+      file_path: "/tmp/test.txt"
+      exe: "/bin/bash"
+      agent_id: "test-host-1"
+    expect_not_match: ["suspicious_crontab_write"]
+
+  # --- ssh_brute_force_connect ---
+  - name: "外网 SSH 连接 → 命中"
+    data_type: 3002
+    fields:
+      remote_addr: "203.0.113.50"
+      remote_port: "22"
+      exe: "/usr/bin/ssh"
+      agent_id: "test-host-1"
+    expect_match: ["ssh_brute_force_connect"]
+
+  - name: "内网 SSH 连接 → 不命中"
+    data_type: 3002
+    fields:
+      remote_addr: "192.168.1.100"
+      remote_port: "22"
+      exe: "/usr/bin/ssh"
+      agent_id: "test-host-1"
+    expect_not_match: ["ssh_brute_force_connect"]
+
+  - name: "外网非 SSH 端口 → 不命中"
+    data_type: 3002
+    fields:
+      remote_addr: "8.8.8.8"
+      remote_port: "443"
+      exe: "/usr/bin/curl"
+      agent_id: "test-host-1"
+    expect_not_match: ["ssh_brute_force_connect"]
+
+  # --- passwd_file_read ---
+  - name: "读取 /etc/shadow → 命中"
+    data_type: 3001
+    fields:
+      file_path: "/etc/shadow"
+      exe: "/usr/bin/cat"
+      agent_id: "test-host-1"
+    expect_match: ["passwd_file_read"]
+
+  - name: "读取 /etc/hosts → 不命中"
+    data_type: 3001
+    fields:
+      file_path: "/etc/hosts"
+      exe: "/usr/bin/cat"
+      agent_id: "test-host-1"
+    expect_not_match: ["passwd_file_read"]

@@ -1,0 +1,12 @@
+.git
+.DS_Store
+dist/
+tmp/
+data/
+# 根目录的隐藏文件与目录（本地工具配置、.env、本地清单）都不进构建上下文
+.*
+deploy/data/
+web/node_modules/
+web/.next/
+web/out/
+web/.pnpm-store/

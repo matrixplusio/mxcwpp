@@ -1,0 +1,263 @@
+package engine
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"go.uber.org/zap"
+)
+
+// Engine FIM 检查引擎
+type Engine struct {
+	logger   *zap.Logger
+	scanner  *Scanner
+	baseline *BaselineStore
+	verifier *PkgVerifier
+	now      func() time.Time
+}
+
+// baselineStaleAfter 距上次扫描超过这么久，本轮结果标「基线过期」。
+// 策略默认每 24 小时扫一次，留出两轮的余量，偶尔漏一轮不算过期。
+const baselineStaleAfter = 72 * time.Hour
+
+// NewEngine 创建引擎实例
+func NewEngine(logger *zap.Logger) *Engine {
+	return &Engine{
+		logger:   logger,
+		scanner:  NewScanner(logger),
+		baseline: NewBaselineStore(logger),
+		verifier: NewPkgVerifier(logger),
+		now:      time.Now,
+	}
+}
+
+// Execute 执行 FIM 检查流程
+func (e *Engine) Execute(ctx context.Context, taskData json.RawMessage) (*ExecuteResult, error) {
+	// 1. 解析策略
+	policy, err := e.parsePolicyFromTask(taskData)
+	if err != nil {
+		return nil, fmt.Errorf("解析策略失败: %w", err)
+	}
+
+	// 2. 扫描文件
+	e.logger.Info("开始文件扫描",
+		zap.String("policy_id", policy.PolicyID),
+		zap.Int("watch_paths", len(policy.WatchPaths)))
+	scanResult, err := e.scanner.Scan(ctx, policy)
+	if err != nil {
+		return nil, fmt.Errorf("文件扫描失败: %w", err)
+	}
+	e.logger.Info("文件扫描完成",
+		zap.Int("file_count", len(scanResult.Entries)),
+		zap.Int("errors", len(scanResult.Errors)))
+
+	// 3. 加载基线
+	bl, err := e.baseline.Load(policy.PolicyID)
+	if err != nil {
+		return nil, fmt.Errorf("加载基线失败: %w", err)
+	}
+
+	lastScan, hasLastScan := e.baseline.LastScan(policy.PolicyID)
+	defer e.baseline.MarkScanned(policy.PolicyID, e.now())
+
+	// 4. 无基线（首次扫描）→ 保存初始基线，上报快照供服务端审批
+	if bl == nil {
+		e.logger.Info("首次扫描，生成初始基线",
+			zap.String("policy_id", policy.PolicyID),
+			zap.Int("entry_count", len(scanResult.Entries)))
+		newBL := e.baseline.NewBaseline(policy.PolicyID, scanResult.Entries)
+		if err := e.baseline.Save(newBL); err != nil {
+			return nil, fmt.Errorf("保存初始基线失败: %w", err)
+		}
+		return &ExecuteResult{
+			PolicyID: policy.PolicyID,
+			Summary: FIMSummary{
+				TotalEntries: len(scanResult.Entries),
+			},
+			IsInitialBaseline: true,
+			Snapshot:          scanResult.Entries,
+		}, nil
+	}
+
+	// 5. 有基线 → 对比生成事件
+	events := compare(bl, scanResult)
+
+	// 6. 分类每个事件
+	for i := range events {
+		Classify(&events[i])
+	}
+	e.annotatePackages(ctx, events)
+	if hasLastScan && e.now().Sub(lastScan) > baselineStaleAfter {
+		markStale(events, lastScan)
+	}
+
+	summary := FIMSummary{TotalEntries: len(scanResult.Entries)}
+	for _, ev := range events {
+		switch ev.ChangeType {
+		case "added":
+			summary.AddedEntries++
+		case "removed":
+			summary.RemovedEntries++
+		case "changed":
+			summary.ChangedEntries++
+		}
+	}
+
+	return &ExecuteResult{
+		PolicyID: policy.PolicyID,
+		Summary:  summary,
+		Events:   events,
+	}, nil
+}
+
+// annotatePackages 与包数据库一致的变更降为 info 并带上包名。
+// 只看新增与修改：删除的文件已不在磁盘上，无从校验。
+func (e *Engine) annotatePackages(ctx context.Context, events []FIMEvent) {
+	var paths []string
+	meta := map[string]bool{}
+	for _, ev := range events {
+		if ev.ChangeType != "changed" && ev.ChangeType != "added" {
+			continue
+		}
+		paths = append(paths, ev.FilePath)
+		if ev.ChangeDetail.PermissionChanged || ev.ChangeDetail.OwnerChanged {
+			meta[ev.FilePath] = true
+		}
+	}
+	owned := e.verifier.Verify(ctx, paths, meta)
+	for i := range events {
+		if pkg, ok := owned[events[i].FilePath]; ok {
+			events[i].Severity = "info"
+			events[i].ChangeDetail.Package = pkg
+		}
+	}
+	if len(paths) > 0 {
+		e.logger.Info("变更文件已对照包数据库",
+			zap.Int("checked", len(paths)), zap.Int("package_consistent", len(owned)))
+	}
+}
+
+// markStale 把基线过期这一轮里的高危结果压到 medium 并打标。
+//
+// 离线期间的合法升级会在恢复后一次性涌出，按实时变更定级就是一整批 critical。
+// 只降不丢：结果照常上报、照常可查，只是不再以 critical 的身份去叫醒人。
+func markStale(events []FIMEvent, lastScan time.Time) {
+	for i := range events {
+		events[i].ChangeDetail.BaselineStale = true
+		events[i].ChangeDetail.LastScanAt = lastScan.Format(time.RFC3339)
+		if events[i].Severity == "critical" || events[i].Severity == "high" {
+			events[i].Severity = "medium"
+		}
+	}
+}
+
+// SaveBaseline 保存服务端下发的审批基线
+func (e *Engine) SaveBaseline(taskData json.RawMessage) error {
+	var bl Baseline
+	if err := json.Unmarshal(taskData, &bl); err != nil {
+		return fmt.Errorf("解析基线数据失败: %w", err)
+	}
+	return e.baseline.Save(&bl)
+}
+
+// parsePolicyFromTask 从任务 JSON 提取策略配置
+func (e *Engine) parsePolicyFromTask(taskData json.RawMessage) (*FIMPolicy, error) {
+	var policy FIMPolicy
+	if err := json.Unmarshal(taskData, &policy); err != nil {
+		return nil, fmt.Errorf("解析策略 JSON 失败: %w", err)
+	}
+	if len(policy.WatchPaths) == 0 {
+		return nil, fmt.Errorf("策略未配置监控路径")
+	}
+	return &policy, nil
+}
+
+// compare 对比基线与当前扫描结果，生成变更事件
+func compare(bl *Baseline, current *ScanResult) []FIMEvent {
+	var events []FIMEvent
+	counter := 0
+
+	// 已删除文件（基线中有，当前没有）
+	for path := range bl.Entries {
+		if _, exists := current.Entries[path]; !exists {
+			counter++
+			events = append(events, FIMEvent{
+				EventID:    fmt.Sprintf("evt-%06d", counter),
+				FilePath:   path,
+				ChangeType: "removed",
+			})
+		}
+	}
+
+	// 新增和变更文件
+	for path, curEntry := range current.Entries {
+		blEntry, exists := bl.Entries[path]
+		if !exists {
+			counter++
+			events = append(events, FIMEvent{
+				EventID:    fmt.Sprintf("evt-%06d", counter),
+				FilePath:   path,
+				ChangeType: "added",
+			})
+			continue
+		}
+
+		if detail := compareEntries(blEntry, curEntry); detail != nil {
+			counter++
+			events = append(events, FIMEvent{
+				EventID:      fmt.Sprintf("evt-%06d", counter),
+				FilePath:     path,
+				ChangeType:   "changed",
+				ChangeDetail: *detail,
+			})
+		}
+	}
+
+	return events
+}
+
+// compareEntries 比较两个文件条目，返回变更详情（无变更返回 nil）
+func compareEntries(old, cur FileEntry) *ChangeDetail {
+	detail := &ChangeDetail{}
+	changed := false
+
+	if old.SHA256 != "" && cur.SHA256 != "" && old.SHA256 != cur.SHA256 {
+		detail.HashChanged = true
+		detail.HashBefore = old.SHA256
+		detail.HashAfter = cur.SHA256
+		changed = true
+	}
+
+	// 与 hash / mode 一致：基线侧缺值时跳过。
+	// 少了这道护栏，基线条目 size 为 0（旧版本写入或采集失败）会让任何非空文件
+	// 每轮都判变更，且因为基线不回写而永不收敛。
+	if old.Size != 0 && old.Size != cur.Size {
+		detail.SizeBefore = fmt.Sprintf("%d", old.Size)
+		detail.SizeAfter = fmt.Sprintf("%d", cur.Size)
+		changed = true
+	}
+
+	if old.Mode != "" && cur.Mode != "" && old.Mode != cur.Mode {
+		detail.PermissionChanged = true
+		detail.ModeBefore = old.Mode
+		detail.ModeAfter = cur.Mode
+		changed = true
+	}
+
+	if old.UID != cur.UID || old.GID != cur.GID {
+		detail.OwnerChanged = true
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	// 带上当前值，服务端回写基线时才有东西可写。缺了它们，基线里的属主与 mtime
+	// 停在旧值，同一处差异每轮重新比出来——修好了哈希那条路，属主这条仍会复读。
+	uid, gid, mtime := cur.UID, cur.GID, cur.MTime
+	detail.UIDAfter, detail.GIDAfter, detail.MTimeAfter = &uid, &gid, &mtime
+	return detail
+}
