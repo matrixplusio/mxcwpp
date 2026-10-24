@@ -29,6 +29,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/common/gctune"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
@@ -193,8 +194,8 @@ func main() {
 // sourceOSFamilies 记录每个 OS-distro advisory 源服务的 host OS 家族（小写）。
 // 用于 fleet-aware 门控：fleet 无对应家族的主机则不同步该源。
 var sourceOSFamilies = map[string][]string{
-	"rhsa":           {"rhel", "centos", "centos-stream", "rocky", "almalinux", "oraclelinux"},
-	"rocky-apollo":   {"rocky", "centos", "centos-stream", "rhel", "almalinux"},
+	"rhsa":           {"rhel", "centos", "centos-stream", "rocky", "almalinux", "oracle"},
+	"rocky-apollo":   {"rocky", "centos", "centos-stream", "rhel", "almalinux", "oracle"},
 	"centos":         {"centos", "centos-stream"},
 	"usn":            {"ubuntu"},
 	"debian-tracker": {"debian"},
@@ -249,7 +250,8 @@ func loadFleetOSFamilies(db *gorm.DB, logger *zap.Logger) map[string]bool {
 	}
 	set := make(map[string]bool, len(families))
 	for _, f := range families {
-		if t := strings.ToLower(strings.TrimSpace(f)); t != "" {
+		// 归一成规范名，与 sourceOSFamilies 对齐（Oracle Linux 上报 "ol"）。
+		if t := osfamily.Normalize(f); t != "" {
 			set[t] = true
 		}
 	}

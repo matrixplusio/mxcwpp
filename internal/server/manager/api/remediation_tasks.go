@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/manager/biz"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
@@ -18,7 +19,7 @@ import (
 // detectPackageManager 根据主机 OS 和版本判断应使用的包管理器类型
 // 返回值与 RemediationCommand.PackageType 对应：rpm-yum / rpm-dnf / deb
 func detectPackageManager(osFamily, osVersion string) string {
-	osLower := strings.ToLower(osFamily)
+	osLower := osfamily.Normalize(osFamily) // Oracle Linux 上报 "ol"
 
 	switch osLower {
 	case "debian", "ubuntu":

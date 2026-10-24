@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 )
 
@@ -319,16 +320,13 @@ func osFamilyCoversAnyHost(advFamily string, present map[string]bool) bool {
 	if advFamily == "" {
 		return true
 	}
-	advFamily = strings.ToLower(advFamily)
-	rhel := map[string]bool{
-		"rhel": true, "rocky": true, "centos": true,
-		"centos-stream": true, "almalinux": true, "oraclelinux": true,
-	}
+	advFamily = osfamily.Normalize(advFamily)
 	for fam := range present {
+		fam = osfamily.Normalize(fam)
 		if fam == advFamily {
 			return true
 		}
-		if rhel[advFamily] && rhel[fam] {
+		if osfamily.RHELCompatible(advFamily) && osfamily.RHELCompatible(fam) {
 			return true
 		}
 		if advFamily == "openeuler" && (fam == "openeuler" || fam == "anolis" || fam == "openanolis") {
@@ -359,9 +357,11 @@ func validateAdvisory(adv *Advisory) bool {
 }
 
 func isLinuxOS(family string) bool {
+	if osfamily.RHELCompatible(family) {
+		return true
+	}
 	switch strings.ToLower(family) {
-	case "rhel", "rocky", "centos", "centos-stream", "almalinux",
-		"oraclelinux", "ubuntu", "debian", "alpine",
+	case "ubuntu", "debian", "alpine",
 		// 信创 OS
 		"openeuler", "anolis", "openanolis", "kylin", "uos", "tencentos":
 		return true

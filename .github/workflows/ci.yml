@@ -128,7 +128,6 @@ jobs:
       # 判定逻辑与本地 make vuln 共用 scripts/check-vuln.sh，避免两边漂移。
       # 版本固定：@latest 会随上游抬高对 Go 版本的要求，与上面固定的工具链脱节，
       # 结果是工具装不上、检查根本没跑。漏洞库在线拉取，固定工具版本不影响数据新旧。
+      # 脚本按 go.mod 的 toolchain 自行安装固定版本的 govulncheck，这里不再预装。
       - name: govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
-          make vuln
+        run: make vuln

@@ -7,18 +7,18 @@ import (
 	"io/fs"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 )
 
 // SelfProtect implements agent self-protection mechanisms:
 //   - systemd sd_notify integration (READY + WATCHDOG heartbeat)
-//   - chattr +i file immutability for critical files and directories
+//   - immutable attribute (as chattr +i) on critical files and directories
 type SelfProtect struct {
 	logger     *zap.Logger
 	notifyConn net.Conn
@@ -149,84 +149,123 @@ func (sp *SelfProtect) applyImmutable() {
 	}
 }
 
-// setImmutableRecursive applies chattr +i to a path. If the path is a
-// directory, all entries within are protected first, then the directory
-// itself (so the walk completes before the directory entry is locked).
+// setImmutableRecursive protects a path. Directory entries are locked
+// before the directory itself so the walk completes first.
 func (sp *SelfProtect) setImmutableRecursive(path string) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return // Path doesn't exist yet, skip.
-	}
-
-	if info.IsDir() {
-		_ = filepath.WalkDir(path, func(p string, _ fs.DirEntry, walkErr error) error {
-			if walkErr != nil || p == path {
-				return nil // handle root dir after the walk
-			}
-			sp.setImmutable(p)
-			return nil
-		})
-	}
-
-	sp.setImmutable(path)
+	sp.applyTree(path, true)
 }
 
-// removeImmutableRecursive removes chattr +i from a path. If the path is a
-// directory, the directory is unlocked first, then all entries within.
+// removeImmutableRecursive unprotects a path. The directory is unlocked
+// first so the walk can proceed.
 func (sp *SelfProtect) removeImmutableRecursive(path string) {
-	// Remove directory +i first so the walk can proceed.
-	sp.removeImmutable(path)
+	sp.applyTree(path, false)
+}
 
+// applyTree sets or clears the immutable attribute on path and everything
+// beneath it, then logs one summary per root. Failures are counted and
+// surfaced at Warn: a lock that silently fails (no CAP_LINUX_IMMUTABLE,
+// unsupported filesystem) leaves the agent unprotected with nothing in the log.
+func (sp *SelfProtect) applyTree(path string, on bool) {
 	info, err := os.Stat(path)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			sp.logger.Warn("protected path not accessible", zap.String("path", path), zap.Error(err))
+		}
 		return
 	}
 
+	var applied, failed int
+	var firstErr error
+	var firstPath string
+	record := func(p string, err error) {
+		if err == nil {
+			applied++
+			return
+		}
+		if failed == 0 {
+			firstPath, firstErr = p, err
+		}
+		failed++
+	}
+
+	if !on {
+		record(path, setImmutableFlag(path, false))
+	}
 	if info.IsDir() {
 		_ = filepath.WalkDir(path, func(p string, _ fs.DirEntry, walkErr error) error {
-			if walkErr != nil || p == path {
+			if walkErr != nil {
+				record(p, walkErr)
 				return nil
 			}
-			sp.removeImmutable(p)
+			if p != path {
+				record(p, setImmutableFlag(p, on))
+			}
 			return nil
 		})
 	}
-}
+	if on {
+		record(path, setImmutableFlag(path, true))
+	}
 
-// setImmutable applies chattr +i to a single path.
-func (sp *SelfProtect) setImmutable(path string) {
-	if _, err := os.Stat(path); err != nil {
+	action := "file protection applied"
+	if !on {
+		action = "file protection removed"
+	}
+	if failed > 0 {
+		sp.logger.Warn(action+" with failures",
+			zap.String("path", path),
+			zap.Int("applied", applied),
+			zap.Int("failed", failed),
+			zap.String("first_failed_path", firstPath),
+			zap.Error(firstErr),
+		)
 		return
 	}
-
-	cmd := exec.Command("chattr", "+i", path)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		sp.logger.Debug("chattr +i failed (may lack capability)",
-			zap.String("path", path),
-			zap.String("output", string(output)),
-			zap.Error(err),
-		)
-	} else {
-		sp.logger.Info("file protection applied",
-			zap.String("path", path),
-		)
-	}
+	sp.logger.Info(action, zap.String("path", path), zap.Int("entries", applied))
 }
 
-// removeImmutable removes chattr +i from a single path.
-func (sp *SelfProtect) removeImmutable(path string) {
-	if _, err := os.Stat(path); err != nil {
-		return
+// fsImmutableFL is FS_IMMUTABLE_FL from linux/fs.h (not exported by x/sys).
+const fsImmutableFL = 0x00000010
+
+// setImmutableFlag toggles the immutable attribute via ioctl instead of
+// spawning chattr: a chattr child per file trips our own "chattr +i" rule and
+// resolves chattr through PATH. O_NOFOLLOW + the type check keep a symlink or
+// device planted in a protected dir from redirecting the lock elsewhere.
+// Intermediate path components are still resolved normally; tampering with
+// them requires root over the protected dirs already.
+func setImmutableFlag(path string, on bool) error {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return err
+	}
+	mode := st.Mode & unix.S_IFMT
+	if mode != unix.S_IFREG && mode != unix.S_IFDIR {
+		return unix.EINVAL
+	}
+	// A hard link planted in a protected dir would lock (or unlock) the
+	// original inode elsewhere, e.g. /etc/shadow.
+	if mode == unix.S_IFREG && st.Nlink > 1 {
+		return unix.EMLINK
 	}
 
-	cmd := exec.Command("chattr", "-i", path)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		sp.logger.Warn("chattr -i failed",
-			zap.String("path", path),
-			zap.String("output", string(output)),
-			zap.Error(err),
-		)
+	flags, err := unix.IoctlGetUint32(fd, unix.FS_IOC_GETFLAGS)
+	if err != nil {
+		return err
 	}
+	next := flags &^ fsImmutableFL
+	if on {
+		next = flags | fsImmutableFL
+	}
+	if next == flags {
+		return nil
+	}
+	return unix.IoctlSetPointerInt(fd, unix.FS_IOC_SETFLAGS, int(int32(next)))
 }
 
 // GenerateSystemdUnit returns a recommended systemd unit file content

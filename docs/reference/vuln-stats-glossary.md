@@ -45,3 +45,9 @@
 - 主机漏洞实例 = 10,000(一个 CVE 命中 N 台主机 → N 行)
 
 两者相差数十倍是**正常**的量纲差异，不是数据错误。列表页与修复页因此展示不同数字，各自 label 已标明口径。
+
+## 系统系列与版本比较
+
+主机的系统系列取自 `/etc/os-release` 的 `ID`，原样存进 `hosts.os_family`（Oracle Linux 存的是 `ol`）。匹配、清理、修复下发前统一经 `internal/common/osfamily` 归一，RHEL 兼容系列（rhel、rocky、centos、centos-stream、almalinux、oracle）共用 RHSA 的修复版本。SQL 里无法调用归一函数，用 `osfamily.RHELCompatibleSQLList()` 列出全部拼写。
+
+Oracle Linux 主机的包版本在比较前会去掉 Oracle 插入的 `.0.N` 段（普通包在 `.el` 前，模块流包在 `.module+el` 前），还原成对应的 RHEL release。匹配、已修复清理与漏洞对账三处都用 `advisory.RHELEquivalentVersion`，且只还原主机侧的安装版本，修复版本保持 RHSA 原值。三处只要有一处不一致，同一个包就会在一处判受影响、另一处判已修复。修复验证（`remediation_verify.go`）与重新出现判定（`vuln_scanner.go`）用的是另一套不含 release 的比较，不在这三处之内。

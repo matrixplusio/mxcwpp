@@ -45,6 +45,9 @@ func TestVulnApplicableToHost(t *testing.T) {
 		{"rhsa", "rocky", true},
 		{"rhsa", "almalinux", true},
 		{"rhsa", "oracle", true},
+		{"rhsa", "ol", true}, // Oracle Linux 的 os-release ID
+		{"rhsa", "alma", true},
+		{"rhsa", "centos-stream", true},
 		{"rhsa", "debian", false},
 		{"rocky-apollo", "rhel", false},
 		{"rocky-apollo", "rocky", true},

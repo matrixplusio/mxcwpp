@@ -1,14 +1,18 @@
 // Package biz — host OS-specific fixed_version lookup
 package biz
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
+)
 
 // ResolveFixedVersionForHost 按 host OS family + major + pkg 精确匹配 advisory_packages
 // 对应的 fixed_version。匹配失败返回空字符串（调用方应兜底用 vulnerabilities.fixed_version）。
 //
 // 优先级：
 //  1. 精准匹配 host OS family + major
-//  2. RHEL 兼容族（rhel/rocky/centos/almalinux/oraclelinux/centos-stream）互通匹配
+//  2. RHEL 兼容族（osfamily.RHELCompatible，含 Oracle Linux 上报的 "ol"）互通匹配
 //
 // 性能：使用 idx_ap_lookup(os_family, os_major, pkg_name) 索引。
 func ResolveFixedVersionForHost(db *gorm.DB, cveID, pkgName, hostID string) string {
@@ -46,8 +50,8 @@ func ResolveFixedVersionForHost(db *gorm.DB, cveID, pkgName, hostID string) stri
 		Where(
 			"cve_id = ? AND pkg_name = ? AND os_major = ? AND "+
 				"(LOWER(os_family) = LOWER(?) OR "+
-				" (LOWER(os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux') "+
-				"  AND LOWER(?) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')))",
+				" (LOWER(os_family) IN ("+osfamily.RHELCompatibleSQLList()+") "+
+				"  AND LOWER(?) IN ("+osfamily.RHELCompatibleSQLList()+")))",
 			cveID, pkgName, osMajor, h.OSFamily, h.OSFamily,
 		).
 		Scan(&rows).Error

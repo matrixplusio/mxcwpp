@@ -141,8 +141,8 @@ hooks:
 test: ensure-hooks vuln
 	go test ./...
 
-# 依赖漏洞检查与 CI 共用 scripts/check-vuln.sh。本地没装 govulncheck 会跳过
-# 并打印提示——CI 上这项一定会跑，跳过不代表能过。
+# 依赖漏洞检查与 CI 共用 scripts/check-vuln.sh。脚本按 go.mod 的 toolchain 自行安装
+# govulncheck；扫描没跑成按失败处理，不会静默放行。
 vuln:
 	@./scripts/check-vuln.sh
 

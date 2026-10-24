@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	grpcProto "github.com/matrixplusio/mxcwpp/api/proto/grpc"
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/agentcenter/transfer"
 	"github.com/matrixplusio/mxcwpp/internal/server/audit"
 	"github.com/matrixplusio/mxcwpp/internal/server/config"
@@ -512,7 +513,7 @@ func (s *AgentUpdateScheduler) autoCheckAndPushUpdates(ctx context.Context) {
 
 // detectPackageType 根据 OS 类型检测包类型
 func (s *AgentUpdateScheduler) detectPackageType(osFamily string) model.PackageType {
-	switch osFamily {
+	switch osfamily.Normalize(osFamily) { // Oracle Linux 上报 "ol"
 	case "rocky", "centos", "rhel", "oracle", "almalinux":
 		return model.PackageTypeRPM
 	case "debian", "ubuntu":

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-24
+
+### Fixed
+- Oracle Linux hosts (os-release ID `ol`) are now matched against Red Hat advisories; previously they received no OS vulnerabilities, and cleanup would have removed such links
+- Oracle Linux package releases with an inserted `.0.N` segment are compared as their RHEL equivalents, so outdated packages are no longer reported as patched
+- The agent sets the immutable attribute through the kernel interface instead of running `chattr`, so it no longer triggers its own "file attribute lock" detection rule; symlinks, hard links and special files under protected directories are skipped
+- The dependency vulnerability check fails when govulncheck does not complete, instead of passing silently
+
 ## [1.0.1] - 2026-10-24
 
 ### Changed

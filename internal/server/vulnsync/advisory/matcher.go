@@ -2,8 +2,11 @@ package advisory
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 )
 
 // DefaultMatcher 实现严格 OS / ecosystem + pkg + arch + version 比对。
@@ -65,10 +68,10 @@ func compareNEVRAOrFallback(host HostSoftware, fixedVersion string) (int, error)
 	cmp := selectVersionComparator(host.PkgManager)
 	if host.PkgVerRaw != "" {
 		installed := composeNEVRAString(host.PkgEpoch, host.PkgVerRaw, host.PkgRelease)
-		return cmp(installed, fixedVersion)
+		return cmp(RHELEquivalentVersion(host.OSFamily, installed), fixedVersion)
 	}
 	if host.PkgVer != "" {
-		return cmp(host.PkgVer, fixedVersion)
+		return cmp(RHELEquivalentVersion(host.OSFamily, host.PkgVer), fixedVersion)
 	}
 	return 0, fmt.Errorf("no version info")
 }
@@ -83,7 +86,7 @@ func selectVersionComparator(pkgManager string) func(a, b string) (int, error) {
 	}
 }
 
-// CompareVersionByOS 按 OS family 选权威版本比较器（RPM/dpkg）比对 a、b。
+// CompareVersionByOS 按 OS family 选权威版本比较器（RPM/dpkg）比对 a（主机安装版本）与 b（修复版本）。
 //
 // 供 reconcile/verify 等复用与 matcher 一致的严谨 NEVRA 语义，避免各处自造弱比较器
 // （忽略 el9_4 等 release 后缀导致误判已修）。debian/ubuntu 用 dpkg，其余用 RPM。
@@ -93,7 +96,7 @@ func CompareVersionByOS(osFamily, a, b string) (int, error) {
 	case "debian", "ubuntu":
 		pkgManager = "dpkg"
 	}
-	return selectVersionComparator(pkgManager)(a, b)
+	return selectVersionComparator(pkgManager)(RHELEquivalentVersion(osFamily, a), b)
 }
 
 // composeNEVRAString 把 epoch/version/release 拼成标准 NEVRA 字符串(无 name 无 arch)。
@@ -110,6 +113,25 @@ func composeNEVRAString(epoch, version, release string) string {
 		out = epoch + ":" + out
 	}
 	return out
+}
+
+// oracleReleaseMarker 匹配 Oracle Linux 在 RHEL release 里插入的 ".0.N" 段，后面紧跟发行标记：
+// RHEL "251.el8_10.25" 在 Oracle 上是 "251.0.3.el8_10.25"；
+// 模块流包 "65.module+el8.10.0+..." 在 Oracle 上是 "65.0.1.module+el8.10.0+..."。
+var oracleReleaseMarker = regexp.MustCompile(`\.0\.[0-9]+(\.(?:el[0-9]|module\+el[0-9]))`)
+
+// RHELEquivalentVersion 把 Oracle Linux 主机的版本串还原成对应的 RHEL 写法，其余系列原样返回。
+// 只用于主机侧的安装版本：修复版本来自 RHSA，本就是 RHEL 写法，再还原会把原生带
+// ".0.N.el" 的修复版改低，判成已修复。
+//
+// 不还原的话，rpm 比较会把插入段里的数字 "0" 判得比 "el" 新，于是 "251.0.3.el8_10.25"
+// 被当成高于 RHSA 修复版 "251.el8_10.27"——落后的主机被判成已修复，漏报。
+// 还原只会让 Oracle 主机显得更旧，代价是极少数 RHEL 原生就带 ".0.N.el" 的包可能误报，不会漏报。
+func RHELEquivalentVersion(osFamily, version string) string {
+	if osfamily.Normalize(osFamily) != "oracle" {
+		return version
+	}
+	return oracleReleaseMarker.ReplaceAllString(version, "$1")
 }
 
 // gatePassed 双 gate 互斥校验：advisory 须经 ecosystem 或 OS 路径其一精确匹配 host。
@@ -136,25 +158,18 @@ func gatePassed(adv *Advisory, host HostSoftware) bool {
 
 // osCompatible 判断 host OS 是否在 advisory OS 覆盖范围。
 //
-// RHEL 同源生态视为兼容（advisory.OSFamily="rhel" 覆盖 host.OSFamily in {rhel,rocky,centos,almalinux,oraclelinux}）。
+// RHEL 同源生态视为兼容（advisory.OSFamily="rhel" 覆盖 RHEL 兼容系列的任意拼写，见 osfamily.RHELCompatible）。
 // 其他 OS 必须严格匹配。
 func osCompatible(advFamily, advMajor, hostFamily, hostMajor string) bool {
 	if advMajor == "" || hostMajor == "" || advMajor != hostMajor {
 		return false
 	}
-	advFamily = strings.ToLower(advFamily)
-	hostFamily = strings.ToLower(hostFamily)
+	// 主机上报的是 os-release ID（Oracle Linux 为 "ol"），先归一再比较，否则整类主机静默零命中。
+	advFamily = osfamily.Normalize(advFamily)
+	hostFamily = osfamily.Normalize(hostFamily)
 
-	rhelCompat := map[string]bool{
-		"rhel":          true,
-		"rocky":         true,
-		"centos":        true,
-		"centos-stream": true,
-		"almalinux":     true,
-		"oraclelinux":   true,
-	}
 	if advFamily == "rhel" || advFamily == "rocky" {
-		return rhelCompat[hostFamily]
+		return osfamily.RHELCompatible(hostFamily)
 	}
 	// 信创 OS：openEuler 衍生兼容(龙蜥 Anolis 基于 openEuler)，
 	// 麒麟 V10 / 统信 UOS 视为独立家族（基于不同上游）。

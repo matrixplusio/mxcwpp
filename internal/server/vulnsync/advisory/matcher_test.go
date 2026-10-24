@@ -164,6 +164,13 @@ func TestOSCompatible(t *testing.T) {
 		{"rhel", "9", "rocky", "9", true},
 		{"rhel", "9", "centos", "9", true},
 		{"rhel", "9", "almalinux", "9", true},
+		{"rhel", "9", "ol", "9", true}, // Oracle Linux 的 os-release ID
+		{"rhel", "9", "oracle", "9", true},
+		{"rhel", "9", "OracleLinux", "9", true},
+		{"rocky", "9", "ol", "9", true},
+		{"rhel", "9", "alma", "9", true},
+		{"centos", "9", "ol", "9", false}, // centos 源只覆盖 centos
+		{"rhel", "8", "ol", "9", false},
 		{"rhel", "9", "ubuntu", "9", false},
 		{"rhel", "9", "rhel", "8", false},
 		{"ubuntu", "22.04", "ubuntu", "22.04", true},
@@ -306,5 +313,110 @@ func TestArchMatch(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("archMatch(%q,%q) = %v, want %v", tc.advArch, tc.hostArch, got, tc.want)
 		}
+	}
+}
+
+// Oracle Linux 主机上报 os_family="ol"，包的 release 在 RHEL 的基础上追加 ".0.1" 之类的后缀。
+// 锁定：ol 主机能被 RHSA 匹配到；与 RHEL 修复同级的 Oracle 构建（27.0.1 对 27）视为已修复，
+// 更早的构建仍判受影响。
+func TestDefaultMatcher_OracleLinuxHost(t *testing.T) {
+	adv := &Advisory{
+		OSFamily:   "rhel",
+		OSMajorVer: "9",
+		AffectedPkgs: []PkgFix{
+			{Name: "openssl", Arch: "x86_64", FixedVersion: "1:3.0.7-27.el9"},
+		},
+	}
+	hosts := []HostSoftware{
+		{HostID: "old", OSFamily: "ol", OSMajor: "9", PkgName: "openssl",
+			PkgArch: "x86_64", PkgVer: "1:3.0.7-25.0.1.el9_3"},
+		{HostID: "fixed", OSFamily: "ol", OSMajor: "9", PkgName: "openssl",
+			PkgArch: "x86_64", PkgVer: "1:3.0.7-27.0.1.el9"},
+	}
+	out := (&DefaultMatcher{}).Match(adv, hosts)
+	got := map[string]bool{}
+	for _, h := range out {
+		got[h.HostID] = h.NeedsUpdate
+	}
+	if len(got) != 2 {
+		t.Fatalf("ol 主机应全部进入匹配, got %+v", out)
+	}
+	if !got["old"] {
+		t.Error("早于修复版本的 Oracle 构建应判受影响")
+	}
+	if got["fixed"] {
+		t.Error("与修复同级的 Oracle 构建（.0.1 后缀）应判已修复")
+	}
+}
+
+func TestOSFamilyCoversAnyHost_OracleLinux(t *testing.T) {
+	present := map[string]bool{"ol": true}
+	if !osFamilyCoversAnyHost("rhel", present) {
+		t.Error("rhel 公告应覆盖 ol 主机")
+	}
+	if osFamilyCoversAnyHost("debian", present) {
+		t.Error("debian 公告不应覆盖 ol 主机")
+	}
+}
+
+// Oracle 在 RHEL release 里插入 ".0.N"。不还原时 rpm 比较把 "0" 判得比 "el" 新，
+// 落后两个小版本的 glibc 也会被判成已修复。
+func TestRHELEquivalentVersion(t *testing.T) {
+	cases := []struct{ family, in, want string }{
+		{"ol", "2.28-251.0.3.el8_10.25", "2.28-251.el8_10.25"},
+		{"ol", "7.29.0-59.0.3.el7_9.2", "7.29.0-59.el7_9.2"},
+		{"ol", "1.9.5p2-1.0.1.el8_10.3", "1.9.5p2-1.el8_10.3"},
+		{"oracle", "1:3.0.7-27.0.1.el9", "1:3.0.7-27.el9"},
+		{"ol", "4.18.0-553.45.1.el8_10", "4.18.0-553.45.1.el8_10"}, // 与 RHEL 同 release，不动
+		{"ol", "1:1.1.1k-14.el8_6", "1:1.1.1k-14.el8_6"},
+		{"rocky", "2.28-251.0.3.el8_10.25", "2.28-251.0.3.el8_10.25"}, // 非 Oracle 不动
+		// 模块流包：Oracle 段后面是 module+el
+		{"ol", "2.7.18-17.0.1.module+el8.10.0+90286+7c291053", "2.7.18-17.module+el8.10.0+90286+7c291053"},
+		{"ol", "5.3.0-1.el9_4.0.1", "5.3.0-1.el9_4.0.1"}, // .0.N 在 el 之后不是 Oracle 插入段
+	}
+	for _, c := range cases {
+		if got := RHELEquivalentVersion(c.family, c.in); got != c.want {
+			t.Errorf("RHELEquivalentVersion(%q, %q) = %q, want %q", c.family, c.in, got, c.want)
+		}
+	}
+}
+
+func TestDefaultMatcher_OracleLinuxLaggingZStream(t *testing.T) {
+	adv := &Advisory{
+		OSFamily: "rhel", OSMajorVer: "8",
+		AffectedPkgs: []PkgFix{{Name: "glibc", Arch: "x86_64", FixedVersion: "2.28-251.el8_10.27"}},
+	}
+	host := HostSoftware{HostID: "h", OSFamily: "ol", OSMajor: "8", PkgName: "glibc", PkgArch: "x86_64",
+		PkgVerRaw: "2.28", PkgRelease: "251.0.3.el8_10.25", PkgManager: "rpm"}
+	out := (&DefaultMatcher{}).Match(adv, []HostSoftware{host})
+	if len(out) != 1 || !out[0].NeedsUpdate {
+		t.Fatalf("落后的 Oracle glibc 应判受影响, got %+v", out)
+	}
+	if out[0].InstalledVer != "2.28-251.0.3.el8_10.25" {
+		t.Errorf("展示的安装版本应保留主机原值, got %q", out[0].InstalledVer)
+	}
+	if cmp, _ := CompareVersionByOS("ol", "2.28-251.0.3.el8_10.27", "2.28-251.el8_10.27"); cmp != 0 {
+		t.Errorf("同级 Oracle 构建与修复版比较应相等, got %d", cmp)
+	}
+	// 修复版本是 RHEL 写法，不还原：原生带 .0.N.el 的修复版不能被改低。
+	if cmp, _ := CompareVersionByOS("ol", "1.0-1.0.2.el9", "1.0-1.0.3.el9"); cmp >= 0 {
+		t.Errorf("落后于原生带 .0.N 的修复版应判受影响, got %d", cmp)
+	}
+}
+
+// Oracle 在模块流包的 "module" 前插入 ".0.N"（如 python2 "17.0.1.module+el8..."）。不还原时
+// 数字 "0" 比字母 "module" 新，落后于 z-stream 修复的包被判已修复。
+// 这里用同一个模块构建计数，只验证 ".0.N" 的还原；各厂商的构建计数（"+el8.10.0+" 后面那段）
+// 是各自的序列，跨厂商比较本身不可靠，属已知局限，见 docs/operations/faq.md。
+func TestDefaultMatcher_OracleLinuxModuleStream(t *testing.T) {
+	adv := &Advisory{
+		OSFamily: "rhel", OSMajorVer: "8",
+		AffectedPkgs: []PkgFix{{Name: "python2", Arch: "x86_64", FixedVersion: "2.7.18-17.module+el8.10.0+22069+b47f5c72.1"}},
+	}
+	host := HostSoftware{HostID: "h", OSFamily: "ol", OSMajor: "8", PkgName: "python2", PkgArch: "x86_64",
+		PkgVerRaw: "2.7.18", PkgRelease: "17.0.1.module+el8.10.0+22069+b47f5c72", PkgManager: "rpm"}
+	out := (&DefaultMatcher{}).Match(adv, []HostSoftware{host})
+	if len(out) != 1 || !out[0].NeedsUpdate {
+		t.Fatalf("落后的 Oracle 模块包应判受影响, got %+v", out)
 	}
 }

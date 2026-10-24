@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 	"github.com/matrixplusio/mxcwpp/internal/server/remediation"
 )
@@ -199,12 +200,13 @@ func fixedVersionValid(v string) bool {
 // 这些 source 没有 OS scope，由 PURL / pkg manager 推断包类型。
 func VulnApplicableToHost(vulnSource, hostOSFamily string) bool {
 	source := strings.ToLower(strings.TrimSpace(vulnSource))
-	osFamily := strings.ToLower(strings.TrimSpace(hostOSFamily))
+	osFamily := osfamily.Normalize(hostOSFamily) // Oracle Linux 上报 "ol"
 	rhelFamily := map[string]bool{"rhel": true, "centos": true, "rocky": true, "almalinux": true, "alma": true, "oracle": true, "fedora": true}
 
 	switch source {
 	case "rhsa", "rhel", "redhat":
-		return rhelFamily[osFamily]
+		// 与匹配器同一张兼容表（osfamily.RHELCompatible），否则报了漏洞却不出修复任务。
+		return osfamily.RHELCompatible(osFamily) || rhelFamily[osFamily]
 	case "rocky-apollo", "rocky":
 		return osFamily == "rocky" || osFamily == "almalinux" || osFamily == "alma"
 	case "centos":

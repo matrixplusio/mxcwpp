@@ -36,7 +36,8 @@ type AdvisoryPackage struct {
 	SourceAdvisoryID string `gorm:"column:source_advisory_id;type:varchar(255);index" json:"sourceAdvisoryId"`
 
 	// OS 归属（按 host OS 维度查找用）
-	//   OSFamily: rhel/rocky/centos/almalinux/oraclelinux/debian/ubuntu/alpine/openeuler/anolis/kylin/uos
+	//   OSFamily: rhel/rocky/centos/almalinux/oracle/debian/ubuntu/alpine/openeuler/anolis/kylin/uos
+	//   （主机侧拼写不一，比较一律经 osfamily.Normalize）
 	//   OSMajor:  9 / 10 / 11 / "" （""=未明确 OS 主版本，仅靠 ecosystem 匹配）
 	OSFamily string `gorm:"column:os_family;type:varchar(32);not null;default:'';index:idx_ap_os" json:"osFamily"`
 	OSMajor  string `gorm:"column:os_major;type:varchar(16);not null;default:'';index:idx_ap_os;index:idx_ap_cve_pkg_os,priority:3" json:"osMajor"`

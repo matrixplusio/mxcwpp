@@ -7,7 +7,13 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 )
+
+// rhelFamiliesSQL 列出 RHEL 兼容系列的全部拼写。主机表里存的是上报原值（Oracle Linux 为 "ol"），
+// 只写规范名会把这些主机当成跨系列，删掉它们本该保留的关联。
+var rhelFamiliesSQL = osfamily.RHELCompatibleSQLList()
 
 // CleanupScope 限定一次 FP 清理要检查哪些关联。
 //
@@ -150,6 +156,7 @@ func CleanupAlreadyPatched(db *gorm.DB, logger *zap.Logger) {
 		Version       string `gorm:"column:version"`
 		ReleaseString string `gorm:"column:release"`
 		FixedVersion  string `gorm:"column:fixed_version"`
+		OSFamily      string `gorm:"column:os_family"`
 	}
 	const batchSize = 5000
 	var lastID uint = 0
@@ -157,7 +164,7 @@ func CleanupAlreadyPatched(db *gorm.DB, logger *zap.Logger) {
 	for {
 		var batch []row
 		err := db.Raw(`
-SELECT hv.id AS hv_id, s.epoch, s.version, s.`+"`release`"+`,
+SELECT hv.id AS hv_id, s.epoch, s.version, s.`+"`release`"+`, h.os_family,
        COALESCE(ap.fixed_version, v.fixed_version) AS fixed_version
 FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
@@ -169,8 +176,8 @@ LEFT JOIN advisory_packages ap
   AND ap.os_major = SUBSTRING_INDEX(h.os_version, '.', 1)
   AND (
     LOWER(ap.os_family) = LOWER(h.os_family)
-    OR (LOWER(ap.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
-        AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux'))
+    OR (LOWER(ap.os_family) IN (`+rhelFamiliesSQL+`)
+        AND LOWER(h.os_family) IN (`+rhelFamiliesSQL+`))
   )
 WHERE v.source IN ('rhsa','rocky-apollo','centos','osv')
   AND COALESCE(ap.fixed_version, v.fixed_version) <> ''
@@ -196,7 +203,8 @@ LIMIT ?`, lastID, batchSize).Scan(&batch).Error
 			if r.Epoch != "" {
 				installed = r.Epoch + ":" + installed
 			}
-			cmp, err := CompareRPMVersion(installed, r.FixedVersion)
+			// 与匹配器同一套还原，否则 Oracle 主机在这里被判已修复、刚建的关联随即被删。
+			cmp, err := CompareRPMVersion(RHELEquivalentVersion(r.OSFamily, installed), r.FixedVersion)
 			if err != nil {
 				continue
 			}
@@ -230,15 +238,15 @@ func cleanupCrossOSFamily(db *gorm.DB, logger *zap.Logger, sc CleanupScope) {
 		{"debian-tracker", "'debian','ubuntu'"},
 		{"usn", "'debian','ubuntu'"},
 		{"alpine", "'alpine'"},
-		{"rhsa", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
-		{"rocky-apollo", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
-		{"centos", "'rhel','rocky','centos','centos-stream','almalinux','oraclelinux'"},
+		{"rhsa", rhelFamiliesSQL},
+		{"rocky-apollo", rhelFamiliesSQL},
+		{"centos", rhelFamiliesSQL},
 	}
 	// 守卫：多发行版 CVE 的 vulnerabilities.source 会被 mergeByConfidence 按全局
 	// confidence 覆盖成异 OS 源（如 rocky 匹配的 CentOS 链被标 debian-tracker），若仅按
 	// v.source 判跨 OS 会误删合法链。故仅当该 CVE 对本机 OS **无任何覆盖性 advisory_packages
 	// 行**时才删——advisory_packages 是 per-OS 修复权威源，rhel 家族互兼容。
-	const hasCoveringAdvisory = `
+	hasCoveringAdvisory := `
   AND NOT EXISTS (
     SELECT 1 FROM advisory_packages ap
     WHERE ap.cve_id = v.cve_id
@@ -246,8 +254,8 @@ func cleanupCrossOSFamily(db *gorm.DB, logger *zap.Logger, sc CleanupScope) {
       AND ap.os_major = SUBSTRING_INDEX(h.os_version, '.', 1)
       AND (
         LOWER(ap.os_family) = LOWER(h.os_family)
-        OR (LOWER(ap.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
-            AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux'))
+        OR (LOWER(ap.os_family) IN (` + rhelFamiliesSQL + `)
+            AND LOWER(h.os_family) IN (` + rhelFamiliesSQL + `))
       )
   )`
 	var total int64
@@ -332,7 +340,7 @@ func cleanupNonRHELDistroSuffix(db *gorm.DB, logger *zap.Logger, sc CleanupScope
 FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
-WHERE LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
+WHERE LOWER(h.os_family) IN (`+rhelFamiliesSQL+`)
   AND v.fixed_version REGEXP ?`, regex)
 	if err == nil && n > 0 {
 		logger.Info("非 RHEL distro 后缀 host_vuln 已清理", zap.Int64("deleted", n))
@@ -345,7 +353,7 @@ FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source = 'nvd'
-  AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux','ubuntu','debian','alpine','sles','opensuse')`)
+  AND LOWER(h.os_family) IN (`+rhelFamiliesSQL+`,'ubuntu','debian','alpine','sles','opensuse')`)
 	if err == nil && n > 0 {
 		logger.Info("NVD 在 vendor OS host_vuln 已清理(backport-blind)", zap.Int64("deleted", n))
 	}
@@ -357,7 +365,7 @@ FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source = 'osv'
-  AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux')
+  AND LOWER(h.os_family) IN (`+rhelFamiliesSQL+`)
   AND v.fixed_version REGEXP '[.+]el[0-9]+'`)
 	if err == nil && n > 0 {
 		logger.Info("RHEL 家族 OSV RPM-format host_vuln 已清理", zap.Int64("deleted", n))

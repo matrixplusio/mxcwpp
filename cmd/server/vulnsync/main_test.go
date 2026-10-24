@@ -44,6 +44,8 @@ func TestSourceServesFleet(t *testing.T) {
 		{"rhsa", setOf("centos"), true},         // rhsa 经 rhel-compat 覆盖 centos
 		{"rhsa", setOf("rocky"), true},          // 覆盖 rocky
 		{"rocky-apollo", setOf("centos"), true}, // rocky-apollo 覆盖 centos
+		{"rhsa", setOf("oracle"), true},         // loadFleetOSFamilies 把上报的 "ol" 归一为 oracle
+		{"rocky-apollo", setOf("oracle"), true},
 		{"debian-tracker", setOf("centos", "rocky"), false},
 		{"usn", setOf("centos"), false},
 		{"alpine", setOf("centos"), false},

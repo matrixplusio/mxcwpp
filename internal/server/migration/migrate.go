@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/matrixplusio/mxcwpp/internal/common/osfamily"
 	"github.com/matrixplusio/mxcwpp/internal/server/model"
 	"github.com/matrixplusio/mxcwpp/internal/server/vulnsync/advisory"
 )
@@ -487,7 +488,7 @@ DELETE hv FROM host_vulnerabilities hv
 JOIN vulnerabilities v ON hv.vuln_id = v.id
 JOIN hosts h ON h.host_id = hv.host_id
 WHERE v.source = 'nvd'
-  AND LOWER(h.os_family) IN ('rhel','rocky','centos','centos-stream','almalinux','oraclelinux','ubuntu','debian','alpine','sles','opensuse')
+  AND LOWER(h.os_family) IN (`+osfamily.RHELCompatibleSQLList()+`,'ubuntu','debian','alpine','sles','opensuse')
   AND LOWER(v.description) REGEXP ?`, nvdQualifierRegex)
 	if r7.Error == nil && r7.RowsAffected > 0 {
 		logger.Info("NVD OS/arch qualifier host_vuln 已清理",

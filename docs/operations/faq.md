@@ -213,6 +213,20 @@ openssl x509 -in deploy/certs/ca.crt -noout -dates
 
 主机上报的系统系列取自 `/etc/os-release` 的 `ID`，Oracle Linux 是 `ol`，而策略里写的是 `oracle`。匹配前两边都会归一（`ol`、`oraclelinux` → `oracle`，`alma` → `almalinux`，`redhat` → `rhel`），无需在策略里重复填写别名。
 
+### Oracle Linux 主机的系统漏洞从哪来
+
+Oracle Linux 与 RHEL 二进制兼容，系统漏洞按 Red Hat 公告（RHSA）匹配，与 Rocky、AlmaLinux 相同；系统系列同样按上面的规则归一。Oracle 的包会在 RHEL 的 release 里插入 `.0.N` 段（RHEL `251.el8_10.25` 对应 Oracle `251.0.3.el8_10.25`），比较版本前会先还原成 RHEL 写法，否则落后的包会被判成已修复。
+
+已知局限：
+
+- Oracle 独有的包（如 UEK 内核 `kernel-uek`）不在 RHSA 里，不会产生系统漏洞。
+- 模块流包（release 含 `module+el8`）末尾的构建计数是各厂商自己的序列，Oracle 的计数比 RHEL 大，跨厂商比较会偏向判成已修复。Rocky 主机有 Rocky 自己的公告源兜底，Oracle 没有。
+- 极少数 RHEL 原生 release 就带 `.0.N.el` 的包，在 Oracle 主机上可能多报，不会漏报。
+
+### 刚部署完，漏洞页没有系统漏洞
+
+漏洞同步在 VulnSync 启动后约 30 秒开始。各公告源首次是全量拉取，其中 Red Hat 公告逐条下载详情，需要较长时间；全部完成后才会出现完整的系统漏洞。同步状态在「漏洞管理 → 漏洞源管理」页面查看，「同步中」表示仍在拉取。
+
 ### 修复任务执行失败如何排查
 
 1. 查看 Manager 日志中 remediation 相关记录
